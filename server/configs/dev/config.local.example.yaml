@@ -1,0 +1,30 @@
+# 本地联调私有覆盖示例：复制为 config.local.yaml 后填写真实值，禁止把真实密码提交进仓库。
+trace:
+  jaeger:
+    endpoint: ""
+
+data:
+  postgres:
+    dsn: "postgres://test_user:local-password@192.168.0.106:5432/openai_oauth_api_service?sslmode=disable"
+  auth:
+    jwtSecret: "local-dev-jwt-secret"
+    admin:
+      username: "admin"
+      password: "adminadmin"
+    oauth:
+      enabled: false
+      providerName: "OIDC"
+      clientId: "local-oauth-client-id"
+      clientSecret: "local-oauth-client-secret"
+      authUrl: "https://idp.example.com/oauth2/authorize"
+      tokenUrl: "https://idp.example.com/oauth2/token"
+      userInfoUrl: "https://idp.example.com/oauth2/userinfo"
+      redirectUrl: "http://localhost:8200/auth/oauth/callback"
+      scopes:
+        - openid
+        - profile
+        - email
+  openai:
+    apiKey: "sk-proj-local-openai-key"
+    baseUrl: "https://api.openai.com/v1"
+    upstreamProxyUrl: ""

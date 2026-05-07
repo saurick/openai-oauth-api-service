@@ -1,0 +1,69 @@
+# server/configs/prod/config.yaml
+server:
+  http:
+    addr: 0.0.0.0:8400
+    timeout: 10s
+  grpc:
+    addr: 0.0.0.0:9400
+    timeout: 10s
+
+log:
+  debug: false
+
+# 链路追踪服务器
+trace:
+  jaeger:
+    traceName: ""
+    endpoint: ""
+    ratio: 0
+
+# 数据相关
+data:
+  # 主数据库，保存核心数据
+  postgres:
+    # if true output sql
+    debug: false
+    # 生产环境必须由 POSTGRES_DSN 覆盖，仓库内仅保留不可直接使用的示例值。
+    dsn: "postgres://postgres:change-this-postgres-password@postgres:5432/openai_oauth_api_service?sslmode=disable"
+
+  # 缓存服务
+  etcd:
+    hosts:
+      - etcd:2379
+  # 认证相关
+  auth:
+    jwtSecret: "change-this-prod-jwt-secret-via-env"
+    jwtExpireSeconds: 604800 # 7 days
+    admin:
+      username: "admin"
+      password: "adminadmin"
+    oauth:
+      enabled: false
+      providerName: "OAuth"
+      clientId: ""
+      clientSecret: ""
+      authUrl: ""
+      tokenUrl: ""
+      userInfoUrl: ""
+      redirectUrl: ""
+      scopes:
+        - openid
+        - profile
+        - email
+
+  openai:
+    apiKey: ""
+    baseUrl: "https://api.openai.com/v1"
+    upstreamProxyUrl: ""
+    requestTimeoutSeconds: 600
+
+  api:
+    rateLimitEnabled: true
+    exportMaxDays: 90
+    modelSyncTimeoutSeconds: 30
+    alertRetentionDays: 30
+
+# notify:
+#   telegram:
+#     apiToken: "set-by-secret"
+#     chatId: 0

@@ -1,0 +1,69 @@
+# server/configs/dev/config.yaml
+server:
+  http:
+    addr: 0.0.0.0:8400
+    timeout: 10s
+  grpc:
+    addr: 0.0.0.0:9400
+    timeout: 10s
+
+log:
+  debug: true
+
+# 链路追踪服务器
+trace:
+  jaeger:
+    traceName: ""
+    endpoint: ""
+    ratio: 0
+
+# 数据相关
+data:
+  # 主数据库，保存核心数据
+  postgres:
+    # if true output sql
+    debug: true
+    # 开发默认连接共享 PG；真实密码请通过 config.local.yaml、server/.env 或 POSTGRES_DSN 覆盖。
+    dsn: "postgres://test_user:shared-postgres-password@192.168.0.106:5432/openai_oauth_api_service?sslmode=disable"
+
+  # 缓存服务
+  etcd:
+    hosts:
+      - etcd:2379
+  # 认证相关：仓库只保留公开占位值，真实私钥/密码请在本地覆盖。
+  auth:
+    jwtSecret: "dev-jwt-secret-change-before-shared-use"
+    jwtExpireSeconds: 604800 # 7 days
+    admin:
+      username: "admin"
+      password: "adminadmin"
+    oauth:
+      enabled: false
+      providerName: "OAuth"
+      clientId: ""
+      clientSecret: ""
+      authUrl: ""
+      tokenUrl: ""
+      userInfoUrl: ""
+      redirectUrl: ""
+      scopes:
+        - openid
+        - profile
+        - email
+
+  openai:
+    apiKey: ""
+    baseUrl: "https://api.openai.com/v1"
+    upstreamProxyUrl: ""
+    requestTimeoutSeconds: 600
+
+  api:
+    rateLimitEnabled: true
+    exportMaxDays: 90
+    modelSyncTimeoutSeconds: 30
+    alertRetentionDays: 30
+
+# notify:
+#   telegram:
+#     apiToken: "set-in-local-config"
+#     chatId: 0

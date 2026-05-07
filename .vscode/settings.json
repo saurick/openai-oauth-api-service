@@ -1,0 +1,11 @@
+{
+  "git.ignoreLimitWarning": true,
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "less.lint.unknownAtRules": "ignore",
+  // Helm chart 模板不是纯 YAML；显式交给 helm 语言模式，避免 YAML 扩展把 {{ ... }} 误判成语法错误。
+  "files.associations": {
+    "server/deploy/lab-ha/charts/*/templates/*.yaml": "helm",
+    "server/deploy/lab-ha/charts/*/templates/*.tpl": "helm"
+  }
+}

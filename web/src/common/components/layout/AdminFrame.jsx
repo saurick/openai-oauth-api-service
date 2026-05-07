@@ -1,0 +1,237 @@
+import React, { useMemo } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import AppShell from '@/common/components/layout/AppShell'
+import { AUTH_SCOPE, getCurrentUser, logout } from '@/common/auth/auth'
+import { ADMIN_BASE_PATH } from '@/common/utils/adminRpc'
+import { JsonRpc } from '@/common/utils/jsonRpc'
+
+const NAV_GROUPS = [
+  {
+    label: '总览',
+    items: [{ to: '/admin-dashboard', label: '业务看板', icon: GaugeIcon }],
+  },
+  {
+    label: '配置管理',
+    items: [
+      { to: '/admin-keys', label: '下游 key', icon: RouteIcon },
+      { to: '/admin-models', label: '模型列表', icon: RouteIcon },
+      { to: '/admin-usage', label: 'usage 明细', icon: GaugeIcon },
+    ],
+  },
+  {
+    label: '基础资料',
+    items: [
+      { to: '/admin-accounts', label: '账号目录', icon: UsersIcon },
+      {
+        to: '/admin-oauth',
+        label: 'OAuth 配置',
+        icon: OAuthIcon,
+      },
+      { to: '/admin-guide', label: '功能路线', icon: RouteIcon },
+    ],
+  },
+]
+
+function BrandMark() {
+  return (
+    <div className="leading-none">
+      <div className="text-[30px] font-extrabold tracking-tight text-[#173b59]">
+        <span>OA</span>
+        <span className="text-[#d6a23a]">S</span>
+      </div>
+      <div className="mt-[-2px] text-[9px] font-bold uppercase tracking-[0.06em] text-[#173b59]">
+        OpenAI OAuth API Service
+      </div>
+    </div>
+  )
+}
+
+function NavIcon({ icon: Icon }) {
+  return (
+    <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+      <Icon />
+    </span>
+  )
+}
+
+function Sidebar() {
+  return (
+    <aside className="border-b border-[#dce8df] bg-[#f5fbf7] lg:min-h-screen lg:border-b-0 lg:border-r">
+      <div className="flex h-[86px] items-center border-b border-[#dce8df] px-4">
+        <BrandMark />
+      </div>
+
+      <nav className="max-h-[calc(100vh-86px)] overflow-auto px-4 py-5">
+        {NAV_GROUPS.map((group) => (
+          <div key={group.label} className="mb-6">
+            <div className="mb-3 px-3 text-sm text-[#7b8780]">
+              {group.label}
+            </div>
+            <div className="space-y-1">
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    [
+                      'flex min-h-10 items-center gap-3 rounded-md px-3 text-sm font-semibold transition',
+                      isActive
+                        ? 'bg-[#c7d3c5] text-[#238a43]'
+                        : 'text-[#1f2d25] hover:bg-[#e7efe9] hover:text-[#238a43]',
+                    ].join(' ')
+                  }
+                >
+                  <NavIcon icon={item.icon} />
+                  <span>{item.label}</span>
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+    </aside>
+  )
+}
+
+export default function AdminFrame({
+  title,
+  description,
+  breadcrumb,
+  actions = null,
+  children,
+}) {
+  const navigate = useNavigate()
+  const user = getCurrentUser(AUTH_SCOPE.ADMIN)
+  const authRpc = useMemo(
+    () =>
+      new JsonRpc({
+        url: 'auth',
+        basePath: ADMIN_BASE_PATH,
+        authScope: AUTH_SCOPE.ADMIN,
+      }),
+    []
+  )
+
+  const handleLogout = async () => {
+    try {
+      await authRpc.call('logout')
+    } catch (e) {
+      console.warn('服务器 logout 失败', e)
+    } finally {
+      logout(AUTH_SCOPE.ADMIN)
+      navigate('/admin-login', { replace: true })
+    }
+  }
+
+  return (
+    <AppShell variant="admin" className="admin-frame">
+      <div className="lg:grid lg:min-h-screen lg:grid-cols-[276px_minmax(0,1fr)]">
+        <Sidebar />
+
+        <div className="min-w-0">
+          <header className="sticky top-0 z-20 border-b border-[#dce8df] bg-white/95 backdrop-blur">
+            <div className="flex min-h-[86px] flex-col gap-3 px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
+              <div className="text-sm font-semibold text-[#1f2d25]">
+                OAuth API 管理后台
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {actions}
+                <span className="rounded-md border border-[#f0c868] bg-[#fff8df] px-3 py-1.5 text-xs font-semibold text-[#c07a00]">
+                  超级管理员
+                </span>
+                <span className="text-sm text-[#7b8780]">
+                  {user?.username || 'admin'}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="rounded-md border border-[#d6ded8] bg-white px-3 py-1.5 text-sm text-[#1f2d25] transition hover:border-[#238a43] hover:text-[#238a43]"
+                >
+                  退出
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <main className="px-4 py-5 sm:px-5 lg:px-6">
+            {breadcrumb ? (
+              <div className="mb-4 text-sm text-[#7b8780]">{breadcrumb}</div>
+            ) : null}
+
+            {title || description ? (
+              <section className="mb-5 rounded-lg border border-[#dde8df] bg-white px-5 py-6 shadow-[0_2px_10px_rgba(24,61,42,0.08)]">
+                {title ? (
+                  <h1 className="text-xl font-bold text-[#1f2d25]">{title}</h1>
+                ) : null}
+                {description ? (
+                  <p className="mt-3 max-w-5xl text-sm leading-6 text-[#7b8780]">
+                    {description}
+                  </p>
+                ) : null}
+              </section>
+            ) : null}
+
+            <div className="space-y-5">{children}</div>
+          </main>
+        </div>
+      </div>
+    </AppShell>
+  )
+}
+
+function GaugeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M5 14a7 7 0 0 1 14 0M12 14l3-4M7 17h10"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="2"
+      />
+    </svg>
+  )
+}
+
+function UsersIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M16 19c0-2.2-1.8-4-4-4H8c-2.2 0-4 1.8-4 4M10 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M20 19c0-1.8-1.2-3.2-2.9-3.8M17 5.3a3 3 0 0 1 0 5.4"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="2"
+      />
+    </svg>
+  )
+}
+
+function RouteIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M6 6h.01M18 18h.01M7 6h5a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="2"
+      />
+    </svg>
+  )
+}
+
+function OAuthIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M7 12a5 5 0 1 1 5 5H9l-2 2H4v-3l2-2.1A5 5 0 0 1 7 12Zm6-2h.01M16 10h.01"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  )
+}

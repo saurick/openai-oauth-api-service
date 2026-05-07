@@ -1,0 +1,12 @@
+{
+  "extends": ["stylelint-config-recommended", "stylelint-config-tailwindcss"],
+  "rules": {
+    "selector-pseudo-class-no-unknown": [
+      true,
+      {
+        "ignorePseudoClasses": ["global"]
+      }
+    ],
+    "at-rule-no-unknown": null
+  }
+}
