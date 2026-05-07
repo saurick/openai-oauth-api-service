@@ -1,0 +1,95 @@
+# Progress
+
+- 完成：初始化长期维护仓库并切到 `main` 分支；当前正式定位已收口为 OAuth 登录、API 转发与 token/usage 统计服务。
+- 完成：基于 `webapp-template` 复制出长期项目骨架，保留前端、Go/Kratos 后端、Ent/Atlas、PostgreSQL、质量门禁、健康检查和 Compose 部署主路径。
+- 完成：把首轮 FastAPI + SQLite MVP 移入 `legacy-python-mvp/`，仅作为 API 转发和 usage 记录的参考实现，不作为长期主路径。
+- 完成：裁剪 K8s、dashboard、lab-ha 和远端 SSH 发布脚本，避免旧模板占位环境进入主仓库。
+- 完成：更新 README、AGENTS、docs、配置示例和前端首页文案，明确官方 OpenAI API key 是唯一上游凭据，禁止复用 Codex / ChatGPT 登录态。
+- 完成：启用本仓库 Git hooks，`core.hooksPath=.githooks`。
+- 完成：同步前端 L1 回归脚本到当前 API 服务文案，覆盖首页、用户登录、注册、管理登录和未登录重定向场景。
+- 验证通过：`pnpm style:l1`。
+- 验证通过：`bash scripts/init-project.sh --project --strict`，必须处理项为 0；仅保留 tracing 配置命名相关建议项。
+- 验证通过：`bash scripts/doctor.sh`。
+- 验证通过：`gitleaks detect --source . --no-banner --redact --log-level warn`。
+- 验证通过：`bash scripts/qa/fast.sh`。
+- 验证通过：`bash scripts/qa/full.sh`，包含前端 lint/css/test/build、`go test ./...`、后端 build 和 govulncheck。
+- 完成：迁入 Go 后端主路径，新增下游 API key、模型缓存和 usage log 的 Ent schema 与 Atlas migration。
+- 完成：新增 OpenAI 兼容 `/v1/models`、`/v1/chat/completions`、`/v1/responses` 转发，支持非流式和 SSE usage 解析，支持统一上游代理配置。
+- 完成：新增管理后台 `/admin-api`，可查看 24h 用量、管理下游 key、管理模型列表和查看最近请求。
+- 完成：本地 `server/.env` 已接入共享 PostgreSQL `192.168.0.106:5432/oauth_api_service`，文件被 git 忽略。
+- 修复：`api.key_create` 的 `allowed_models` 已转换为 JSON-RPC Struct 兼容数组，避免成功响应里 `data=null`。
+- 验证通过：`make print_db_url && make migrate_status`，当前 192 数据库 migration 版本为 `20260430110943`，无待执行迁移。
+- 验证通过：后端连接 192 数据库并使用本地 mock OpenAI upstream 完成管理员登录、创建下游 key、`/v1/models`、`/v1/chat/completions`、`/v1/responses` 和 usage 查询。
+- 验证通过：登录后的 `/admin-api` 桌面与移动端浏览器回归，确认 key、模型和最近 usage 能加载且无横向页面溢出。
+- 验证通过：登录后的 `/admin-dashboard` 桌面与移动端浏览器回归，确认 key、模型和最近 usage 能加载且无横向页面溢出。
+- 完成：仅将后台登录页调整为浅色企业登录卡片风格，后台内部页面保持原有控制台样式不变。
+- 完成：根路径 `/` 改为直接进入后台登录页，不再展示首页入口页。
+- 完成：管理员登录成功默认进入 `/admin-dashboard`，`/admin-menu` 不再展示旧中转菜单。
+- 完成：将登录后的后台页改为浅色 ERP 风格后台骨架，覆盖左侧导航、顶部工具栏、统计卡、状态分布、表单和表格；`/admin-dashboard`、账号目录和功能路线共享同一后台壳子。
+- 完成：扩展 `pnpm style:l1`，使用测试管理员 token 和 mock API RPC 覆盖 `/admin-dashboard` 桌面与移动端回归。
+- 完成：新增 `api.usage_buckets` 按天聚合接口，并在 `/admin-dashboard` 补 30 天 usage 趋势、Token 构成、模型分布、Endpoint 分布和按天统计表。
+- 完成：将 `/admin-dashboard` 的 key、模型和 usage 管理区从深色残留样式收口为浅色后台表单和表格。
+- 验证通过：`cd server && go test ./internal/biz ./internal/data`、`cd server && go test ./...`、`cd web && pnpm lint && pnpm css && pnpm test && pnpm build`、`cd web && pnpm style:l1`、`git diff --check`。
+- 验证通过：`go test ./...`、`pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`、`bash scripts/doctor.sh`、`bash scripts/init-project.sh --project --strict`、`gitleaks detect --source . --no-banner --redact --log-level warn`、`bash scripts/qa/fast.sh`、`bash scripts/qa/full.sh`。
+- 完成：提交前修正 `server/Makefile` 与 `server/third_party/openapi/v3/openapi.proto` 的空白格式问题，避免首个提交触发 `git diff --check` 失败。
+- 修复：处理首个提交钩子暴露的 Go lint 和 YAML lint 问题，包括 `Close` 返回值、API 转发响应处理的无效赋值、Ent 日志适配器返回值、未使用约束 helper 和 OpenAPI YAML 缩进。
+- 验证通过：`SECRETS_STAGED_ONLY=1 bash scripts/qa/secrets.sh`、`bash scripts/qa/fast.sh`、`git diff --cached --check`。
+- 完成：实现管理员 OAuth/OIDC 授权登录入口，包含 `/auth/oauth/config`、`/auth/oauth/start`、`/auth/oauth/callback`，服务端换取 userinfo 后绑定已有管理员并签发本系统管理员 JWT。
+- 完成：前端管理员登录页接入 OAuth 登录按钮，新增 `/oauth/callback` 写入本系统管理员登录态；第三方 OAuth token 不返回给前端。
+- 修复：补充 Vite 开发代理 `/auth -> http://localhost:8200`，避免本地请求 OAuth 配置时被 Vite history fallback 成 HTML。
+- 调整：按后台管理与监控主路径收口，普通 `/login`、`/register` 前端路由重定向到 `/admin-login`，OAuth 登录入口迁移到管理员登录页并签发管理员 JWT。
+- 调整：OAuth 管理员登录不自动创建管理员，只允许绑定已存在管理员账号；首次绑定要求 IdP `email` 或 `preferred_username` 匹配管理员用户名。
+- 修复：Vite `/rpc` 与 `/auth` 代理支持 `VITE_API_PROXY_TARGET`，默认仍指向项目配置真源 `http://localhost:8200`。
+- 完成：新增后台 `/admin-oauth` 配置页与控制台入口，用于查看 OAuth 启用状态、登录入口、回调地址和所需环境变量；client secret 仍只允许后端环境变量注入。
+- 完成：新增管理员 OAuth 身份字段与 Atlas migration，配置样例、Compose 环境变量和相关文档已同步。
+- 验证通过：`go test ./...`、`make build`、`pnpm test`、`git diff --check`。
+- 完成：拆分 API 运营后台信息架构，`/admin-api` 只保留只读业务看板；下游 key、模型列表和 usage 明细迁到独立菜单 `/admin-keys`、`/admin-models`、`/admin-usage`。
+- 完成：修正项目正式定位口径，不再以单纯 API 转发命名，统一为 OAuth 登录、API 转发与 token/usage 统计服务；对外管理路径统一为 `/admin-api` 和 `/rpc/api`，数据库标识后续如需彻底清理再单独迁移。
+- 完成：项目主配置名同步去除旧命名，环境变量改为 `OAUTH_API_*`，Compose 默认 slug/image/db 改为 `oauth-api-service` / `oauth_api_service`，文档命令改用仓库相对路径。
+- 验证通过：`pnpm test`、`go test ./...`、`git diff --check`；旧项目名、旧管理路径和旧 RPC 域的正式文档/前端/配置残留搜索为 0。
+- 完成：将默认管理员账号 `admin` 的初始化密码统一调整为 `adminadmin`，同步开发配置、生产 Compose 示例、README 和模板初始化检查口径。
+- 验证通过：`bash scripts/init-project.sh --project --strict`、`bash -n scripts/init-project.sh && git diff --check`、`cd server && go test ./internal/data -run 'TestInitAdminUsersIfNeeded|TestAdmin'`。
+- 修复：管理员初始化逻辑改为 upsert，同步配置中的默认管理员密码到已有同名账号；保留原禁用状态不被初始化流程自动改写。
+- 验证通过：`cd server && gofmt -w internal/data/admin_user_init.go internal/data/admin_user_init_test.go && go test ./internal/data -run 'TestInitAdminUsersIfNeeded|TestAdmin'`、`bash scripts/init-project.sh --project --strict`、`bash -n scripts/init-project.sh && git diff --check`。
+- 完成：使用当前本地 `.env` 注入的数据库连接重置共享库中 `admin` 的密码哈希，确认账号未禁用。
+- 验证通过：`curl` 调用 `admin_login`，`admin/adminadmin` 返回 `code=0` 和登录 token。
+- 完成：按最新要求将服务端 HTTP 默认端口统一调整为 `8400`，同步开发/生产配置、Docker 暴露端口、Compose 映射、前端 dev 代理和运行文档。
+- 完成：将服务端 gRPC 默认端口统一调整为 `9400`，同步开发/生产配置、Docker 暴露端口、Compose 映射和运行文档。
+- 下一步：重启本地后端或生产 Compose，使新端口生效。
+- 阻塞/风险：未修改本机未提交的真实 `.env` 或私有覆盖配置；若已有环境文件显式设置旧端口，需要手工同步 HTTP `8400` 与 gRPC `9400`。
+- 完成：移除后台顶部工具栏里的“全局业务员”和“全局客户”筛选占位，保留管理员身份、用户名和退出入口。
+- 验证通过：`cd web && pnpm style:l1`。
+- 下一步：如后续确实需要业务员或客户维度筛选，再基于真实数据源补回受控筛选逻辑。
+- 阻塞/风险：无。
+- 完成：补齐下一阶段全路线：组织账号由管理员创建/禁用/重置密码，公开注册关闭；API key 可绑定组织用户，新增普通用户 `/portal` 查看归属 key 与 usage。
+- 完成：新增 key+model 策略表、模型价格表、审计日志、站内告警规则和事件；请求转发前检查模型权限、RPM/TPM 与日/月配额，超限返回 429 并写 usage/audit。
+- 完成：usage summary、bucket、list 接入 `estimated_cost_usd`，价格缺失返回 `null`；新增上游模型同步、CSV/JSON usage 导出和生产 API 配置。
+- 验证通过：`cd server && make data && make config && go test ./...`、`cd web && pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`。
+- 完成：合并远端组织账号与用量治理路线，保留 OAuth 管理员登录、`OAUTH_API_*` 配置、`/admin-oauth` 入口和 `/admin-dashboard` 浅色后台主路径；兼容保留 `/admin-api`、`/admin-keys`、`/admin-models`、`/admin-usage` 路由。
+- 验证通过：合并冲突后重新执行 `cd server && make config && make migrate_hash`。
+- 下一步：接入真实身份提供方后，在目标域名上跑一次完整 OAuth 回调联调，并执行 Atlas migration；生产部署前按真实模型维护价格表。
+- 阻塞/风险：生产域名、镜像仓库、生产 OpenAI API key 和真实 OAuth client 尚未确定；模型价格必须由管理员在后台维护，未配置时费用估算保持空值。
+- 修复：重新将默认管理员登录口径收口为 `admin/adminadmin`，同步开发配置、本地覆盖示例、生产配置、Compose 示例、环境变量示例和 README，避免登录页使用 `adminadmin` 时后端仍校验旧默认密码。
+- 验证通过：`cd server && go test ./internal/data -run 'TestInitAdminUsersIfNeeded|TestAdmin'`、`bash scripts/init-project.sh --project --strict`、`git diff --check`。
+- 下一步：重启当前本地 `server/bin/server-dev` 进程，使已修正的默认管理员密码重新初始化到运行库。
+- 阻塞/风险：当前直连 `server/.env` 中的共享 PostgreSQL 返回 `No route to host`，无法在本轮直接重置数据库哈希；8400 上仍在运行的旧进程在重启前会继续使用旧内存配置。
+- 完成：将后台业务看板收口为只读数据页，移除顶部刷新和页面内创建/启停/导出等操作入口；左侧新增“配置管理”菜单承载下游 key、模型列表和 usage 明细。
+- 验证通过：`cd web && pnpm lint && pnpm css && pnpm test && pnpm build`；补充执行后台看板桌面/移动端定向 Playwright 回归，确认新菜单存在、看板无创建/保存/导出/刷新入口且无横向溢出。
+- 验证受限：`cd web && pnpm style:l1` 当前在既有 `login-desktop` 场景失败，脚本仍等待“用户登录”文案；该失败发生在业务看板场景之前，和本轮看板改动无关。
+- 下一步：如需继续拆分 key 策略、模型价格和站内告警，可按同一菜单分组补独立页面。
+- 阻塞/风险：当前工作区存在大量本轮前已有未提交改动，本轮只在现有前端重命名后的 `AdminDashboard` 入口上做最小收口。
+- 完成：将 OAuth/SSO 拆为独立 `/oauth-login` 入口，支持用户 SSO 与管理员 SSO 两种登录目标；用户 SSO 回调签发普通用户 JWT，进入 `/portal` 后继续按 `owner_user_id` 查看 key 与 token/usage。
+- 完成：为 `users` 增加 OAuth 身份绑定字段与 Atlas migration，普通用户可按 OAuth `provider + subject` 复用账号；首次 SSO 会绑定同名/同邮箱组织账号，未匹配时创建本系统普通用户。
+- 下一步：在真实 IdP 上分别联调用户 SSO 与管理员 SSO，并执行新 migration。
+- 阻塞/风险：本轮只实现本系统 SSO 登录与 usage 归属，不接入也不保存第三方 OAuth access token 作为 OpenAI 上游凭据。
+- 完成：按项目定位将前端主路径、登录页、后台壳子、用户门户、功能路线和 L1 回归中的旧展示口径改为 OAuth API、API key 生成与 token/usage 统计；后台主路由改为 `/admin-dashboard`，JSON-RPC 域统一使用后端当前真源 `/rpc/api`。
+- 下一步：如需彻底清理后端内部历史命名，需要单独安排 Ent schema、表名、审计 action 和 Go 类型的迁移方案，避免无迁移重命名破坏已有数据。
+- 阻塞/风险：本轮未重命名数据库实体和后端内部历史类型；它们仍是历史内部实现名，不再作为前端和正式文档主口径。
+- 完成：按“只保留后台和后台登录”收口前端入口，删除普通用户登录、注册、独立 OAuth 选择页和用户门户源码；历史 `/login`、`/register`、`/oauth-login`、`/portal` 均重定向到 `/admin-login`，OAuth 回调只接收管理员登录态。
+- 完成：后台侧栏的 OAuth 入口改为 `/admin-oauth` 配置页，并将该页纳入统一后台壳子；服务端 OAuth 默认回跳和错误回跳统一指向 `/admin-dashboard` / `/admin-login`。
+- 验证通过：`cd web && pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`、`cd server && go test ./internal/server ./internal/biz ./internal/data`、`git diff --check`。
+- 下一步：如需彻底移除普通用户 RPC/API 能力，需要单独评估服务端 `api.user_*`、`users` 归属字段和历史数据兼容。
+- 阻塞/风险：本轮只收口前端可访问入口与 OAuth 回跳，不删除后端组织用户数据结构和用户侧 JSON-RPC 方法。
+- 完成：项目改名为 `OpenAI OAuth API Service`，包名、服务名、Compose slug/image、默认数据库名和前端标题同步改为 `openai-oauth-api-service` 口径；保留 `OAUTH_API_*` 环境变量前缀，避免配置面扩大破坏。
+- 下一步：新建仓库后重新执行初始化、依赖安装和质量门禁，按新环境确认数据库名与镜像名。
+- 阻塞/风险：已移除当前目录 `.git` 版本库元数据；历史 `progress.md` 中仍保留旧项目名演进记录作为上下文，不作为当前命名真源。

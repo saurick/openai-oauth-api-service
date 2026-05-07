@@ -1,0 +1,10 @@
+.cursor/
+.DS_Store
+
+web/node_modules/
+web/build/
+web/.vite-cache/
+
+server/bin/
+output/
+.playwright-cli/

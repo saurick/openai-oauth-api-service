@@ -1,0 +1,174 @@
+package biz
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/go-kratos/kratos/v2/log"
+)
+
+func TestNewGatewayAPIKeySecretStoresOnlyDerivedParts(t *testing.T) {
+	secret, err := NewGatewayAPIKeySecret()
+	if err != nil {
+		t.Fatalf("NewGatewayAPIKeySecret() error = %v", err)
+	}
+	if !strings.HasPrefix(secret.PlainKey, GatewayAPIKeyPrefix) {
+		t.Fatalf("plain key prefix = %q, want %q", secret.PlainKey, GatewayAPIKeyPrefix)
+	}
+	if len(secret.KeyHash) != 64 {
+		t.Fatalf("hash length = %d, want 64", len(secret.KeyHash))
+	}
+	if secret.KeyPrefix == "" || secret.KeyLast4 == "" {
+		t.Fatalf("expected prefix and last4, got %+v", secret)
+	}
+
+	rebuilt := BuildGatewayAPIKeySecret(secret.PlainKey)
+	if rebuilt.KeyHash != secret.KeyHash {
+		t.Fatalf("rebuilt hash mismatch")
+	}
+	if rebuilt.KeyPrefix != secret.KeyPrefix || rebuilt.KeyLast4 != secret.KeyLast4 {
+		t.Fatalf("rebuilt preview mismatch")
+	}
+}
+
+func TestGatewayUsecaseCheckPolicyRateAndQuota(t *testing.T) {
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	repo := &gatewayPolicyTestRepo{
+		policy: &GatewayPolicy{
+			APIKeyID:      9,
+			ModelID:       "*",
+			RPM:           2,
+			DailyRequests: 10,
+		},
+		summaryByStart: map[time.Time]*GatewayUsageSummary{
+			now.Add(-time.Minute): {TotalRequests: 2},
+		},
+	}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+
+	err := uc.CheckPolicy(context.Background(), &GatewayAPIKey{ID: 9}, "gpt-5.4", now)
+	if err != ErrGatewayRateLimited {
+		t.Fatalf("CheckPolicy err = %v, want ErrGatewayRateLimited", err)
+	}
+
+	repo.summaryByStart[now.Add(-time.Minute)] = &GatewayUsageSummary{TotalRequests: 1}
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	repo.summaryByStart[dayStart] = &GatewayUsageSummary{TotalRequests: 10}
+	err = uc.CheckPolicy(context.Background(), &GatewayAPIKey{ID: 9}, "gpt-5.4", now)
+	if err != ErrGatewayQuotaExceeded {
+		t.Fatalf("CheckPolicy err = %v, want ErrGatewayQuotaExceeded", err)
+	}
+}
+
+type testWriter struct{}
+
+func (testWriter) Write(p []byte) (int, error) { return len(p), nil }
+
+type gatewayPolicyTestRepo struct {
+	policy         *GatewayPolicy
+	summaryByStart map[time.Time]*GatewayUsageSummary
+}
+
+func (r *gatewayPolicyTestRepo) CreateAPIKey(context.Context, CreateGatewayAPIKeyInput, GatewayAPIKeySecret) (*GatewayAPIKey, error) {
+	return nil, nil
+}
+func (r *gatewayPolicyTestRepo) ListAPIKeys(context.Context, int, int, string) ([]*GatewayAPIKey, int, error) {
+	return nil, 0, nil
+}
+func (r *gatewayPolicyTestRepo) ListAPIKeysByOwner(context.Context, int, int, int) ([]*GatewayAPIKey, int, error) {
+	return nil, 0, nil
+}
+func (r *gatewayPolicyTestRepo) SetAPIKeyDisabled(context.Context, int, bool) error { return nil }
+func (r *gatewayPolicyTestRepo) GetAPIKeyByHash(context.Context, string) (*GatewayAPIKey, error) {
+	return nil, nil
+}
+func (r *gatewayPolicyTestRepo) TouchAPIKeyUsed(context.Context, int, time.Time) error {
+	return nil
+}
+func (r *gatewayPolicyTestRepo) CreateUsageLog(context.Context, *GatewayUsageLog) error { return nil }
+func (r *gatewayPolicyTestRepo) ListUsageLogs(context.Context, GatewayUsageFilter) ([]*GatewayUsageLog, int, error) {
+	return nil, 0, nil
+}
+func (r *gatewayPolicyTestRepo) SummarizeUsage(_ context.Context, filter GatewayUsageFilter) (*GatewayUsageSummary, error) {
+	if item := r.summaryByStart[filter.StartTime]; item != nil {
+		return item, nil
+	}
+	return &GatewayUsageSummary{}, nil
+}
+func (r *gatewayPolicyTestRepo) ListUsageBuckets(context.Context, GatewayUsageFilter, string) ([]*GatewayUsageBucket, error) {
+	return nil, nil
+}
+func (r *gatewayPolicyTestRepo) GetPolicyForKeyModel(context.Context, int, string) (*GatewayPolicy, error) {
+	return r.policy, nil
+}
+func (r *gatewayPolicyTestRepo) ListPolicies(context.Context, int) ([]*GatewayPolicy, error) {
+	return nil, nil
+}
+func (r *gatewayPolicyTestRepo) UpsertPolicy(context.Context, GatewayPolicy) (*GatewayPolicy, error) {
+	return nil, nil
+}
+func (r *gatewayPolicyTestRepo) DeletePolicy(context.Context, int) error { return nil }
+func (r *gatewayPolicyTestRepo) ListModelPrices(context.Context) ([]*GatewayModelPrice, error) {
+	return nil, nil
+}
+func (r *gatewayPolicyTestRepo) UpsertModelPrice(context.Context, GatewayModelPrice) (*GatewayModelPrice, error) {
+	return nil, nil
+}
+func (r *gatewayPolicyTestRepo) DeleteModelPrice(context.Context, int) error { return nil }
+func (r *gatewayPolicyTestRepo) CreateAuditLog(context.Context, GatewayAuditLog) error {
+	return nil
+}
+func (r *gatewayPolicyTestRepo) ListAlertRules(context.Context) ([]*GatewayAlertRule, error) {
+	return nil, nil
+}
+func (r *gatewayPolicyTestRepo) UpsertAlertRule(context.Context, GatewayAlertRule) (*GatewayAlertRule, error) {
+	return nil, nil
+}
+func (r *gatewayPolicyTestRepo) SetAlertRuleEnabled(context.Context, int, bool) error {
+	return nil
+}
+func (r *gatewayPolicyTestRepo) ListAlertEvents(context.Context, string, int, int) ([]*GatewayAlertEvent, int, error) {
+	return nil, 0, nil
+}
+func (r *gatewayPolicyTestRepo) AckAlertEvent(context.Context, int, int, time.Time) error {
+	return nil
+}
+func (r *gatewayPolicyTestRepo) CreateAlertEvent(context.Context, GatewayAlertEvent) error {
+	return nil
+}
+func (r *gatewayPolicyTestRepo) ListModels(context.Context, int, int, bool, string) ([]*GatewayModel, int, error) {
+	return nil, 0, nil
+}
+func (r *gatewayPolicyTestRepo) UpsertModel(context.Context, GatewayModel) (*GatewayModel, error) {
+	return nil, nil
+}
+func (r *gatewayPolicyTestRepo) UpsertSyncedModel(context.Context, GatewayModel) (*GatewayModel, error) {
+	return nil, nil
+}
+func (r *gatewayPolicyTestRepo) SetModelEnabled(context.Context, int, bool) error { return nil }
+func (r *gatewayPolicyTestRepo) GetModelByID(context.Context, string) (*GatewayModel, error) {
+	return nil, nil
+}
+func (r *gatewayPolicyTestRepo) EnsureDefaultModels(context.Context) error { return nil }
+
+func TestNormalizeGatewayBearer(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "bearer", in: "Bearer ogw_abc", want: "ogw_abc"},
+		{name: "lowercase", in: "bearer ogw_def", want: "ogw_def"},
+		{name: "plain", in: "ogw_plain", want: "ogw_plain"},
+		{name: "blank", in: "  ", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NormalizeGatewayBearer(tt.in); got != tt.want {
+				t.Fatalf("NormalizeGatewayBearer(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}

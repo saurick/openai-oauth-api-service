@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package jsonrpc.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "server/api/jsonrpc/v1;v1";
+
+// JSON-RPC 统一入口
+// /rpc/{url}   <- 模块
+// method       <- 动作
+// params       <- 内容
+service Jsonrpc {
+  // GET /rpc/{url}?id=xxx&jsonrpc=2.0&method=ping 之类
+  rpc GetJsonrpc (GetJsonrpcRequest) returns (GetJsonrpcReply) {
+    option (google.api.http) = {
+      get: "/rpc/{url}"
+      // GET 没有 body，jsonrpc、id、method、params 走 query 即可（可选）
+    };
+  }
+
+  // POST /rpc/{url}
+  // body 是 JSON-RPC 报文的“结构化版本”
+  rpc PostJsonrpc (PostJsonrpcRequest) returns (PostJsonrpcReply) {
+    option (google.api.http) = {
+      post: "/rpc/{url}"
+      body: "*"    // POST 才可以有 body
+    };
+  }
+}
+
+// --------------------
+// GET 版本
+// --------------------
+message GetJsonrpcRequest {
+  // /rpc/{url} 里的 path 变量
+  string url = 1;
+
+  // JSON-RPC 版本，通常 "2.0"
+  string jsonrpc = 2;
+
+  // JSON-RPC id，用 string 存，前端是数字也能转成字符串
+  string id = 3;
+
+  // 可选：method & params 也可以跟在 query 里（不强制）
+  string method = 4;
+  google.protobuf.Struct params = 5;
+}
+
+message GetJsonrpcReply {
+  string jsonrpc = 1;
+  string id = 2;
+  JsonrpcResult result = 3;
+  string error = 4;
+}
+
+// --------------------
+// POST 版本（推荐）
+// --------------------
+message PostJsonrpcRequest {
+  // /rpc/{url} 里的 path 变量，用于区分不同业务域，比如 "auth"、"erp"、"analytics" 等
+  string url = 1;
+
+  // JSON-RPC 标准字段
+  string jsonrpc = 2;               // 一般是 "2.0"
+  string method = 3;                // 比如: "system.ping" / "erp.order.list" / "erp.dashboard.summary"
+  google.protobuf.Struct params = 4;  // 原始 params
+  string id = 5;                    // JSON-RPC id，不带 id 则可以视为通知
+}
+
+message PostJsonrpcReply {
+  string jsonrpc = 1;
+  string id = 2;
+  JsonrpcResult result = 3;
+  string error = 4;
+}
+
+// --------------------
+// 通用结果封装
+// --------------------
+message JsonrpcResult {
+  int32 code = 1;      // 0 = 成功，非 0 = 错误
+  string message = 2;  // 通用提示
+
+  // 真正的业务数据 payload，所有 domain 统一塞到这里，
+  // 比如：
+  //  - system.ping         -> {"pong": "pong"}
+  //  - erp.order.list -> {"orders": [...]}
+  //  - erp.dashboard.summary -> {"kpis": {...}}
+  google.protobuf.Struct data = 3;
+}

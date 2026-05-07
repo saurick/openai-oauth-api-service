@@ -1,0 +1,16 @@
+extends: default
+
+ignore: |
+  .git/
+  web/node_modules/
+  web/build/
+  server/bin/
+  web/pnpm-lock.yaml
+  .playwright-cli/
+  server/deploy/lab-ha/charts/headlamp/
+  server/deploy/lab-ha/manifests/gateway-api-v1.4.1-standard-install.yaml
+
+rules:
+  document-start: disable
+  line-length: disable
+  comments: disable

@@ -1,0 +1,231 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "api/jsonrpc/v1/jsonrpc.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "Jsonrpc"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/rpc/{url}": {
+      "get": {
+        "summary": "GET /rpc/{url}?id=xxx\u0026jsonrpc=2.0\u0026method=ping 之类",
+        "operationId": "Jsonrpc_GetJsonrpc",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetJsonrpcReply"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "url",
+            "description": "/rpc/{url} 里的 path 变量",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "jsonrpc",
+            "description": "JSON-RPC 版本，通常 \"2.0\"",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "description": "JSON-RPC id，用 string 存，前端是数字也能转成字符串",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "method",
+            "description": "可选：method \u0026 params 也可以跟在 query 里（不强制）",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "params",
+            "in": "query",
+            "required": false,
+            "type": "object"
+          }
+        ],
+        "tags": [
+          "Jsonrpc"
+        ]
+      },
+      "post": {
+        "summary": "POST /rpc/{url}\nbody 是 JSON-RPC 报文的“结构化版本”",
+        "operationId": "Jsonrpc_PostJsonrpc",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PostJsonrpcReply"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "url",
+            "description": "/rpc/{url} 里的 path 变量，用于区分不同业务域，比如 \"auth\"、\"erp\"、\"analytics\" 等",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/JsonrpcPostJsonrpcBody"
+            }
+          }
+        ],
+        "tags": [
+          "Jsonrpc"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "JsonrpcPostJsonrpcBody": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "type": "string",
+          "description": "一般是 \"2.0\"",
+          "title": "JSON-RPC 标准字段"
+        },
+        "method": {
+          "type": "string",
+          "title": "比如: \"system.ping\" / \"erp.order.list\" / \"erp.dashboard.summary\""
+        },
+        "params": {
+          "type": "object",
+          "title": "原始 params"
+        },
+        "id": {
+          "type": "string",
+          "title": "JSON-RPC id，不带 id 则可以视为通知"
+        }
+      },
+      "title": "--------------------\nPOST 版本（推荐）\n--------------------"
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "protobufNullValue": {
+      "type": "string",
+      "enum": [
+        "NULL_VALUE"
+      ],
+      "default": "NULL_VALUE",
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1GetJsonrpcReply": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "result": {
+          "$ref": "#/definitions/v1JsonrpcResult"
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "v1JsonrpcResult": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32",
+          "title": "0 = 成功，非 0 = 错误"
+        },
+        "message": {
+          "type": "string",
+          "title": "通用提示"
+        },
+        "data": {
+          "type": "object",
+          "title": "真正的业务数据 payload，所有 domain 统一塞到这里，\n比如：\n - system.ping         -\u003e {\"pong\": \"pong\"}\n - erp.order.list -\u003e {\"orders\": [...]}\n - erp.dashboard.summary -\u003e {\"kpis\": {...}}"
+        }
+      },
+      "title": "--------------------\n通用结果封装\n--------------------"
+    },
+    "v1PostJsonrpcReply": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "result": {
+          "$ref": "#/definitions/v1JsonrpcResult"
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,82 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 64 64"
+  fill="none"
+>
+  <defs>
+    <linearGradient
+      id="favicon-bg"
+      x1="8"
+      y1="6"
+      x2="56"
+      y2="58"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop stop-color="#13213f" />
+      <stop offset="0.52" stop-color="#0b1220" />
+      <stop offset="1" stop-color="#172338" />
+    </linearGradient>
+    <radialGradient
+      id="favicon-cyan-glow"
+      cx="0"
+      cy="0"
+      r="1"
+      gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(20 16) rotate(53.18) scale(26.4291)"
+    >
+      <stop stop-color="#67e8f9" stop-opacity="0.82" />
+      <stop offset="1" stop-color="#67e8f9" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient
+      id="favicon-amber-glow"
+      cx="0"
+      cy="0"
+      r="1"
+      gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(46 49) rotate(-138.58) scale(24.0208)"
+    >
+      <stop stop-color="#f59e0b" stop-opacity="0.7" />
+      <stop offset="1" stop-color="#f59e0b" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient
+      id="favicon-mark"
+      x1="18"
+      y1="18"
+      x2="46"
+      y2="46"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop stop-color="#7dd3fc" />
+      <stop offset="0.58" stop-color="#f8fafc" />
+      <stop offset="1" stop-color="#fbbf24" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="url(#favicon-bg)" />
+  <rect width="64" height="64" rx="18" fill="url(#favicon-cyan-glow)" />
+  <rect width="64" height="64" rx="18" fill="url(#favicon-amber-glow)" />
+  <rect
+    x="4.5"
+    y="4.5"
+    width="55"
+    height="55"
+    rx="13.5"
+    stroke="#e2e8f0"
+    stroke-opacity="0.12"
+  />
+  <circle cx="46" cy="18" r="3" fill="#67e8f9" fill-opacity="0.75" />
+  <path
+    d="M18.5 20.5L25.5 43.5L32 29.5L38.5 43.5L45.5 20.5"
+    stroke="url(#favicon-mark)"
+    stroke-width="6.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M18.5 20.5L25.5 43.5L32 29.5L38.5 43.5L45.5 20.5"
+    stroke="#f8fafc"
+    stroke-opacity="0.24"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
