@@ -182,6 +182,40 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 	}
 
 	if h.gatewayRateLimitEnabled() {
+		if err := h.gatewayUC.CheckAPIKeyTokenQuota(r.Context(), key, time.Now()); err != nil {
+			status := stdhttp.StatusTooManyRequests
+			h.writeGatewayError(w, status, err, gatewayErrorType(err))
+			h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+				APIKeyID:     key.ID,
+				APIKeyPrefix: key.KeyPrefix,
+				RequestID:    requestID,
+				Method:       r.Method,
+				Path:         r.URL.Path,
+				Endpoint:     endpoint,
+				Model:        requestModel,
+				StatusCode:   status,
+				Success:      false,
+				Stream:       stream,
+				RequestBytes: int64(len(body)),
+				DurationMS:   time.Since(start).Milliseconds(),
+				ErrorType:    gatewayErrorType(err),
+				CreatedAt:    time.Now(),
+			})
+			h.gatewayUC.CreateAuditLog(r.Context(), biz.GatewayAuditLog{
+				ActorID:    key.ID,
+				ActorName:  key.KeyPrefix,
+				ActorRole:  "api_key",
+				Action:     "api.request_blocked",
+				TargetType: "api_key",
+				TargetID:   fmt.Sprint(key.ID),
+				Metadata: map[string]any{
+					"model":      requestModel,
+					"endpoint":   endpoint,
+					"error_type": gatewayErrorType(err),
+				},
+			})
+			return
+		}
 		if err := h.gatewayUC.CheckPolicy(r.Context(), key, requestModel, time.Now()); err != nil {
 			status := stdhttp.StatusTooManyRequests
 			h.writeGatewayError(w, status, err, gatewayErrorType(err))

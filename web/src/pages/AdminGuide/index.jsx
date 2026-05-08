@@ -1,24 +1,23 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
 import AdminFrame from '@/common/components/layout/AdminFrame'
 import SurfacePanel from '@/common/components/layout/SurfacePanel'
 
 const DEFAULT_ITEMS = [
-  '管理员登录入口、受保护路由和账号目录',
+  '管理员登录入口、受保护路由和 API 运营后台',
   '健康检查、PostgreSQL 迁移、Compose 部署骨架和质量门禁',
   '历史 Python MVP 仅作早期用量记录参考，不作为主路径',
 ]
 
 const CUSTOMIZE_ITEMS = [
-  'API key 创建、启停、模型白名单、组织用户归属和一次性明文返回',
+  'API key 创建、启停、模型白名单和完整 key 展示',
   'OpenAI 兼容 /v1/models、/v1/chat/completions、/v1/responses 调用入口',
   '模型列表管理、usage 看板、最近请求、导出、价格、告警和统一上游代理配置',
 ]
 
 const NEXT_ITEMS = [
-  'OAuth/OIDC 授权登录入口已接入，后续联调真实身份提供方',
-  '组织账号由管理员创建，普通用户门户只看归属 key 和 usage',
+  '组织用户管理和普通用户门户不作为当前前端主路径',
   'key + 模型级 RPM、TPM、日/月配额、审计日志和站内告警已落库',
+  '后续按真实生产反馈继续收敛 API 转发、计量和后台运维能力',
 ]
 
 function GuideList({ title, description, items, accentClass }) {
@@ -51,15 +50,7 @@ export default function AdminGuidePage() {
     <AdminFrame
       breadcrumb="API / 接入路线"
       title="长期维护路线"
-      description="当前仓库已经收口为长期维护结构，OAuth 登录、API key 生成和 token/usage 统计能力已迁入 Go 后端。组织账号、策略、价格、告警、导出和模型同步都已接入主路径。"
-      actions={
-        <Link
-          to="/admin-oauth"
-          className="rounded-md border border-[#d6ded8] bg-white px-3 py-1.5 text-sm text-[#1f2d25] transition hover:border-[#238a43] hover:text-[#238a43]"
-        >
-          OAuth 配置
-        </Link>
-      }
+      description="当前仓库已经收口为长期维护结构，API key 生成、OpenAI 兼容转发和 token/usage 统计能力已迁入 Go 后端。后台前端保留管理登录、key、模型和 usage 主路径。"
     >
       <div className="grid gap-6 lg:grid-cols-2">
         <GuideList

@@ -56,12 +56,11 @@ export default function HomePage() {
                 </div>
                 <div className="max-w-2xl space-y-3">
                   <h1 className="text-3xl font-semibold tracking-tight text-slate-50 sm:text-4xl lg:text-5xl">
-                    OAuth 登录与 API 用量服务
+                    API 转发与用量服务
                   </h1>
                   <p className="text-sm leading-7 text-slate-300 sm:text-base">
-                    管理员接入 OAuth/OIDC 登录，统一管理下游 API key、OpenAI
-                    上游出口、用量记录和运行状态。上游只接入官方 OpenAI API key，
-                    不复用客户端登录态。
+                    管理员通过后台账号登录，统一管理下游 API key、OpenAI
+                    上游出口、用量记录和运行状态。
                   </p>
                 </div>
               </div>
@@ -72,8 +71,7 @@ export default function HomePage() {
                     下游接入
                   </div>
                   <div className="mt-2 text-sm leading-6 text-slate-300">
-                    下游系统使用本系统签发的 API key 调用 `/v1/*`，不直接接触真实 OpenAI API
-                    key。
+                    下游系统使用本系统签发的 API key 调用 `/v1/*`，统一走后台鉴权、配额和计量。
                   </div>
                 </div>
                 <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
@@ -86,11 +84,10 @@ export default function HomePage() {
                 </div>
                 <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
                   <div className="text-sm font-medium text-slate-100">
-                    合规边界
+                    运行监控
                   </div>
                   <div className="mt-2 text-sm leading-6 text-slate-300">
-                    禁止接入 Codex / ChatGPT 登录态、Cookie、设备码或个人账号
-                    token。
+                    统一查看 usage、错误、延迟和审计记录，辅助定位调用链路问题。
                   </div>
                 </div>
               </div>

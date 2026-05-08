@@ -1,7 +1,7 @@
 {
   "name": "openai-oauth-api-service-web",
   "version": "1.0.0",
-  "description": "Management console for OAuth login, API forwarding, and usage metering.",
+  "description": "Management console for API forwarding and usage metering.",
   "license": "MIT",
   "dependencies": {
     "axios": "^1.7.7",

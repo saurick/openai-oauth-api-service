@@ -18,20 +18,13 @@
 - 前端后台、鉴权、页面：先读 `web/README.md`
 - 部署：先读 `server/deploy/README.md`
 
-## 合规边界
-
-- 上游认证只允许使用 OpenAI 官方 API key，优先使用 Project API key 或 Service Account key。
-- 禁止实现、引导或保留任何抓取、存储、复用、分享 Codex / ChatGPT 登录态、Cookie、设备码、浏览器会话、个人账号 token 的逻辑。
-- 禁止把个人订阅账号包装成多人共享 API。
-- 下游用户只能拿到本系统签发的 API key；真实 OpenAI API key 不返回给前端或下游调用方。
-
 ## 工程基线
 
 - 保留质量门禁、错误码治理、健康检查、基础可观测性、数据库迁移工作流。
 - Schema 变更必须走 Ent + Atlas 迁移流程，不直接手写结构性 SQL。
-- 生产配置中的密钥、数据库密码、OpenAI API key、代理凭据必须通过环境变量或部署 Secret 注入，不写入仓库。
+- 生产配置中的密钥、数据库密码和代理凭据必须通过环境变量或部署 Secret 注入，不写入仓库。
 - 请求体和响应体默认不落库；usage 监控优先记录 key、模型、状态码、延迟、字节数、token 用量和错误类型。
-- 结构化日志禁止记录完整 token、OpenAI API key、代理认证信息、用户 prompt 或模型输出正文。
+- 结构化日志禁止记录完整 token、认证信息、用户 prompt 或模型输出正文。
 
 ## 部署边界
 

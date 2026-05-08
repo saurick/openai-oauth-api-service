@@ -25,7 +25,7 @@ func TestExtractUsageFromJSONResponses(t *testing.T) {
 
 func TestExtractUsageFromJSONChatCompletions(t *testing.T) {
 	body := []byte(`{
-		"model": "gpt-4o-mini",
+		"model": "gpt-5.5",
 		"usage": {
 			"prompt_tokens": 19,
 			"completion_tokens": 10,
@@ -36,7 +36,7 @@ func TestExtractUsageFromJSONChatCompletions(t *testing.T) {
 	}`)
 
 	got := extractUsageFromJSON(body)
-	if got.Model != "gpt-4o-mini" || got.InputTokens != 19 || got.OutputTokens != 10 || got.TotalTokens != 29 {
+	if got.Model != "gpt-5.5" || got.InputTokens != 19 || got.OutputTokens != 10 || got.TotalTokens != 29 {
 		t.Fatalf("unexpected usage: %+v", got)
 	}
 	if got.CachedTokens != 3 || got.ReasoningTokens != 2 {
@@ -60,12 +60,12 @@ func TestExtractUsageFromSSEResponsesCompleted(t *testing.T) {
 }
 
 func TestExtractUsageFromSSEChatChunk(t *testing.T) {
-	body := []byte("data: {\"model\":\"gpt-4o-mini\",\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}\n\n" +
-		"data: {\"model\":\"gpt-4o-mini\",\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":7,\"total_tokens\":12}}\n\n" +
+	body := []byte("data: {\"model\":\"gpt-5.5\",\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}\n\n" +
+		"data: {\"model\":\"gpt-5.5\",\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":7,\"total_tokens\":12}}\n\n" +
 		"data: [DONE]\n\n")
 
 	got := extractUsageFromSSE(body)
-	if got.Model != "gpt-4o-mini" || got.InputTokens != 5 || got.OutputTokens != 7 || got.TotalTokens != 12 {
+	if got.Model != "gpt-5.5" || got.InputTokens != 5 || got.OutputTokens != 7 || got.TotalTokens != 12 {
 		t.Fatalf("unexpected usage: %+v", got)
 	}
 }

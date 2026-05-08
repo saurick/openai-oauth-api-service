@@ -17,23 +17,17 @@ import (
 type memAuthRepo struct {
 	mu sync.Mutex
 
-	usersByName  map[string]*User
-	usersByOAuth map[string]*User
-	lastLogin    map[int]time.Time
-	nextUserID   int
+	usersByName map[string]*User
+	lastLogin   map[int]time.Time
+	nextUserID  int
 }
 
 func newMemAuthRepo() *memAuthRepo {
 	return &memAuthRepo{
-		usersByName:  make(map[string]*User),
-		usersByOAuth: make(map[string]*User),
-		lastLogin:    make(map[int]time.Time),
-		nextUserID:   1,
+		usersByName: make(map[string]*User),
+		lastLogin:   make(map[int]time.Time),
+		nextUserID:  1,
 	}
-}
-
-func oauthIdentityKey(provider, subject string) string {
-	return provider + "\x00" + subject
 }
 
 func (r *memAuthRepo) GetUserByUsername(ctx context.Context, username string) (*User, error) {
@@ -61,18 +55,6 @@ func (r *memAuthRepo) GetUserByID(ctx context.Context, id int) (*User, error) {
 	return nil, errors.New("not found")
 }
 
-func (r *memAuthRepo) GetUserByOAuthIdentity(ctx context.Context, provider, subject string) (*User, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	u := r.usersByOAuth[oauthIdentityKey(provider, subject)]
-	if u == nil {
-		return nil, errors.New("not found")
-	}
-	cp := *u
-	return &cp, nil
-}
-
 func (r *memAuthRepo) CreateUser(ctx context.Context, u *User) (*User, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -85,28 +67,7 @@ func (r *memAuthRepo) CreateUser(ctx context.Context, u *User) (*User, error) {
 	r.nextUserID++
 
 	r.usersByName[cp.Username] = &cp
-	if cp.OAuthProvider != nil && cp.OAuthSubject != nil {
-		r.usersByOAuth[oauthIdentityKey(*cp.OAuthProvider, *cp.OAuthSubject)] = &cp
-	}
 	return &cp, nil
-}
-
-func (r *memAuthRepo) BindUserOAuthIdentity(ctx context.Context, id int, identity OAuthIdentity) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	for _, u := range r.usersByName {
-		if u.ID != id {
-			continue
-		}
-		u.OAuthProvider = optionalStringPtr(identity.Provider)
-		u.OAuthSubject = optionalStringPtr(identity.Subject)
-		u.OAuthEmail = optionalStringPtr(identity.Email)
-		u.OAuthName = optionalStringPtr(identity.Name)
-		r.usersByOAuth[oauthIdentityKey(identity.Provider, identity.Subject)] = u
-		return nil
-	}
-	return errors.New("not found")
 }
 
 func (r *memAuthRepo) UpdateUserLastLogin(ctx context.Context, id int, t time.Time) error {
@@ -326,54 +287,5 @@ func TestAuthUsecase_Login_TokenGenFailed(t *testing.T) {
 	_, _, _, err := uc.Login(context.Background(), "alice", "p@ss")
 	if err == nil {
 		t.Fatalf("expected error when token generation fails")
-	}
-}
-
-func TestAuthUsecase_LoginWithOAuth_BindsExistingUser(t *testing.T) {
-	repo := newMemAuthRepo()
-	_, _ = repo.CreateUser(context.Background(), &User{Username: "alice@example.com", PasswordHash: "hash"})
-	uc := NewAuthUsecase(repo, func(userID int, username string, role int8) (string, time.Time, error) {
-		return "user-oauth-token", time.Now().Add(time.Hour), nil
-	}, log.NewStdLogger(io.Discard), tracesdk.NewTracerProvider())
-
-	token, _, user, err := uc.LoginWithOAuth(context.Background(), OAuthIdentity{
-		Provider:          "oidc",
-		Subject:           "subject-1",
-		Email:             "alice@example.com",
-		PreferredUsername: "alice",
-	})
-	if err != nil {
-		t.Fatalf("expected nil err, got %v", err)
-	}
-	if token != "user-oauth-token" {
-		t.Fatalf("unexpected token: %s", token)
-	}
-	if user == nil || user.Username != "alice@example.com" || user.OAuthSubject == nil || *user.OAuthSubject != "subject-1" {
-		t.Fatalf("unexpected user: %+v", user)
-	}
-}
-
-func TestAuthUsecase_LoginWithOAuth_CreatesUser(t *testing.T) {
-	repo := newMemAuthRepo()
-	uc := NewAuthUsecase(repo, func(userID int, username string, role int8) (string, time.Time, error) {
-		return "created-oauth-token", time.Now().Add(time.Hour), nil
-	}, log.NewStdLogger(io.Discard), tracesdk.NewTracerProvider())
-
-	token, _, user, err := uc.LoginWithOAuth(context.Background(), OAuthIdentity{
-		Provider: "oidc",
-		Subject:  "subject-2",
-		Email:    "bob@example.com",
-	})
-	if err != nil {
-		t.Fatalf("expected nil err, got %v", err)
-	}
-	if token != "created-oauth-token" {
-		t.Fatalf("unexpected token: %s", token)
-	}
-	if user == nil || user.ID == 0 || user.OAuthSubject == nil || *user.OAuthSubject != "subject-2" {
-		t.Fatalf("unexpected user: %+v", user)
-	}
-	if user.Username != "bob-"+oauthSubjectHash("oidc", "subject-2") {
-		t.Fatalf("unexpected username: %s", user.Username)
 	}
 }

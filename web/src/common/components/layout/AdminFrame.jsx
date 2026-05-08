@@ -7,27 +7,15 @@ import { JsonRpc } from '@/common/utils/jsonRpc'
 
 const NAV_GROUPS = [
   {
-    label: '总览',
+    label: '运营总览',
     items: [{ to: '/admin-dashboard', label: '业务看板', icon: GaugeIcon }],
   },
   {
-    label: '配置管理',
+    label: '转发配置',
     items: [
-      { to: '/admin-keys', label: '下游 key', icon: RouteIcon },
-      { to: '/admin-models', label: '模型列表', icon: RouteIcon },
-      { to: '/admin-usage', label: 'usage 明细', icon: GaugeIcon },
-    ],
-  },
-  {
-    label: '基础资料',
-    items: [
-      { to: '/admin-accounts', label: '账号目录', icon: UsersIcon },
-      {
-        to: '/admin-oauth',
-        label: 'OAuth 配置',
-        icon: OAuthIcon,
-      },
-      { to: '/admin-guide', label: '功能路线', icon: RouteIcon },
+      { to: '/admin-keys', label: 'API 凭据', icon: KeyIcon },
+      { to: '/admin-models', label: '模型管理', icon: RouteIcon },
+      { to: '/admin-usage', label: '调用明细', icon: ListIcon },
     ],
   },
 ]
@@ -193,20 +181,6 @@ function GaugeIcon() {
   )
 }
 
-function UsersIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
-      <path
-        d="M16 19c0-2.2-1.8-4-4-4H8c-2.2 0-4 1.8-4 4M10 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M20 19c0-1.8-1.2-3.2-2.9-3.8M17 5.3a3 3 0 0 1 0 5.4"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="2"
-      />
-    </svg>
-  )
-}
-
 function RouteIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
@@ -221,15 +195,29 @@ function RouteIcon() {
   )
 }
 
-function OAuthIcon() {
+function KeyIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
       <path
-        d="M7 12a5 5 0 1 1 5 5H9l-2 2H4v-3l2-2.1A5 5 0 0 1 7 12Zm6-2h.01M16 10h.01"
+        d="M14 10a4 4 0 1 1-2.4-3.67A4 4 0 0 1 14 10Zm0 0h6m-3 0v3"
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  )
+}
+
+function ListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
         strokeWidth="2"
       />
     </svg>

@@ -3,15 +3,8 @@ package biz
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"errors"
-	"fmt"
-	"strings"
 	"time"
-	"unicode"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"go.opentelemetry.io/otel"
@@ -32,9 +25,7 @@ var (
 type AuthRepo interface {
 	GetUserByUsername(ctx context.Context, username string) (*User, error)
 	GetUserByID(ctx context.Context, id int) (*User, error)
-	GetUserByOAuthIdentity(ctx context.Context, provider, subject string) (*User, error)
 	CreateUser(ctx context.Context, u *User) (*User, error)
-	BindUserOAuthIdentity(ctx context.Context, id int, identity OAuthIdentity) error
 	UpdateUserLastLogin(ctx context.Context, id int, t time.Time) error
 }
 
@@ -77,70 +68,6 @@ type AuthUsecase struct {
 	// repo & token
 	repo   AuthRepo
 	genTok TokenGenerator
-}
-
-func normalizeOAuthIdentity(in OAuthIdentity) OAuthIdentity {
-	in.Provider = strings.TrimSpace(in.Provider)
-	in.Subject = strings.TrimSpace(in.Subject)
-	in.Email = strings.TrimSpace(in.Email)
-	in.Name = strings.TrimSpace(in.Name)
-	in.PreferredUsername = strings.TrimSpace(in.PreferredUsername)
-	return in
-}
-
-func oauthSubjectHash(provider, subject string) string {
-	sum := sha256.Sum256([]byte(provider + ":" + subject))
-	return hex.EncodeToString(sum[:])[:10]
-}
-
-func sanitizeUsernameSeed(seed string) string {
-	seed = strings.ToLower(strings.TrimSpace(seed))
-	if at := strings.Index(seed, "@"); at > 0 {
-		seed = seed[:at]
-	}
-
-	var b strings.Builder
-	lastSep := false
-	for _, r := range seed {
-		valid := unicode.IsLetter(r) || unicode.IsDigit(r)
-		sep := r == '-' || r == '_' || r == '.' || unicode.IsSpace(r)
-		switch {
-		case valid:
-			b.WriteRune(r)
-			lastSep = false
-		case sep && !lastSep:
-			b.WriteByte('-')
-			lastSep = true
-		}
-	}
-	return strings.Trim(b.String(), "-")
-}
-
-func truncateString(s string, max int) string {
-	runes := []rune(s)
-	if len(runes) <= max {
-		return s
-	}
-	return string(runes[:max])
-}
-
-func oauthUsernameCandidate(identity OAuthIdentity, attempt int) string {
-	seed := identity.PreferredUsername
-	if seed == "" {
-		seed = identity.Email
-	}
-	if seed == "" {
-		seed = identity.Name
-	}
-	base := sanitizeUsernameSeed(seed)
-	if base == "" {
-		base = "oauth"
-	}
-	hash := oauthSubjectHash(identity.Provider, identity.Subject)
-	if attempt <= 0 {
-		return fmt.Sprintf("%s-%s", truncateString(base, 21), hash)
-	}
-	return fmt.Sprintf("%s-%02d-%s", truncateString(base, 18), attempt, hash)
 }
 
 func NewAuthUsecase(repo AuthRepo, genTok TokenGenerator, logger log.Logger, tp *tracesdk.TracerProvider) *AuthUsecase {
@@ -331,136 +258,6 @@ func (uc *AuthUsecase) Login(ctx context.Context, username, password string) (to
 	l.Infof("Login success user_id=%d username=%s", usr.ID, usr.Username)
 
 	return token, expireAt, usr, nil
-}
-
-func (uc *AuthUsecase) LoginWithOAuth(ctx context.Context, identity OAuthIdentity) (token string, expireAt time.Time, u *User, err error) {
-	identity = normalizeOAuthIdentity(identity)
-	ctx, span := uc.Tracer().Start(ctx, "auth.oauth_login",
-		trace.WithAttributes(
-			attribute.String("auth.oauth_provider", identity.Provider),
-		),
-	)
-	defer span.End()
-
-	l := uc.log.WithContext(ctx)
-	if identity.Provider == "" || identity.Subject == "" {
-		err = errors.New("missing oauth provider or subject")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "invalid argument")
-		return "", time.Time{}, nil, err
-	}
-
-	usr, e := uc.repo.GetUserByOAuthIdentity(ctx, identity.Provider, identity.Subject)
-	if e != nil || usr == nil {
-		usr, e = uc.findBindOrCreateUserByOAuthIdentity(ctx, identity)
-		if e != nil {
-			err = e
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			l.Warnf("OAuth user login failed provider=%s err=%v", identity.Provider, err)
-			return "", time.Time{}, nil, err
-		}
-	}
-
-	span.SetAttributes(attribute.Int("auth.user_id", usr.ID))
-	if usr.Disabled {
-		err = ErrUserDisabled
-		span.SetStatus(codes.Error, err.Error())
-		l.Infof("OAuth user disabled user_id=%d username=%s provider=%s", usr.ID, usr.Username, identity.Provider)
-		return "", time.Time{}, nil, err
-	}
-
-	usr.Role = int8(RoleUser)
-	token, expireAt, e = uc.genTok(usr.ID, usr.Username, usr.Role)
-	if e != nil {
-		err = e
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "generate token failed")
-		l.Errorf("OAuth user generate token failed user_id=%d username=%s err=%v", usr.ID, usr.Username, err)
-		return "", time.Time{}, nil, err
-	}
-
-	span.SetAttributes(attribute.Int64("auth.token_expires_at", expireAt.Unix()))
-	if e := uc.repo.UpdateUserLastLogin(ctx, usr.ID, time.Now()); e != nil {
-		span.RecordError(e)
-		l.Warnf("OAuth user update last_login_at failed user_id=%d err=%v", usr.ID, e)
-	}
-
-	span.SetStatus(codes.Ok, "OK")
-	l.Infof("OAuth user login success user_id=%d username=%s provider=%s", usr.ID, usr.Username, identity.Provider)
-	return token, expireAt, usr, nil
-}
-
-func (uc *AuthUsecase) findBindOrCreateUserByOAuthIdentity(ctx context.Context, identity OAuthIdentity) (*User, error) {
-	candidates := []string{identity.Email, identity.PreferredUsername}
-	seen := map[string]struct{}{}
-	for _, username := range candidates {
-		username = strings.TrimSpace(username)
-		if username == "" {
-			continue
-		}
-		if _, ok := seen[username]; ok {
-			continue
-		}
-		seen[username] = struct{}{}
-
-		usr, err := uc.repo.GetUserByUsername(ctx, username)
-		if err != nil || usr == nil {
-			continue
-		}
-		if err := uc.repo.BindUserOAuthIdentity(ctx, usr.ID, identity); err != nil {
-			return nil, err
-		}
-		usr.OAuthProvider = optionalStringPtr(identity.Provider)
-		usr.OAuthSubject = optionalStringPtr(identity.Subject)
-		usr.OAuthEmail = optionalStringPtr(identity.Email)
-		usr.OAuthName = optionalStringPtr(identity.Name)
-		return usr, nil
-	}
-
-	passwordHash, err := generateUnusableOAuthPasswordHash()
-	if err != nil {
-		return nil, err
-	}
-	for attempt := 0; attempt < 10; attempt++ {
-		created, err := uc.repo.CreateUser(ctx, &User{
-			Username:      oauthUsernameCandidate(identity, attempt),
-			PasswordHash:  passwordHash,
-			OAuthProvider: optionalStringPtr(identity.Provider),
-			OAuthSubject:  optionalStringPtr(identity.Subject),
-			OAuthEmail:    optionalStringPtr(identity.Email),
-			OAuthName:     optionalStringPtr(identity.Name),
-		})
-		if err == nil {
-			created.Role = int8(RoleUser)
-			return created, nil
-		}
-		if !errors.Is(err, ErrUserExists) {
-			return nil, err
-		}
-	}
-	return nil, ErrUserExists
-}
-
-func generateUnusableOAuthPasswordHash() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	raw := "oauth:" + base64.RawURLEncoding.EncodeToString(b)
-	hash, err := bcrypt.GenerateFromPassword([]byte(raw), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hash), nil
-}
-
-func optionalStringPtr(v string) *string {
-	v = strings.TrimSpace(v)
-	if v == "" {
-		return nil
-	}
-	return &v
 }
 
 // GetCurrentUser 获取当前登录用户信息（用于 auth.me 等接口）

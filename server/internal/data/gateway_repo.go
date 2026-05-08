@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"server/internal/data/model/ent/gatewaymodelprice"
 	"server/internal/data/model/ent/gatewaypolicy"
 	"server/internal/data/model/ent/gatewayusagelog"
+	"server/internal/data/model/ent/predicate"
 
 	"github.com/go-kratos/kratos/v2/log"
 )
@@ -38,6 +40,7 @@ func (r *gatewayRepo) CreateAPIKey(ctx context.Context, input biz.CreateGatewayA
 	create := r.data.postgres.GatewayAPIKey.Create().
 		SetName(input.Name).
 		SetKeyHash(secret.KeyHash).
+		SetPlainKey(secret.PlainKey).
 		SetKeyPrefix(secret.KeyPrefix).
 		SetKeyLast4(secret.KeyLast4).
 		SetQuotaRequests(input.QuotaRequests).
@@ -56,7 +59,16 @@ func (r *gatewayRepo) CreateAPIKey(ctx context.Context, input biz.CreateGatewayA
 func (r *gatewayRepo) ListAPIKeys(ctx context.Context, limit, offset int, search string) ([]*biz.GatewayAPIKey, int, error) {
 	q := r.data.postgres.GatewayAPIKey.Query()
 	if search != "" {
-		q = q.Where(gatewayapikey.NameContainsFold(search))
+		predicates := []predicate.GatewayAPIKey{
+			gatewayapikey.NameContainsFold(search),
+			gatewayapikey.PlainKeyContainsFold(search),
+			gatewayapikey.KeyPrefixContainsFold(search),
+			gatewayapikey.KeyLast4ContainsFold(search),
+		}
+		if id, err := strconv.Atoi(search); err == nil && id > 0 {
+			predicates = append(predicates, gatewayapikey.IDEQ(id))
+		}
+		q = q.Where(gatewayapikey.Or(predicates...))
 	}
 
 	total, err := q.Clone().Count(ctx)
@@ -101,6 +113,45 @@ func (r *gatewayRepo) ListAPIKeysByOwner(ctx context.Context, ownerUserID, limit
 		out = append(out, mapGatewayAPIKey(item))
 	}
 	return out, total, nil
+}
+
+func (r *gatewayRepo) UpdateAPIKey(ctx context.Context, input biz.UpdateGatewayAPIKeyInput) (*biz.GatewayAPIKey, error) {
+	update := r.data.postgres.GatewayAPIKey.UpdateOneID(input.ID).
+		SetName(input.Name).
+		SetQuotaRequests(input.QuotaRequests).
+		SetQuotaTotalTokens(input.QuotaTotalTokens).
+		SetAllowedModels(normalizeStringList(input.AllowedModels)).
+		SetDisabled(input.Disabled)
+	if input.OwnerUserID > 0 {
+		update.SetOwnerUserID(input.OwnerUserID)
+	} else {
+		update.ClearOwnerUserID()
+	}
+	item, err := update.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return mapGatewayAPIKey(item), nil
+}
+
+func (r *gatewayRepo) DeleteAPIKey(ctx context.Context, id int) error {
+	if _, err := r.data.postgres.GatewayPolicy.Delete().
+		Where(gatewaypolicy.APIKeyIDEQ(id)).
+		Exec(ctx); err != nil {
+		return err
+	}
+	return r.data.postgres.GatewayAPIKey.DeleteOneID(id).Exec(ctx)
+}
+
+func (r *gatewayRepo) DeleteAPIKeys(ctx context.Context, ids []int) (int, error) {
+	if _, err := r.data.postgres.GatewayPolicy.Delete().
+		Where(gatewaypolicy.APIKeyIDIn(ids...)).
+		Exec(ctx); err != nil {
+		return 0, err
+	}
+	return r.data.postgres.GatewayAPIKey.Delete().
+		Where(gatewayapikey.IDIn(ids...)).
+		Exec(ctx)
 }
 
 func (r *gatewayRepo) SetAPIKeyDisabled(ctx context.Context, id int, disabled bool) error {
@@ -303,6 +354,68 @@ ORDER BY bucket_start ASC`
 	return out, nil
 }
 
+func (r *gatewayRepo) ListUsageKeySummaries(ctx context.Context, filter biz.GatewayUsageFilter, limit int) ([]*biz.GatewayUsageKeySummary, error) {
+	where, args := buildUsageWhereClauseWithPrefix(filter, "l.")
+	args = append(args, limit)
+	query := `SELECT
+COALESCE(l.api_key_id, 0),
+COALESCE(MAX(k.key_prefix), MAX(NULLIF(l.api_key_prefix, '')), ''),
+COALESCE(MAX(k.name), ''),
+COALESCE(BOOL_OR(k.disabled), false),
+COUNT(*),
+COALESCE(SUM(CASE WHEN l.success THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN l.success THEN 0 ELSE 1 END), 0),
+COALESCE(SUM(l.total_tokens), 0),
+COALESCE(SUM(l.input_tokens), 0),
+COALESCE(SUM(l.output_tokens), 0),
+COALESCE(SUM(l.cached_tokens), 0),
+COALESCE(SUM(l.reasoning_tokens), 0),
+COALESCE(AVG(l.duration_ms)::bigint, 0)
+FROM gateway_usage_logs l
+LEFT JOIN gateway_api_keys k ON k.id = l.api_key_id` + where + `
+GROUP BY COALESCE(l.api_key_id, 0)
+ORDER BY COALESCE(SUM(l.total_tokens), 0) DESC, COUNT(*) DESC
+LIMIT $` + fmt.Sprint(len(args))
+
+	rows, err := r.data.sqldb.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			r.log.WithContext(ctx).Warnf("close usage key summary rows failed err=%v", closeErr)
+		}
+	}()
+
+	out := make([]*biz.GatewayUsageKeySummary, 0)
+	for rows.Next() {
+		var item biz.GatewayUsageKeySummary
+		if err := rows.Scan(
+			&item.APIKeyID,
+			&item.APIKeyPrefix,
+			&item.APIKeyName,
+			&item.Disabled,
+			&item.TotalRequests,
+			&item.SuccessRequests,
+			&item.FailedRequests,
+			&item.TotalTokens,
+			&item.InputTokens,
+			&item.OutputTokens,
+			&item.CachedTokens,
+			&item.ReasoningTokens,
+			&item.AverageDurationMS,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, &item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	r.attachUsageKeySummaryCosts(ctx, filter, out)
+	return out, nil
+}
+
 func (r *gatewayRepo) GetPolicyForKeyModel(ctx context.Context, apiKeyID int, modelID string) (*biz.GatewayPolicy, error) {
 	modelID = strings.TrimSpace(modelID)
 	if modelID != "" {
@@ -488,6 +601,15 @@ func (r *gatewayRepo) UpsertAlertRule(ctx context.Context, item biz.GatewayAlert
 	return mapGatewayAlertRule(updated), nil
 }
 
+func (r *gatewayRepo) DeleteAlertRule(ctx context.Context, id int) error {
+	if _, err := r.data.postgres.GatewayAlertEvent.Delete().
+		Where(gatewayalertevent.RuleIDEQ(id)).
+		Exec(ctx); err != nil {
+		return err
+	}
+	return r.data.postgres.GatewayAlertRule.DeleteOneID(id).Exec(ctx)
+}
+
 func (r *gatewayRepo) SetAlertRuleEnabled(ctx context.Context, id int, enabled bool) error {
 	return r.data.postgres.GatewayAlertRule.UpdateOneID(id).
 		SetEnabled(enabled).
@@ -646,6 +768,41 @@ func (r *gatewayRepo) SetModelEnabled(ctx context.Context, id int, enabled bool)
 		Exec(ctx)
 }
 
+func (r *gatewayRepo) DeleteModel(ctx context.Context, id int) error {
+	model, err := r.data.postgres.GatewayModel.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	modelID := model.ModelID
+
+	if _, err := r.data.postgres.GatewayPolicy.Delete().
+		Where(gatewaypolicy.ModelIDEQ(modelID)).
+		Exec(ctx); err != nil {
+		return err
+	}
+	if _, err := r.data.postgres.GatewayModelPrice.Delete().
+		Where(gatewaymodelprice.ModelIDEQ(modelID)).
+		Exec(ctx); err != nil {
+		return err
+	}
+	keys, err := r.data.postgres.GatewayAPIKey.Query().All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, key := range keys {
+		models := removeString(normalizeStringList(key.AllowedModels), modelID)
+		if len(models) == len(normalizeStringList(key.AllowedModels)) {
+			continue
+		}
+		if err := r.data.postgres.GatewayAPIKey.UpdateOneID(key.ID).
+			SetAllowedModels(models).
+			Exec(ctx); err != nil {
+			return err
+		}
+	}
+	return r.data.postgres.GatewayModel.DeleteOneID(id).Exec(ctx)
+}
+
 func (r *gatewayRepo) GetModelByID(ctx context.Context, modelID string) (*biz.GatewayModel, error) {
 	item, err := r.data.postgres.GatewayModel.Query().
 		Where(gatewaymodel.ModelIDEQ(modelID)).
@@ -660,21 +817,20 @@ func (r *gatewayRepo) GetModelByID(ctx context.Context, modelID string) (*biz.Ga
 }
 
 func (r *gatewayRepo) EnsureDefaultModels(ctx context.Context) error {
-	count, err := r.data.postgres.GatewayModel.Query().Count(ctx)
-	if err != nil {
-		return err
-	}
-	if count > 0 {
-		return nil
-	}
-
 	defaults := []biz.GatewayModel{
 		{ModelID: "gpt-5.4", OwnedBy: "openai", Enabled: true, Source: "seed"},
-		{ModelID: "gpt-5.4-mini", OwnedBy: "openai", Enabled: true, Source: "seed"},
-		{ModelID: "gpt-4o-mini", OwnedBy: "openai", Enabled: true, Source: "seed"},
-		{ModelID: "o3-mini", OwnedBy: "openai", Enabled: true, Source: "seed"},
+		{ModelID: "gpt-5.5", OwnedBy: "openai", Enabled: true, Source: "seed"},
 	}
 	for _, item := range defaults {
+		exists, err := r.data.postgres.GatewayModel.Query().
+			Where(gatewaymodel.ModelIDEQ(item.ModelID)).
+			Exist(ctx)
+		if err != nil {
+			return err
+		}
+		if exists {
+			continue
+		}
 		if _, err := r.UpsertModel(ctx, item); err != nil {
 			return err
 		}
@@ -717,8 +873,15 @@ func (r *gatewayRepo) applyUsageFilter(ctx context.Context, q *ent.GatewayUsageL
 }
 
 func buildUsageWhereClause(filter biz.GatewayUsageFilter) (string, []any) {
+	return buildUsageWhereClauseWithPrefix(filter, "")
+}
+
+func buildUsageWhereClauseWithPrefix(filter biz.GatewayUsageFilter, columnPrefix string) (string, []any) {
 	conditions := make([]string, 0, 5)
 	args := make([]any, 0, 5)
+	col := func(name string) string {
+		return columnPrefix + name
+	}
 
 	add := func(format string, value any) {
 		args = append(args, value)
@@ -726,25 +889,25 @@ func buildUsageWhereClause(filter biz.GatewayUsageFilter) (string, []any) {
 	}
 
 	if filter.KeyID > 0 {
-		add("api_key_id = $%d", filter.KeyID)
+		add(col("api_key_id")+" = $%d", filter.KeyID)
 	}
 	if filter.OwnerUserID > 0 {
-		add("api_key_id IN (SELECT id FROM gateway_api_keys WHERE owner_user_id = $%d)", filter.OwnerUserID)
+		add(col("api_key_id")+" IN (SELECT id FROM gateway_api_keys WHERE owner_user_id = $%d)", filter.OwnerUserID)
 	}
 	if filter.Model != "" {
-		add("model = $%d", filter.Model)
+		add(col("model")+" = $%d", filter.Model)
 	}
 	if filter.Endpoint != "" {
-		add("endpoint = $%d", filter.Endpoint)
+		add(col("endpoint")+" = $%d", filter.Endpoint)
 	}
 	if filter.SuccessSet {
-		add("success = $%d", filter.Success)
+		add(col("success")+" = $%d", filter.Success)
 	}
 	if !filter.StartTime.IsZero() {
-		add("created_at >= $%d", filter.StartTime)
+		add(col("created_at")+" >= $%d", filter.StartTime)
 	}
 	if !filter.EndTime.IsZero() {
-		add("created_at < $%d", filter.EndTime)
+		add(col("created_at")+" < $%d", filter.EndTime)
 	}
 
 	if len(conditions) == 0 {
@@ -806,6 +969,71 @@ GROUP BY model`
 		return &zero
 	}
 	return &total
+}
+
+func (r *gatewayRepo) attachUsageKeySummaryCosts(ctx context.Context, filter biz.GatewayUsageFilter, list []*biz.GatewayUsageKeySummary) {
+	if len(list) == 0 {
+		return
+	}
+	prices, err := r.listModelPriceMap(ctx)
+	if err != nil || len(prices) == 0 {
+		return
+	}
+	where, args := buildUsageWhereClauseWithPrefix(filter, "l.")
+	query := `SELECT
+COALESCE(l.api_key_id, 0),
+l.model,
+COALESCE(SUM(l.input_tokens), 0),
+COALESCE(SUM(l.cached_tokens), 0),
+COALESCE(SUM(l.output_tokens), 0)
+FROM gateway_usage_logs l` + where + `
+GROUP BY COALESCE(l.api_key_id, 0), l.model`
+	rows, err := r.data.sqldb.QueryContext(ctx, query, args...)
+	if err != nil {
+		return
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			r.log.WithContext(ctx).Warnf("close usage key summary cost rows failed err=%v", closeErr)
+		}
+	}()
+
+	totals := make(map[int]float64, len(list))
+	seen := make(map[int]bool, len(list))
+	missingPrice := make(map[int]bool, len(list))
+	for rows.Next() {
+		var apiKeyID int
+		var model string
+		var inputTokens, cachedTokens, outputTokens int64
+		if err := rows.Scan(&apiKeyID, &model, &inputTokens, &cachedTokens, &outputTokens); err != nil {
+			return
+		}
+		seen[apiKeyID] = true
+		if inputTokens <= 0 && cachedTokens <= 0 && outputTokens <= 0 {
+			continue
+		}
+		price, ok := prices[model]
+		if !ok || price == nil {
+			missingPrice[apiKeyID] = true
+			continue
+		}
+		cost := estimateCostForTokens(inputTokens, cachedTokens, outputTokens, price)
+		if cost == nil {
+			missingPrice[apiKeyID] = true
+			continue
+		}
+		totals[apiKeyID] += *cost
+	}
+	if err := rows.Err(); err != nil {
+		return
+	}
+	for _, item := range list {
+		if item == nil || !seen[item.APIKeyID] || missingPrice[item.APIKeyID] {
+			continue
+		}
+		cost := totals[item.APIKeyID]
+		item.EstimatedCostUSD = &cost
+	}
 }
 
 func (r *gatewayRepo) listModelPriceMap(ctx context.Context) (map[string]*biz.GatewayModelPrice, error) {
@@ -874,6 +1102,7 @@ func mapGatewayAPIKey(item *ent.GatewayAPIKey) *biz.GatewayAPIKey {
 		ID:               item.ID,
 		OwnerUserID:      ownerUserID,
 		Name:             item.Name,
+		PlainKey:         item.PlainKey,
 		KeyPrefix:        item.KeyPrefix,
 		KeyLast4:         item.KeyLast4,
 		Disabled:         item.Disabled,
@@ -1029,6 +1258,16 @@ func normalizeStringList(in []string) []string {
 		}
 		seen[item] = struct{}{}
 		out = append(out, item)
+	}
+	return out
+}
+
+func removeString(in []string, target string) []string {
+	out := make([]string, 0, len(in))
+	for _, item := range in {
+		if item != target {
+			out = append(out, item)
+		}
 	}
 	return out
 }

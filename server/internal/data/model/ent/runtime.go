@@ -113,8 +113,14 @@ func init() {
 			return nil
 		}
 	}()
+	// gatewayapikeyDescPlainKey is the schema descriptor for plain_key field.
+	gatewayapikeyDescPlainKey := gatewayapikeyFields[3].Descriptor()
+	// gatewayapikey.DefaultPlainKey holds the default value on creation for the plain_key field.
+	gatewayapikey.DefaultPlainKey = gatewayapikeyDescPlainKey.Default.(string)
+	// gatewayapikey.PlainKeyValidator is a validator for the "plain_key" field. It is called by the builders before save.
+	gatewayapikey.PlainKeyValidator = gatewayapikeyDescPlainKey.Validators[0].(func(string) error)
 	// gatewayapikeyDescKeyPrefix is the schema descriptor for key_prefix field.
-	gatewayapikeyDescKeyPrefix := gatewayapikeyFields[3].Descriptor()
+	gatewayapikeyDescKeyPrefix := gatewayapikeyFields[4].Descriptor()
 	// gatewayapikey.KeyPrefixValidator is a validator for the "key_prefix" field. It is called by the builders before save.
 	gatewayapikey.KeyPrefixValidator = func() func(string) error {
 		validators := gatewayapikeyDescKeyPrefix.Validators
@@ -132,7 +138,7 @@ func init() {
 		}
 	}()
 	// gatewayapikeyDescKeyLast4 is the schema descriptor for key_last4 field.
-	gatewayapikeyDescKeyLast4 := gatewayapikeyFields[4].Descriptor()
+	gatewayapikeyDescKeyLast4 := gatewayapikeyFields[5].Descriptor()
 	// gatewayapikey.KeyLast4Validator is a validator for the "key_last4" field. It is called by the builders before save.
 	gatewayapikey.KeyLast4Validator = func() func(string) error {
 		validators := gatewayapikeyDescKeyLast4.Validators
@@ -150,23 +156,23 @@ func init() {
 		}
 	}()
 	// gatewayapikeyDescDisabled is the schema descriptor for disabled field.
-	gatewayapikeyDescDisabled := gatewayapikeyFields[5].Descriptor()
+	gatewayapikeyDescDisabled := gatewayapikeyFields[6].Descriptor()
 	// gatewayapikey.DefaultDisabled holds the default value on creation for the disabled field.
 	gatewayapikey.DefaultDisabled = gatewayapikeyDescDisabled.Default.(bool)
 	// gatewayapikeyDescQuotaRequests is the schema descriptor for quota_requests field.
-	gatewayapikeyDescQuotaRequests := gatewayapikeyFields[6].Descriptor()
+	gatewayapikeyDescQuotaRequests := gatewayapikeyFields[7].Descriptor()
 	// gatewayapikey.DefaultQuotaRequests holds the default value on creation for the quota_requests field.
 	gatewayapikey.DefaultQuotaRequests = gatewayapikeyDescQuotaRequests.Default.(int64)
 	// gatewayapikeyDescQuotaTotalTokens is the schema descriptor for quota_total_tokens field.
-	gatewayapikeyDescQuotaTotalTokens := gatewayapikeyFields[7].Descriptor()
+	gatewayapikeyDescQuotaTotalTokens := gatewayapikeyFields[8].Descriptor()
 	// gatewayapikey.DefaultQuotaTotalTokens holds the default value on creation for the quota_total_tokens field.
 	gatewayapikey.DefaultQuotaTotalTokens = gatewayapikeyDescQuotaTotalTokens.Default.(int64)
 	// gatewayapikeyDescCreatedAt is the schema descriptor for created_at field.
-	gatewayapikeyDescCreatedAt := gatewayapikeyFields[10].Descriptor()
+	gatewayapikeyDescCreatedAt := gatewayapikeyFields[11].Descriptor()
 	// gatewayapikey.DefaultCreatedAt holds the default value on creation for the created_at field.
 	gatewayapikey.DefaultCreatedAt = gatewayapikeyDescCreatedAt.Default.(func() time.Time)
 	// gatewayapikeyDescUpdatedAt is the schema descriptor for updated_at field.
-	gatewayapikeyDescUpdatedAt := gatewayapikeyFields[11].Descriptor()
+	gatewayapikeyDescUpdatedAt := gatewayapikeyFields[12].Descriptor()
 	// gatewayapikey.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	gatewayapikey.DefaultUpdatedAt = gatewayapikeyDescUpdatedAt.Default.(func() time.Time)
 	// gatewayapikey.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

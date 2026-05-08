@@ -3,15 +3,11 @@ import React, { Suspense, useEffect } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { Loading } from '@/common/components/loading'
-import OAuthCallback from '@/pages/OAuthCallback'
 import AuthGuard from '@/common/auth/AuthGuard'
 import { authBus } from '@/common/auth/authBus'
 import { appAlert } from '@/common/components/modal/alertBridge'
-import AdminUsersPage from '@/pages/AdminUsers'
 import AdminLoginPage from '@/pages/AdminLogin'
-import AdminGuidePage from '@/pages/AdminGuide/index.jsx'
 import AdminApiPage from '@/pages/AdminApi'
-import AdminOAuthPage from '@/pages/AdminOAuth'
 import AdminDashboardPage from '@/pages/AdminDashboard'
 
 import 'normalize.css/normalize.css'
@@ -57,7 +53,7 @@ const App = () => {
           {/* <Route path="/about" element={<About />} />  // 匹配/about路径，显示About组件 */}
           <Route path="/login" element={<Navigate to="/admin-login" replace />} />
           <Route path="/oauth-login" element={<Navigate to="/admin-login" replace />} />
-          <Route path="/oauth/callback" element={<OAuthCallback />} />
+          <Route path="/oauth/callback" element={<Navigate to="/admin-login" replace />} />
           <Route path="/admin-login" element={<AdminLoginPage />} />
           <Route path="/register" element={<Navigate to="/admin-login" replace />} />
           <Route
@@ -72,7 +68,7 @@ const App = () => {
             path="/admin-accounts"
             element={
               <AuthGuard requireAdmin>
-                <AdminUsersPage />
+                <Navigate to="/admin-dashboard" replace />
               </AuthGuard>
             }
           />
@@ -80,7 +76,7 @@ const App = () => {
             path="/admin-api"
             element={
               <AuthGuard requireAdmin>
-                <AdminApiPage />
+                <Navigate to="/admin-dashboard" replace />
               </AuthGuard>
             }
           />
@@ -118,28 +114,20 @@ const App = () => {
           />
           <Route
             path="/admin-guide"
-            element={
-              <AuthGuard requireAdmin>
-                <AdminGuidePage />
-              </AuthGuard>
-            }
+            element={<Navigate to="/admin-dashboard" replace />}
           />
           <Route
             path="/admin-oauth"
-            element={
-              <AuthGuard requireAdmin>
-                <AdminOAuthPage />
-              </AuthGuard>
-            }
+            element={<Navigate to="/admin-dashboard" replace />}
           />
           <Route path="/portal" element={<Navigate to="/admin-login" replace />} />
           <Route
             path="/admin-users"
-            element={<Navigate to="/admin-accounts" replace />}
+            element={<Navigate to="/admin-dashboard" replace />}
           />
           <Route
             path="/admin-hierarchy"
-            element={<Navigate to="/admin-guide" replace />}
+            element={<Navigate to="/admin-dashboard" replace />}
           />
           <Route path="/" element={<Navigate to="/admin-login" replace />} />
         </Routes>

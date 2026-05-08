@@ -84,6 +84,20 @@ func (_u *GatewayAPIKeyUpdate) SetNillableKeyHash(v *string) *GatewayAPIKeyUpdat
 	return _u
 }
 
+// SetPlainKey sets the "plain_key" field.
+func (_u *GatewayAPIKeyUpdate) SetPlainKey(v string) *GatewayAPIKeyUpdate {
+	_u.mutation.SetPlainKey(v)
+	return _u
+}
+
+// SetNillablePlainKey sets the "plain_key" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdate) SetNillablePlainKey(v *string) *GatewayAPIKeyUpdate {
+	if v != nil {
+		_u.SetPlainKey(*v)
+	}
+	return _u
+}
+
 // SetKeyPrefix sets the "key_prefix" field.
 func (_u *GatewayAPIKeyUpdate) SetKeyPrefix(v string) *GatewayAPIKeyUpdate {
 	_u.mutation.SetKeyPrefix(v)
@@ -265,6 +279,11 @@ func (_u *GatewayAPIKeyUpdate) check() error {
 			return &ValidationError{Name: "key_hash", err: fmt.Errorf(`ent: validator failed for field "GatewayAPIKey.key_hash": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PlainKey(); ok {
+		if err := gatewayapikey.PlainKeyValidator(v); err != nil {
+			return &ValidationError{Name: "plain_key", err: fmt.Errorf(`ent: validator failed for field "GatewayAPIKey.plain_key": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.KeyPrefix(); ok {
 		if err := gatewayapikey.KeyPrefixValidator(v); err != nil {
 			return &ValidationError{Name: "key_prefix", err: fmt.Errorf(`ent: validator failed for field "GatewayAPIKey.key_prefix": %w`, err)}
@@ -304,6 +323,9 @@ func (_u *GatewayAPIKeyUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if value, ok := _u.mutation.KeyHash(); ok {
 		_spec.SetField(gatewayapikey.FieldKeyHash, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PlainKey(); ok {
+		_spec.SetField(gatewayapikey.FieldPlainKey, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.KeyPrefix(); ok {
 		_spec.SetField(gatewayapikey.FieldKeyPrefix, field.TypeString, value)
@@ -417,6 +439,20 @@ func (_u *GatewayAPIKeyUpdateOne) SetKeyHash(v string) *GatewayAPIKeyUpdateOne {
 func (_u *GatewayAPIKeyUpdateOne) SetNillableKeyHash(v *string) *GatewayAPIKeyUpdateOne {
 	if v != nil {
 		_u.SetKeyHash(*v)
+	}
+	return _u
+}
+
+// SetPlainKey sets the "plain_key" field.
+func (_u *GatewayAPIKeyUpdateOne) SetPlainKey(v string) *GatewayAPIKeyUpdateOne {
+	_u.mutation.SetPlainKey(v)
+	return _u
+}
+
+// SetNillablePlainKey sets the "plain_key" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdateOne) SetNillablePlainKey(v *string) *GatewayAPIKeyUpdateOne {
+	if v != nil {
+		_u.SetPlainKey(*v)
 	}
 	return _u
 }
@@ -615,6 +651,11 @@ func (_u *GatewayAPIKeyUpdateOne) check() error {
 			return &ValidationError{Name: "key_hash", err: fmt.Errorf(`ent: validator failed for field "GatewayAPIKey.key_hash": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PlainKey(); ok {
+		if err := gatewayapikey.PlainKeyValidator(v); err != nil {
+			return &ValidationError{Name: "plain_key", err: fmt.Errorf(`ent: validator failed for field "GatewayAPIKey.plain_key": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.KeyPrefix(); ok {
 		if err := gatewayapikey.KeyPrefixValidator(v); err != nil {
 			return &ValidationError{Name: "key_prefix", err: fmt.Errorf(`ent: validator failed for field "GatewayAPIKey.key_prefix": %w`, err)}
@@ -671,6 +712,9 @@ func (_u *GatewayAPIKeyUpdateOne) sqlSave(ctx context.Context) (_node *GatewayAP
 	}
 	if value, ok := _u.mutation.KeyHash(); ok {
 		_spec.SetField(gatewayapikey.FieldKeyHash, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PlainKey(); ok {
+		_spec.SetField(gatewayapikey.FieldPlainKey, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.KeyPrefix(); ok {
 		_spec.SetField(gatewayapikey.FieldKeyPrefix, field.TypeString, value)

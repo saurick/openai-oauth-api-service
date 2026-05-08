@@ -137,46 +137,6 @@ func overrideFromEnv(dataCfg *conf.Data, baseLogger log.Logger) {
 		helper.Info("admin password overridden from env")
 	}
 
-	if dataCfg.Auth.Oauth == nil {
-		dataCfg.Auth.Oauth = &conf.Data_Auth_OAuth{}
-	}
-	if v := strings.TrimSpace(os.Getenv("OAUTH_API_OAUTH_ENABLED")); v != "" {
-		dataCfg.Auth.Oauth.Enabled = strings.EqualFold(v, "true") || v == "1" || strings.EqualFold(v, "yes")
-		helper.Info("oauth enabled overridden from env")
-	}
-	if v := strings.TrimSpace(os.Getenv("OAUTH_API_OAUTH_PROVIDER_NAME")); v != "" {
-		dataCfg.Auth.Oauth.ProviderName = v
-		helper.Info("oauth provider name overridden from env")
-	}
-	if v := strings.TrimSpace(os.Getenv("OAUTH_API_OAUTH_CLIENT_ID")); v != "" {
-		dataCfg.Auth.Oauth.ClientId = v
-		helper.Info("oauth client id overridden from env")
-	}
-	if v := strings.TrimSpace(os.Getenv("OAUTH_API_OAUTH_CLIENT_SECRET")); v != "" {
-		dataCfg.Auth.Oauth.ClientSecret = v
-		helper.Info("oauth client secret overridden from env")
-	}
-	if v := strings.TrimSpace(os.Getenv("OAUTH_API_OAUTH_AUTH_URL")); v != "" {
-		dataCfg.Auth.Oauth.AuthUrl = v
-		helper.Info("oauth auth url overridden from env")
-	}
-	if v := strings.TrimSpace(os.Getenv("OAUTH_API_OAUTH_TOKEN_URL")); v != "" {
-		dataCfg.Auth.Oauth.TokenUrl = v
-		helper.Info("oauth token url overridden from env")
-	}
-	if v := strings.TrimSpace(os.Getenv("OAUTH_API_OAUTH_USERINFO_URL")); v != "" {
-		dataCfg.Auth.Oauth.UserInfoUrl = v
-		helper.Info("oauth userinfo url overridden from env")
-	}
-	if v := strings.TrimSpace(os.Getenv("OAUTH_API_OAUTH_REDIRECT_URL")); v != "" {
-		dataCfg.Auth.Oauth.RedirectUrl = v
-		helper.Info("oauth redirect url overridden from env")
-	}
-	if v := strings.TrimSpace(os.Getenv("OAUTH_API_OAUTH_SCOPES")); v != "" {
-		dataCfg.Auth.Oauth.Scopes = splitCSV(v)
-		helper.Info("oauth scopes overridden from env")
-	}
-
 	if dataCfg.Openai == nil {
 		dataCfg.Openai = &conf.Data_OpenAI{}
 	}
@@ -220,18 +180,6 @@ func overrideFromEnv(dataCfg *conf.Data, baseLogger log.Logger) {
 			helper.Info("api alert retention days overridden from env")
 		}
 	}
-}
-
-func splitCSV(v string) []string {
-	parts := strings.Split(v, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	return out
 }
 
 func buildConfigSources(confPath string) []config.Source {

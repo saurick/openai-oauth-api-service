@@ -1,18 +1,15 @@
 # OpenAI OAuth API Service
 
-OpenAI OAuth API Service 是一个长期维护的 OAuth 登录、OpenAI 兼容 API 转发与 token/usage 统计管理项目。系统负责接入合规 OAuth/OIDC 登录，用官方 OpenAI API key 作为上游凭据，向下游签发独立 API key，并统一记录 usage、状态码、延迟、字节数和 token 用量。
+OpenAI OAuth API Service 是一个长期维护的 OpenAI 兼容 API 转发与 token/usage 统计管理项目。系统通过后台账号登录管理上游连接，向下游签发独立 API key，并统一记录 usage、状态码、延迟、字节数和 token 用量。
 
 ## 边界
 
 | 类型 | 说明 |
 | --- | --- |
-| 支持 | 官方 OpenAI API key、Project API key、Service Account key |
-| 支持 | OAuth/OIDC 登录接入、本系统 JWT 签发与账号管理 |
+| 支持 | 管理员账号登录、本系统 JWT 签发与后台权限控制 |
 | 支持 | 下游 API key 签发、吊销、配额、usage 监控 |
 | 支持 | OpenAI 兼容 API 转发，例如 `/v1/responses`、`/v1/chat/completions` |
 | 支持 | 统一上游代理、结构化日志、健康检查、Compose 部署 |
-| 不支持 | 抓取或分享 Codex / ChatGPT 登录态、Cookie、设备码、个人账号 token |
-| 不支持 | 把个人订阅账号包装成多人共享 API |
 
 ## 技术栈
 
@@ -82,7 +79,7 @@ POSTGRES_DSN=postgres://postgres:change-this-password@postgres:5432/openai_oauth
 TRACE_ENDPOINT=
 ```
 
-API 转发的上游 OpenAI 凭据应使用环境变量或 Secret 注入，例如：
+API 转发的上游连接可通过环境变量或 Secret 注入，例如：
 
 ```bash
 OPENAI_API_KEY=sk-proj-...
@@ -96,6 +93,23 @@ UPSTREAM_PROXY_URL=socks5://127.0.0.1:7890
 - API 运营控制台：`/admin-api`
 
 开发配置默认会初始化管理员账号 `admin/adminadmin`；共享或部署前必须替换默认管理员密码和 JWT secret。
+
+## 下游调用 API
+
+当前主路径由管理员在后台生成下游凭据，再交给客户端调用：
+
+1. 打开 `/admin-login`，使用管理员账号登录。
+2. 进入 `/admin-keys`，生成或复用一个 `ogw_` key。
+3. OpenAI 兼容客户端使用本服务的 `/v1` 作为 Base URL，并把 `ogw_` key 作为 `OPENAI_API_KEY`。
+
+本地示例：
+
+```bash
+export OPENAI_BASE_URL=http://localhost:8400/v1
+export OPENAI_API_KEY=ogw_xxx
+```
+
+生产环境把 `OPENAI_BASE_URL` 换成部署域名下的 `/v1`。这里的 `ogw_` key 是本系统下游 key；上游 OpenAI 或兼容模型服务仍由服务端通过 `OPENAI_API_KEY`、`OPENAI_BASE_URL` 和可选代理统一配置。
 
 ## 常用质量命令
 

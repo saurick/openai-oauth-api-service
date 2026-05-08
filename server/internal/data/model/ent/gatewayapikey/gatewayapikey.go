@@ -19,6 +19,8 @@ const (
 	FieldName = "name"
 	// FieldKeyHash holds the string denoting the key_hash field in the database.
 	FieldKeyHash = "key_hash"
+	// FieldPlainKey holds the string denoting the plain_key field in the database.
+	FieldPlainKey = "plain_key"
 	// FieldKeyPrefix holds the string denoting the key_prefix field in the database.
 	FieldKeyPrefix = "key_prefix"
 	// FieldKeyLast4 holds the string denoting the key_last4 field in the database.
@@ -47,6 +49,7 @@ var Columns = []string{
 	FieldOwnerUserID,
 	FieldName,
 	FieldKeyHash,
+	FieldPlainKey,
 	FieldKeyPrefix,
 	FieldKeyLast4,
 	FieldDisabled,
@@ -73,6 +76,10 @@ var (
 	NameValidator func(string) error
 	// KeyHashValidator is a validator for the "key_hash" field. It is called by the builders before save.
 	KeyHashValidator func(string) error
+	// DefaultPlainKey holds the default value on creation for the "plain_key" field.
+	DefaultPlainKey string
+	// PlainKeyValidator is a validator for the "plain_key" field. It is called by the builders before save.
+	PlainKeyValidator func(string) error
 	// KeyPrefixValidator is a validator for the "key_prefix" field. It is called by the builders before save.
 	KeyPrefixValidator func(string) error
 	// KeyLast4Validator is a validator for the "key_last4" field. It is called by the builders before save.
@@ -112,6 +119,11 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByKeyHash orders the results by the key_hash field.
 func ByKeyHash(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldKeyHash, opts...).ToFunc()
+}
+
+// ByPlainKey orders the results by the plain_key field.
+func ByPlainKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPlainKey, opts...).ToFunc()
 }
 
 // ByKeyPrefix orders the results by the key_prefix field.

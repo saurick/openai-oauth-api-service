@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +33,7 @@ type GatewayAPIKey struct {
 	ID               int
 	OwnerUserID      int
 	Name             string
+	PlainKey         string
 	KeyPrefix        string
 	KeyLast4         string
 	Disabled         bool
@@ -129,12 +131,39 @@ type GatewayUsageBucket struct {
 	EstimatedCostUSD  *float64
 }
 
+type GatewayUsageKeySummary struct {
+	APIKeyID          int
+	APIKeyPrefix      string
+	APIKeyName        string
+	Disabled          bool
+	TotalRequests     int64
+	SuccessRequests   int64
+	FailedRequests    int64
+	TotalTokens       int64
+	InputTokens       int64
+	OutputTokens      int64
+	CachedTokens      int64
+	ReasoningTokens   int64
+	AverageDurationMS int64
+	EstimatedCostUSD  *float64
+}
+
 type CreateGatewayAPIKeyInput struct {
 	Name             string
 	OwnerUserID      int
 	QuotaRequests    int64
 	QuotaTotalTokens int64
 	AllowedModels    []string
+}
+
+type UpdateGatewayAPIKeyInput struct {
+	ID               int
+	Name             string
+	OwnerUserID      int
+	QuotaRequests    int64
+	QuotaTotalTokens int64
+	AllowedModels    []string
+	Disabled         bool
 }
 
 type GatewayPolicy struct {
@@ -209,6 +238,9 @@ type GatewayRepo interface {
 	CreateAPIKey(ctx context.Context, input CreateGatewayAPIKeyInput, secret GatewayAPIKeySecret) (*GatewayAPIKey, error)
 	ListAPIKeys(ctx context.Context, limit, offset int, search string) ([]*GatewayAPIKey, int, error)
 	ListAPIKeysByOwner(ctx context.Context, ownerUserID, limit, offset int) ([]*GatewayAPIKey, int, error)
+	UpdateAPIKey(ctx context.Context, input UpdateGatewayAPIKeyInput) (*GatewayAPIKey, error)
+	DeleteAPIKey(ctx context.Context, id int) error
+	DeleteAPIKeys(ctx context.Context, ids []int) (int, error)
 	SetAPIKeyDisabled(ctx context.Context, id int, disabled bool) error
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (*GatewayAPIKey, error)
 	TouchAPIKeyUsed(ctx context.Context, id int, usedAt time.Time) error
@@ -217,6 +249,7 @@ type GatewayRepo interface {
 	ListUsageLogs(ctx context.Context, filter GatewayUsageFilter) ([]*GatewayUsageLog, int, error)
 	SummarizeUsage(ctx context.Context, filter GatewayUsageFilter) (*GatewayUsageSummary, error)
 	ListUsageBuckets(ctx context.Context, filter GatewayUsageFilter, groupBy string) ([]*GatewayUsageBucket, error)
+	ListUsageKeySummaries(ctx context.Context, filter GatewayUsageFilter, limit int) ([]*GatewayUsageKeySummary, error)
 
 	GetPolicyForKeyModel(ctx context.Context, apiKeyID int, modelID string) (*GatewayPolicy, error)
 	ListPolicies(ctx context.Context, apiKeyID int) ([]*GatewayPolicy, error)
@@ -230,6 +263,7 @@ type GatewayRepo interface {
 	CreateAuditLog(ctx context.Context, item GatewayAuditLog) error
 	ListAlertRules(ctx context.Context) ([]*GatewayAlertRule, error)
 	UpsertAlertRule(ctx context.Context, item GatewayAlertRule) (*GatewayAlertRule, error)
+	DeleteAlertRule(ctx context.Context, id int) error
 	SetAlertRuleEnabled(ctx context.Context, id int, enabled bool) error
 	ListAlertEvents(ctx context.Context, status string, limit, offset int) ([]*GatewayAlertEvent, int, error)
 	AckAlertEvent(ctx context.Context, id, ackBy int, ackAt time.Time) error
@@ -239,6 +273,7 @@ type GatewayRepo interface {
 	UpsertModel(ctx context.Context, model GatewayModel) (*GatewayModel, error)
 	UpsertSyncedModel(ctx context.Context, model GatewayModel) (*GatewayModel, error)
 	SetModelEnabled(ctx context.Context, id int, enabled bool) error
+	DeleteModel(ctx context.Context, id int) error
 	GetModelByID(ctx context.Context, modelID string) (*GatewayModel, error)
 	EnsureDefaultModels(ctx context.Context) error
 }
@@ -299,13 +334,14 @@ func NormalizeGatewayBearer(auth string) string {
 
 func (uc *GatewayUsecase) CreateAPIKey(ctx context.Context, input CreateGatewayAPIKeyInput) (*CreatedGatewayAPIKey, error) {
 	input.Name = strings.TrimSpace(input.Name)
-	if input.Name == "" {
-		return nil, ErrBadParam
-	}
+	input.QuotaTotalTokens = normalizeNonNegativeInt64(input.QuotaTotalTokens)
 
 	secret, err := NewGatewayAPIKeySecret()
 	if err != nil {
 		return nil, err
+	}
+	if input.Name == "" {
+		input.Name = "key " + secret.KeyLast4
 	}
 
 	item, err := uc.repo.CreateAPIKey(ctx, input, secret)
@@ -324,6 +360,44 @@ func (uc *GatewayUsecase) ListAPIKeysByOwner(ctx context.Context, ownerUserID, l
 		return []*GatewayAPIKey{}, 0, nil
 	}
 	return uc.repo.ListAPIKeysByOwner(ctx, ownerUserID, normalizeLimit(limit), normalizeOffset(offset))
+}
+
+func (uc *GatewayUsecase) UpdateAPIKey(ctx context.Context, input UpdateGatewayAPIKeyInput) (*GatewayAPIKey, error) {
+	if input.ID <= 0 {
+		return nil, ErrBadParam
+	}
+	input.Name = strings.TrimSpace(input.Name)
+	input.QuotaTotalTokens = normalizeNonNegativeInt64(input.QuotaTotalTokens)
+	if input.Name == "" {
+		input.Name = "key " + strconv.Itoa(input.ID)
+	}
+	return uc.repo.UpdateAPIKey(ctx, input)
+}
+
+func (uc *GatewayUsecase) DeleteAPIKey(ctx context.Context, id int) error {
+	if id <= 0 {
+		return ErrBadParam
+	}
+	return uc.repo.DeleteAPIKey(ctx, id)
+}
+
+func (uc *GatewayUsecase) DeleteAPIKeys(ctx context.Context, ids []int) (int, error) {
+	seen := map[int]struct{}{}
+	cleaned := make([]int, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		cleaned = append(cleaned, id)
+	}
+	if len(cleaned) == 0 {
+		return 0, ErrBadParam
+	}
+	return uc.repo.DeleteAPIKeys(ctx, cleaned)
 }
 
 func (uc *GatewayUsecase) SetAPIKeyDisabled(ctx context.Context, id int, disabled bool) error {
@@ -374,6 +448,32 @@ func (uc *GatewayUsecase) ValidateModelAccess(ctx context.Context, key *GatewayA
 		}
 	}
 	return ErrGatewayModelNotAllowed
+}
+
+func (uc *GatewayUsecase) CheckAPIKeyTokenQuota(ctx context.Context, key *GatewayAPIKey, now time.Time) error {
+	if key == nil || key.ID <= 0 {
+		return ErrGatewayAPIKeyNotFound
+	}
+	if key.QuotaTotalTokens <= 0 {
+		return nil
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+	summary, err := uc.repo.SummarizeUsage(ctx, GatewayUsageFilter{
+		KeyID:   key.ID,
+		EndTime: now,
+	})
+	if err != nil {
+		return err
+	}
+	if summary == nil {
+		return nil
+	}
+	if summary.TotalTokens >= key.QuotaTotalTokens {
+		return ErrGatewayQuotaExceeded
+	}
+	return nil
 }
 
 func (uc *GatewayUsecase) CheckPolicy(ctx context.Context, key *GatewayAPIKey, modelID string, now time.Time) error {
@@ -478,6 +578,12 @@ func (uc *GatewayUsecase) ListUsageBuckets(ctx context.Context, filter GatewayUs
 	return uc.repo.ListUsageBuckets(ctx, filter, groupBy)
 }
 
+func (uc *GatewayUsecase) ListUsageKeySummaries(ctx context.Context, filter GatewayUsageFilter, limit int) ([]*GatewayUsageKeySummary, error) {
+	filter.Model = strings.TrimSpace(filter.Model)
+	filter.Endpoint = strings.TrimSpace(filter.Endpoint)
+	return uc.repo.ListUsageKeySummaries(ctx, filter, normalizeLimit(limit))
+}
+
 func (uc *GatewayUsecase) ListPolicies(ctx context.Context, apiKeyID int) ([]*GatewayPolicy, error) {
 	return uc.repo.ListPolicies(ctx, apiKeyID)
 }
@@ -540,6 +646,13 @@ func (uc *GatewayUsecase) UpsertAlertRule(ctx context.Context, item GatewayAlert
 		item.Operator = ">="
 	}
 	return uc.repo.UpsertAlertRule(ctx, item)
+}
+
+func (uc *GatewayUsecase) DeleteAlertRule(ctx context.Context, id int) error {
+	if id <= 0 {
+		return ErrBadParam
+	}
+	return uc.repo.DeleteAlertRule(ctx, id)
 }
 
 func (uc *GatewayUsecase) SetAlertRuleEnabled(ctx context.Context, id int, enabled bool) error {
@@ -620,6 +733,13 @@ func (uc *GatewayUsecase) SetModelEnabled(ctx context.Context, id int, enabled b
 	return uc.repo.SetModelEnabled(ctx, id, enabled)
 }
 
+func (uc *GatewayUsecase) DeleteModel(ctx context.Context, id int) error {
+	if id <= 0 {
+		return ErrBadParam
+	}
+	return uc.repo.DeleteModel(ctx, id)
+}
+
 func (uc *GatewayUsecase) EnsureDefaultModels(ctx context.Context) error {
 	return uc.repo.EnsureDefaultModels(ctx)
 }
@@ -639,6 +759,13 @@ func normalizeOffset(offset int) int {
 		return 0
 	}
 	return offset
+}
+
+func normalizeNonNegativeInt64(value int64) int64 {
+	if value < 0 {
+		return 0
+	}
+	return value
 }
 
 func alertMetricValue(metric string, summary *GatewayUsageSummary) float64 {

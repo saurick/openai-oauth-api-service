@@ -33,6 +33,25 @@ func TestNewGatewayAPIKeySecretStoresOnlyDerivedParts(t *testing.T) {
 	}
 }
 
+func TestGatewayUsecaseCreateAPIKeyAllowsBlankRemark(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+
+	created, err := uc.CreateAPIKey(context.Background(), CreateGatewayAPIKeyInput{})
+	if err != nil {
+		t.Fatalf("CreateAPIKey() error = %v", err)
+	}
+	if created == nil || created.PlainKey == "" {
+		t.Fatalf("expected created key with plain key, got %+v", created)
+	}
+	if repo.createdInput.Name == "" {
+		t.Fatalf("expected fallback remark to be generated")
+	}
+	if !strings.HasPrefix(repo.createdInput.Name, "key ") {
+		t.Fatalf("fallback remark = %q, want key prefix", repo.createdInput.Name)
+	}
+}
+
 func TestGatewayUsecaseCheckPolicyRateAndQuota(t *testing.T) {
 	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
 	repo := &gatewayPolicyTestRepo{
@@ -62,6 +81,61 @@ func TestGatewayUsecaseCheckPolicyRateAndQuota(t *testing.T) {
 	}
 }
 
+func TestGatewayUsecaseCheckAPIKeyTokenQuota(t *testing.T) {
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	repo := &gatewayPolicyTestRepo{
+		summaryByStart: map[time.Time]*GatewayUsageSummary{
+			time.Time{}: {TotalTokens: 100},
+		},
+	}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+
+	err := uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9, QuotaTotalTokens: 100}, now)
+	if err != ErrGatewayQuotaExceeded {
+		t.Fatalf("CheckAPIKeyTokenQuota err = %v, want ErrGatewayQuotaExceeded", err)
+	}
+
+	err = uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9, QuotaTotalTokens: 101}, now)
+	if err != nil {
+		t.Fatalf("CheckAPIKeyTokenQuota err = %v, want nil", err)
+	}
+
+	err = uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9}, now)
+	if err != nil {
+		t.Fatalf("CheckAPIKeyTokenQuota unlimited err = %v, want nil", err)
+	}
+}
+
+func TestGatewayUsecaseDeleteAPIKeysFiltersInvalidAndDuplicateIDs(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+
+	deleted, err := uc.DeleteAPIKeys(context.Background(), []int{3, 0, -1, 3, 8})
+	if err != nil {
+		t.Fatalf("DeleteAPIKeys() error = %v", err)
+	}
+	if deleted != 2 {
+		t.Fatalf("deleted = %d, want 2", deleted)
+	}
+	want := []int{3, 8}
+	if len(repo.deletedIDs) != len(want) {
+		t.Fatalf("deletedIDs = %v, want %v", repo.deletedIDs, want)
+	}
+	for i := range want {
+		if repo.deletedIDs[i] != want[i] {
+			t.Fatalf("deletedIDs = %v, want %v", repo.deletedIDs, want)
+		}
+	}
+}
+
+func TestGatewayUsecaseDeleteAPIKeysRejectsEmptyIDs(t *testing.T) {
+	uc := NewGatewayUsecase(&gatewayPolicyTestRepo{}, log.NewStdLogger(testWriter{}), nil)
+
+	if _, err := uc.DeleteAPIKeys(context.Background(), []int{0, -1}); err != ErrBadParam {
+		t.Fatalf("DeleteAPIKeys() err = %v, want ErrBadParam", err)
+	}
+}
+
 type testWriter struct{}
 
 func (testWriter) Write(p []byte) (int, error) { return len(p), nil }
@@ -69,16 +143,32 @@ func (testWriter) Write(p []byte) (int, error) { return len(p), nil }
 type gatewayPolicyTestRepo struct {
 	policy         *GatewayPolicy
 	summaryByStart map[time.Time]*GatewayUsageSummary
+	createdInput   CreateGatewayAPIKeyInput
+	deletedIDs     []int
 }
 
-func (r *gatewayPolicyTestRepo) CreateAPIKey(context.Context, CreateGatewayAPIKeyInput, GatewayAPIKeySecret) (*GatewayAPIKey, error) {
-	return nil, nil
+func (r *gatewayPolicyTestRepo) CreateAPIKey(_ context.Context, input CreateGatewayAPIKeyInput, secret GatewayAPIKeySecret) (*GatewayAPIKey, error) {
+	r.createdInput = input
+	return &GatewayAPIKey{
+		ID:        1,
+		Name:      input.Name,
+		KeyPrefix: secret.KeyPrefix,
+		KeyLast4:  secret.KeyLast4,
+	}, nil
 }
 func (r *gatewayPolicyTestRepo) ListAPIKeys(context.Context, int, int, string) ([]*GatewayAPIKey, int, error) {
 	return nil, 0, nil
 }
 func (r *gatewayPolicyTestRepo) ListAPIKeysByOwner(context.Context, int, int, int) ([]*GatewayAPIKey, int, error) {
 	return nil, 0, nil
+}
+func (r *gatewayPolicyTestRepo) UpdateAPIKey(context.Context, UpdateGatewayAPIKeyInput) (*GatewayAPIKey, error) {
+	return nil, nil
+}
+func (r *gatewayPolicyTestRepo) DeleteAPIKey(context.Context, int) error { return nil }
+func (r *gatewayPolicyTestRepo) DeleteAPIKeys(_ context.Context, ids []int) (int, error) {
+	r.deletedIDs = append([]int(nil), ids...)
+	return len(ids), nil
 }
 func (r *gatewayPolicyTestRepo) SetAPIKeyDisabled(context.Context, int, bool) error { return nil }
 func (r *gatewayPolicyTestRepo) GetAPIKeyByHash(context.Context, string) (*GatewayAPIKey, error) {
@@ -98,6 +188,9 @@ func (r *gatewayPolicyTestRepo) SummarizeUsage(_ context.Context, filter Gateway
 	return &GatewayUsageSummary{}, nil
 }
 func (r *gatewayPolicyTestRepo) ListUsageBuckets(context.Context, GatewayUsageFilter, string) ([]*GatewayUsageBucket, error) {
+	return nil, nil
+}
+func (r *gatewayPolicyTestRepo) ListUsageKeySummaries(context.Context, GatewayUsageFilter, int) ([]*GatewayUsageKeySummary, error) {
 	return nil, nil
 }
 func (r *gatewayPolicyTestRepo) GetPolicyForKeyModel(context.Context, int, string) (*GatewayPolicy, error) {
@@ -126,6 +219,7 @@ func (r *gatewayPolicyTestRepo) ListAlertRules(context.Context) ([]*GatewayAlert
 func (r *gatewayPolicyTestRepo) UpsertAlertRule(context.Context, GatewayAlertRule) (*GatewayAlertRule, error) {
 	return nil, nil
 }
+func (r *gatewayPolicyTestRepo) DeleteAlertRule(context.Context, int) error { return nil }
 func (r *gatewayPolicyTestRepo) SetAlertRuleEnabled(context.Context, int, bool) error {
 	return nil
 }
@@ -148,6 +242,7 @@ func (r *gatewayPolicyTestRepo) UpsertSyncedModel(context.Context, GatewayModel)
 	return nil, nil
 }
 func (r *gatewayPolicyTestRepo) SetModelEnabled(context.Context, int, bool) error { return nil }
+func (r *gatewayPolicyTestRepo) DeleteModel(context.Context, int) error           { return nil }
 func (r *gatewayPolicyTestRepo) GetModelByID(context.Context, string) (*GatewayModel, error) {
 	return nil, nil
 }

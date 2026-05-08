@@ -46,6 +46,7 @@ var (
 		{Name: "owner_user_id", Type: field.TypeInt, Nullable: true},
 		{Name: "name", Type: field.TypeString, Size: 80},
 		{Name: "key_hash", Type: field.TypeString, Size: 64},
+		{Name: "plain_key", Type: field.TypeString, Size: 128, Default: ""},
 		{Name: "key_prefix", Type: field.TypeString, Size: 16},
 		{Name: "key_last4", Type: field.TypeString, Size: 8},
 		{Name: "disabled", Type: field.TypeBool, Default: false},
@@ -75,7 +76,7 @@ var (
 			{
 				Name:    "gatewayapikey_disabled",
 				Unique:  false,
-				Columns: []*schema.Column{GatewayAPIKeysColumns[6]},
+				Columns: []*schema.Column{GatewayAPIKeysColumns[7]},
 			},
 		},
 	}

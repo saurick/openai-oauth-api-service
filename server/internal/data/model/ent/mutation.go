@@ -965,6 +965,7 @@ type GatewayAPIKeyMutation struct {
 	addowner_user_id      *int
 	name                  *string
 	key_hash              *string
+	plain_key             *string
 	key_prefix            *string
 	key_last4             *string
 	disabled              *bool
@@ -1221,6 +1222,42 @@ func (m *GatewayAPIKeyMutation) OldKeyHash(ctx context.Context) (v string, err e
 // ResetKeyHash resets all changes to the "key_hash" field.
 func (m *GatewayAPIKeyMutation) ResetKeyHash() {
 	m.key_hash = nil
+}
+
+// SetPlainKey sets the "plain_key" field.
+func (m *GatewayAPIKeyMutation) SetPlainKey(s string) {
+	m.plain_key = &s
+}
+
+// PlainKey returns the value of the "plain_key" field in the mutation.
+func (m *GatewayAPIKeyMutation) PlainKey() (r string, exists bool) {
+	v := m.plain_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlainKey returns the old "plain_key" field's value of the GatewayAPIKey entity.
+// If the GatewayAPIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayAPIKeyMutation) OldPlainKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlainKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlainKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlainKey: %w", err)
+	}
+	return oldValue.PlainKey, nil
+}
+
+// ResetPlainKey resets all changes to the "plain_key" field.
+func (m *GatewayAPIKeyMutation) ResetPlainKey() {
+	m.plain_key = nil
 }
 
 // SetKeyPrefix sets the "key_prefix" field.
@@ -1663,7 +1700,7 @@ func (m *GatewayAPIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GatewayAPIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
 	if m.owner_user_id != nil {
 		fields = append(fields, gatewayapikey.FieldOwnerUserID)
 	}
@@ -1672,6 +1709,9 @@ func (m *GatewayAPIKeyMutation) Fields() []string {
 	}
 	if m.key_hash != nil {
 		fields = append(fields, gatewayapikey.FieldKeyHash)
+	}
+	if m.plain_key != nil {
+		fields = append(fields, gatewayapikey.FieldPlainKey)
 	}
 	if m.key_prefix != nil {
 		fields = append(fields, gatewayapikey.FieldKeyPrefix)
@@ -1714,6 +1754,8 @@ func (m *GatewayAPIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case gatewayapikey.FieldKeyHash:
 		return m.KeyHash()
+	case gatewayapikey.FieldPlainKey:
+		return m.PlainKey()
 	case gatewayapikey.FieldKeyPrefix:
 		return m.KeyPrefix()
 	case gatewayapikey.FieldKeyLast4:
@@ -1747,6 +1789,8 @@ func (m *GatewayAPIKeyMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldName(ctx)
 	case gatewayapikey.FieldKeyHash:
 		return m.OldKeyHash(ctx)
+	case gatewayapikey.FieldPlainKey:
+		return m.OldPlainKey(ctx)
 	case gatewayapikey.FieldKeyPrefix:
 		return m.OldKeyPrefix(ctx)
 	case gatewayapikey.FieldKeyLast4:
@@ -1794,6 +1838,13 @@ func (m *GatewayAPIKeyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetKeyHash(v)
+		return nil
+	case gatewayapikey.FieldPlainKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlainKey(v)
 		return nil
 	case gatewayapikey.FieldKeyPrefix:
 		v, ok := value.(string)
@@ -1975,6 +2026,9 @@ func (m *GatewayAPIKeyMutation) ResetField(name string) error {
 		return nil
 	case gatewayapikey.FieldKeyHash:
 		m.ResetKeyHash()
+		return nil
+	case gatewayapikey.FieldPlainKey:
+		m.ResetPlainKey()
 		return nil
 	case gatewayapikey.FieldKeyPrefix:
 		m.ResetKeyPrefix()

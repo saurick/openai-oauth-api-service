@@ -12,16 +12,17 @@ func TestMapGatewayAPIKeyForRPCIsStructCompatible(t *testing.T) {
 	item := &biz.GatewayAPIKey{
 		ID:               1,
 		Name:             "smoke",
+		PlainKey:         "ogw_plain",
 		KeyPrefix:        "ogw_test",
 		KeyLast4:         "abcd",
-		AllowedModels:    []string{"gpt-5.4", "gpt-5.4-mini"},
+		AllowedModels:    []string{"gpt-5.4", "gpt-5.5"},
 		QuotaRequests:    100,
 		QuotaTotalTokens: 200,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
 
-	data := mapGatewayAPIKeyForRPC(item)
+	data := mapGatewayAPIKeyForRPC(item, true)
 	s := newDataStruct(data)
 	if s == nil {
 		t.Fatalf("expected gateway api key rpc data to be structpb-compatible")
@@ -31,8 +32,19 @@ func TestMapGatewayAPIKeyForRPCIsStructCompatible(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected allowed_models to decode as []any, got %T", s.AsMap()["allowed_models"])
 	}
-	if len(models) != 2 || models[0] != "gpt-5.4" || models[1] != "gpt-5.4-mini" {
+	if len(models) != 2 || models[0] != "gpt-5.4" || models[1] != "gpt-5.5" {
 		t.Fatalf("unexpected allowed_models: %#v", models)
+	}
+	if s.AsMap()["plain_key"] != "ogw_plain" {
+		t.Fatalf("plain_key = %#v, want ogw_plain", s.AsMap()["plain_key"])
+	}
+}
+
+func TestMapGatewayAPIKeyForRPCCanHidePlainKey(t *testing.T) {
+	item := &biz.GatewayAPIKey{ID: 1, Name: "smoke", PlainKey: "ogw_plain"}
+	data := mapGatewayAPIKeyForRPC(item, false)
+	if _, ok := data["plain_key"]; ok {
+		t.Fatalf("plain_key should be hidden when includePlainKey=false")
 	}
 }
 
@@ -65,6 +77,39 @@ func TestMapGatewayUsageBucketForRPCIsStructCompatible(t *testing.T) {
 	}
 	if got["cached_tokens"] != float64(40) || got["reasoning_tokens"] != float64(20) {
 		t.Fatalf("unexpected token fields: %#v", got)
+	}
+}
+
+func TestMapGatewayUsageKeySummaryForRPCIsStructCompatible(t *testing.T) {
+	cost := 0.42
+	item := &biz.GatewayUsageKeySummary{
+		APIKeyID:          3,
+		APIKeyPrefix:      "ogw_test",
+		APIKeyName:        "production",
+		TotalRequests:     7,
+		SuccessRequests:   6,
+		FailedRequests:    1,
+		TotalTokens:       900,
+		InputTokens:       600,
+		OutputTokens:      250,
+		CachedTokens:      120,
+		ReasoningTokens:   50,
+		AverageDurationMS: 321,
+		EstimatedCostUSD:  &cost,
+	}
+
+	data := mapGatewayUsageKeySummaryForRPC(item)
+	s := newDataStruct(data)
+	if s == nil {
+		t.Fatalf("expected gateway usage key summary rpc data to be structpb-compatible")
+	}
+
+	got := s.AsMap()
+	if got["api_key_id"] != float64(3) || got["api_key_name"] != "production" {
+		t.Fatalf("unexpected key fields: %#v", got)
+	}
+	if got["estimated_cost_usd"] != cost {
+		t.Fatalf("estimated_cost_usd = %#v, want %v", got["estimated_cost_usd"], cost)
 	}
 }
 

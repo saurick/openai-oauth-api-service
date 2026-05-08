@@ -4,7 +4,6 @@ package biz
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
@@ -18,8 +17,6 @@ import (
 
 type AdminAuthRepo interface {
 	GetAdminByUsername(ctx context.Context, username string) (*AdminUser, error)
-	GetAdminByOAuthIdentity(ctx context.Context, provider, subject string) (*AdminUser, error)
-	BindAdminOAuthIdentity(ctx context.Context, id int, identity OAuthIdentity) error
 	UpdateAdminLastLogin(ctx context.Context, id int, t time.Time) error
 }
 
@@ -133,90 +130,4 @@ func (uc *AdminAuthUsecase) Login(ctx context.Context, username, password string
 	l.Infof("Login admin success admin_id=%d username=%s", admin.ID, admin.Username)
 
 	return token, expireAt, admin, nil
-}
-
-func (uc *AdminAuthUsecase) LoginWithOAuth(ctx context.Context, identity OAuthIdentity) (token string, expireAt time.Time, u *AdminUser, err error) {
-	identity = normalizeOAuthIdentity(identity)
-	ctx, span := uc.Tracer().Start(ctx, "admin_auth.oauth_login",
-		trace.WithAttributes(
-			attribute.String("admin_auth.oauth_provider", identity.Provider),
-		),
-	)
-	defer span.End()
-
-	l := uc.log.WithContext(ctx)
-	if identity.Provider == "" || identity.Subject == "" {
-		err = errors.New("missing oauth provider or subject")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "invalid argument")
-		return "", time.Time{}, nil, err
-	}
-
-	admin, e := uc.repo.GetAdminByOAuthIdentity(ctx, identity.Provider, identity.Subject)
-	if e != nil || admin == nil {
-		admin, e = uc.findAndBindAdminByOAuthIdentity(ctx, identity)
-		if e != nil {
-			err = e
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			l.Warnf("OAuth admin not found provider=%s err=%v", identity.Provider, err)
-			return "", time.Time{}, nil, err
-		}
-	}
-
-	span.SetAttributes(attribute.Int("admin_auth.admin_id", admin.ID))
-	if admin.Disabled {
-		err = ErrUserDisabled
-		span.SetStatus(codes.Error, err.Error())
-		l.Infof("OAuth admin disabled admin_id=%d username=%s provider=%s", admin.ID, admin.Username, identity.Provider)
-		return "", time.Time{}, nil, err
-	}
-
-	token, expireAt, e = uc.genTok(admin.ID, admin.Username, int8(RoleAdmin))
-	if e != nil {
-		err = e
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "generate token failed")
-		l.Errorf("OAuth admin generate token failed admin_id=%d username=%s err=%v", admin.ID, admin.Username, err)
-		return "", time.Time{}, nil, err
-	}
-
-	span.SetAttributes(attribute.Int64("admin_auth.token_expires_at", expireAt.Unix()))
-	if e := uc.repo.UpdateAdminLastLogin(ctx, admin.ID, time.Now()); e != nil {
-		span.RecordError(e)
-		l.Warnf("OAuth admin update last_login_at failed admin_id=%d err=%v", admin.ID, e)
-	}
-
-	span.SetStatus(codes.Ok, "OK")
-	l.Infof("OAuth admin login success admin_id=%d username=%s provider=%s", admin.ID, admin.Username, identity.Provider)
-	return token, expireAt, admin, nil
-}
-
-func (uc *AdminAuthUsecase) findAndBindAdminByOAuthIdentity(ctx context.Context, identity OAuthIdentity) (*AdminUser, error) {
-	candidates := []string{identity.Email, identity.PreferredUsername}
-	seen := map[string]struct{}{}
-	for _, username := range candidates {
-		username = strings.TrimSpace(username)
-		if username == "" {
-			continue
-		}
-		if _, ok := seen[username]; ok {
-			continue
-		}
-		seen[username] = struct{}{}
-
-		admin, err := uc.repo.GetAdminByUsername(ctx, username)
-		if err != nil || admin == nil {
-			continue
-		}
-		if err := uc.repo.BindAdminOAuthIdentity(ctx, admin.ID, identity); err != nil {
-			return nil, err
-		}
-		admin.OAuthProvider = optionalStringPtr(identity.Provider)
-		admin.OAuthSubject = optionalStringPtr(identity.Subject)
-		admin.OAuthEmail = optionalStringPtr(identity.Email)
-		admin.OAuthName = optionalStringPtr(identity.Name)
-		return admin, nil
-	}
-	return nil, ErrUserNotFound
 }

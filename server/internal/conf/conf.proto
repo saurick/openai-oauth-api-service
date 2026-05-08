@@ -43,18 +43,6 @@ message Data {
       string password = 2;
     }
     Admin admin = 3;
-    message OAuth {
-      bool enabled = 1;
-      string providerName = 2;
-      string clientId = 3;
-      string clientSecret = 4;
-      string authUrl = 5;
-      string tokenUrl = 6;
-      string userInfoUrl = 7;
-      string redirectUrl = 8;
-      repeated string scopes = 9;
-    }
-    OAuth oauth = 4;
   }
   message OpenAI {
     string apiKey = 1;
