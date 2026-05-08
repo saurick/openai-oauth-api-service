@@ -29,6 +29,7 @@
 ## 部署边界
 
 - 当前仓库主部署方式是 Docker Compose。
+- 低配服务器只负责 `docker load`、`docker compose up`、migration 与 smoke，不作为构建机使用；部署时必须在本地或 CI 先完成镜像构建、打包和上传，禁止在服务器上执行 `docker build`、`pnpm build`、`go build`、`make build_server` 等重构建步骤。
 - Kubernetes、dashboard、lab-ha 和远端 SSH 发布脚本已从主路径裁剪；后续确实需要时再按真实环境新增，不从旧模板回填占位清单。
 - Compose 环境变量以 `server/deploy/compose/prod/.env.example` 为入口，真实 `.env` 不提交。
 
