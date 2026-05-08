@@ -11,6 +11,8 @@
 
 ## 启动
 
+目标服务器配置较低，部署时不要在服务器上构建镜像或前后端产物。先在本地或 CI 完成 `docker build` / 前端构建 / Go 构建并导出镜像包，再把镜像包上传到服务器，由服务器执行 `docker load` 与 `docker compose up`。
+
 ```bash
 cd server/deploy/compose/prod
 cp .env.example .env

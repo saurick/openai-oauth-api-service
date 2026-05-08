@@ -1,5 +1,9 @@
 # Progress
 
+- 完成：按低配服务器发布口径补充部署构建边界，更新 `AGENTS.md`、`server/deploy/README.md` 和 `server/deploy/compose/prod/README.md`，明确服务器只负责加载已构建镜像、启动 Compose、执行 migration 与部署后检查；镜像和前后端产物必须先在本地或 CI 构建并上传。
+- 验证通过：本轮为文档/协作约定改动，未触达运行时代码、schema、Compose 配置或线上服务；已检查 `progress.md` 规模，未达到归档阈值。
+- 阻塞/风险：未新增发布脚本自动拦截服务器侧构建命令；当前约束先收口到正式文档和项目协作规则。
+
 - 完成：接入 API 凭据级 `quota_total_tokens` 限制，转发前按该 key 历史 usage 总 token 判断是否超额，超额返回 HTTP 429 并记录 usage/audit；后台 API 凭据创建/编辑和列表恢复“Token 总额度”配置与展示，`0` 或空值表示不限。
 - 验证通过：`cd server && go test ./internal/biz ./internal/server`、`cd web && pnpm lint && pnpm test && pnpm build && pnpm css && pnpm style:l1`、`git diff --check`；内置浏览器使用 mock RPC 打开 `/admin-keys`，确认“Token 总额度”表单、“Token 限制”列和编辑态额度回显正常。
 - 阻塞/风险：token 限制以 OpenAI 响应实际 usage 入账为准，单次请求可能短暂越过额度，下一次请求开始拦截；本轮不改模型级 policy 管理页和历史 `quota_requests` 行为。

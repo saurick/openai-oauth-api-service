@@ -2,6 +2,8 @@
 
 当前项目只保留 Docker Compose 作为主部署路径。
 
+部署构建边界：目标服务器配置较低，只负责导入已经构建好的镜像、启动 Compose、执行 migration 和部署后检查；不要在服务器上执行 `docker build`、`pnpm build`、`go build`、`make build_server` 等重构建步骤。镜像必须在本地开发机或 CI 构建完成后，再上传到服务器。
+
 | 路径 | 说明 |
 | --- | --- |
 | `compose/prod/compose.yml` | PostgreSQL + 后端服务 |
