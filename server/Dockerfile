@@ -18,7 +18,7 @@ FROM --platform=$BUILDPLATFORM ${NODE_BUILDER_IMAGE} AS web-builder
 WORKDIR /web
 
 COPY web/package.json web/pnpm-lock.yaml ./
-RUN npm install -g pnpm && \
+RUN npm install -g pnpm@10.13.1 && \
     pnpm config set store-dir /web/.pnpm-store && \
     pnpm config set registry https://registry.npmmirror.com && \
     pnpm install --frozen-lockfile

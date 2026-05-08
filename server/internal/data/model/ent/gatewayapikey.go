@@ -24,6 +24,8 @@ type GatewayAPIKey struct {
 	Name string `json:"name,omitempty"`
 	// KeyHash holds the value of the "key_hash" field.
 	KeyHash string `json:"-"`
+	// PlainKey holds the value of the "plain_key" field.
+	PlainKey string `json:"-"`
 	// KeyPrefix holds the value of the "key_prefix" field.
 	KeyPrefix string `json:"key_prefix,omitempty"`
 	// KeyLast4 holds the value of the "key_last4" field.
@@ -56,7 +58,7 @@ func (*GatewayAPIKey) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case gatewayapikey.FieldID, gatewayapikey.FieldOwnerUserID, gatewayapikey.FieldQuotaRequests, gatewayapikey.FieldQuotaTotalTokens:
 			values[i] = new(sql.NullInt64)
-		case gatewayapikey.FieldName, gatewayapikey.FieldKeyHash, gatewayapikey.FieldKeyPrefix, gatewayapikey.FieldKeyLast4:
+		case gatewayapikey.FieldName, gatewayapikey.FieldKeyHash, gatewayapikey.FieldPlainKey, gatewayapikey.FieldKeyPrefix, gatewayapikey.FieldKeyLast4:
 			values[i] = new(sql.NullString)
 		case gatewayapikey.FieldLastUsedAt, gatewayapikey.FieldCreatedAt, gatewayapikey.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -99,6 +101,12 @@ func (_m *GatewayAPIKey) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field key_hash", values[i])
 			} else if value.Valid {
 				_m.KeyHash = value.String
+			}
+		case gatewayapikey.FieldPlainKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field plain_key", values[i])
+			} else if value.Valid {
+				_m.PlainKey = value.String
 			}
 		case gatewayapikey.FieldKeyPrefix:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -202,6 +210,8 @@ func (_m *GatewayAPIKey) String() string {
 	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
 	builder.WriteString("key_hash=<sensitive>")
+	builder.WriteString(", ")
+	builder.WriteString("plain_key=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("key_prefix=")
 	builder.WriteString(_m.KeyPrefix)

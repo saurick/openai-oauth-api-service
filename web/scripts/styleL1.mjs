@@ -62,7 +62,7 @@ const scenarios = [
     },
   },
   {
-    name: 'oauth-login-redirect',
+    name: 'legacy-oauth-login-redirect',
     path: '/oauth-login',
     viewport: { width: 1280, height: 800 },
     expectPath: '/admin-login',
@@ -112,6 +112,88 @@ const scenarios = [
     },
   },
   {
+    name: 'admin-usage-desktop',
+    path: '/admin-usage',
+    viewport: { width: 1440, height: 900 },
+    adminAuth: true,
+    mockApiRpc: true,
+    verify: async (page) => {
+      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, '调用明细')
+      await expectText(page, '最近调用')
+      await expectNoText(page, '返回控制台')
+      await assertAdminChrome(page, 'admin-usage-desktop')
+      await assertUsageTableVisuals(page, 'admin-usage-desktop')
+    },
+  },
+  {
+    name: 'admin-usage-mobile',
+    path: '/admin-usage',
+    viewport: { width: 390, height: 844 },
+    adminAuth: true,
+    mockApiRpc: true,
+    verify: async (page) => {
+      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, '调用明细')
+      await expectText(page, '最近调用')
+      await expectNoText(page, '返回控制台')
+      await assertAdminChrome(page, 'admin-usage-mobile')
+      await assertUsageTableVisuals(page, 'admin-usage-mobile')
+    },
+  },
+  {
+    name: 'admin-keys-desktop',
+    path: '/admin-keys',
+    viewport: { width: 1440, height: 900 },
+    adminAuth: true,
+    mockApiRpc: true,
+    verify: async (page) => {
+      await expectText(page, 'API 凭据')
+      await expectRole(page, 'button', '生成 API 凭据')
+      await assertAdminChrome(page, 'admin-keys-desktop')
+      await assertKeyTableVisuals(page, 'admin-keys-desktop')
+    },
+  },
+  {
+    name: 'admin-keys-mobile',
+    path: '/admin-keys',
+    viewport: { width: 390, height: 844 },
+    adminAuth: true,
+    mockApiRpc: true,
+    verify: async (page) => {
+      await expectText(page, 'API 凭据')
+      await expectRole(page, 'button', '生成 API 凭据')
+      await assertAdminChrome(page, 'admin-keys-mobile')
+      await assertKeyTableVisuals(page, 'admin-keys-mobile')
+    },
+  },
+  {
+    name: 'admin-models-desktop',
+    path: '/admin-models',
+    viewport: { width: 1440, height: 900 },
+    adminAuth: true,
+    mockApiRpc: true,
+    verify: async (page) => {
+      await expectText(page, '模型管理')
+      await expectText(page, '保存模型')
+      await assertAdminChrome(page, 'admin-models-desktop')
+      await assertModelTableVisuals(page, 'admin-models-desktop')
+    },
+  },
+  {
+    name: 'admin-models-mobile',
+    path: '/admin-models',
+    viewport: { width: 390, height: 844 },
+    adminAuth: true,
+    mockApiRpc: true,
+    verify: async (page) => {
+      await expectText(page, '模型管理')
+      await expectText(page, '保存模型')
+      await assertAdminChrome(page, 'admin-models-mobile')
+      await assertModelTableVisuals(page, 'admin-models-mobile')
+    },
+  },
+  {
     name: 'admin-dashboard-desktop',
     path: '/admin-dashboard',
     viewport: { width: 1440, height: 900 },
@@ -120,10 +202,12 @@ const scenarios = [
     verify: async (page) => {
       await expectText(page, 'OAuth API 管理后台')
       await expectText(page, '业务看板')
-      await expectText(page, '30 天 usage 趋势')
+      await expectText(page, '30 天调用趋势')
       await expectText(page, 'Token 构成')
+      await expectText(page, '调用状态概览')
+      await expectText(page, '启用 API 凭据')
       await expectText(page, '30 天按天统计')
-      await expectText(page, '最近 usage')
+      await expectText(page, '最近调用')
       await assertAdminChrome(page, 'admin-dashboard-desktop')
       await assertApiVisuals(page, 'admin-dashboard-desktop')
     },
@@ -137,23 +221,57 @@ const scenarios = [
     verify: async (page) => {
       await expectText(page, 'OAuth API 管理后台')
       await expectText(page, '业务看板')
-      await expectText(page, '30 天 usage 趋势')
+      await expectText(page, '30 天调用趋势')
       await expectText(page, 'Token 构成')
+      await expectText(page, '调用状态概览')
+      await expectText(page, '启用 API 凭据')
       await assertAdminChrome(page, 'admin-dashboard-mobile')
       await assertApiVisuals(page, 'admin-dashboard-mobile')
     },
   },
   {
-    name: 'admin-oauth-desktop',
+    name: 'admin-guide-redirect',
+    path: '/admin-guide',
+    viewport: { width: 1280, height: 800 },
+    expectPath: '/admin-dashboard',
+    adminAuth: true,
+    mockApiRpc: true,
+    verify: async (page) => {
+      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, '业务看板')
+      await expectNoText(page, '功能路线')
+      await assertAdminChrome(page, 'admin-guide-redirect')
+      await assertApiVisuals(page, 'admin-guide-redirect')
+    },
+  },
+  {
+    name: 'admin-accounts-redirect',
+    path: '/admin-accounts',
+    viewport: { width: 1280, height: 800 },
+    expectPath: '/admin-dashboard',
+    adminAuth: true,
+    mockApiRpc: true,
+    verify: async (page) => {
+      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, '业务看板')
+      await expectNoText(page, '账号目录')
+      await assertAdminChrome(page, 'admin-accounts-redirect')
+      await assertApiVisuals(page, 'admin-accounts-redirect')
+    },
+  },
+  {
+    name: 'admin-oauth-redirect',
     path: '/admin-oauth',
     viewport: { width: 1280, height: 800 },
+    expectPath: '/admin-dashboard',
     adminAuth: true,
-    mockOAuthConfig: true,
+    mockApiRpc: true,
     verify: async (page) => {
-      await expectText(page, 'OAuth/SSO 登录配置')
-      await expectText(page, '管理员登录入口')
-      await expectText(page, '/auth/oauth/start?scope=admin&redirect=/admin-dashboard')
-      await assertAdminChrome(page, 'admin-oauth-desktop')
+      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, '业务看板')
+      await expectNoText(page, '授权登录')
+      await assertAdminChrome(page, 'admin-oauth-redirect')
+      await assertApiVisuals(page, 'admin-oauth-redirect')
     },
   },
 ]
@@ -294,10 +412,6 @@ async function runScenario(browser, scenario) {
       await installApiRpcMock(page)
     }
 
-    if (scenario.mockOAuthConfig) {
-      await installOAuthConfigMock(page)
-    }
-
     await page.goto(new URL(scenario.path, `${baseURL}/`).toString(), {
       waitUntil: 'domcontentloaded',
     })
@@ -339,13 +453,21 @@ async function expectHeading(page, text) {
 }
 
 async function expectRole(page, role, name) {
-  const locator = page.getByRole(role, { name })
+  const locator = page.getByRole(role, { exact: true, name })
   await locator.waitFor({ state: 'visible', timeout: 10_000 })
 }
 
 async function expectText(page, text) {
   const locator = page.getByText(text, { exact: false })
   await locator.first().waitFor({ state: 'visible', timeout: 10_000 })
+}
+
+async function expectNoText(page, text) {
+  const hasText = await page.evaluate(
+    (value) => document.body.innerText.includes(value),
+    text
+  )
+  assert(!hasText, `页面不应出现文案: ${text}`)
 }
 
 async function assertNoHorizontalOverflow(page, scenarioName) {
@@ -383,8 +505,11 @@ async function assertAdminChrome(page, scenarioName) {
 
     return {
       aside: rectOf('aside'),
+      hasAccountNav: document.body.innerText.includes('账号目录'),
+      hasGuideNav: document.body.innerText.includes('功能路线'),
       hasGlobalCustomerFilter: document.body.innerText.includes('全局客户'),
       hasGlobalSalesFilter: document.body.innerText.includes('全局业务员'),
+      hasOAuthNav: document.body.innerText.includes('授权登录'),
       header: rectOf('header'),
       main: rectOf('main'),
       viewportWidth: window.innerWidth,
@@ -396,6 +521,9 @@ async function assertAdminChrome(page, scenarioName) {
   assert(metrics.main, `${scenarioName} 缺少后台内容区`)
   assert(!metrics.hasGlobalSalesFilter, `${scenarioName} 仍显示全局业务员筛选`)
   assert(!metrics.hasGlobalCustomerFilter, `${scenarioName} 仍显示全局客户筛选`)
+  assert(!metrics.hasAccountNav, `${scenarioName} 仍显示账号目录入口`)
+  assert(!metrics.hasGuideNav, `${scenarioName} 仍显示功能路线入口`)
+  assert(!metrics.hasOAuthNav, `${scenarioName} 仍显示授权登录入口`)
   assert(metrics.main.width > 0, `${scenarioName} 内容区宽度异常`)
   assert(metrics.main.height > 0, `${scenarioName} 内容区高度异常`)
 
@@ -420,25 +548,124 @@ async function assertApiVisuals(page, scenarioName) {
     const main = document.querySelector('main')
     const barTitles = Array.from(main?.querySelectorAll('[title]') || [])
       .map((node) => node.getAttribute('title') || '')
-      .filter((title) => title.includes('tokens'))
+      .filter((title) => title.includes('Token'))
 
     return {
       barCount: barTitles.length,
-      hasDailyTable: document.body.innerText.includes('cached_input_tokens'),
-      hasEndpointPanel: headings.includes('Endpoint 分布'),
+      hasDailyTable: document.body.innerText.includes('缓存输入'),
+      hasEndpointPanel: headings.includes('接口分布'),
+      hasKeyUsagePanel: headings.includes('24h 凭据消耗'),
       hasModelPanel: headings.includes('模型用量分布'),
       hasTokenPanel: headings.includes('Token 构成'),
     }
   })
 
   assert(metrics.hasTokenPanel, `${scenarioName} 缺少 token 构成面板`)
+  assert(metrics.hasKeyUsagePanel, `${scenarioName} 缺少 key 消耗面板`)
   assert(metrics.hasModelPanel, `${scenarioName} 缺少模型用量分布面板`)
-  assert(metrics.hasEndpointPanel, `${scenarioName} 缺少 endpoint 分布面板`)
+  assert(metrics.hasEndpointPanel, `${scenarioName} 缺少接口分布面板`)
   assert(metrics.hasDailyTable, `${scenarioName} 缺少按天 token 统计表`)
   assert(
     metrics.barCount >= 20,
     `${scenarioName} usage 趋势柱状图数量异常: ${JSON.stringify(metrics)}`
   )
+}
+
+async function assertUsageTableVisuals(page, scenarioName) {
+  const metrics = await page.evaluate(() => {
+    const main = document.querySelector('main')
+    const table = main?.querySelector('table')
+    const tableRect = table?.getBoundingClientRect()
+    const mainRect = main?.getBoundingClientRect()
+
+    return {
+      hasSidebarUsageNav: document.body.innerText.includes('调用明细'),
+      mainHeight: mainRect?.height || 0,
+      tableHeight: tableRect?.height || 0,
+      tableWidth: tableRect?.width || 0,
+    }
+  })
+
+  assert(metrics.hasSidebarUsageNav, `${scenarioName} 缺少后台侧栏 usage 入口`)
+  assert(metrics.mainHeight > 0, `${scenarioName} 后台内容区高度异常`)
+  assert(metrics.tableHeight > 0, `${scenarioName} usage 表格高度异常`)
+  assert(metrics.tableWidth > 0, `${scenarioName} usage 表格宽度异常`)
+}
+
+async function assertKeyTableVisuals(page, scenarioName) {
+  const metrics = await page.evaluate(() => {
+    const main = document.querySelector('main')
+    const table = main?.querySelector('table')
+    const tableRect = table?.getBoundingClientRect()
+    const mainRect = main?.getBoundingClientRect()
+    const createButton = Array.from(
+      main?.querySelectorAll('button') || []
+    ).find((node) => node.textContent.trim() === '生成 API 凭据')
+
+    return {
+      createButtonDisabled: Boolean(createButton?.disabled),
+      hasFullPlainKey: document.body.innerText.includes('ogw_mock_prod_8a2c'),
+      hasOptionalRemarkInput: Boolean(
+        main?.querySelector('input[placeholder="例如内部测试 key"]')
+      ),
+      hasRemarkHeader: document.body.innerText.includes('备注'),
+      hasSidebarKeyNav: document.body.innerText.includes('API 凭据'),
+      mainHeight: mainRect?.height || 0,
+      tableHeight: tableRect?.height || 0,
+      tableWidth: tableRect?.width || 0,
+    }
+  })
+
+  assert(metrics.hasSidebarKeyNav, `${scenarioName} 缺少后台侧栏 API 凭据入口`)
+  assert(metrics.hasFullPlainKey, `${scenarioName} 缺少完整 key 展示`)
+  assert(metrics.hasOptionalRemarkInput, `${scenarioName} 缺少可选备注输入框`)
+  assert(metrics.hasRemarkHeader, `${scenarioName} 缺少备注列表列`)
+  assert(
+    !metrics.createButtonDisabled,
+    `${scenarioName} 生成 API 凭据按钮不应默认禁用`
+  )
+  assert(metrics.mainHeight > 0, `${scenarioName} 后台内容区高度异常`)
+  assert(metrics.tableHeight > 0, `${scenarioName} key 表格高度异常`)
+  assert(metrics.tableWidth > 0, `${scenarioName} key 表格宽度异常`)
+}
+
+async function assertModelTableVisuals(page, scenarioName) {
+  const metrics = await page.evaluate(() => {
+    const main = document.querySelector('main')
+    const table = main?.querySelector('table')
+    const tableRect = table?.getBoundingClientRect()
+    const mainRect = main?.getBoundingClientRect()
+
+    return {
+      formCount: main?.querySelectorAll('form').length || 0,
+      hasDisableButton: Array.from(main?.querySelectorAll('button') || []).some(
+        (node) => node.textContent.trim() === '禁用'
+      ),
+      hasDeleteButton: Array.from(main?.querySelectorAll('button') || []).some(
+        (node) => node.textContent.trim() === '删除'
+      ),
+      hasModelCreateInput: Boolean(
+        main?.querySelector('input[placeholder="例如 gpt-5.5"]')
+      ),
+      hasModel54: document.body.innerText.includes('gpt-5.4'),
+      hasModel55: document.body.innerText.includes('gpt-5.5'),
+      hasSidebarModelNav: document.body.innerText.includes('模型管理'),
+      mainHeight: mainRect?.height || 0,
+      tableHeight: tableRect?.height || 0,
+      tableWidth: tableRect?.width || 0,
+    }
+  })
+
+  assert.equal(metrics.formCount, 1, `${scenarioName} 应保留一个模型新增表单`)
+  assert(metrics.hasSidebarModelNav, `${scenarioName} 缺少后台侧栏模型入口`)
+  assert(metrics.hasModelCreateInput, `${scenarioName} 缺少模型新增输入框`)
+  assert(metrics.hasModel54, `${scenarioName} 缺少 gpt-5.4 展示`)
+  assert(metrics.hasModel55, `${scenarioName} 缺少 gpt-5.5 展示`)
+  assert(metrics.hasDisableButton, `${scenarioName} 缺少模型启停操作`)
+  assert(metrics.hasDeleteButton, `${scenarioName} 缺少模型删除操作`)
+  assert(metrics.mainHeight > 0, `${scenarioName} 后台内容区高度异常`)
+  assert(metrics.tableHeight > 0, `${scenarioName} 模型表格高度异常`)
+  assert(metrics.tableWidth > 0, `${scenarioName} 模型表格宽度异常`)
 }
 
 function createFakeAdminToken() {
@@ -488,20 +715,6 @@ async function installApiRpcMock(page) {
   })
 }
 
-async function installOAuthConfigMock(page) {
-  await page.route('**/auth/oauth/config', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        enabled: true,
-        login_url: '/auth/oauth/start',
-        provider_name: 'OpenAI',
-      }),
-    })
-  })
-}
-
 function getApiMockData(method) {
   if (method === 'summary') {
     return {
@@ -521,13 +734,14 @@ function getApiMockData(method) {
     return {
       items: [
         {
-          allowed_models: ['gpt-5.4', 'gpt-5.4-mini'],
+          allowed_models: ['gpt-5.4', 'gpt-5.5'],
           disabled: false,
           id: 1,
           key_last4: '8a2c',
           key_prefix: 'sk-api-prod',
           last_used_at: 1778000000,
           name: 'production-api-key',
+          plain_key: 'ogw_mock_prod_8a2c',
         },
         {
           allowed_models: [],
@@ -537,6 +751,7 @@ function getApiMockData(method) {
           key_prefix: 'sk-api-stage',
           last_used_at: 0,
           name: 'staging-key-with-long-name-for-overflow-check',
+          plain_key: 'ogw_mock_stage_3f9d',
         },
       ],
     }
@@ -555,7 +770,7 @@ function getApiMockData(method) {
         {
           enabled: false,
           id: 2,
-          model_id: 'gpt-5.4-mini',
+          model_id: 'gpt-5.5',
           owned_by: 'openai',
           source: 'manual',
         },
@@ -602,7 +817,7 @@ function getApiMockData(method) {
           error_type: 'upstream_error',
           id: 3,
           input_tokens: 1000,
-          model: 'gpt-5.4-mini',
+          model: 'gpt-5.5',
           output_tokens: 80,
           status_code: 502,
           success: false,
@@ -610,6 +825,43 @@ function getApiMockData(method) {
         },
       ],
       total: 3,
+    }
+  }
+
+  if (method === 'usage_key_summaries') {
+    return {
+      items: [
+        {
+          api_key_id: 1,
+          api_key_name: 'production-api-key',
+          api_key_prefix: 'sk-api-prod',
+          average_duration_ms: 980,
+          cached_tokens: 42000,
+          disabled: false,
+          estimated_cost_usd: 0.96,
+          failed_requests: 0,
+          input_tokens: 61900,
+          output_tokens: 3510,
+          success_requests: 2,
+          total_requests: 2,
+          total_tokens: 65410,
+        },
+        {
+          api_key_id: 2,
+          api_key_name: 'staging-key-with-long-name-for-overflow-check',
+          api_key_prefix: 'sk-api-stage',
+          average_duration_ms: 330,
+          cached_tokens: 0,
+          disabled: true,
+          estimated_cost_usd: null,
+          failed_requests: 1,
+          input_tokens: 1000,
+          output_tokens: 80,
+          success_requests: 0,
+          total_requests: 1,
+          total_tokens: 1080,
+        },
+      ],
     }
   }
 

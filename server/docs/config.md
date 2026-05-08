@@ -74,23 +74,11 @@
 - `data.auth.jwtExpireSeconds`
 - `data.auth.admin.username`
 - `data.auth.admin.password`
-- `data.auth.oauth.enabled`
-- `data.auth.oauth.providerName`
-- `data.auth.oauth.clientId`
-- `data.auth.oauth.clientSecret`
-- `data.auth.oauth.authUrl`
-- `data.auth.oauth.tokenUrl`
-- `data.auth.oauth.userInfoUrl`
-- `data.auth.oauth.redirectUrl`
-- `data.auth.oauth.scopes`
 
 说明：
 
 - 这组字段决定用户 token 签名和默认管理员初始化逻辑。
 - 初始化新项目后，必须替换模板里的默认密钥和管理员密码。
-- `oauth.enabled=false` 时不展示管理员授权登录入口；开启后，服务端通过 OAuth2/OIDC code flow 换取第三方身份，再签发本系统管理员 JWT。
-- `oauth.providerName` 同时作为页面展示名称和本地 OAuth 身份提供方标识；已上线后不要随意改名，否则已绑定管理员不会自动匹配。
-- `oauth.redirectUrl` 必须与身份提供方后台登记的回调地址一致，路径为 `/auth/oauth/callback`。
 
 ## `data.openai`
 
@@ -102,7 +90,7 @@
 说明：
 
 - 这是 OpenAI 兼容转发链路的上游配置。
-- `apiKey` 必须是官方 OpenAI API key、Project API key 或 Service Account key，不能使用 Codex / ChatGPT 登录态、Cookie、设备码或个人账号 token。
+- `apiKey` 用于配置 OpenAI 兼容上游鉴权。
 - `baseUrl` 默认使用 `https://api.openai.com/v1`，兼容测试时可指向本地 mock upstream。
 - `upstreamProxyUrl` 为空时直连上游；需要统一出口时可配置 HTTP 或 SOCKS5 代理。
 - `requestTimeoutSeconds` 控制上游请求超时，流式请求同样受该超时约束。
@@ -118,7 +106,7 @@
 
 - `rateLimitEnabled=true` 时，`/v1/chat/completions` 与 `/v1/responses` 会在转发前检查 key+model 策略；关闭后仍保留 key 状态与模型权限校验。
 - `exportMaxDays` 控制 `/admin/exports/usage.csv` 和 `/admin/exports/usage.json` 的最大导出时间范围。
-- `modelSyncTimeoutSeconds` 只控制后台模型同步动作；它会调用配置的官方 OpenAI 兼容上游 `GET /models`，不会抓取网页价格。
+- `modelSyncTimeoutSeconds` 只控制后台模型同步动作；它会调用配置的 OpenAI 兼容上游 `GET /models`，不会抓取网页价格。
 - `alertRetentionDays` 是站内告警事件保留天数的生产配置口径，当前事件写入与确认已落库，清理任务后续接入时复用该字段。
 - 模型价格默认为空，必须在后台价格表维护；价格缺失时 usage 费用估算返回 `null`，前端显示“未配置价格”，不硬编码美元单价。
 
@@ -130,8 +118,6 @@
 - `data.auth.jwtSecret`
 - `data.auth.admin.username`
 - `data.auth.admin.password`
-- `data.auth.oauth.clientId`
-- `data.auth.oauth.clientSecret`
 - `data.openai.apiKey`
 - `data.openai.upstreamProxyUrl`
 - `data.api.rateLimitEnabled`

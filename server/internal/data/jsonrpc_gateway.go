@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -60,7 +61,7 @@ func (d *JsonrpcData) handleGateway(
 		}
 		items := make([]any, 0, len(list))
 		for _, item := range list {
-			items = append(items, mapGatewayAPIKeyForRPC(item))
+			items = append(items, mapGatewayAPIKeyForRPC(item, true))
 		}
 		return id, okResult("获取 API key 列表成功", map[string]any{
 			"items":  items,
@@ -85,9 +86,49 @@ func (d *JsonrpcData) handleGateway(
 			"name":          item.Name,
 			"owner_user_id": item.OwnerUserID,
 		})
-		data := mapGatewayAPIKeyForRPC(&item.GatewayAPIKey)
+		data := mapGatewayAPIKeyForRPC(&item.GatewayAPIKey, true)
 		data["plain_key"] = item.PlainKey
 		return id, okResult("创建 API key 成功，明文 key 只返回一次", data), nil
+
+	case "key_update":
+		keyID := getInt(pm, "key_id", 0)
+		item, err := d.gatewayUC.UpdateAPIKey(ctx, biz.UpdateGatewayAPIKeyInput{
+			ID:               keyID,
+			Name:             getString(pm, "name"),
+			OwnerUserID:      getInt(pm, "owner_user_id", 0),
+			QuotaRequests:    getInt64(pm, "quota_requests", 0),
+			QuotaTotalTokens: getInt64(pm, "quota_total_tokens", 0),
+			AllowedModels:    getStringList(pm, "allowed_models"),
+			Disabled:         getBool(pm, "disabled", false),
+		})
+		if err != nil {
+			return id, d.mapGatewayError(ctx, err), nil
+		}
+		d.auditGateway(ctx, "api.key_update", "api_key", fmt.Sprint(item.ID), map[string]any{
+			"owner_user_id": item.OwnerUserID,
+			"disabled":      item.Disabled,
+		})
+		return id, okResult("更新 API key 成功", mapGatewayAPIKeyForRPC(item, true)), nil
+
+	case "key_delete":
+		keyID := getInt(pm, "key_id", 0)
+		if err := d.gatewayUC.DeleteAPIKey(ctx, keyID); err != nil {
+			return id, d.mapGatewayError(ctx, err), nil
+		}
+		d.auditGateway(ctx, "api.key_delete", "api_key", fmt.Sprint(keyID), nil)
+		return id, okResult("删除 API key 成功", map[string]any{"key_id": keyID}), nil
+
+	case "key_delete_batch":
+		keyIDs := getIntList(pm, "key_ids")
+		deleted, err := d.gatewayUC.DeleteAPIKeys(ctx, keyIDs)
+		if err != nil {
+			return id, d.mapGatewayError(ctx, err), nil
+		}
+		d.auditGateway(ctx, "api.key_delete_batch", "api_key", "batch", map[string]any{
+			"key_ids": keyIDs,
+			"deleted": deleted,
+		})
+		return id, okResult("批量删除 API key 成功", map[string]any{"key_ids": keyIDs, "deleted": deleted}), nil
 
 	case "key_set_disabled":
 		keyID := getInt(pm, "key_id", 0)
@@ -148,6 +189,23 @@ func (d *JsonrpcData) handleGateway(
 			"group_by": "day",
 		}), nil
 
+	case "usage_key_summaries":
+		filter := gatewayUsageFilterFromParams(pm)
+		limit := getInt(pm, "limit", 30)
+		items, err := d.gatewayUC.ListUsageKeySummaries(ctx, filter, limit)
+		if err != nil {
+			l.Errorf("[api] usage_key_summaries failed err=%v", err)
+			return id, d.mapGatewayError(ctx, err), nil
+		}
+		out := make([]any, 0, len(items))
+		for _, item := range items {
+			out = append(out, mapGatewayUsageKeySummaryForRPC(item))
+		}
+		return id, okResult("获取 key usage 聚合成功", map[string]any{
+			"items": out,
+			"limit": limit,
+		}), nil
+
 	case "model_list":
 		limit := getInt(pm, "limit", 100)
 		offset := getInt(pm, "offset", 0)
@@ -205,6 +263,14 @@ func (d *JsonrpcData) handleGateway(
 			"id":      modelID,
 			"enabled": enabled,
 		}), nil
+
+	case "model_delete":
+		modelID := getInt(pm, "id", 0)
+		if err := d.gatewayUC.DeleteModel(ctx, modelID); err != nil {
+			return id, d.mapGatewayError(ctx, err), nil
+		}
+		d.auditGateway(ctx, "api.model_delete", "api_model", fmt.Sprint(modelID), nil)
+		return id, okResult("删除模型成功", map[string]any{"id": modelID}), nil
 
 	case "model_sync":
 		items, err := d.syncGatewayModels(ctx)
@@ -334,6 +400,14 @@ func (d *JsonrpcData) handleGateway(
 		d.auditGateway(ctx, "api.alert_rule_set_enabled", "api_alert_rule", fmt.Sprint(ruleID), map[string]any{"enabled": enabled})
 		return id, okResult("更新告警规则状态成功", map[string]any{"rule_id": ruleID, "enabled": enabled}), nil
 
+	case "alert_rule_delete":
+		ruleID := getInt(pm, "rule_id", 0)
+		if err := d.gatewayUC.DeleteAlertRule(ctx, ruleID); err != nil {
+			return id, d.mapGatewayError(ctx, err), nil
+		}
+		d.auditGateway(ctx, "api.alert_rule_delete", "api_alert_rule", fmt.Sprint(ruleID), nil)
+		return id, okResult("删除告警规则成功", map[string]any{"rule_id": ruleID}), nil
+
 	case "alert_event_list":
 		status := strings.TrimSpace(getString(pm, "status"))
 		limit := getInt(pm, "limit", 30)
@@ -416,7 +490,7 @@ func (d *JsonrpcData) handleGatewayUser(ctx context.Context, method, id string, 
 		}
 		items := make([]any, 0, len(list))
 		for _, item := range list {
-			items = append(items, mapGatewayAPIKeyForRPC(item))
+			items = append(items, mapGatewayAPIKeyForRPC(item, false))
 		}
 		return id, okResult("获取我的 API key 成功", map[string]any{"items": items, "total": total, "limit": limit, "offset": offset}), nil
 
@@ -559,6 +633,11 @@ func gatewayUsageFilterFromParams(pm map[string]any) biz.GatewayUsageFilter {
 		Endpoint:  getString(pm, "endpoint"),
 		StartTime: start,
 		EndTime:   end,
+		SuccessSet: func() bool {
+			_, ok := pm["success"]
+			return ok
+		}(),
+		Success: getBool(pm, "success", false),
 	}
 }
 
@@ -597,7 +676,56 @@ func getStringList(m map[string]any, key string) []string {
 	}
 }
 
-func mapGatewayAPIKeyForRPC(item *biz.GatewayAPIKey) map[string]any {
+func getIntList(m map[string]any, key string) []int {
+	raw, ok := m[key]
+	if !ok || raw == nil {
+		return []int{}
+	}
+	switch v := raw.(type) {
+	case []int:
+		return v
+	case []any:
+		out := make([]int, 0, len(v))
+		for _, item := range v {
+			n := intFromAny(item)
+			if n > 0 {
+				out = append(out, n)
+			}
+		}
+		return out
+	case string:
+		parts := strings.Split(v, ",")
+		out := make([]int, 0, len(parts))
+		for _, part := range parts {
+			n := intFromAny(strings.TrimSpace(part))
+			if n > 0 {
+				out = append(out, n)
+			}
+		}
+		return out
+	default:
+		return []int{}
+	}
+}
+
+func intFromAny(v any) int {
+	switch x := v.(type) {
+	case int:
+		return x
+	case int64:
+		return int(x)
+	case float64:
+		return int(x)
+	case string:
+		n, err := strconv.Atoi(strings.TrimSpace(x))
+		if err == nil {
+			return n
+		}
+	}
+	return 0
+}
+
+func mapGatewayAPIKeyForRPC(item *biz.GatewayAPIKey, includePlainKey bool) map[string]any {
 	if item == nil {
 		return map[string]any{}
 	}
@@ -613,6 +741,9 @@ func mapGatewayAPIKeyForRPC(item *biz.GatewayAPIKey) map[string]any {
 		"allowed_models":     stringListForRPC(item.AllowedModels),
 		"created_at":         item.CreatedAt.Unix(),
 		"updated_at":         item.UpdatedAt.Unix(),
+	}
+	if includePlainKey {
+		data["plain_key"] = item.PlainKey
 	}
 	if item.LastUsedAt != nil {
 		data["last_used_at"] = item.LastUsedAt.Unix()
@@ -724,6 +855,33 @@ func mapGatewayUsageBucketForRPC(item *biz.GatewayUsageBucket) map[string]any {
 		"reasoning_tokens":    item.ReasoningTokens,
 		"total_bytes_in":      item.TotalBytesIn,
 		"total_bytes_out":     item.TotalBytesOut,
+		"average_duration_ms": item.AverageDurationMS,
+	}
+	if item.EstimatedCostUSD != nil {
+		data["estimated_cost_usd"] = *item.EstimatedCostUSD
+	} else {
+		data["estimated_cost_usd"] = nil
+	}
+	return data
+}
+
+func mapGatewayUsageKeySummaryForRPC(item *biz.GatewayUsageKeySummary) map[string]any {
+	if item == nil {
+		return map[string]any{}
+	}
+	data := map[string]any{
+		"api_key_id":          item.APIKeyID,
+		"api_key_prefix":      item.APIKeyPrefix,
+		"api_key_name":        item.APIKeyName,
+		"disabled":            item.Disabled,
+		"total_requests":      item.TotalRequests,
+		"success_requests":    item.SuccessRequests,
+		"failed_requests":     item.FailedRequests,
+		"total_tokens":        item.TotalTokens,
+		"input_tokens":        item.InputTokens,
+		"output_tokens":       item.OutputTokens,
+		"cached_tokens":       item.CachedTokens,
+		"reasoning_tokens":    item.ReasoningTokens,
 		"average_duration_ms": item.AverageDurationMS,
 	}
 	if item.EstimatedCostUSD != nil {

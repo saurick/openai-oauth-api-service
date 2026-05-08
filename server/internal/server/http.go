@@ -66,7 +66,6 @@ func NewHTTPServer(
 
 	registerHealthRoutes(srv, logger, tp, data.SQLDB())
 	registerOpenAIGatewayRoutes(srv, logger, tp, gatewayUC, dc)
-	registerOAuthRoutes(srv, logger, tp, dc, adminAuthUC, authUC)
 	registerAdminExportRoutes(srv, logger, tp, gatewayUC, dc)
 	registerStaticHandler(srv, logger, tp)
 

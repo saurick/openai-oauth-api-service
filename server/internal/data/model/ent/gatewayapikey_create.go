@@ -46,6 +46,20 @@ func (_c *GatewayAPIKeyCreate) SetKeyHash(v string) *GatewayAPIKeyCreate {
 	return _c
 }
 
+// SetPlainKey sets the "plain_key" field.
+func (_c *GatewayAPIKeyCreate) SetPlainKey(v string) *GatewayAPIKeyCreate {
+	_c.mutation.SetPlainKey(v)
+	return _c
+}
+
+// SetNillablePlainKey sets the "plain_key" field if the given value is not nil.
+func (_c *GatewayAPIKeyCreate) SetNillablePlainKey(v *string) *GatewayAPIKeyCreate {
+	if v != nil {
+		_c.SetPlainKey(*v)
+	}
+	return _c
+}
+
 // SetKeyPrefix sets the "key_prefix" field.
 func (_c *GatewayAPIKeyCreate) SetKeyPrefix(v string) *GatewayAPIKeyCreate {
 	_c.mutation.SetKeyPrefix(v)
@@ -183,6 +197,10 @@ func (_c *GatewayAPIKeyCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *GatewayAPIKeyCreate) defaults() {
+	if _, ok := _c.mutation.PlainKey(); !ok {
+		v := gatewayapikey.DefaultPlainKey
+		_c.mutation.SetPlainKey(v)
+	}
 	if _, ok := _c.mutation.Disabled(); !ok {
 		v := gatewayapikey.DefaultDisabled
 		_c.mutation.SetDisabled(v)
@@ -221,6 +239,14 @@ func (_c *GatewayAPIKeyCreate) check() error {
 	if v, ok := _c.mutation.KeyHash(); ok {
 		if err := gatewayapikey.KeyHashValidator(v); err != nil {
 			return &ValidationError{Name: "key_hash", err: fmt.Errorf(`ent: validator failed for field "GatewayAPIKey.key_hash": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.PlainKey(); !ok {
+		return &ValidationError{Name: "plain_key", err: errors.New(`ent: missing required field "GatewayAPIKey.plain_key"`)}
+	}
+	if v, ok := _c.mutation.PlainKey(); ok {
+		if err := gatewayapikey.PlainKeyValidator(v); err != nil {
+			return &ValidationError{Name: "plain_key", err: fmt.Errorf(`ent: validator failed for field "GatewayAPIKey.plain_key": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.KeyPrefix(); !ok {
@@ -291,6 +317,10 @@ func (_c *GatewayAPIKeyCreate) createSpec() (*GatewayAPIKey, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.KeyHash(); ok {
 		_spec.SetField(gatewayapikey.FieldKeyHash, field.TypeString, value)
 		_node.KeyHash = value
+	}
+	if value, ok := _c.mutation.PlainKey(); ok {
+		_spec.SetField(gatewayapikey.FieldPlainKey, field.TypeString, value)
+		_node.PlainKey = value
 	}
 	if value, ok := _c.mutation.KeyPrefix(); ok {
 		_spec.SetField(gatewayapikey.FieldKeyPrefix, field.TypeString, value)

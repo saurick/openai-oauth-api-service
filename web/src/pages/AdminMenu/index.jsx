@@ -82,30 +82,6 @@ export default function AdminMenuPage() {
 
             <button
               type="button"
-              onClick={() => navigate('/admin-accounts')}
-              className="w-full rounded-2xl bg-amber-300 px-4 py-3 font-semibold text-slate-950 transition hover:bg-amber-200 active:bg-amber-400"
-            >
-              账号目录
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate('/admin-guide')}
-              className="w-full rounded-2xl bg-amber-300 px-4 py-3 font-semibold text-slate-950 transition hover:bg-amber-200 active:bg-amber-400"
-            >
-              接入路线
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate('/admin-oauth')}
-              className="w-full rounded-2xl bg-amber-300 px-4 py-3 font-semibold text-slate-950 transition hover:bg-amber-200 active:bg-amber-400"
-            >
-              OAuth 配置
-            </button>
-
-            <button
-              type="button"
               onClick={() => setShowLogoutConfirm(true)}
               className="w-full rounded-2xl bg-amber-300 px-4 py-3 font-semibold text-slate-950 transition hover:bg-amber-200 active:bg-amber-400"
             >

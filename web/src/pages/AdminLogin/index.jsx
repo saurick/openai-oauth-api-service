@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '@/common/components/layout/AppShell'
 import { AUTH_SCOPE, persistAuth } from '@/common/auth/auth'
@@ -30,13 +30,6 @@ export default function AdminLoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [errMsg, setErrMsg] = useState('')
-
-  useEffect(() => {
-    const query = new URLSearchParams(location.search)
-    if (query.get('oauth_error')) {
-      setErrMsg('管理员授权登录失败，请重试或使用账号密码登录')
-    }
-  }, [location.search])
 
   const canSubmit = useMemo(
     () => username.trim().length > 0 && password.length > 0 && !submitting,
@@ -144,6 +137,7 @@ export default function AdminLoginPage() {
             >
               {submitting ? '登录中…' : '登 录'}
             </button>
+
           </form>
         </div>
       </div>

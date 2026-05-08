@@ -24,6 +24,10 @@ func (GatewayAPIKey) Fields() []ent.Field {
 			NotEmpty().
 			Sensitive().
 			MaxLen(64),
+		field.String("plain_key").
+			Default("").
+			Sensitive().
+			MaxLen(128),
 		field.String("key_prefix").
 			NotEmpty().
 			MaxLen(16),

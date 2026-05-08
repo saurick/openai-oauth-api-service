@@ -1,6 +1,6 @@
 # 历史 FastAPI API 转发 MVP
 
-一个早期 OpenAI 兼容 API 转发与用量记录 MVP，用官方 OpenAI API key 作为上游凭据，向下游分发独立 API key，并记录每个 key 的请求量、状态码、延迟、字节数和 token 用量。
+一个早期 OpenAI 兼容 API 转发与用量记录 MVP，集中配置上游连接，向下游分发独立 API key，并记录每个 key 的请求量、状态码、延迟、字节数和 token 用量。
 
 ## 边界
 
@@ -12,10 +12,8 @@
 | 支持 | 给下游用户创建独立的 `ogw_...` API key |
 | 支持 | 记录用量汇总、最近请求、上游状态码、延迟和 token |
 | 支持 | 通过 `UPSTREAM_PROXY_URL` 统一配置上游 HTTP/SOCKS 代理 |
-| 不支持 | 抓取、复用或分享 Codex/ChatGPT 登录态、Cookie、设备码、个人账号 token |
-| 不支持 | 把个人订阅账号包装成多人共享 API |
 
-OpenAI 当前 API 真源是官方 API endpoint，例如 `POST /v1/responses` 使用 `Authorization: Bearer $OPENAI_API_KEY`。OpenAI 权限文档也把 Project API Keys、Service Accounts、Responses API、Usage 等列为平台权限项。
+OpenAI 兼容 API endpoint 例如 `POST /v1/responses` 使用 `Authorization: Bearer $OPENAI_API_KEY`。
 
 ## 快速开始
 
@@ -129,4 +127,4 @@ openai-oauth-api-service revoke-key <key_id>
 pytest
 ```
 
-测试使用 `httpx.MockTransport` 模拟上游，不会调用真实 OpenAI API。
+测试使用 `httpx.MockTransport` 模拟上游，不会发起外部网络请求。

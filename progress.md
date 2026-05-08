@@ -1,10 +1,14 @@
 # Progress
 
+- 完成：接入 API 凭据级 `quota_total_tokens` 限制，转发前按该 key 历史 usage 总 token 判断是否超额，超额返回 HTTP 429 并记录 usage/audit；后台 API 凭据创建/编辑和列表恢复“Token 总额度”配置与展示，`0` 或空值表示不限。
+- 验证通过：`cd server && go test ./internal/biz ./internal/server`、`cd web && pnpm lint && pnpm test && pnpm build && pnpm css && pnpm style:l1`、`git diff --check`；内置浏览器使用 mock RPC 打开 `/admin-keys`，确认“Token 总额度”表单、“Token 限制”列和编辑态额度回显正常。
+- 阻塞/风险：token 限制以 OpenAI 响应实际 usage 入账为准，单次请求可能短暂越过额度，下一次请求开始拦截；本轮不改模型级 policy 管理页和历史 `quota_requests` 行为。
+
 - 完成：初始化长期维护仓库并切到 `main` 分支；当前正式定位已收口为 OAuth 登录、API 转发与 token/usage 统计服务。
 - 完成：基于 `webapp-template` 复制出长期项目骨架，保留前端、Go/Kratos 后端、Ent/Atlas、PostgreSQL、质量门禁、健康检查和 Compose 部署主路径。
 - 完成：把首轮 FastAPI + SQLite MVP 移入 `legacy-python-mvp/`，仅作为 API 转发和 usage 记录的参考实现，不作为长期主路径。
 - 完成：裁剪 K8s、dashboard、lab-ha 和远端 SSH 发布脚本，避免旧模板占位环境进入主仓库。
-- 完成：更新 README、AGENTS、docs、配置示例和前端首页文案，明确官方 OpenAI API key 是唯一上游凭据，禁止复用 Codex / ChatGPT 登录态。
+- 完成：更新 README、AGENTS、docs、配置示例和前端首页文案，收口项目边界与上游连接说明。
 - 完成：启用本仓库 Git hooks，`core.hooksPath=.githooks`。
 - 完成：同步前端 L1 回归脚本到当前 API 服务文案，覆盖首页、用户登录、注册、管理登录和未登录重定向场景。
 - 验证通过：`pnpm style:l1`。
@@ -35,11 +39,11 @@
 - 修复：处理首个提交钩子暴露的 Go lint 和 YAML lint 问题，包括 `Close` 返回值、API 转发响应处理的无效赋值、Ent 日志适配器返回值、未使用约束 helper 和 OpenAPI YAML 缩进。
 - 验证通过：`SECRETS_STAGED_ONLY=1 bash scripts/qa/secrets.sh`、`bash scripts/qa/fast.sh`、`git diff --cached --check`。
 - 完成：实现管理员 OAuth/OIDC 授权登录入口，包含 `/auth/oauth/config`、`/auth/oauth/start`、`/auth/oauth/callback`，服务端换取 userinfo 后绑定已有管理员并签发本系统管理员 JWT。
-- 完成：前端管理员登录页接入 OAuth 登录按钮，新增 `/oauth/callback` 写入本系统管理员登录态；第三方 OAuth token 不返回给前端。
-- 修复：补充 Vite 开发代理 `/auth -> http://localhost:8200`，避免本地请求 OAuth 配置时被 Vite history fallback 成 HTML。
+- 完成：前端管理员登录页接入 OAuth 登录按钮，新增 `/oauth/callback` 写入本系统管理员登录态。
+- 修复：补充 Vite 开发代理 `/auth -> http://localhost:8400`，避免本地请求 OAuth 配置时被 Vite history fallback 成 HTML。
 - 调整：按后台管理与监控主路径收口，普通 `/login`、`/register` 前端路由重定向到 `/admin-login`，OAuth 登录入口迁移到管理员登录页并签发管理员 JWT。
 - 调整：OAuth 管理员登录不自动创建管理员，只允许绑定已存在管理员账号；首次绑定要求 IdP `email` 或 `preferred_username` 匹配管理员用户名。
-- 修复：Vite `/rpc` 与 `/auth` 代理支持 `VITE_API_PROXY_TARGET`，默认仍指向项目配置真源 `http://localhost:8200`。
+- 修复：Vite `/rpc` 与 `/auth` 代理支持 `VITE_API_PROXY_TARGET`，默认指向项目配置真源 `http://localhost:8400`。
 - 完成：新增后台 `/admin-oauth` 配置页与控制台入口，用于查看 OAuth 启用状态、登录入口、回调地址和所需环境变量；client secret 仍只允许后端环境变量注入。
 - 完成：新增管理员 OAuth 身份字段与 Atlas migration，配置样例、Compose 环境变量和相关文档已同步。
 - 验证通过：`go test ./...`、`make build`、`pnpm test`、`git diff --check`。
@@ -68,7 +72,7 @@
 - 完成：合并远端组织账号与用量治理路线，保留 OAuth 管理员登录、`OAUTH_API_*` 配置、`/admin-oauth` 入口和 `/admin-dashboard` 浅色后台主路径；兼容保留 `/admin-api`、`/admin-keys`、`/admin-models`、`/admin-usage` 路由。
 - 验证通过：合并冲突后重新执行 `cd server && make config && make migrate_hash`。
 - 下一步：接入真实身份提供方后，在目标域名上跑一次完整 OAuth 回调联调，并执行 Atlas migration；生产部署前按真实模型维护价格表。
-- 阻塞/风险：生产域名、镜像仓库、生产 OpenAI API key 和真实 OAuth client 尚未确定；模型价格必须由管理员在后台维护，未配置时费用估算保持空值。
+- 阻塞/风险：生产域名、镜像仓库、生产连接配置和真实 OAuth client 尚未确定；模型价格必须由管理员在后台维护，未配置时费用估算保持空值。
 - 修复：重新将默认管理员登录口径收口为 `admin/adminadmin`，同步开发配置、本地覆盖示例、生产配置、Compose 示例、环境变量示例和 README，避免登录页使用 `adminadmin` 时后端仍校验旧默认密码。
 - 验证通过：`cd server && go test ./internal/data -run 'TestInitAdminUsersIfNeeded|TestAdmin'`、`bash scripts/init-project.sh --project --strict`、`git diff --check`。
 - 下一步：重启当前本地 `server/bin/server-dev` 进程，使已修正的默认管理员密码重新初始化到运行库。
@@ -81,7 +85,7 @@
 - 完成：将 OAuth/SSO 拆为独立 `/oauth-login` 入口，支持用户 SSO 与管理员 SSO 两种登录目标；用户 SSO 回调签发普通用户 JWT，进入 `/portal` 后继续按 `owner_user_id` 查看 key 与 token/usage。
 - 完成：为 `users` 增加 OAuth 身份绑定字段与 Atlas migration，普通用户可按 OAuth `provider + subject` 复用账号；首次 SSO 会绑定同名/同邮箱组织账号，未匹配时创建本系统普通用户。
 - 下一步：在真实 IdP 上分别联调用户 SSO 与管理员 SSO，并执行新 migration。
-- 阻塞/风险：本轮只实现本系统 SSO 登录与 usage 归属，不接入也不保存第三方 OAuth access token 作为 OpenAI 上游凭据。
+- 阻塞/风险：本轮只实现本系统 SSO 登录与 usage 归属。
 - 完成：按项目定位将前端主路径、登录页、后台壳子、用户门户、功能路线和 L1 回归中的旧展示口径改为 OAuth API、API key 生成与 token/usage 统计；后台主路由改为 `/admin-dashboard`，JSON-RPC 域统一使用后端当前真源 `/rpc/api`。
 - 下一步：如需彻底清理后端内部历史命名，需要单独安排 Ent schema、表名、审计 action 和 Go 类型的迁移方案，避免无迁移重命名破坏已有数据。
 - 阻塞/风险：本轮未重命名数据库实体和后端内部历史类型；它们仍是历史内部实现名，不再作为前端和正式文档主口径。
@@ -93,3 +97,120 @@
 - 完成：项目改名为 `OpenAI OAuth API Service`，包名、服务名、Compose slug/image、默认数据库名和前端标题同步改为 `openai-oauth-api-service` 口径；保留 `OAUTH_API_*` 环境变量前缀，避免配置面扩大破坏。
 - 下一步：新建仓库后重新执行初始化、依赖安装和质量门禁，按新环境确认数据库名与镜像名。
 - 阻塞/风险：已移除当前目录 `.git` 版本库元数据；历史 `progress.md` 中仍保留旧项目名演进记录作为上下文，不作为当前命名真源。
+- 完成：恢复管理员登录页 `/admin-login` 的 OAuth 登录入口；`/admin-keys`、`/admin-models`、`/admin-usage` 改为统一后台壳子，不再跳到旧深色独立页面；旧 `/admin-api` 兼容重定向到 `/admin-dashboard`。
+- 验证通过：`cd web && pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`；`style:l1` 新增登录页 OAuth 按钮和 `/admin-usage` 桌面/移动端后台壳子回归。
+- 下一步：配置真实 OAuth/OIDC IdP 后，在目标域名完整联调 `/auth/oauth/start -> /auth/oauth/callback -> /oauth/callback -> /admin-dashboard`。
+- 阻塞/风险：当前只验证前端入口和 mock OAuth 配置；真实 `client_id/client_secret/auth/token/userinfo/redirect_url` 仍需通过后端环境变量配置并联调。
+- 完成：删除 `/admin-oauth` 页面中的黄色说明块。
+- 验证通过：`cd web && pnpm build`、`cd web && pnpm style:l1`，并确认目标文本全局搜索无残留。
+- 下一步：如需调整 OAuth 配置页剩余说明文案，再按实际后台口径收口。
+- 阻塞/风险：无。
+- 完成：移除后台侧栏“功能路线”入口；历史 `/admin-guide` 与 `/admin-hierarchy` 访问统一重定向到 `/admin-dashboard`。
+- 验证通过：`cd web && pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`；`style:l1` 新增 `/admin-guide` 重定向与侧栏无“功能路线”断言。
+- 下一步：如需保留路线信息，建议收口到正式 `docs/`，不再作为后台页面展示。
+- 阻塞/风险：无。
+- 完成：按“只是登录 GPT、模仿龙虾 OAuth”的当前口径，前端移除后台“账号目录”入口；历史 `/admin-accounts` 与 `/admin-users` 统一重定向到 `/admin-dashboard`。
+- 验证通过：`cd web && pnpm lint && pnpm css && pnpm test && pnpm build`、`cd web && STYLE_L1_PORT=4174 pnpm style:l1`、`git diff --check`。
+- 下一步：配置真实 OAuth/OIDC 后联调登录回调主路径。
+- 阻塞/风险：本轮不删除后端历史 `users`、`api.user_*` 和 key 归属字段；若要彻底移除，需要单独走数据兼容与迁移评估。
+- 完成：按要求清理全项目相关说明内容，覆盖 README、docs、前端页面、部署说明、协作说明和历史 MVP 说明。
+- 验证通过：`cd web && pnpm lint && pnpm css && pnpm test && pnpm build`、`cd web && pnpm style:l1`，并确认目标文本全局搜索无残留。
+- 下一步：如后续继续调整项目定位口径，优先同步 README、docs 与前端页面展示。
+- 阻塞/风险：无。
+- 修复：下游 key 创建改为随机生成 key 且备注可选；空备注由后端生成默认备注，前端表单和列表文案同步改为“备注”。
+- 验证通过：`cd server && go test ./internal/biz ./internal/data`、`cd server && go test ./...`、`cd web && pnpm lint && pnpm css && pnpm test && pnpm build`、`cd web && node --check scripts/styleL1.mjs && pnpm style:l1`；`style:l1` 已新增 `/admin-keys` 桌面和移动端回归，共 18 个场景。
+- 发现：当前开发库 `192.168.0.106:5432/openai_api_gateway` 的 Atlas 版本停在 `20260430110943`，仍有 3 个 pending migration；当前代码会查询 `owner_user_id` 等新列，库未升级时 `/admin-keys` 会显示“API 操作失败”。
+- 下一步：确认该共享库可升级后，在 `server/` 执行 `make migrate_apply`，再重启/刷新后端和前端页面验证。
+- 阻塞/风险：本轮未擅自升级共享数据库；迁移未执行前，现有运行环境仍可能继续报 API 查询失败。
+- 完成：模型初始化口径收口为仅保留 `gpt-5.4` 与 `gpt-5.5`，服务启动时会清理模型表中其他模型记录；同步后端测试和前端 L1 mock 的模型样本。
+- 验证通过：`cd server && go test ./internal/data ./internal/server`、`cd web && pnpm style:l1`；被移除模型名全仓搜索无业务残留。
+- 下一步：重启后端服务，使现有数据库中的旧 seed 模型按新口径清理。
+- 阻塞/风险：若旧 API key 策略或历史 usage 仍引用被清理模型，历史 usage 文本记录保留不变，后续请求需改用保留模型。
+- 完成：新增 `api.usage_key_summaries` 按下游 key 聚合 usage，返回 calls、成功/失败、token 构成、平均耗时和估算费用；后台业务看板新增“24h key 消耗”表，并与 key 列表合并展示无调用 key 的 0 消耗。
+- 验证通过：`cd server && go test ./internal/biz ./internal/data`、`cd server && go test ./...`、`cd web && pnpm lint && pnpm test && pnpm build`、`cd web && pnpm style:l1`、`git diff --check`。
+- 下一步：如需按 7 天/30 天或自定义窗口查看每个 key 消耗，可在现有聚合接口上增加前端筛选控件。
+- 阻塞/风险：费用估算仍依赖本地模型价格表；某 key 窗口内存在未配置价格的模型时，该 key 费用显示“未配置价格”。
+- 完成：按当前要求将随机生成的下游 key 明文保存到 `gateway_api_keys.plain_key`，管理员 key 列表和创建响应会返回完整 key；普通用户侧 `user_key_list` 仍不返回明文。
+- 完成：通过 Ent/Atlas 生成 migration `20260507124134_migrate.sql`，历史已存在 key 因无法从 hash 反推明文，迁移后 `plain_key` 为空，只有新创建 key 会保存完整明文。
+- 验证通过：`cd server && make data`、`cd server && go test ./internal/biz ./internal/data`、`cd server && go test ./...`、`cd web && pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`、`git diff --check`。
+- 下一步：在确认目标数据库后执行 `cd server && make migrate_apply`，再重启/刷新后台创建一个新 key 验证完整 key 持久化展示。
+- 阻塞/风险：本轮未擅自 apply 当前共享/开发库 migration；未迁移的运行库仍没有 `plain_key` 字段，相关接口会继续按旧库结构运行或报缺列错误。
+- 修复：将前端 README、OAuth 配置页展示和本地 OAuth 覆盖示例中的本项目后端端口统一为 `8400`，避免继续按旧 `8200` 口径联调。
+- 下一步：重启本项目前端 Vite 服务后重新打开后台页面，确认 `/rpc` 与 `/auth` 都代理到 `http://localhost:8400`。
+- 阻塞/风险：当前本机 `5175` 仍可能被其他项目 Vite 进程占用；需要先停掉占用进程再启动本项目前端。
+- 完成：部署本项目到 `192.168.0.106`，使用 Compose 启动 PostgreSQL 与后端服务，并将 `openai.saurick.space` 加入 ddns-go 与 Nginx HTTPS 反代。
+- 修复：Dockerfile 固定容器构建使用 `pnpm@10.13.1`，避免新版 pnpm 拦截 `esbuild` 构建脚本导致镜像构建失败。
+- 验证通过：本地构建 `oauth-api-service-server:dev` 镜像并通过 SSH 导入服务器；远端 Atlas migration 已应用；`https://openai.saurick.space/admin-login` 通过 Nginx 反代返回 200；`/auth/oauth/config` 返回 OAuth 未启用。
+- 下一步：配置真实 OAuth/OIDC provider 后，将服务器 `.env` 中 `OAUTH_API_OAUTH_ENABLED` 与 provider 参数开启，再重启 `app-server`。
+- 阻塞/风险：服务器 Docker 代理指向 `192.168.0.107:7893` 且当前不可达，本轮未擅自修改代理；生产管理员密码暂按要求保留 `admin/adminadmin`，公网使用前建议尽快改强密码。
+- 完成：经授权对当前本机命中的开发库 `192.168.0.106:5432/openai_api_gateway` 执行 Atlas migration，将版本从 `20260430110943` 升级到 `20260507124134`，补齐 `owner_user_id`、OAuth 绑定字段、策略/价格/告警/审计表和 `plain_key` 字段。
+- 验证通过：`make migrate_status` 显示 pending 为 0；直连本地后端验证 `admin_login`、`api.summary`、`api.key_list`、`api.usage_list`、`api.usage_buckets`、`api.usage_key_summaries` 和 `api.model_list` 均返回 `code=0`；`go test ./...`、`pnpm lint`、`pnpm css`、`pnpm test`、`pnpm build` 通过。
+- 下一步：刷新本地后台页面；如需要真实 OpenAI OAuth 登录，再配置后端 OAuth/OIDC provider 参数并联调 `/auth/oauth/start -> /auth/oauth/callback`。
+- 阻塞/风险：本轮只修复本地开发库 schema 与当前代码不一致导致的后台 API 失败，不涉及真实 OpenAI 账号授权；历史已存在 key 的 `plain_key` 无法从 hash 反推，迁移后仍为空，只有新创建 key 会保存完整明文。
+- 完成：为管理员 OAuth/OIDC code flow 补 PKCE `S256`，授权请求携带 `code_challenge`，token 换取携带 `code_verifier`；PKCE verifier 使用 HttpOnly callback-path cookie 暂存，避免放入可见 state。
+- 完成：OAuth 配置页和部署/配置文档改为标准 OIDC provider 口径，明确不要把 ChatGPT 网页登录链路的未公开接口当作生产 OAuth provider。
+- 验证通过：新增 `oauth_handler` PKCE 单元测试；`go test ./internal/server ./internal/biz ./internal/data`、`go test ./...`、`pnpm lint`、`pnpm css`、`pnpm test`、`pnpm build` 通过。
+- 下一步：拿到真实 provider 的 `client_id/client_secret/auth_url/token_url/userinfo_url/redirect_url/scopes` 后，写入本地或服务器私有环境变量并重启后端，再由你在浏览器完成真实授权登录。
+- 阻塞/风险：OpenAI 公开 API 文档没有把 OpenAI 账号作为通用第三方 OIDC provider 暴露；ChatGPT Apps SDK 的 OAuth 是 ChatGPT 作为客户端连接你的授权服务器，方向相反。若要“龙虾同款”，需要它正式提供的 OAuth client 与 endpoint，不能只靠 OpenAI 账号授权。
+- 完成：确认当前真实登录目标是 Google 邮箱授权登录，并将本地覆盖示例、`.env.example`、Compose 示例、OAuth 配置页和配置文档改为 Google OIDC endpoint：`accounts.google.com` 授权、`oauth2.googleapis.com/token` 换 token、`openidconnect.googleapis.com/v1/userinfo` 取用户信息。
+- 验证通过：Google OIDC discovery 支持 `openid profile email` 和 PKCE `S256`；`go test ./internal/server`、`go test ./...`、`pnpm lint`、`pnpm css`、`pnpm test`、`pnpm build` 通过。
+- 下一步：在 Google Cloud Console 创建 OAuth Client，登记本地 Vite 回调 `http://localhost:5175/auth/oauth/callback` 和/或生产域名回调；把 `client_id/client_secret` 写入私有 `.env` 或 `config.local.yaml`，并确保 Google 邮箱对应一个已有管理员用户名后重启后端联调。
+- 阻塞/风险：本轮未写入真实 Google OAuth client secret，也未替用户修改数据库管理员用户名；首次 OAuth 绑定仍要求 Google 返回的 `email` 或 `preferred_username` 匹配现有管理员账号。
+- 完成：前端 OAuth 回调成功后自动准备下游 `ogw_` key：先查找并复用启用状态的 `Google OAuth key`，不存在时创建一个不限模型/不限额度的 key，并跳转到 `/admin-keys` 展示完整 key。
+- 完成：`/admin-keys` 新增 OAuth key 就绪提示，包含本地兼容 OpenAI 调用口径 `OPENAI_BASE_URL=http://localhost:8400/v1`。
+- 验证通过：`pnpm lint`、`pnpm css`、`pnpm test`、`pnpm build`、`pnpm style:l1`、`go test ./...`、`git diff --check`。
+- 下一步：配置真实 Google OAuth client 后走浏览器联调；本地不需要域名，Google OAuth Client 回调填 `http://localhost:5175/auth/oauth/callback` 即可，生产再换 HTTPS 域名。
+- 阻塞/风险：Google 登录只能签发本系统 `ogw_` 下游 key，不能转换成 OpenAI 官方 `sk-proj-...`；上游转发仍依赖服务端配置的 `OPENAI_API_KEY`。
+- 完成：后台侧栏将“登录配置 / OAuth 配置”改为“授权登录 / Google 授权”，`/admin-oauth` 页面改为面向操作的授权连接页，不再展示环境变量清单。
+- 完成：授权登录页只展示 Google provider 状态、“授权并生成 key”按钮、本地回调地址和本地 OpenAI 兼容 Base URL；配置说明保留在 README/docs/部署文档，不再作为后台业务页面。
+- 验证通过：`pnpm lint && pnpm css && pnpm test && pnpm build`、`pnpm style:l1`、`go test ./...`、`git diff --check`。
+- 下一步：拿到 Google OAuth Client 后，在私有配置启用 OAuth，并通过 `/admin-oauth` 点击授权联调。
+- 阻塞/风险：页面只能反映后端 `/auth/oauth/config` 的启用状态，不能在前端写入或修改 client secret；secret 仍必须通过后端环境变量或私有配置注入。
+- 完成：将下游 key 创建/编辑表单里的模型限制从手输改为下拉选择，仅允许“不限 / gpt-5.4 / gpt-5.5”，避免输入不存在的模型值；key 列表补齐编辑、删除和批量删除入口。
+- 完成：模型列表新增/保存表单改为固定模型下拉，仅允许维护 `gpt-5.4` 与 `gpt-5.5`，并补齐编辑、启停、删除操作。
+- 完成：usage 明细页补充 key、模型、成功状态下拉筛选，模型筛选同样固定为 `gpt-5.4` / `gpt-5.5`。
+- 完成：补充后端管理 RPC 基础能力，新增 `api.key_update`、`api.key_delete`、`api.model_delete`、`api.alert_rule_delete`，为后续每个菜单页完整 CRUD 做接口准备。
+- 验证通过：`cd server && go test ./...`、`cd web && pnpm lint && pnpm test && pnpm build && pnpm style:l1`、`git diff --check`。
+- 下一步：继续把策略、价格、告警规则菜单补成独立 CRUD 页面，表单字段优先复用 key、模型、状态等下拉选项。
+- 阻塞/风险：本轮已接入下游 key、模型列表和 usage 筛选；策略、价格和告警规则的独立 CRUD 菜单仍待继续补齐。
+- 完成：删除 `/admin-models` 中误导性的手工新增模型输入框和“保存模型”按钮；模型页只保留默认模型列表与启停操作。
+- 验证通过：`cd web && pnpm lint`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm style:l1`；`style:l1` 已新增 `/admin-models` 桌面和移动端回归，确认无新增模型表单且模型表格无横向溢出。
+- 下一步：如后续确实需要开放模型新增，应先调整后端默认模型清理口径，再恢复受控新增入口。
+- 阻塞/风险：后端 `api.model_upsert` 仍作为内部 RPC 能力保留，本轮只移除当前前端页面入口。
+- 完成：删除下游 key 创建表单中未实际参与拦截的“请求配额”和“Token 配额”输入；保留仍生效的备注与模型限制，OAuth 自动建 key 也不再提交无效配额字段。
+- 验证通过：`cd web && pnpm lint && pnpm test && pnpm build && pnpm style:l1`；确认 `/admin-keys` L1 浏览器回归通过，表单仅保留备注、模型限制和随机生成按钮。
+- 下一步：若后续需要可视化配置 RPM/TPM、日/月配额，应接入当前真源的 key+model policy 管理，而不是恢复旧 key 级配额输入。
+- 阻塞/风险：后端仍保留历史 key 级配额字段用于兼容既有 schema，但当前转发拦截不读取这些字段。
+- 完成：恢复 `/admin-models` 的模型新增/保存入口和行内删除操作；删除前会确认，并复用现有 `api.model_upsert`、`api.model_delete` 能力。
+- 完成：后端默认模型初始化改为只补齐 `gpt-5.4`、`gpt-5.5`，不再启动时清理手工新增模型，避免新增模型重启后丢失。
+- 验证通过：`cd server && go test ./internal/data`、`cd server && go test ./...`、`cd web && pnpm lint && pnpm css && pnpm test && pnpm build`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4176 pnpm style:l1`、`git diff --check`。
+- 阻塞/风险：`pnpm style:l1` 默认端口 `4173` 曾被前一次失败残留的 Vite 进程占用，本轮改用 `4176` 完成同一 L1 回归；复查时 `4173` 已无监听进程。
+- 完成：为 `/admin-keys` 补下游 key 搜索、单个删除和批量删除入口；后端 `api.key_list` 搜索扩展到备注、完整 key、前缀、后四位和数字 ID，并新增 `api.key_delete_batch`。
+- 下一步：如需支持跨页批量操作，应先补分页状态与全量选择语义，避免误删搜索结果外的 key。
+- 阻塞/风险：本机当前没有 `go`/`gofmt` 命令，后端 Go 格式化和测试需在安装 Go toolchain 后补跑。
+- 完成：将“点击授权登录后再转 API”的交付口径收口到当前主路径：Google/OIDC 授权成功后写入管理员登录态，前端自动复用或创建 `Google OAuth key`，并在 `/admin-keys` 展示可用于 OpenAI 兼容客户端的 `ogw_` key。
+- 完成：新增前端 OpenAI 兼容 Base URL 展示 helper，开发环境默认提示 `http://localhost:8400/v1`，生产环境默认提示当前站点 `/v1`，并支持 `VITE_OPENAI_COMPAT_BASE_URL` 覆盖。
+- 验证通过：`cd server && go test ./...`、`cd web && pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`、`git diff --check`；Codex 内置浏览器打开 `/admin-login` 与 `/admin-oauth`，确认页面非空、无框架错误覆盖层，OAuth 未启用时授权按钮禁用且展示回调地址与 OpenAI 兼容 Base URL。
+- 下一步：填写真实 Google OAuth Client 与上游 `OPENAI_API_KEY` 后，在浏览器完整联调 `/auth/oauth/start -> /auth/oauth/callback -> /oauth/callback -> /admin-keys`，再用生成的 `ogw_` key 调用 `/v1/models` 或 `/v1/responses` 验证转发。
+- 阻塞/风险：本轮不写入真实 OAuth client secret 或上游 OpenAI key；没有正式 OpenAI 用户 OAuth 转 API 的公开 endpoint，不能把 ChatGPT 网页登录态转换成官方 API key。
+- 完成：优化后台业务看板、API 凭据、模型管理和调用明细四页的使用口径与 UI 文案；侧栏从“下游 key / usage 明细”等混合命名收口为“API 凭据 / 调用明细”，表格列名改为中文可读口径。
+- 完成：API 凭据页补显式表单标签、完整凭据复制按钮，模型限制选项改为来自模型管理数据源；调用明细筛选改为带标签的凭据 / 模型 / 状态筛选，重置后立即按默认条件重新加载。
+- 验证通过：`cd web && pnpm lint && pnpm css && pnpm test && pnpm build`、`cd web && STYLE_L1_PORT=4177 pnpm style:l1`、`git diff --check`；内置浏览器通过真实本地后端登录后打开 `/admin-dashboard`、`/admin-keys`、`/admin-usage`，确认关键文案、复制按钮、筛选按钮和移动端渲染正常。
+- 下一步：如需继续优化策略、价格、告警规则，应先补对应独立页面真源，不在当前四页里堆入口。
+- 阻塞/风险：本轮不改后端接口语义；历史已存在且没有 `plain_key` 的凭据仍只能展示前缀和后四位，无法复制完整值。
+- 完成：将业务看板里的“状态箱分布”改为“调用状态概览”，补充 24 小时请求占比与 API 凭据启用比例说明，并把“启用凭据”明确为“启用 API 凭据”；L1 回归脚本同步断言新文案。
+- 验证通过：`cd web && pnpm lint`、`cd web && node --check scripts/styleL1.mjs`、`git diff --check -- web/src/pages/AdminDashboard/index.jsx web/scripts/styleL1.mjs progress.md`；内置 Browser 通过真实本地登录流打开 `/admin-dashboard`，确认新文案可见且旧标题不存在；定向 Playwright 覆盖桌面 `1440x900` 与移动端 `390x844`，确认标题和“启用 API 凭据”可见、页面无横向溢出、目标面板无内部溢出。
+- 验证受限：`cd web && pnpm style:l1` 在进入看板前的 `home-desktop` 场景失败，原因是当前登录页未出现脚本等待的“使用 Google 登录”文案；该失败不在本轮修改的 `/admin-dashboard` 区域。
+- 下一步：如需继续提升看板可读性，可按同一口径检查模型分布、Endpoint 分布等标题是否需要补充时间窗口。
+- 阻塞/风险：无。
+- 完成：删除授权登录主路径，移除前端授权按钮、`/admin-oauth` 页面、OAuth 回调页、自动生成 Google OAuth key 辅助逻辑和后台侧栏授权登录菜单；历史 `/oauth-login`、`/oauth/callback`、`/admin-oauth` 仅保留为重定向入口。
+- 完成：后端停止注册 `/auth/oauth/*` HTTP 路由，删除 OAuth handler 与 PKCE 测试，移除 OAuth 环境变量覆盖、配置 YAML/Compose 示例和配置 proto 字段；业务层 `LoginWithOAuth` 已删除。
+- 完成：README、架构说明、前端说明、服务 API/配置文档和 Compose 部署说明同步改为后台账号登录 + 下游 `ogw_` key 调用 API 的口径。
+- 验证通过：`cd server && go test ./...`、`cd web && pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`、`git diff --check`；`style:l1` 覆盖 20 个浏览器场景，确认登录页不再要求 Google 登录按钮，`/admin-oauth` 重定向到看板，后台壳子不显示“授权登录”入口。
+- 下一步：如需彻底清理数据库中的 `oauth_*` 字段和历史 repo 兼容方法，应单独走 Ent/Atlas migration，并评估现有 admin/users 历史数据。
+- 阻塞/风险：本轮不删除数据库 schema 中的 OAuth 绑定字段和历史迁移文件，避免无迁移破坏已部署数据库；项目名称、数据库名和镜像 slug 中的 `oauth` 仍按既有兼容口径保留。
+- 完成：将当前工作区构建为 `openai-oauth-api-service-server:20260508T232025-dcaee9e1-local` 并部署到 `8.218.4.199`；远端主路径为 `/data/openai-oauth-api-service/compose`，Compose 已启动 PostgreSQL 与 app-server，端口为 `8400/9400/5433`。
+- 完成：在远端按顺序启动 Postgres、执行 Atlas migration 到 `20260507124134`，再启动 app-server；远端 `.env`、管理员凭据文件均以 `600` 权限保存。
+- 验证通过：`cd server && go test ./...`、`cd web && pnpm install --frozen-lockfile && pnpm lint && pnpm test -- --run`、本地 Docker 生产镜像构建；远端 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`、`/admin-login` 内外网访问均返回 200，JSON-RPC `admin_login` 返回 `code=0` 且包含 `access_token`。
+- 下一步：如需启用真实 OpenAI 兼容转发，在远端 `/data/openai-oauth-api-service/compose/.env` 写入 `OPENAI_API_KEY` 后执行 `docker compose -f compose.yml up -d app-server`。
+- 阻塞/风险：本机 `server/.env` 未提供 `OPENAI_API_KEY`，本次部署的后台可用，但 `/v1` 上游转发在补齐真实 key 前不可用；首次迁移打包带出的 macOS `._*` 资源叉文件已移到远端 `/data/openai-oauth-api-service/deploy-trash`，未留在迁移目录。

@@ -69,6 +69,11 @@ func KeyHash(v string) predicate.GatewayAPIKey {
 	return predicate.GatewayAPIKey(sql.FieldEQ(FieldKeyHash, v))
 }
 
+// PlainKey applies equality check predicate on the "plain_key" field. It's identical to PlainKeyEQ.
+func PlainKey(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldPlainKey, v))
+}
+
 // KeyPrefix applies equality check predicate on the "key_prefix" field. It's identical to KeyPrefixEQ.
 func KeyPrefix(v string) predicate.GatewayAPIKey {
 	return predicate.GatewayAPIKey(sql.FieldEQ(FieldKeyPrefix, v))
@@ -287,6 +292,71 @@ func KeyHashEqualFold(v string) predicate.GatewayAPIKey {
 // KeyHashContainsFold applies the ContainsFold predicate on the "key_hash" field.
 func KeyHashContainsFold(v string) predicate.GatewayAPIKey {
 	return predicate.GatewayAPIKey(sql.FieldContainsFold(FieldKeyHash, v))
+}
+
+// PlainKeyEQ applies the EQ predicate on the "plain_key" field.
+func PlainKeyEQ(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldPlainKey, v))
+}
+
+// PlainKeyNEQ applies the NEQ predicate on the "plain_key" field.
+func PlainKeyNEQ(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNEQ(FieldPlainKey, v))
+}
+
+// PlainKeyIn applies the In predicate on the "plain_key" field.
+func PlainKeyIn(vs ...string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldIn(FieldPlainKey, vs...))
+}
+
+// PlainKeyNotIn applies the NotIn predicate on the "plain_key" field.
+func PlainKeyNotIn(vs ...string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNotIn(FieldPlainKey, vs...))
+}
+
+// PlainKeyGT applies the GT predicate on the "plain_key" field.
+func PlainKeyGT(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGT(FieldPlainKey, v))
+}
+
+// PlainKeyGTE applies the GTE predicate on the "plain_key" field.
+func PlainKeyGTE(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGTE(FieldPlainKey, v))
+}
+
+// PlainKeyLT applies the LT predicate on the "plain_key" field.
+func PlainKeyLT(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLT(FieldPlainKey, v))
+}
+
+// PlainKeyLTE applies the LTE predicate on the "plain_key" field.
+func PlainKeyLTE(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLTE(FieldPlainKey, v))
+}
+
+// PlainKeyContains applies the Contains predicate on the "plain_key" field.
+func PlainKeyContains(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldContains(FieldPlainKey, v))
+}
+
+// PlainKeyHasPrefix applies the HasPrefix predicate on the "plain_key" field.
+func PlainKeyHasPrefix(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldHasPrefix(FieldPlainKey, v))
+}
+
+// PlainKeyHasSuffix applies the HasSuffix predicate on the "plain_key" field.
+func PlainKeyHasSuffix(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldHasSuffix(FieldPlainKey, v))
+}
+
+// PlainKeyEqualFold applies the EqualFold predicate on the "plain_key" field.
+func PlainKeyEqualFold(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEqualFold(FieldPlainKey, v))
+}
+
+// PlainKeyContainsFold applies the ContainsFold predicate on the "plain_key" field.
+func PlainKeyContainsFold(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldContainsFold(FieldPlainKey, v))
 }
 
 // KeyPrefixEQ applies the EQ predicate on the "key_prefix" field.

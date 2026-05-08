@@ -37,19 +37,6 @@ data:
     admin:
       username: "admin"
       password: "adminadmin"
-    oauth:
-      enabled: false
-      providerName: "OAuth"
-      clientId: ""
-      clientSecret: ""
-      authUrl: ""
-      tokenUrl: ""
-      userInfoUrl: ""
-      redirectUrl: ""
-      scopes:
-        - openid
-        - profile
-        - email
 
   openai:
     apiKey: ""
