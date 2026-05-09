@@ -65,6 +65,7 @@ func NewHTTPServer(
 	v1.RegisterJsonrpcHTTPServer(srv, jsonrpcSvc)
 
 	registerHealthRoutes(srv, logger, tp, data.SQLDB())
+	registerOAuthRoutes(srv, logger, tp, adminAuthUC, dc)
 	registerOpenAIGatewayRoutes(srv, logger, tp, gatewayUC, dc)
 	registerAdminExportRoutes(srv, logger, tp, gatewayUC, dc)
 	registerStaticHandler(srv, logger, tp)

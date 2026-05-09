@@ -30,7 +30,7 @@ pnpm install
 pnpm start
 ```
 
-默认地址：`http://localhost:5173`
+默认地址：`http://localhost:5176`
 
 ### 后端
 
@@ -78,6 +78,17 @@ OAUTH_API_ADMIN_PASSWORD=adminadmin
 POSTGRES_DSN=postgres://postgres:change-this-password@postgres:5432/openai_oauth_api_service?sslmode=disable
 TRACE_ENDPOINT=
 ```
+
+可选管理员 OAuth 登录：
+
+```bash
+OAUTH_API_OAUTH_PROVIDER=google
+OAUTH_API_OAUTH_CLIENT_ID=...
+OAUTH_API_OAUTH_CLIENT_SECRET=...
+OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS=https://your-admin.example.com
+```
+
+本地 Google OAuth Client 只需要登记后端固定回调 `http://localhost:8400/auth/oauth/callback`。前端当前端口会通过 signed state 自动回跳；生产环境继续登记线上 HTTPS 后端回调，并用 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` 明确允许前端后台域名。
 
 API 转发的上游连接可通过环境变量或 Secret 注入，例如：
 

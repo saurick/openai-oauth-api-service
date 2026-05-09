@@ -110,6 +110,16 @@ usage 记录：
 - `/v1/chat/completions` 和 `/v1/responses` 转发前会检查 key 状态、模型权限、key 级 token 总额度、RPM、TPM、日/月请求配额和日/月 token 配额；超限返回 HTTP `429`
 - token 计量以 OpenAI 响应里的实际 usage 为准，key 级 token 总额度、TPM 和 token 配额允许单次请求短暂越界，下一次请求开始拦截
 
+## 管理员 OAuth 入口
+
+管理员 OAuth 登录默认关闭，配置完整后开放以下 HTTP 路由：
+
+- `GET /auth/oauth/config`：返回 `{ enabled, provider }`，前端据此决定是否显示 OAuth 登录按钮。
+- `GET /auth/oauth/start`：发起授权。可传 `frontend_origin` 和 `next`，服务端会把当前前端 origin 和回跳路径写入 signed state。
+- `GET /auth/oauth/callback`：OAuth provider 固定回调后端的地址。服务端完成 code exchange 和 userinfo 查询后，签发本系统管理员 JWT，并通过前端 `/oauth/callback` 的 URL fragment 回传登录态。
+
+本地 Google Console 回调登记 `http://localhost:8400/auth/oauth/callback`，不登记 Vite 端口。生产环境登记后端 HTTPS 域名下的同一路径，并通过 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` allowlist 前端后台 origin。
+
 ## 鉴权规则
 
 - `system.*` 默认是公开方法

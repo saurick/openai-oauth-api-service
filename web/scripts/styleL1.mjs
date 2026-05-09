@@ -408,6 +408,8 @@ async function runScenario(browser, scenario) {
       }, createFakeUserToken())
     }
 
+    await installAuthConfigMock(page)
+
     if (scenario.mockApiRpc) {
       await installApiRpcMock(page)
     }
@@ -694,6 +696,16 @@ function base64UrlJson(value) {
   return Buffer.from(JSON.stringify(value))
     .toString('base64url')
     .replace(/=+$/u, '')
+}
+
+async function installAuthConfigMock(page) {
+  await page.route('**/auth/oauth/config', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ enabled: false, provider: '' }),
+    })
+  })
 }
 
 async function installApiRpcMock(page) {
