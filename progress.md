@@ -1,5 +1,11 @@
 # Progress
 
+- 完成：恢复可选管理员 Google/OIDC 登录，并把本地回调改为动态前端端口方案。OAuth provider 固定回调后端 `/auth/oauth/callback`；`/auth/oauth/start` 会从 `frontend_origin`、`Origin` 或 `Referer` 收敛当前前端 origin，写入 signed state，授权完成后通过 `/oauth/callback` URL fragment 写入管理员 JWT 并跳回原后台路径。
+- 完成：新增 `/auth/oauth/config` 供前端判断是否显示 OAuth 登录按钮；默认未配置 `OAUTH_API_OAUTH_CLIENT_ID / CLIENT_SECRET` 时 OAuth 关闭，不影响账号密码登录。生产前端 origin 需通过 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` allowlist 明确放行；本地 `localhost / 127.0.0.1 / ::1` 支持任意端口。
+- 文档：同步更新 README、运维说明、服务配置说明、Compose `.env.example` / `compose.yml` / README、前端说明和架构说明；本地 Google Console 回调现在登记 `http://localhost:8400/auth/oauth/callback`，不再登记 Vite 端口。
+- 验证通过：`gofmt`；`cd server && go test ./internal/biz ./internal/server -run 'Test(AdminAuthUsecase_LoginWithOAuth|OAuth|RegisterHealthRoutes)'`；`cd server && go test ./internal/data`；`cd web && pnpm test`；`cd web && pnpm lint`；`cd web && pnpm css`；`cd web && pnpm build`；`cd web && pnpm style:l1`；`git diff --check`。
+- 阻塞/风险：本轮未配置真实 Google Client，也未跑真实外部授权链路；OAuth 管理员只允许匹配已有管理员用户名的邮箱或已绑定 `admin_users.oauth_provider/oauth_subject`，不会自动创建管理员。当前工作区已有大量其他未提交改动，本轮只追加 OAuth 动态回调相关实现与文档。
+
 - 完成：复核 dev/prod 管理员密码口径，确认 `server/configs/dev/config.yaml`、`server/configs/dev/config.local.example.yaml`、`server/configs/prod/config.yaml`、`server/deploy/compose/prod/.env.example`、远端 prod `.env` 和运行容器均为 `admin/adminadmin`，未发现代码或部署脚本要求生成随机管理员密码。
 - 完成：同步 README、部署文档、Compose 文档、配置文档和运维文档，明确当前个人部署默认保持 `admin/adminadmin`，部署过程不得擅自生成或替换管理员密码；如需改密必须由维护者明确指定。
 - 验证通过：只输出管理员密码长度和是否匹配默认值，未打印明文 secret；远端 prod `.env` 与容器均显示密码长度 10 且匹配默认口径。

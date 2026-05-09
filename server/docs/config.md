@@ -109,6 +109,21 @@
 
 `codex_cli` 模式适合多台客户端统一走本服务出口：客户端只保存 `ogw_...` 下游 key，服务端统一使用服务器 Codex 登录态，并继续记录 usage。该模式会为每次 `/v1/chat/completions` 或 `/v1/responses` 启动一次 Codex CLI；服务端会串行执行 Codex CLI upstream，避免多个 CLI 进程同时争用 Codex 登录态和本地状态。低配服务器应提高 `APP_MEM_LIMIT`，客户端 provider timeout 建议不低于 600 秒。
 
+## 可选管理员 OAuth 环境变量
+
+管理员 OAuth 登录默认关闭，配置完整后才启用：
+
+- `OAUTH_API_OAUTH_PROVIDER`：默认 `google`。
+- `OAUTH_API_OAUTH_CLIENT_ID`
+- `OAUTH_API_OAUTH_CLIENT_SECRET`
+- `OAUTH_API_OAUTH_AUTH_URL`：Google 默认 `https://accounts.google.com/o/oauth2/v2/auth`。
+- `OAUTH_API_OAUTH_TOKEN_URL`：Google 默认 `https://oauth2.googleapis.com/token`。
+- `OAUTH_API_OAUTH_USERINFO_URL`：Google 默认 `https://openidconnect.googleapis.com/v1/userinfo`。
+- `OAUTH_API_OAUTH_SCOPES`：默认 `openid email profile`。
+- `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS`：生产前端后台 origin allowlist，多个值用逗号或空格分隔。
+
+OAuth provider 的回调地址固定登记后端 `/auth/oauth/callback`，例如本地 `http://localhost:8400/auth/oauth/callback`。前端当前 origin 通过 signed state 动态回跳，`localhost / 127.0.0.1 / ::1` 自动允许任意本地端口；生产前端域名必须显式写入 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS`。授权邮箱必须匹配现有管理员用户名，或已绑定在 `admin_users.oauth_provider/oauth_subject`，服务端不会自动创建管理员。
+
 ## `data.api`
 
 - `data.api.rateLimitEnabled`

@@ -17,7 +17,7 @@ make run
 本地访问：
 
 - 后端：`http://127.0.0.1:8400`
-- 前端：Vite 默认监听 `http://localhost:5175`；如果端口被占用，按终端输出的新端口访问
+- 前端：Vite 默认监听 `http://localhost:5176`；该端口只用于本地开发，与生产 Compose 端口无关
 - 管理登录：`/admin-login`
 - API 运营控制台：`/admin-api`
 
@@ -51,6 +51,8 @@ cp .env.example .env
 - `OAUTH_API_UPSTREAM_PROVIDER=codex_cli`：个人统一出口模式，app-server 容器内调用 Codex CLI，并通过 `CODEX_HOST_HOME` 挂载服务器上的 Codex 登录态。该模式下多台客户端仍只使用本系统签发的 `ogw_...` 下游 key。
 
 当前个人部署的管理员账号默认保持 `admin/adminadmin`。不要在部署时擅自生成或替换 `OAUTH_API_ADMIN_PASSWORD`；只有维护者明确要求改密时才调整该变量并重启服务。
+
+管理员 OAuth 登录默认关闭。启用 Google/OIDC 时，Google Console 的本地回调登记后端固定地址 `http://localhost:8400/auth/oauth/callback`，不要再登记 Vite 端口；服务端会把当前前端 origin 写入 signed state，并在授权完成后动态跳回当前前端端口。生产环境需额外设置 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` 为管理后台 HTTPS 域名。
 
 开发环境可在 `server/.env` 设置 `DB_URL`，Makefile 会自动映射到 `POSTGRES_DSN`。本地联调数据库名建议使用 `openai_oauth_api_service`，真实密码只保存在本地忽略文件中。
 

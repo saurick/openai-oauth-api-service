@@ -44,6 +44,8 @@ pnpm build
 - `VITE_API_PROXY_TARGET`：本地 Vite 代理的后端地址，默认 `http://localhost:8400`
 说明：前端只保存本系统管理员登录返回的 JWT。下游 `ogw_` key 由管理员在 `/admin-keys` 页面生成和维护，OpenAI 兼容客户端使用本服务 `/v1` Base URL 和该 key 调用。
 
+管理员 OAuth 登录按钮只在后端 `/auth/oauth/config` 返回启用时显示。授权完成后前端 `/oauth/callback` 从 URL fragment 读取管理员 JWT 并写入 `admin_access_token`，随后跳转到后台页面；本地 Vite 端口变化不需要改前端配置。
+
 环境文件：
 
 - `web/.env.development`

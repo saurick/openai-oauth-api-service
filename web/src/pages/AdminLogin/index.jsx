@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '@/common/components/layout/AppShell'
 import { AUTH_SCOPE, persistAuth } from '@/common/auth/auth'
@@ -30,6 +30,7 @@ export default function AdminLoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [errMsg, setErrMsg] = useState('')
+  const [oauthConfig, setOauthConfig] = useState({ enabled: false, provider: '' })
 
   const canSubmit = useMemo(
     () => username.trim().length > 0 && password.length > 0 && !submitting,
@@ -56,6 +57,32 @@ export default function AdminLoginPage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/auth/oauth/config')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.enabled) {
+          setOauthConfig({
+            enabled: true,
+            provider: data.provider || 'oauth',
+          })
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const startOAuthLogin = () => {
+    const query = new URLSearchParams({
+      frontend_origin: window.location.origin,
+      next: from,
+    })
+    window.location.assign(`/auth/oauth/start?${query.toString()}`)
   }
 
   return (
@@ -137,6 +164,16 @@ export default function AdminLoginPage() {
             >
               {submitting ? '登录中…' : '登 录'}
             </button>
+
+            {oauthConfig.enabled ? (
+              <button
+                type="button"
+                onClick={startOAuthLogin}
+                className="h-11 w-full rounded-lg border border-[#d6d9d8] bg-white text-base font-semibold text-[#173b59] transition hover:border-[#2f934d] hover:text-[#2f934d]"
+              >
+                使用 {oauthConfig.provider === 'google' ? 'Google' : 'OAuth'} 登录
+              </button>
+            ) : null}
 
           </form>
         </div>

@@ -90,7 +90,8 @@ export default defineConfig(({ command, mode }) => {
 
     server: {
       host: '0.0.0.0', // 监听所有地址，方便局域网测试
-      port: 5175,
+      port: 5176,
+      strictPort: true,
       open: true,
       proxy: {
         '/rpc': {

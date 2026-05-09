@@ -9,6 +9,7 @@ import { appAlert } from '@/common/components/modal/alertBridge'
 import AdminLoginPage from '@/pages/AdminLogin'
 import AdminApiPage from '@/pages/AdminApi'
 import AdminDashboardPage from '@/pages/AdminDashboard'
+import OAuthCallbackPage from '@/pages/OAuthCallback'
 
 import 'normalize.css/normalize.css'
 
@@ -53,7 +54,7 @@ const App = () => {
           {/* <Route path="/about" element={<About />} />  // 匹配/about路径，显示About组件 */}
           <Route path="/login" element={<Navigate to="/admin-login" replace />} />
           <Route path="/oauth-login" element={<Navigate to="/admin-login" replace />} />
-          <Route path="/oauth/callback" element={<Navigate to="/admin-login" replace />} />
+          <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
           <Route path="/admin-login" element={<AdminLoginPage />} />
           <Route path="/register" element={<Navigate to="/admin-login" replace />} />
           <Route

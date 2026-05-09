@@ -50,6 +50,8 @@ APP_MEM_RESERVATION=256m
 
 管理员账号默认保持 `admin/adminadmin`。只有维护者明确要求改密时，才设置 `OAUTH_API_ADMIN_PASSWORD` 并重启 `app-server`；部署过程不要擅自生成随机管理员密码。
 
+如启用管理员 OAuth 登录，OAuth provider 回调固定登记后端 `/auth/oauth/callback`。本地为 `http://localhost:8400/auth/oauth/callback`；生产为后端 HTTPS 域名下的同一路径。前端后台域名通过 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` allowlist 控制，避免授权完成后跳到未登记来源。
+
 如需统一上游代理：
 
 ```bash
