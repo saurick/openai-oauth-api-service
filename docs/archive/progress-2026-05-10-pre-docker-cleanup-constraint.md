@@ -1,0 +1,476 @@
+# Progress
+
+- 完成：按低配服务器发布边界将本轮变更先本地构建为镜像并上传到 `8.218.4.199`；远端 Atlas migration `20260509135543` 已成功应用，新增 `gateway_usage_logs.session_id` 与会话索引。
+- 完成：发现生产镜像构建链路未复制 `web/.env.production` 后，已在 `server/Dockerfile` 补齐该文件并重新构建修正版镜像 `oauth-api-service-server:20260509T143327-729a20d9-local2`；Compose `.env` 已切到该镜像，页面标题不再残留 `%VITE_APP_TITLE%`。
+- 完成：线上主机一度因根分区 `/` 100% 满导致 Docker / SSH / HTTP 异常；已删除本轮上传 tar 包、清理 Docker build cache，并删除更旧的 `oauth-api-service-server:20260509T093830-e18ce39b` 镜像，根分区可用空间恢复到约 991MB，保留当前镜像和上一版 `20260509T141505-729a20d9-local` 作为回滚点。
+- 验证通过：远端 `/readyz`、`/healthz`、`/admin-login` 均返回 200；`admin/adminadmin` JSON-RPC 登录返回 `code=0`，`api.summary` 返回 `code=0`，新增 `api.usage_session_summaries` 返回 `code=0`；migration status 为 latest 且 pending 为 0。
+- 阻塞/风险：服务器根分区仍有约 95% 使用率，只剩约 991MB，可继续运行但部署缓冲偏小；后续发布前应先扩容磁盘或清理无用镜像 / 日志，避免再次满盘导致 Docker 和 sshd 卡住。
+
+- 完成：修正 Codex CLI 上游 token 统计口径，后端改为执行 `codex exec --json` 并读取 Codex JSON 事件里的 `last_token_usage`，同步记录 input / cached input / output / reasoning / total tokens；只有缺失 token_count 事件时才退回字符数估算。
+- 完成：usage 日志新增 `session_id` 字段和 Atlas migration `20260509135543`；网关从 `X-Session-ID` / `X-Conversation-ID` / `X-Thread-ID` 或请求 JSON 顶层及 `metadata` 的 `session_id` / `conversation_id` / `thread_id` 提取会话标识，不保存请求正文。
+- 完成：新增 `api.usage_session_summaries` 会话聚合接口，`/admin-usage` 增加「会话聚合」分段，并支持点击详情弹窗展开该会话下的请求级 usage 明细。
+- 验证通过：`cd server && go test ./...`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4338 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
+- 阻塞/风险：历史 usage 没有 `session_id`，不会被伪造成会话；OpenCode 若不传会话标识，后台仍只能按请求展示，无法准确合并成同一会话。内置 Browser 可验证登录页加载与控制台健康，但本轮会话详情依赖 mock usage 数据，最终交互验收以 `style:l1` 的桌面 / 移动端 Playwright 场景为准；Browser 截图接口仍出现 `Page.captureScreenshot` 超时。
+
+- 完成：提交并推送 `main` 提交 `e18ce39`（`完善 API 后台与 Codex 上游能力`），随后按低配服务器发布边界将本地构建镜像 `oauth-api-service-server:20260509T093830-e18ce39b` 部署到 `8.218.4.199`。
+- 完成：本地完成镜像构建与 `docker save`，上传镜像包到远端 `/data/openai-oauth-api-service/releases/`；远端只执行 `docker load`、Atlas migration、`docker compose up -d app-server` 和部署后检查，没有在服务器执行构建。
+- 完成：远端 Atlas migration 已从 `20260507124134` 升到 `20260509091545`，新增 `gateway_api_keys.quota_daily_tokens` 与 `quota_weekly_tokens`；Compose 当前 app-server 镜像为 `oauth-api-service-server:20260509T093830-e18ce39b`。
+- 验证通过：远端 `/readyz` 返回 `ready`，`/admin-login` 返回 HTTP 200，`admin/adminadmin` JSON-RPC 登录返回 `code=0 登录成功`，`api.summary` 返回 `code=0 total_requests=52`，`api.key_list` 返回 `code=0 total=2`，migration status 为 latest 且 pending 为 0。
+- 阻塞/风险：全量 QA 通过但 `govulncheck` 提示 Go 1.25.9 标准库与 `golang.org/x/net` 有已知漏洞，脚本默认仅提示不阻断；后续应升级到包含修复的 Go 1.25.10 / x/net 版本后重建镜像。
+
+- 修复：业务看板折线图尖峰线段溢出到下方卡片的问题；根因是绝对定位 SVG 没有显式绘图区高度，浏览器按 SVG 自身比例计算盒子，导致线段脱离 30 天趋势容器。现在折线 SVG 被包进固定绘图区并填满该区域。
+- 验证补充：`style:l1` 增加折线绘图区盒模型断言，确认 `data-trend-line` 和 `data-trend-line-box` 都被限制在 `data-trend-chart` 内，避免尖峰再次穿透到相邻面板。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4337 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminDashboard/index.jsx web/scripts/styleL1.mjs progress.md`。
+- 阻塞/风险：本轮只修复折线图前端布局，不修改指标计算、tooltip 内容或后端聚合数据。
+
+- 完成：API 凭据级 Token 限制从单一 `quota_total_tokens` 调整为每日 / 每周两个窗口；新增 Ent 字段与 Atlas 迁移 `quota_daily_tokens`、`quota_weekly_tokens`，创建、编辑、列表展示和转发前额度检查统一使用新字段。
+- 兼容：旧 RPC 入参 `quota_total_tokens` 仍会作为每周额度兼容接入；旧数据如果只有历史总额度，会在业务映射中按每周额度展示和拦截，避免后台看不到的旧残值继续暗中生效。新前端保存时只提交每日 / 每周字段。
+- 验证通过：`cd server && make data`、`cd server && go test ./internal/biz ./internal/data ./internal/server`、`cd web && pnpm lint`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && pnpm style:l1`。
+- 阻塞/风险：本轮已生成 migration，但未对当前数据库执行 `make migrate_apply`；部署或本地联调新后端前需要先应用迁移。内置 Browser 无法注入 `style:l1` 所需的 mock 管理员态和 mock `/rpc/api` 路由，本轮页面交互验收以仓库 `style:l1` 的 21 个 Playwright 场景为准。
+
+- 完成：业务看板 30 天趋势新增“柱状 / 折线”切换；默认保留柱状图用于看每日量级，折线图复用同一组 `usage_buckets` 数据、指标按钮和 hover / focus 明细浮层用于看走势。
+- 验证补充：`style:l1` 断言默认柱状状态、折线切换按钮、折线 SVG 和趋势点数量，并在折线模式下继续验证错误 / Token 指标 hover 明细。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4336 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminDashboard/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`。
+- 阻塞/风险：本轮只扩展前端图表呈现方式，不新增图表区块、不请求额外接口、不修改后端聚合口径；真实本地 `/admin-dashboard` 仍需要管理员登录态和后端数据，最终交互验收以 `style:l1` 的 mock 管理员态桌面 / 移动端场景为准。
+
+- 完成：业务看板 30 天趋势图新增页面内 hover / focus 明细浮层，替代原来只依赖浏览器原生 `title` 的弱提示；请求、错误、费用、延迟和 Token 指标都会展示对应日期和值，Token / 错误指标补充组成明细。
+- 验证补充：`style:l1` 新增趋势柱 `data-trend-bar` 与 `data-trend-tooltip` 断言，覆盖错误指标 hover 明细和 Token 指标切换后的 hover 明细。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4334 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminDashboard/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`。
+- 阻塞/风险：本轮只调整 `/admin-dashboard` 图表交互和展示文案，不修改 `usage_buckets` 后端聚合口径；内置 Browser 打开真实本地 `/admin-dashboard` 会按未登录态跳转 `/admin-login`，无法复用 `style:l1` 的 mock 管理员态和 mock usage 数据，交互验收以 `style:l1` 的桌面 / 移动端 Playwright 场景为准。
+
+- 完成：删除业务看板里的“调用状态概览”整块；错误率和 API 凭据启用状态已由顶部核心卡覆盖，首页不再用重复进度条占用整行。
+- 调整：`style:l1` 不再要求调用状态概览，继续断言核心指标、30 天趋势、Token 构成、模型 / 接口分布、最近调用和明细入口存在。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4333 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminDashboard/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`。
+- 阻塞/风险：本轮只调整 `/admin-dashboard` 展示层和前端回归口径，不修改后端接口、usage 真源或 `/admin-usage` 深度统计页面。
+
+- 完成：按“不过度精简”口径恢复业务看板里的 Token 构成、调用状态概览、模型用量分布和接口分布；这些模块保留概览和排障价值，但不恢复凭据宽表、目录导航和 30 天按天明细。
+- 调整：业务看板仍不请求 `usage_key_summaries`，避免首页重新拉完整凭据窗口统计；深度凭据统计继续放在 `/admin-usage`「用量日志」。
+- 验证补充：`style:l1` 更新为中等密度口径，断言 Token 构成、调用状态、模型 / 接口分布存在，同时继续断言凭据看板和 30 天按天统计不回首页。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4331 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminDashboard/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`。
+- 阻塞/风险：本轮只调整 `/admin-dashboard` 展示层，不修改后端接口、usage 真源或 `/admin-usage` 深度统计页面；内置 Browser 本轮打开临时本地端口时被浏览器侧拦截为 `ERR_BLOCKED_BY_CLIENT`，最终视觉回归以 `style:l1` 的桌面 / 移动端 Playwright 场景为准。
+
+- 完成：将 `/admin-analytics` 的凭据统计合并进 `/admin-usage`，侧栏只保留「用量日志」入口；旧 `/admin-analytics` 兼容跳转到 `/admin-usage`。
+- 完成：`/admin-usage` 新增「每日汇总 / 凭据统计 / 调用明细 / 异常请求」分段视图，复用现有 `usage_list`、`usage_buckets` 和 `usage_key_summaries` 真源；调用明细补费用估算列和请求详情弹窗，详情仅展示 usage、状态和排障字段，不展示请求 / 响应正文。
+- 验证补充：`style:l1` 覆盖旧链接跳转、用量日志分段、每日聚合、凭据窗口统计、明细分页、180 天窗口切换、异常请求强制失败筛选和详情弹窗盒模型。
+- 阻塞/风险：本轮只做前端信息架构合并与现有接口展示，不新增后端接口、schema、导出或按模型拆分的每日聚合；每日汇总当前按日期聚合，不按模型再拆行。
+
+- 完成：精简 `/admin-dashboard` 业务看板，只保留 6 张核心指标卡、30 天趋势和最近调用样本；移除首页目录导航、凭据宽表、Token 构成、状态分布、模型 / 接口分布和 30 天按天明细。
+- 调整：业务看板数据请求减少为 `summary`、`key_list`、`usage_list` 和 `usage_buckets`，不再为首页请求 8 个 `usage_key_summaries` 凭据窗口；凭据明细和深度分析继续放在独立用量统计 / 调用明细页面。
+- 验证补充：`style:l1` 按精简口径更新断言，确认核心指标、趋势切换、最近调用和明细入口存在，同时确认被移除的非必要区块不再回到业务看板。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4329 NODE_USE_ENV_PROXY=0 pnpm style:l1`；内置 Browser 打开真实本地 `/admin-dashboard`，确认桌面 / 移动端核心指标、30 天趋势和最近调用可见，旧业务看板区块无残留，趋势“错误”切换生效，控制台仅有 React Router v7 future flag 既有 warning。
+- 阻塞/风险：本轮只调整业务看板首页展示和前端请求范围，不修改后端接口、usage 真源、独立用量统计页或调用明细页。
+
+- 完成：业务看板顶部新增今日消费、今日请求、错误率、响应耗时、当前 RPM/TPM 和 API 凭据 6 张核心指标卡；复用现有 `summary`、`key_list`、`usage_list` 和 `usage_buckets` 真源，不新增后端接口、schema 或伪造余额数据。
+- 完成：30 天趋势图支持请求、错误、费用、延迟和 Token 指标切换；Token 模式保留输入 / 缓存输入 / 输出堆叠，其余指标按单指标柱状展示。
+- 验证补充：`style:l1` 更新 mock 和断言，覆盖核心指标卡、趋势指标按钮、趋势切换交互、凭据窗口切换、搜索、内部滚动和 token 说明 tooltip。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4326 NODE_USE_ENV_PROXY=0 pnpm style:l1`；内置 Browser 打开真实本地 `/admin-dashboard`，确认桌面 / 移动端核心卡片和趋势按钮可见，趋势“错误”切换生效，控制台仅有 React Router v7 future flag 既有 warning。
+- 阻塞/风险：当前后端没有余额 / 冻结余额真源，因此本轮未添加余额卡；响应 P95 取最近调用样本计算，不是后端全量分位数，后续如需严格 P95 应在后端聚合层补统计口径。
+
+- 完成：模型管理页按固定官方列表收口，移除“新建模型”、行内编辑、删除和模型弹窗；页面只保留代码内 Codex 模型目录展示、官方价格展示和启停操作。
+- 修复：管理端 `api.model_upsert` / `api.model_delete` 不再作为正式接口开放，调用时返回固定模型目录错误，避免绕过前端写入手工模型或删除固定模型。
+- 文档：同步更新 `web/README.md` 与 `server/docs/api.md`，明确模型目录以服务端代码官方列表为真源，后续官方列表更新通过代码同步。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd server && go test ./internal/biz ./internal/data`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4326 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
+- 阻塞/风险：本轮不改当前官方模型集合与价格口径；以后 OpenAI 官方列表或价格变化时，需要继续同步 `server/internal/biz/official_model_prices.go` 和前端固定目录兜底。历史 usage 文本记录仍保留原模型值，不做重写。
+
+- 修复：暗夜模式下后台顶部栏仍显示浅色的问题；根因是顶部栏使用 `bg-white/95`，此前主题覆盖只接管了 `bg-white`，未覆盖带透明度的 Tailwind 背景类。
+- 验证补充：`style:l1` 在后台暗色态新增 `header` 背景亮度断言，要求顶部栏和内容面板一样进入暗色主题。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx scripts/styleL1.mjs`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4325 NODE_USE_ENV_PROXY=0 pnpm style:l1`；本地 Playwright 打开 `/admin-dashboard` 暗色态，确认顶部栏背景为 `rgb(17, 24, 39)`、文字为浅色，已不再显示浅色顶部栏。
+
+- 完成：`/admin-keys` API 凭据表新增“创建时间”和“更新时间”独立列，直接展示后端 `key_list` 已返回的 `created_at` / `updated_at`；空态列数同步调整，不改接口、schema 或历史数据。
+- 验证补充：`style:l1` 为 API 凭据 mock 数据补 `created_at` / `updated_at`，并断言桌面/移动端 key 表格存在创建时间、更新时间列且当前页 8 条均展示有效时间；同时 mock `/auth/oauth/config`，避免本地后端未提供 OAuth 配置时首页场景被 404 控制台错误提前拦截。
+- 验证通过：`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4322 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminApi/index.jsx web/scripts/styleL1.mjs progress.md`；内置 Browser 打开真实本地 `/admin-keys`，确认“创建时间”和“更新时间”列可见、行选择仍能选中 1 行，控制台仅有 React Router v7 future flag 既有 warning。
+- 阻塞/风险：本轮只调整 API 凭据列表展示和回归脚本，不修改创建、编辑、删除、导出、用量统计或后端字段真源；历史数据若 `created_at` / `updated_at` 异常仍按现有 `fmtTs` 口径显示 `-` 或原值兜底。内置 Browser 截图接口本轮仍出现 `Page.captureScreenshot` 超时，视觉留证以 `style:l1` 生成截图为准。
+
+- 完成：后台主题切换从浅色 / 暗夜二态升级为「跟系统 / 浅色 / 暗夜」三态；默认模式为 `system`，首次进入不再固定浅色，系统偏好变化时会同步刷新实际生效主题。
+- 验证补充：`style:l1` 主题断言改为验证默认 `system` 选中、手动切到 `dark` 后刷新保持、再切回 `system` 后持久化，避免主题模式和最终生效颜色混用。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/index.jsx src/common/theme/adminTheme.js src/common/components/layout/AdminThemeToggle.jsx scripts/styleL1.mjs`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4323 NODE_USE_ENV_PROXY=0 pnpm style:l1`；本地 Playwright 打开 `/admin-login`，确认缺省无 `admin_theme` 时进入 `system`，三种选项可见，切到 `dark` 后刷新保持，再切回 `system` 后持久化。
+
+- 完成：管理员登录页和后台壳子新增浅色 / 暗夜模式切换；主题以 `admin_theme` 为唯一前端持久化键，初始化优先读取本地选择，缺省跟随系统偏好，并在刷新后保持。
+- 调整：暗色覆盖收口在 `admin-frame` / `admin-login-shell` 作用域，复用同一个主题按钮和 CSS 变量，覆盖通用面板、表格、筛选栏、弹窗、按钮、状态标签和登录表单，避免逐页散落硬编码补丁。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/index.jsx src/common/theme/adminTheme.js src/common/components/layout/AdminThemeToggle.jsx src/common/components/layout/AppShell.jsx src/common/components/layout/AdminFrame.jsx src/common/components/layout/SurfacePanel.jsx src/pages/AdminLogin/index.jsx scripts/styleL1.mjs`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4321 NODE_USE_ENV_PROXY=0 pnpm style:l1`；内置 Browser 打开本地 `/admin-login`，确认主题按钮可从浅色切到暗色并刷新保持，只有 React Router v7 future flag 既有 warning。
+- 阻塞/风险：本轮只实现前端主题，不修改后端接口、鉴权、数据库或部署配置；内置 Browser 的截图能力仍出现 `Page.captureScreenshot` 超时，视觉留证改用本地 Playwright 截图。
+
+- 完成：恢复可选管理员 Google/OIDC 登录，并把本地回调改为动态前端端口方案。OAuth provider 固定回调后端 `/auth/oauth/callback`；`/auth/oauth/start` 会从 `frontend_origin`、`Origin` 或 `Referer` 收敛当前前端 origin，写入 signed state，授权完成后通过 `/oauth/callback` URL fragment 写入管理员 JWT 并跳回原后台路径。
+- 完成：新增 `/auth/oauth/config` 供前端判断是否显示 OAuth 登录按钮；默认未配置 `OAUTH_API_OAUTH_CLIENT_ID / CLIENT_SECRET` 时 OAuth 关闭，不影响账号密码登录。生产前端 origin 需通过 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` allowlist 明确放行；本地 `localhost / 127.0.0.1 / ::1` 支持任意端口。
+- 文档：同步更新 README、运维说明、服务配置说明、Compose `.env.example` / `compose.yml` / README、前端说明和架构说明；本地 Google Console 回调现在登记 `http://localhost:8400/auth/oauth/callback`，不再登记 Vite 端口。
+- 验证通过：`gofmt`；`cd server && go test ./internal/biz ./internal/server -run 'Test(AdminAuthUsecase_LoginWithOAuth|OAuth|RegisterHealthRoutes)'`；`cd server && go test ./internal/data`；`cd web && pnpm test`；`cd web && pnpm lint`；`cd web && pnpm css`；`cd web && pnpm build`；`cd web && pnpm style:l1`；`git diff --check`。
+- 阻塞/风险：本轮未配置真实 Google Client，也未跑真实外部授权链路；OAuth 管理员只允许匹配已有管理员用户名的邮箱或已绑定 `admin_users.oauth_provider/oauth_subject`，不会自动创建管理员。当前工作区已有大量其他未提交改动，本轮只追加 OAuth 动态回调相关实现与文档。
+
+- 修复：分页“每页条数”下拉改为向上展开；`SearchableSelect` 新增 `menuPlacement`，默认仍向下，只有表格分页传 `top`，避免影响筛选栏和弹窗里的选择器。
+- 验证补充：分页盒模型回归同步检查 `data-menu-placement="top"`，并断言菜单底部位于输入框上方，防止后续又退回向下展开。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4315 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminApi/index.jsx web/src/tailwind.css web/scripts/styleL1.mjs progress.md`；本地 Playwright 登录真实 `/admin-keys`，桌面与移动端均确认分页菜单向上展开、无祖先裁剪。
+
+- 完成：重新规划业务看板信息架构，新增顶部看板目录导航，将“凭据 Token 窗口”和“24h 凭据消耗”合并为单个“凭据看板”；凭据看板支持时间窗口切换、名称/前缀搜索、排序和模块内滚动，避免凭据增多时拉长整个业务看板页面。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx src/common/components/layout/SurfacePanel.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4309 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`；内置 Browser 打开真实本地 `/admin-dashboard`，确认页面身份、看板目录、凭据看板、窗口切换和搜索空态，只有 React Router v7 future flag 既有 warning。
+- 阻塞/风险：本轮只调整前端看板展示与回归脚本，不修改后端 usage/key 聚合接口、数据库 schema 或历史 usage 真源；`usage_key_summaries` 仍按后端当前限制返回聚合结果。真实本地库当前没有凭据数据，真实 Browser 验证只能覆盖空态；带凭据数据的桌面/移动端状态由 `style:l1` mock 回归覆盖。
+
+- 完成：新增后台一级入口 `/admin-analytics`「用量统计」，左侧菜单从“转发配置”中拆出独立“用量统计”分组；第一版先承载凭据维度 Token 窗口统计和搜索 / 模型 / 状态筛选。
+- 调整：`/admin-keys` 回归为纯 API 凭据管理页，不再内嵌“凭据 Token 统计”宽表；调用明细继续保留在用量统计分组下。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/common/components/layout/AppShell.jsx src/App.jsx src/common/components/layout/AdminFrame.jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4314 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/App.jsx web/src/common/components/layout/AppShell.jsx web/src/common/components/layout/AdminFrame.jsx web/src/pages/AdminApi/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`；`style:l1` 覆盖 `/admin-analytics` 桌面和移动端，确认用量统计菜单、凭据维度表格、筛选入口、分页和横向溢出回归。
+- 阻塞/风险：本轮只做前端信息架构和现有聚合接口展示迁移，不新增后端接口、schema、导出、告警或延迟/错误率分析。
+
+- 修复：模型口径改为对齐 Codex 客户端模型菜单，候选和后端种子模型包含 `gpt-5.5`、`gpt-5.4`、`gpt-5.4-mini`、`gpt-5.3-codex`、`gpt-5.3-codex-spark`、`gpt-5.2`，不再只保留 `gpt-5.3-codex`。
+- 完成：价格表补齐上述已发布 API token 价格的模型；`gpt-5.3-codex-spark` 作为 research preview 保留在候选中，但显示“价格未定”，避免把未定价模型伪造成免费。
+- 验证通过：`gofmt -w server/internal/biz/official_model_prices.go server/internal/biz/gateway_test.go server/internal/data/gateway_repo.go server/internal/data/jsonrpc_gateway_test.go`、`cd server && go test ./internal/biz ./internal/data ./internal/server`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4306 pnpm style:l1`、`git diff --check`。
+- 阻塞/风险：Spark 价格仍以 OpenAI Codex rate card 的 research preview 口径处理，费用估算不会为它伪造 USD 单价。
+
+- 修复：后台浅色 `SurfacePanel` 不再默认 `overflow-hidden`，避免分页“每页条数”等绝对定位下拉菜单超出面板内容区后被父容器裁剪；表格自身仍由独立 `tableWrapClass` 保持圆角裁剪和横向滚动。
+- 验证补充：`style:l1` 新增分页每页条数下拉菜单盒模型断言，检查打开后的菜单尺寸以及祖先 `overflow` 容器不会裁剪菜单。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/common/components/layout/SurfacePanel.jsx scripts/styleL1.mjs`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`；本地 Playwright 登录真实 `/admin-keys`，桌面和移动端打开分页每页条数下拉，盒模型均确认无裁剪祖先。
+- 阻塞/风险：`cd web && STYLE_L1_PORT=4311 NODE_USE_ENV_PROXY=0 pnpm style:l1` 进入 `/admin-keys` 后停在既有断言“缺少 key 表格分页器”，但真实页面和截图均存在分页器；该失败不来自本轮新增的下拉裁剪断言。内置 Browser 截图接口本轮 `Page.captureScreenshot` 超时，最终视觉留证使用本地 Playwright 截图。
+
+- 修复：模型管理弹窗前端新增 Codex 候选过滤与 `gpt-5.3-codex` 价格兜底，即使旧后端或旧 mock 返回 `gpt-5.5` / `gpt-5.5-pro`，新建模型候选也不会再显示非 Codex 模型。
+- 修复：模型列表前端同步过滤非 Codex 模型，避免旧 `model_list` 残值在表格和模型限制下拉里继续回显。
+- 验证通过：`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4303 pnpm style:l1`、`cd server && go test ./internal/biz ./internal/data ./internal/server`、`git diff --check`；`style:l1` 已故意注入旧 `gpt-5.5` / `gpt-5.5-pro` 候选并验证弹窗输入 `gpt-5.5` 时只显示 Codex 空态，输入 `codex` 时只出现 `gpt-5.3-codex`。
+- 阻塞/风险：前端兜底只负责展示和提交入口过滤；数据库里的历史旧模型残值仍以服务端启动清理为准，历史 usage 日志不重写。
+
+- 完成：模型口径收口为仅保留 OpenAI Codex 当前非废弃模型 `gpt-5.3-codex`；内置官方价格候选、默认种子模型、Codex CLI 默认模型、前端模型管理默认值与 L1 mock 均同步为 `gpt-5.3-codex`。
+- 完成：后端新增非 Codex 模型准入保护，创建/编辑 key 的 `allowed_models`、模型新增/同步、价格覆盖和 key+model policy 均拒绝非 Codex 模型；服务启动种子会清理模型表、模型价格覆盖、策略和 key `allowed_models` 中的非 Codex 残值。
+- 验证通过：`cd server && go test ./internal/biz ./internal/data ./internal/server`、`cd server && go test ./...`、`cd web && pnpm test`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm lint`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4299 pnpm style:l1`、`git diff --check`。
+- 阻塞/风险：`STYLE_L1_PORT=4192` 首次执行时端口已被占用，未进入页面验证；已换用 `4299` 完整通过。历史 usage 日志里已经记录的旧模型值不会被本轮重写，统计筛选仍会按历史日志原值保留。
+
+- 完成：移除后台顶部和模型管理工具栏里的“刷新当前页”按钮，保留页面进入、筛选、分页等既有数据加载逻辑。
+- 修复：同步更新 `style:l1` 中已过期的 key / 模型分页断言，按当前 mock 数据口径分别校验 10 条凭据和 1 条 Codex 模型。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4192 NODE_USE_ENV_PROXY=0 pnpm style:l1`；内置浏览器打开本地 `/admin-models` 并点击“新建模型”，确认页面和弹窗均不再出现“刷新当前页”，无新增应用运行错误。
+- 阻塞/风险：本轮只移除前端刷新入口并修正回归脚本断言，不修改 `loadAll` 数据加载逻辑、后端接口或数据库；浏览器控制台仍有 React Router v7 future flag 既有 warning。
+
+- 修复：模型管理弹窗的官方模型候选列表从普通文档流改为绝对定位浮层，避免下拉展开时把弹窗内容和底部按钮整体顶高。
+- 验证通过：`cd web && pnpm lint`、`cd web && pnpm css`、`cd web && pnpm build`；Playwright 盒模型回归确认新建模型弹窗打开下拉前后高度均为 `433.6875px`，候选列表为 `position: absolute` 且无新增控制台 error。
+- 阻塞/风险：本轮只修正模型管理弹窗候选列表撑高问题，不调整其他弹窗布局结构。
+
+- 完成：模型管理弹窗官方模型选择支持输入时筛选，输入关键字即时过滤官方模型价格列表；只有选择或精确匹配官方模型 ID 后才允许保存，归属方继续固定为 `openai`。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4188 pnpm style:l1`、`git diff --check`；内置浏览器打开本地 `/admin-models`，输入 `mini` 后可筛选并选择 `gpt-5.4-mini`，价格预览同步显示 `$0.75 / $0.075 / $4.5`，无新增控制台 error。
+- 阻塞/风险：本轮只调整模型管理弹窗的官方模型选择交互，不新增运行时自动抓取官方价格；内置价格仍需随 OpenAI 调价同步更新。
+
+- 完成：调用明细页时间范围补充 `5 年` 选项，继续复用现有 `usage_list` 的 `start_time/end_time/limit/offset` 查询。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm css`、`git diff --check -- web/src/pages/AdminApi/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`；临时 Playwright 验证真实本地 `/admin-usage` 可看到并选择 `5 年`，页面摘要显示 `5 年 范围内第` 且无 console error。
+- 阻塞/风险：本轮只增加前端时间窗口选项和回归断言，不改后端接口、数据库或导出逻辑。完整 `style:l1` 当前阻塞在本轮无关的 `/admin-keys` 每页条数下拉被祖先 `overflow` 裁剪断言，未作为本轮通过项。
+
+- 完成：调用明细页新增时间范围筛选，支持 `24h/7 天/30 天/90 天/180 天/1 年/2 年/3 年`，并把 `usage_list` 请求收口到现有 `start_time/end_time/limit/offset` 主路径；页面摘要改为显示当前窗口和当前页范围。
+- 完成：补充调用明细页分页与时间窗口的浏览器级回归断言，覆盖时间范围选项、切换 180 天后请求窗口和翻页 `offset`。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm build`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/`、`git diff --check -- web/src/pages/AdminApi/index.jsx web/src/tailwind.css web/scripts/styleL1.mjs web/README.md progress.md`、`cd web && NO_PROXY=127.0.0.1,localhost STYLE_L1_PORT=4191 pnpm style:l1`；内置浏览器打开真实本地 `/admin-usage`，确认 180 天窗口回显 6 条历史记录且无 console error。
+- 阻塞/风险：本轮只调整调用明细页前端筛选和文档，不改 usage 日志真源、后端接口、数据库或导出逻辑；大窗口查询性能继续依赖现有 usage log 索引与后端分页。内置浏览器截图能力本轮在 CDP `Page.captureScreenshot` 超时，截图留证以 `style:l1` 生成的 `web/output/playwright/style-l1/admin-usage-desktop.png` 和 `admin-usage-mobile.png` 为准。
+
+- 完成：将后台现有原生下拉框替换为可输入筛选的受控选择组件，覆盖分页每页条数、API 凭据页模型/状态筛选、API 凭据表单允许模型、调用明细页时间范围/凭据/模型/状态筛选；模型管理弹窗保留已有官方模型输入筛选。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm lint`、`cd web && pnpm build`、`cd web && STYLE_L1_BASE_URL=http://127.0.0.1:4190 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
+- 下一步：如后续新增独立策略、价格或告警规则菜单，新增筛选/选择入口默认复用同一可筛选选择组件。
+- 阻塞/风险：本轮只覆盖当前 `web/src/pages/AdminApi/index.jsx` 中的下拉入口；仓库中存在大量本轮前已有未提交改动，未对无关页面和服务端改动做回归。
+
+- 完成：业务看板新增“凭据 Token 窗口”只读统计表并上移到顶部概览卡片下方，按每个 API 凭据展示 24h、7 天、30 天、180 天、360 天、1 年、3 年和 5 年总 Token；原有“24h 凭据消耗”继续保留请求数、成功/失败、输入/输出、费用估算和平均耗时。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm lint`、`cd web && pnpm build`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4191 pnpm style:l1`、`git diff --check`；内置浏览器打开真实本地 `/admin-dashboard`，确认“凭据 Token 窗口”位于 `30 天调用趋势` 前，且 `24h` 到 `5 年` 窗口列可见，页面无新增控制台 error。
+- 阻塞/风险：业务看板统计继续以 usage 日志 `created_at` 与 `total_tokens` 为真源；本轮只新增总 Token 窗口表，不在看板里展开每个窗口的输入/输出/缓存拆分，避免看板信息密度失控。
+
+- 完成：将费用估算从“必须手动维护模型价格”调整为优先使用数据库覆盖价、缺省回落到内置 OpenAI API 官方 Standard 短上下文 token 单价；新增 `api.official_model_price_list` 给前端选择和展示官方模型价格。
+- 完成：模型管理弹窗的模型 ID 从手填改为官方模型可输入筛选选择，归属方固定为 `openai`；模型列表新增输入、缓存输入和输出的 USD / 1M token 单价展示。
+- 验证通过：`cd server && go test ./...`、`cd web && pnpm test`、`cd web && pnpm lint`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4188 pnpm style:l1`、`git diff --check`。
+- 下一步：如需严格覆盖长上下文、Batch、Flex、Priority 或区域处理加价，需要为 usage 增加计费模式 / 上下文档位字段，再扩展估算公式。
+- 阻塞/风险：内置官方价格表按 2026-05-09 官方文档维护，OpenAI 调价后需要同步更新代码；本轮不自动抓取线上价格页，避免运行时依赖外部页面结构。
+
+- 完成：`/admin-keys` 新增“凭据 Token 统计”表，按每个 API 凭据展示 24h、7 天、30 天、180 天、360 天、1 年、3 年和 5 年总 Token；实现复用现有 `api.usage_key_summaries` 的 `start_time/end_time` 过滤，不新增后端接口、schema 或迁移。
+- 修复：业务看板 Token 说明问号从可聚焦 `span` 改为语义化 `button`，避免 `jsx-a11y/no-noninteractive-tabindex` 阻断前端 lint。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm lint`、`cd web && pnpm build`、`cd web && pnpm css`、`cd web && STYLE_L1_PORT=4187 pnpm style:l1`、`cd web && node --check scripts/styleL1.mjs`、`git diff --check`；内置浏览器打开本地 `/admin-keys`，使用真实本地后端登录后确认“凭据 Token 统计”和 `24h` 到 `5 年` 窗口列可见，页面无新增控制台 error。
+- 阻塞/风险：统计以当前 usage 日志的 `created_at` 和 `total_tokens` 为真源；没有调用的 key 显示 0，历史日志缺失 token 时不会伪造补值。本轮只展示总 Token，不新增各窗口的输入/输出/缓存拆分列，避免 API 凭据页表格过宽。
+
+- 完成：按“全局已有刷新入口”口径，移除 `/admin-keys` 与 `/admin-usage` 主内容区表格工具栏里的“刷新当前页”，保留后台顶部全局刷新按钮。
+- 验证：已补充 `style:l1` 断言，覆盖 API 凭据页和调用明细页主内容区不再出现表格级刷新入口。
+- 阻塞/风险：本轮只调整前端按钮入口，不改 `loadAll` 数据刷新逻辑、接口、后端或数据库。
+
+- 完成：为业务看板中的输入 Token、缓存输入、输出 Token 和 Reasoning 输出字段补充问号说明入口；覆盖 Token 构成、24h 凭据消耗表和 30 天按天统计表，说明文案按后端 usage 解析口径收口到 input/output/cached/reasoning token。
+- 修复：问号说明从浏览器原生 `title` 改为应用内自定义 tooltip，hover 或键盘 focus 到问号时直接显示说明，避免原生 title 延迟或不稳定导致看不到说明。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4186 pnpm style:l1`、`cd web && node --check scripts/styleL1.mjs`；`style:l1` 已真实 hover `Reasoning 输出` 问号并断言 tooltip 可见、非透明、尺寸正常且包含 `reasoning_tokens` 文案。
+- 阻塞/风险：单文件 `pnpm exec eslint --fix src/pages/AdminDashboard/index.jsx` 在当前 ESLint 配置下只返回“文件被忽略” warning；本轮为前端展示说明，不修改后端统计字段、接口或数据库。
+
+- 完成：将本地前端 Vite 开发端口从 `5175` 顺延到 `5176`，并开启 `strictPort`，避免与 `plush-toy-erp` 桌面端 `5175` 互抢；同步更新根 README 和运维说明中的本地访问地址。
+- 验证通过：`curl -I http://127.0.0.1:5176/` 返回 `HTTP/1.1 200 OK`；`git diff --check` 通过。
+- 下一步：如需联调 Google OAuth，本地 OAuth Client 回调地址应改填 `http://localhost:5176/auth/oauth/callback`；生产仍按 HTTPS 域名配置，不使用本地 Vite 端口。
+- 阻塞/风险：本轮只调整本地前端开发端口与文档，未修改后端 `8400/9400`、生产 Compose、Dockerfile、数据库或线上服务。
+
+- 完成：将后台 `/admin-keys` 的 API 凭据 Token 总额度改为按“百万 token”填写与展示；前端仍向后端提交原始 `quota_total_tokens` token 数，保持接口和数据库语义不变。
+- 验证通过：`cd web && pnpm lint`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && pnpm style:l1`、`git diff --check`；内置浏览器打开 `/admin-keys`，确认表单文案、列表列头和编辑态回显均使用百万单位。
+- 阻塞/风险：本轮只调整 API 凭据管理页的前端单位换算，不改后端字段、迁移、转发限额判定或其他用量统计页面。
+
+- 完成：复核 dev/prod 管理员密码口径，确认 `server/configs/dev/config.yaml`、`server/configs/dev/config.local.example.yaml`、`server/configs/prod/config.yaml`、`server/deploy/compose/prod/.env.example`、远端 prod `.env` 和运行容器均为 `admin/adminadmin`，未发现代码或部署脚本要求生成随机管理员密码。
+- 完成：同步 README、部署文档、Compose 文档、配置文档和运维文档，明确当前个人部署默认保持 `admin/adminadmin`，部署过程不得擅自生成或替换管理员密码；如需改密必须由维护者明确指定。
+- 验证通过：只输出管理员密码长度和是否匹配默认值，未打印明文 secret；远端 prod `.env` 与容器均显示密码长度 10 且匹配默认口径。
+
+- 完成：将远端 prod Compose 目录中已失效的 `ADMIN_CREDENTIALS.txt` 和含旧管理员密码的 `.env.bak-20260508235936-admin-password` 移出主路径，放入 `/data/openai-oauth-api-service/deploy-trash/` 并保留 `600` 权限，避免后续误读旧凭据。
+- 验证通过：远端 `/data/openai-oauth-api-service/compose` 当前只保留 `.env` 与 `compose.yml`；当前 `.env` 中管理员账号为 `admin`，`OAUTH_API_ADMIN_PASSWORD` 长度为 10，即 `adminadmin` 口径。
+- 阻塞/风险：本轮按项目约定未永久删除远端旧文件；如确认需要不可恢复删除，应单独明确授权后再处理。
+
+- 完成：按低配服务器发布口径补充部署构建边界，更新 `AGENTS.md`、`server/deploy/README.md` 和 `server/deploy/compose/prod/README.md`，明确服务器只负责加载已构建镜像、启动 Compose、执行 migration 与部署后检查；镜像和前后端产物必须先在本地或 CI 构建并上传。
+- 验证通过：本轮为文档/协作约定改动，未触达运行时代码、schema、Compose 配置或线上服务；已检查 `progress.md` 规模，未达到归档阈值。
+- 阻塞/风险：未新增发布脚本自动拦截服务器侧构建命令；当前约束先收口到正式文档和项目协作规则。
+
+- 完成：将远端 prod `/data/openai-oauth-api-service/compose/.env` 的 `OAUTH_API_ADMIN_PASSWORD` 调整为 `adminadmin`，原 `.env` 已备份为 `.env.bak-20260508235936-admin-password`，并重建 `app-server` 让启动初始化同步 `admin_users` 密码哈希。
+- 验证通过：远端 `/readyz` 返回 `ready`；服务日志出现 `sync admin_users admin success`；`admin/adminadmin` 调用 `http://8.218.4.199:8400/rpc/auth` 返回 `code=0 登录成功`，错误密码仍返回 `10002 密码错误`；`/admin-login` 返回 HTTP 200。
+- 阻塞/风险：当前 prod 管理员密码按维护者要求保持默认口径；后续不得擅自替换，除非维护者明确要求改密。
+
+- 完成：接入 API 凭据级 `quota_total_tokens` 限制，转发前按该 key 历史 usage 总 token 判断是否超额，超额返回 HTTP 429 并记录 usage/audit；后台 API 凭据创建/编辑和列表恢复“Token 总额度”配置与展示，`0` 或空值表示不限。
+- 验证通过：`cd server && go test ./internal/biz ./internal/server`、`cd web && pnpm lint && pnpm test && pnpm build && pnpm css && pnpm style:l1`、`git diff --check`；内置浏览器使用 mock RPC 打开 `/admin-keys`，确认“Token 总额度”表单、“Token 限制”列和编辑态额度回显正常。
+- 阻塞/风险：token 限制以 OpenAI 响应实际 usage 入账为准，单次请求可能短暂越过额度，下一次请求开始拦截；本轮不改模型级 policy 管理页和历史 `quota_requests` 行为。
+
+- 完成：初始化长期维护仓库并切到 `main` 分支；当前正式定位已收口为 OAuth 登录、API 转发与 token/usage 统计服务。
+- 完成：基于 `webapp-template` 复制出长期项目骨架，保留前端、Go/Kratos 后端、Ent/Atlas、PostgreSQL、质量门禁、健康检查和 Compose 部署主路径。
+- 完成：把首轮 FastAPI + SQLite MVP 移入 `legacy-python-mvp/`，仅作为 API 转发和 usage 记录的参考实现，不作为长期主路径。
+- 完成：裁剪 K8s、dashboard、lab-ha 和远端 SSH 发布脚本，避免旧模板占位环境进入主仓库。
+- 完成：更新 README、AGENTS、docs、配置示例和前端首页文案，收口项目边界与上游连接说明。
+- 完成：启用本仓库 Git hooks，`core.hooksPath=.githooks`。
+- 完成：同步前端 L1 回归脚本到当前 API 服务文案，覆盖首页、用户登录、注册、管理登录和未登录重定向场景。
+- 验证通过：`pnpm style:l1`。
+- 验证通过：`bash scripts/init-project.sh --project --strict`，必须处理项为 0；仅保留 tracing 配置命名相关建议项。
+- 验证通过：`bash scripts/doctor.sh`。
+- 验证通过：`gitleaks detect --source . --no-banner --redact --log-level warn`。
+- 验证通过：`bash scripts/qa/fast.sh`。
+- 验证通过：`bash scripts/qa/full.sh`，包含前端 lint/css/test/build、`go test ./...`、后端 build 和 govulncheck。
+- 完成：迁入 Go 后端主路径，新增下游 API key、模型缓存和 usage log 的 Ent schema 与 Atlas migration。
+- 完成：新增 OpenAI 兼容 `/v1/models`、`/v1/chat/completions`、`/v1/responses` 转发，支持非流式和 SSE usage 解析，支持统一上游代理配置。
+- 完成：新增管理后台 `/admin-api`，可查看 24h 用量、管理下游 key、管理模型列表和查看最近请求。
+- 完成：本地 `server/.env` 已接入共享 PostgreSQL `192.168.0.106:5432/oauth_api_service`，文件被 git 忽略。
+- 修复：`api.key_create` 的 `allowed_models` 已转换为 JSON-RPC Struct 兼容数组，避免成功响应里 `data=null`。
+- 验证通过：`make print_db_url && make migrate_status`，当前 192 数据库 migration 版本为 `20260430110943`，无待执行迁移。
+- 验证通过：后端连接 192 数据库并使用本地 mock OpenAI upstream 完成管理员登录、创建下游 key、`/v1/models`、`/v1/chat/completions`、`/v1/responses` 和 usage 查询。
+- 验证通过：登录后的 `/admin-api` 桌面与移动端浏览器回归，确认 key、模型和最近 usage 能加载且无横向页面溢出。
+- 验证通过：登录后的 `/admin-dashboard` 桌面与移动端浏览器回归，确认 key、模型和最近 usage 能加载且无横向页面溢出。
+- 完成：仅将后台登录页调整为浅色企业登录卡片风格，后台内部页面保持原有控制台样式不变。
+- 完成：根路径 `/` 改为直接进入后台登录页，不再展示首页入口页。
+- 完成：管理员登录成功默认进入 `/admin-dashboard`，`/admin-menu` 不再展示旧中转菜单。
+- 完成：将登录后的后台页改为浅色 ERP 风格后台骨架，覆盖左侧导航、顶部工具栏、统计卡、状态分布、表单和表格；`/admin-dashboard`、账号目录和功能路线共享同一后台壳子。
+- 完成：扩展 `pnpm style:l1`，使用测试管理员 token 和 mock API RPC 覆盖 `/admin-dashboard` 桌面与移动端回归。
+- 完成：新增 `api.usage_buckets` 按天聚合接口，并在 `/admin-dashboard` 补 30 天 usage 趋势、Token 构成、模型分布、Endpoint 分布和按天统计表。
+- 完成：将 `/admin-dashboard` 的 key、模型和 usage 管理区从深色残留样式收口为浅色后台表单和表格。
+- 验证通过：`cd server && go test ./internal/biz ./internal/data`、`cd server && go test ./...`、`cd web && pnpm lint && pnpm css && pnpm test && pnpm build`、`cd web && pnpm style:l1`、`git diff --check`。
+- 验证通过：`go test ./...`、`pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`、`bash scripts/doctor.sh`、`bash scripts/init-project.sh --project --strict`、`gitleaks detect --source . --no-banner --redact --log-level warn`、`bash scripts/qa/fast.sh`、`bash scripts/qa/full.sh`。
+- 完成：提交前修正 `server/Makefile` 与 `server/third_party/openapi/v3/openapi.proto` 的空白格式问题，避免首个提交触发 `git diff --check` 失败。
+- 修复：处理首个提交钩子暴露的 Go lint 和 YAML lint 问题，包括 `Close` 返回值、API 转发响应处理的无效赋值、Ent 日志适配器返回值、未使用约束 helper 和 OpenAPI YAML 缩进。
+- 验证通过：`SECRETS_STAGED_ONLY=1 bash scripts/qa/secrets.sh`、`bash scripts/qa/fast.sh`、`git diff --cached --check`。
+- 完成：实现管理员 OAuth/OIDC 授权登录入口，包含 `/auth/oauth/config`、`/auth/oauth/start`、`/auth/oauth/callback`，服务端换取 userinfo 后绑定已有管理员并签发本系统管理员 JWT。
+- 完成：前端管理员登录页接入 OAuth 登录按钮，新增 `/oauth/callback` 写入本系统管理员登录态。
+- 修复：补充 Vite 开发代理 `/auth -> http://localhost:8400`，避免本地请求 OAuth 配置时被 Vite history fallback 成 HTML。
+- 调整：按后台管理与监控主路径收口，普通 `/login`、`/register` 前端路由重定向到 `/admin-login`，OAuth 登录入口迁移到管理员登录页并签发管理员 JWT。
+- 调整：OAuth 管理员登录不自动创建管理员，只允许绑定已存在管理员账号；首次绑定要求 IdP `email` 或 `preferred_username` 匹配管理员用户名。
+- 修复：Vite `/rpc` 与 `/auth` 代理支持 `VITE_API_PROXY_TARGET`，默认指向项目配置真源 `http://localhost:8400`。
+- 完成：新增后台 `/admin-oauth` 配置页与控制台入口，用于查看 OAuth 启用状态、登录入口、回调地址和所需环境变量；client secret 仍只允许后端环境变量注入。
+- 完成：新增管理员 OAuth 身份字段与 Atlas migration，配置样例、Compose 环境变量和相关文档已同步。
+- 验证通过：`go test ./...`、`make build`、`pnpm test`、`git diff --check`。
+- 完成：拆分 API 运营后台信息架构，`/admin-api` 只保留只读业务看板；下游 key、模型列表和 usage 明细迁到独立菜单 `/admin-keys`、`/admin-models`、`/admin-usage`。
+- 完成：修正项目正式定位口径，不再以单纯 API 转发命名，统一为 OAuth 登录、API 转发与 token/usage 统计服务；对外管理路径统一为 `/admin-api` 和 `/rpc/api`，数据库标识后续如需彻底清理再单独迁移。
+- 完成：项目主配置名同步去除旧命名，环境变量改为 `OAUTH_API_*`，Compose 默认 slug/image/db 改为 `oauth-api-service` / `oauth_api_service`，文档命令改用仓库相对路径。
+- 验证通过：`pnpm test`、`go test ./...`、`git diff --check`；旧项目名、旧管理路径和旧 RPC 域的正式文档/前端/配置残留搜索为 0。
+- 完成：将默认管理员账号 `admin` 的初始化密码统一调整为 `adminadmin`，同步开发配置、生产 Compose 示例、README 和模板初始化检查口径。
+- 验证通过：`bash scripts/init-project.sh --project --strict`、`bash -n scripts/init-project.sh && git diff --check`、`cd server && go test ./internal/data -run 'TestInitAdminUsersIfNeeded|TestAdmin'`。
+- 修复：管理员初始化逻辑改为 upsert，同步配置中的默认管理员密码到已有同名账号；保留原禁用状态不被初始化流程自动改写。
+- 验证通过：`cd server && gofmt -w internal/data/admin_user_init.go internal/data/admin_user_init_test.go && go test ./internal/data -run 'TestInitAdminUsersIfNeeded|TestAdmin'`、`bash scripts/init-project.sh --project --strict`、`bash -n scripts/init-project.sh && git diff --check`。
+- 完成：使用当前本地 `.env` 注入的数据库连接重置共享库中 `admin` 的密码哈希，确认账号未禁用。
+- 验证通过：`curl` 调用 `admin_login`，`admin/adminadmin` 返回 `code=0` 和登录 token。
+- 完成：按最新要求将服务端 HTTP 默认端口统一调整为 `8400`，同步开发/生产配置、Docker 暴露端口、Compose 映射、前端 dev 代理和运行文档。
+- 完成：将服务端 gRPC 默认端口统一调整为 `9400`，同步开发/生产配置、Docker 暴露端口、Compose 映射和运行文档。
+- 下一步：重启本地后端或生产 Compose，使新端口生效。
+- 阻塞/风险：未修改本机未提交的真实 `.env` 或私有覆盖配置；若已有环境文件显式设置旧端口，需要手工同步 HTTP `8400` 与 gRPC `9400`。
+- 完成：移除后台顶部工具栏里的“全局业务员”和“全局客户”筛选占位，保留管理员身份、用户名和退出入口。
+- 验证通过：`cd web && pnpm style:l1`。
+- 下一步：如后续确实需要业务员或客户维度筛选，再基于真实数据源补回受控筛选逻辑。
+- 阻塞/风险：无。
+- 完成：补齐下一阶段全路线：组织账号由管理员创建/禁用/重置密码，公开注册关闭；API key 可绑定组织用户，新增普通用户 `/portal` 查看归属 key 与 usage。
+- 完成：新增 key+model 策略表、模型价格表、审计日志、站内告警规则和事件；请求转发前检查模型权限、RPM/TPM 与日/月配额，超限返回 429 并写 usage/audit。
+- 完成：usage summary、bucket、list 接入 `estimated_cost_usd`，价格缺失返回 `null`；新增上游模型同步、CSV/JSON usage 导出和生产 API 配置。
+- 验证通过：`cd server && make data && make config && go test ./...`、`cd web && pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`。
+- 完成：合并远端组织账号与用量治理路线，保留 OAuth 管理员登录、`OAUTH_API_*` 配置、`/admin-oauth` 入口和 `/admin-dashboard` 浅色后台主路径；兼容保留 `/admin-api`、`/admin-keys`、`/admin-models`、`/admin-usage` 路由。
+- 验证通过：合并冲突后重新执行 `cd server && make config && make migrate_hash`。
+- 下一步：接入真实身份提供方后，在目标域名上跑一次完整 OAuth 回调联调，并执行 Atlas migration；生产部署前按真实模型维护价格表。
+- 阻塞/风险：生产域名、镜像仓库、生产连接配置和真实 OAuth client 尚未确定；模型价格必须由管理员在后台维护，未配置时费用估算保持空值。
+- 修复：重新将默认管理员登录口径收口为 `admin/adminadmin`，同步开发配置、本地覆盖示例、生产配置、Compose 示例、环境变量示例和 README，避免登录页使用 `adminadmin` 时后端仍校验旧默认密码。
+- 验证通过：`cd server && go test ./internal/data -run 'TestInitAdminUsersIfNeeded|TestAdmin'`、`bash scripts/init-project.sh --project --strict`、`git diff --check`。
+- 下一步：重启当前本地 `server/bin/server-dev` 进程，使已修正的默认管理员密码重新初始化到运行库。
+- 阻塞/风险：当前直连 `server/.env` 中的共享 PostgreSQL 返回 `No route to host`，无法在本轮直接重置数据库哈希；8400 上仍在运行的旧进程在重启前会继续使用旧内存配置。
+- 完成：将后台业务看板收口为只读数据页，移除顶部刷新和页面内创建/启停/导出等操作入口；左侧新增“配置管理”菜单承载下游 key、模型列表和 usage 明细。
+- 验证通过：`cd web && pnpm lint && pnpm css && pnpm test && pnpm build`；补充执行后台看板桌面/移动端定向 Playwright 回归，确认新菜单存在、看板无创建/保存/导出/刷新入口且无横向溢出。
+- 验证受限：`cd web && pnpm style:l1` 当前在既有 `login-desktop` 场景失败，脚本仍等待“用户登录”文案；该失败发生在业务看板场景之前，和本轮看板改动无关。
+- 下一步：如需继续拆分 key 策略、模型价格和站内告警，可按同一菜单分组补独立页面。
+- 阻塞/风险：当前工作区存在大量本轮前已有未提交改动，本轮只在现有前端重命名后的 `AdminDashboard` 入口上做最小收口。
+- 完成：将 OAuth/SSO 拆为独立 `/oauth-login` 入口，支持用户 SSO 与管理员 SSO 两种登录目标；用户 SSO 回调签发普通用户 JWT，进入 `/portal` 后继续按 `owner_user_id` 查看 key 与 token/usage。
+- 完成：为 `users` 增加 OAuth 身份绑定字段与 Atlas migration，普通用户可按 OAuth `provider + subject` 复用账号；首次 SSO 会绑定同名/同邮箱组织账号，未匹配时创建本系统普通用户。
+- 下一步：在真实 IdP 上分别联调用户 SSO 与管理员 SSO，并执行新 migration。
+- 阻塞/风险：本轮只实现本系统 SSO 登录与 usage 归属。
+- 完成：按项目定位将前端主路径、登录页、后台壳子、用户门户、功能路线和 L1 回归中的旧展示口径改为 OAuth API、API key 生成与 token/usage 统计；后台主路由改为 `/admin-dashboard`，JSON-RPC 域统一使用后端当前真源 `/rpc/api`。
+- 下一步：如需彻底清理后端内部历史命名，需要单独安排 Ent schema、表名、审计 action 和 Go 类型的迁移方案，避免无迁移重命名破坏已有数据。
+- 阻塞/风险：本轮未重命名数据库实体和后端内部历史类型；它们仍是历史内部实现名，不再作为前端和正式文档主口径。
+- 完成：按“只保留后台和后台登录”收口前端入口，删除普通用户登录、注册、独立 OAuth 选择页和用户门户源码；历史 `/login`、`/register`、`/oauth-login`、`/portal` 均重定向到 `/admin-login`，OAuth 回调只接收管理员登录态。
+- 完成：后台侧栏的 OAuth 入口改为 `/admin-oauth` 配置页，并将该页纳入统一后台壳子；服务端 OAuth 默认回跳和错误回跳统一指向 `/admin-dashboard` / `/admin-login`。
+- 验证通过：`cd web && pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`、`cd server && go test ./internal/server ./internal/biz ./internal/data`、`git diff --check`。
+- 下一步：如需彻底移除普通用户 RPC/API 能力，需要单独评估服务端 `api.user_*`、`users` 归属字段和历史数据兼容。
+- 阻塞/风险：本轮只收口前端可访问入口与 OAuth 回跳，不删除后端组织用户数据结构和用户侧 JSON-RPC 方法。
+- 完成：项目改名为 `OpenAI OAuth API Service`，包名、服务名、Compose slug/image、默认数据库名和前端标题同步改为 `openai-oauth-api-service` 口径；保留 `OAUTH_API_*` 环境变量前缀，避免配置面扩大破坏。
+- 下一步：新建仓库后重新执行初始化、依赖安装和质量门禁，按新环境确认数据库名与镜像名。
+- 阻塞/风险：已移除当前目录 `.git` 版本库元数据；历史 `progress.md` 中仍保留旧项目名演进记录作为上下文，不作为当前命名真源。
+- 完成：恢复管理员登录页 `/admin-login` 的 OAuth 登录入口；`/admin-keys`、`/admin-models`、`/admin-usage` 改为统一后台壳子，不再跳到旧深色独立页面；旧 `/admin-api` 兼容重定向到 `/admin-dashboard`。
+- 验证通过：`cd web && pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`；`style:l1` 新增登录页 OAuth 按钮和 `/admin-usage` 桌面/移动端后台壳子回归。
+- 下一步：配置真实 OAuth/OIDC IdP 后，在目标域名完整联调 `/auth/oauth/start -> /auth/oauth/callback -> /oauth/callback -> /admin-dashboard`。
+- 阻塞/风险：当前只验证前端入口和 mock OAuth 配置；真实 `client_id/client_secret/auth/token/userinfo/redirect_url` 仍需通过后端环境变量配置并联调。
+- 完成：删除 `/admin-oauth` 页面中的黄色说明块。
+- 验证通过：`cd web && pnpm build`、`cd web && pnpm style:l1`，并确认目标文本全局搜索无残留。
+- 下一步：如需调整 OAuth 配置页剩余说明文案，再按实际后台口径收口。
+- 阻塞/风险：无。
+- 完成：移除后台侧栏“功能路线”入口；历史 `/admin-guide` 与 `/admin-hierarchy` 访问统一重定向到 `/admin-dashboard`。
+- 验证通过：`cd web && pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`；`style:l1` 新增 `/admin-guide` 重定向与侧栏无“功能路线”断言。
+- 下一步：如需保留路线信息，建议收口到正式 `docs/`，不再作为后台页面展示。
+- 阻塞/风险：无。
+- 完成：按“只是登录 GPT、模仿龙虾 OAuth”的当前口径，前端移除后台“账号目录”入口；历史 `/admin-accounts` 与 `/admin-users` 统一重定向到 `/admin-dashboard`。
+- 验证通过：`cd web && pnpm lint && pnpm css && pnpm test && pnpm build`、`cd web && STYLE_L1_PORT=4174 pnpm style:l1`、`git diff --check`。
+- 下一步：配置真实 OAuth/OIDC 后联调登录回调主路径。
+- 阻塞/风险：本轮不删除后端历史 `users`、`api.user_*` 和 key 归属字段；若要彻底移除，需要单独走数据兼容与迁移评估。
+- 完成：按要求清理全项目相关说明内容，覆盖 README、docs、前端页面、部署说明、协作说明和历史 MVP 说明。
+- 验证通过：`cd web && pnpm lint && pnpm css && pnpm test && pnpm build`、`cd web && pnpm style:l1`，并确认目标文本全局搜索无残留。
+- 下一步：如后续继续调整项目定位口径，优先同步 README、docs 与前端页面展示。
+- 阻塞/风险：无。
+- 修复：下游 key 创建改为随机生成 key 且备注可选；空备注由后端生成默认备注，前端表单和列表文案同步改为“备注”。
+- 验证通过：`cd server && go test ./internal/biz ./internal/data`、`cd server && go test ./...`、`cd web && pnpm lint && pnpm css && pnpm test && pnpm build`、`cd web && node --check scripts/styleL1.mjs && pnpm style:l1`；`style:l1` 已新增 `/admin-keys` 桌面和移动端回归，共 18 个场景。
+- 发现：当前开发库 `192.168.0.106:5432/openai_api_gateway` 的 Atlas 版本停在 `20260430110943`，仍有 3 个 pending migration；当前代码会查询 `owner_user_id` 等新列，库未升级时 `/admin-keys` 会显示“API 操作失败”。
+- 下一步：确认该共享库可升级后，在 `server/` 执行 `make migrate_apply`，再重启/刷新后端和前端页面验证。
+- 阻塞/风险：本轮未擅自升级共享数据库；迁移未执行前，现有运行环境仍可能继续报 API 查询失败。
+- 完成：模型初始化口径收口为仅保留 `gpt-5.4` 与 `gpt-5.5`，服务启动时会清理模型表中其他模型记录；同步后端测试和前端 L1 mock 的模型样本。
+- 验证通过：`cd server && go test ./internal/data ./internal/server`、`cd web && pnpm style:l1`；被移除模型名全仓搜索无业务残留。
+- 下一步：重启后端服务，使现有数据库中的旧 seed 模型按新口径清理。
+- 阻塞/风险：若旧 API key 策略或历史 usage 仍引用被清理模型，历史 usage 文本记录保留不变，后续请求需改用保留模型。
+- 完成：新增 `api.usage_key_summaries` 按下游 key 聚合 usage，返回 calls、成功/失败、token 构成、平均耗时和估算费用；后台业务看板新增“24h key 消耗”表，并与 key 列表合并展示无调用 key 的 0 消耗。
+- 验证通过：`cd server && go test ./internal/biz ./internal/data`、`cd server && go test ./...`、`cd web && pnpm lint && pnpm test && pnpm build`、`cd web && pnpm style:l1`、`git diff --check`。
+- 下一步：如需按 7 天/30 天或自定义窗口查看每个 key 消耗，可在现有聚合接口上增加前端筛选控件。
+- 阻塞/风险：费用估算仍依赖本地模型价格表；某 key 窗口内存在未配置价格的模型时，该 key 费用显示“未配置价格”。
+- 完成：按当前要求将随机生成的下游 key 明文保存到 `gateway_api_keys.plain_key`，管理员 key 列表和创建响应会返回完整 key；普通用户侧 `user_key_list` 仍不返回明文。
+- 完成：通过 Ent/Atlas 生成 migration `20260507124134_migrate.sql`，历史已存在 key 因无法从 hash 反推明文，迁移后 `plain_key` 为空，只有新创建 key 会保存完整明文。
+- 验证通过：`cd server && make data`、`cd server && go test ./internal/biz ./internal/data`、`cd server && go test ./...`、`cd web && pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`、`git diff --check`。
+- 下一步：在确认目标数据库后执行 `cd server && make migrate_apply`，再重启/刷新后台创建一个新 key 验证完整 key 持久化展示。
+- 阻塞/风险：本轮未擅自 apply 当前共享/开发库 migration；未迁移的运行库仍没有 `plain_key` 字段，相关接口会继续按旧库结构运行或报缺列错误。
+- 修复：将前端 README、OAuth 配置页展示和本地 OAuth 覆盖示例中的本项目后端端口统一为 `8400`，避免继续按旧 `8200` 口径联调。
+- 下一步：重启本项目前端 Vite 服务后重新打开后台页面，确认 `/rpc` 与 `/auth` 都代理到 `http://localhost:8400`。
+- 阻塞/风险：当前本机 `5175` 仍可能被其他项目 Vite 进程占用；需要先停掉占用进程再启动本项目前端。
+- 完成：部署本项目到 `192.168.0.106`，使用 Compose 启动 PostgreSQL 与后端服务，并将 `openai.saurick.space` 加入 ddns-go 与 Nginx HTTPS 反代。
+- 修复：Dockerfile 固定容器构建使用 `pnpm@10.13.1`，避免新版 pnpm 拦截 `esbuild` 构建脚本导致镜像构建失败。
+- 验证通过：本地构建 `oauth-api-service-server:dev` 镜像并通过 SSH 导入服务器；远端 Atlas migration 已应用；`https://openai.saurick.space/admin-login` 通过 Nginx 反代返回 200；`/auth/oauth/config` 返回 OAuth 未启用。
+- 下一步：配置真实 OAuth/OIDC provider 后，将服务器 `.env` 中 `OAUTH_API_OAUTH_ENABLED` 与 provider 参数开启，再重启 `app-server`。
+- 阻塞/风险：服务器 Docker 代理指向 `192.168.0.107:7893` 且当前不可达，本轮未擅自修改代理；生产管理员密码按要求保留 `admin/adminadmin`，后续不得擅自生成或替换。
+- 完成：经授权对当前本机命中的开发库 `192.168.0.106:5432/openai_api_gateway` 执行 Atlas migration，将版本从 `20260430110943` 升级到 `20260507124134`，补齐 `owner_user_id`、OAuth 绑定字段、策略/价格/告警/审计表和 `plain_key` 字段。
+- 验证通过：`make migrate_status` 显示 pending 为 0；直连本地后端验证 `admin_login`、`api.summary`、`api.key_list`、`api.usage_list`、`api.usage_buckets`、`api.usage_key_summaries` 和 `api.model_list` 均返回 `code=0`；`go test ./...`、`pnpm lint`、`pnpm css`、`pnpm test`、`pnpm build` 通过。
+- 下一步：刷新本地后台页面；如需要真实 OpenAI OAuth 登录，再配置后端 OAuth/OIDC provider 参数并联调 `/auth/oauth/start -> /auth/oauth/callback`。
+- 阻塞/风险：本轮只修复本地开发库 schema 与当前代码不一致导致的后台 API 失败，不涉及真实 OpenAI 账号授权；历史已存在 key 的 `plain_key` 无法从 hash 反推，迁移后仍为空，只有新创建 key 会保存完整明文。
+- 完成：为管理员 OAuth/OIDC code flow 补 PKCE `S256`，授权请求携带 `code_challenge`，token 换取携带 `code_verifier`；PKCE verifier 使用 HttpOnly callback-path cookie 暂存，避免放入可见 state。
+- 完成：OAuth 配置页和部署/配置文档改为标准 OIDC provider 口径，明确不要把 ChatGPT 网页登录链路的未公开接口当作生产 OAuth provider。
+- 验证通过：新增 `oauth_handler` PKCE 单元测试；`go test ./internal/server ./internal/biz ./internal/data`、`go test ./...`、`pnpm lint`、`pnpm css`、`pnpm test`、`pnpm build` 通过。
+- 下一步：拿到真实 provider 的 `client_id/client_secret/auth_url/token_url/userinfo_url/redirect_url/scopes` 后，写入本地或服务器私有环境变量并重启后端，再由你在浏览器完成真实授权登录。
+- 阻塞/风险：OpenAI 公开 API 文档没有把 OpenAI 账号作为通用第三方 OIDC provider 暴露；ChatGPT Apps SDK 的 OAuth 是 ChatGPT 作为客户端连接你的授权服务器，方向相反。若要“龙虾同款”，需要它正式提供的 OAuth client 与 endpoint，不能只靠 OpenAI 账号授权。
+- 完成：确认当前真实登录目标是 Google 邮箱授权登录，并将本地覆盖示例、`.env.example`、Compose 示例、OAuth 配置页和配置文档改为 Google OIDC endpoint：`accounts.google.com` 授权、`oauth2.googleapis.com/token` 换 token、`openidconnect.googleapis.com/v1/userinfo` 取用户信息。
+- 验证通过：Google OIDC discovery 支持 `openid profile email` 和 PKCE `S256`；`go test ./internal/server`、`go test ./...`、`pnpm lint`、`pnpm css`、`pnpm test`、`pnpm build` 通过。
+- 下一步：在 Google Cloud Console 创建 OAuth Client，登记本地 Vite 回调 `http://localhost:5175/auth/oauth/callback` 和/或生产域名回调；把 `client_id/client_secret` 写入私有 `.env` 或 `config.local.yaml`，并确保 Google 邮箱对应一个已有管理员用户名后重启后端联调。
+- 阻塞/风险：本轮未写入真实 Google OAuth client secret，也未替用户修改数据库管理员用户名；首次 OAuth 绑定仍要求 Google 返回的 `email` 或 `preferred_username` 匹配现有管理员账号。
+- 完成：前端 OAuth 回调成功后自动准备下游 `ogw_` key：先查找并复用启用状态的 `Google OAuth key`，不存在时创建一个不限模型/不限额度的 key，并跳转到 `/admin-keys` 展示完整 key。
+- 完成：`/admin-keys` 新增 OAuth key 就绪提示，包含本地兼容 OpenAI 调用口径 `OPENAI_BASE_URL=http://localhost:8400/v1`。
+- 验证通过：`pnpm lint`、`pnpm css`、`pnpm test`、`pnpm build`、`pnpm style:l1`、`go test ./...`、`git diff --check`。
+- 下一步：配置真实 Google OAuth client 后走浏览器联调；本地不需要域名，Google OAuth Client 回调填 `http://localhost:5175/auth/oauth/callback` 即可，生产再换 HTTPS 域名。
+- 阻塞/风险：Google 登录只能签发本系统 `ogw_` 下游 key，不能转换成 OpenAI 官方 `sk-proj-...`；上游转发仍依赖服务端配置的 `OPENAI_API_KEY`。
+- 完成：后台侧栏将“登录配置 / OAuth 配置”改为“授权登录 / Google 授权”，`/admin-oauth` 页面改为面向操作的授权连接页，不再展示环境变量清单。
+- 完成：授权登录页只展示 Google provider 状态、“授权并生成 key”按钮、本地回调地址和本地 OpenAI 兼容 Base URL；配置说明保留在 README/docs/部署文档，不再作为后台业务页面。
+- 验证通过：`pnpm lint && pnpm css && pnpm test && pnpm build`、`pnpm style:l1`、`go test ./...`、`git diff --check`。
+- 下一步：拿到 Google OAuth Client 后，在私有配置启用 OAuth，并通过 `/admin-oauth` 点击授权联调。
+- 阻塞/风险：页面只能反映后端 `/auth/oauth/config` 的启用状态，不能在前端写入或修改 client secret；secret 仍必须通过后端环境变量或私有配置注入。
+- 完成：将下游 key 创建/编辑表单里的模型限制从手输改为下拉选择，仅允许“不限 / gpt-5.4 / gpt-5.5”，避免输入不存在的模型值；key 列表补齐编辑、删除和批量删除入口。
+- 完成：模型列表新增/保存表单改为固定模型下拉，仅允许维护 `gpt-5.4` 与 `gpt-5.5`，并补齐编辑、启停、删除操作。
+- 完成：usage 明细页补充 key、模型、成功状态下拉筛选，模型筛选同样固定为 `gpt-5.4` / `gpt-5.5`。
+- 完成：补充后端管理 RPC 基础能力，新增 `api.key_update`、`api.key_delete`、`api.model_delete`、`api.alert_rule_delete`，为后续每个菜单页完整 CRUD 做接口准备。
+- 验证通过：`cd server && go test ./...`、`cd web && pnpm lint && pnpm test && pnpm build && pnpm style:l1`、`git diff --check`。
+- 下一步：继续把策略、价格、告警规则菜单补成独立 CRUD 页面，表单字段优先复用 key、模型、状态等下拉选项。
+- 阻塞/风险：本轮已接入下游 key、模型列表和 usage 筛选；策略、价格和告警规则的独立 CRUD 菜单仍待继续补齐。
+- 完成：删除 `/admin-models` 中误导性的手工新增模型输入框和“保存模型”按钮；模型页只保留默认模型列表与启停操作。
+- 验证通过：`cd web && pnpm lint`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm style:l1`；`style:l1` 已新增 `/admin-models` 桌面和移动端回归，确认无新增模型表单且模型表格无横向溢出。
+- 下一步：如后续确实需要开放模型新增，应先调整后端默认模型清理口径，再恢复受控新增入口。
+- 阻塞/风险：后端 `api.model_upsert` 仍作为内部 RPC 能力保留，本轮只移除当前前端页面入口。
+- 完成：删除下游 key 创建表单中未实际参与拦截的“请求配额”和“Token 配额”输入；保留仍生效的备注与模型限制，OAuth 自动建 key 也不再提交无效配额字段。
+- 验证通过：`cd web && pnpm lint && pnpm test && pnpm build && pnpm style:l1`；确认 `/admin-keys` L1 浏览器回归通过，表单仅保留备注、模型限制和随机生成按钮。
+- 下一步：若后续需要可视化配置 RPM/TPM、日/月配额，应接入当前真源的 key+model policy 管理，而不是恢复旧 key 级配额输入。
+- 阻塞/风险：后端仍保留历史 key 级配额字段用于兼容既有 schema，但当前转发拦截不读取这些字段。
+- 完成：恢复 `/admin-models` 的模型新增/保存入口和行内删除操作；删除前会确认，并复用现有 `api.model_upsert`、`api.model_delete` 能力。
+- 完成：后端默认模型初始化改为只补齐 `gpt-5.4`、`gpt-5.5`，不再启动时清理手工新增模型，避免新增模型重启后丢失。
+- 验证通过：`cd server && go test ./internal/data`、`cd server && go test ./...`、`cd web && pnpm lint && pnpm css && pnpm test && pnpm build`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4176 pnpm style:l1`、`git diff --check`。
+- 阻塞/风险：`pnpm style:l1` 默认端口 `4173` 曾被前一次失败残留的 Vite 进程占用，本轮改用 `4176` 完成同一 L1 回归；复查时 `4173` 已无监听进程。
+- 完成：为 `/admin-keys` 补下游 key 搜索、单个删除和批量删除入口；后端 `api.key_list` 搜索扩展到备注、完整 key、前缀、后四位和数字 ID，并新增 `api.key_delete_batch`。
+- 下一步：如需支持跨页批量操作，应先补分页状态与全量选择语义，避免误删搜索结果外的 key。
+- 阻塞/风险：本机当前没有 `go`/`gofmt` 命令，后端 Go 格式化和测试需在安装 Go toolchain 后补跑。
+- 完成：将“点击授权登录后再转 API”的交付口径收口到当前主路径：Google/OIDC 授权成功后写入管理员登录态，前端自动复用或创建 `Google OAuth key`，并在 `/admin-keys` 展示可用于 OpenAI 兼容客户端的 `ogw_` key。
+- 完成：新增前端 OpenAI 兼容 Base URL 展示 helper，开发环境默认提示 `http://localhost:8400/v1`，生产环境默认提示当前站点 `/v1`，并支持 `VITE_OPENAI_COMPAT_BASE_URL` 覆盖。
+- 验证通过：`cd server && go test ./...`、`cd web && pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`、`git diff --check`；Codex 内置浏览器打开 `/admin-login` 与 `/admin-oauth`，确认页面非空、无框架错误覆盖层，OAuth 未启用时授权按钮禁用且展示回调地址与 OpenAI 兼容 Base URL。
+- 下一步：填写真实 Google OAuth Client 与上游 `OPENAI_API_KEY` 后，在浏览器完整联调 `/auth/oauth/start -> /auth/oauth/callback -> /oauth/callback -> /admin-keys`，再用生成的 `ogw_` key 调用 `/v1/models` 或 `/v1/responses` 验证转发。
+- 阻塞/风险：本轮不写入真实 OAuth client secret 或上游 OpenAI key；没有正式 OpenAI 用户 OAuth 转 API 的公开 endpoint，不能把 ChatGPT 网页登录态转换成官方 API key。
+- 完成：优化后台业务看板、API 凭据、模型管理和调用明细四页的使用口径与 UI 文案；侧栏从“下游 key / usage 明细”等混合命名收口为“API 凭据 / 调用明细”，表格列名改为中文可读口径。
+- 完成：API 凭据页补显式表单标签、完整凭据复制按钮，模型限制选项改为来自模型管理数据源；调用明细筛选改为带标签的凭据 / 模型 / 状态筛选，重置后立即按默认条件重新加载。
+- 验证通过：`cd web && pnpm lint && pnpm css && pnpm test && pnpm build`、`cd web && STYLE_L1_PORT=4177 pnpm style:l1`、`git diff --check`；内置浏览器通过真实本地后端登录后打开 `/admin-dashboard`、`/admin-keys`、`/admin-usage`，确认关键文案、复制按钮、筛选按钮和移动端渲染正常。
+- 下一步：如需继续优化策略、价格、告警规则，应先补对应独立页面真源，不在当前四页里堆入口。
+- 阻塞/风险：本轮不改后端接口语义；历史已存在且没有 `plain_key` 的凭据仍只能展示前缀和后四位，无法复制完整值。
+- 完成：将业务看板里的“状态箱分布”改为“调用状态概览”，补充 24 小时请求占比与 API 凭据启用比例说明，并把“启用凭据”明确为“启用 API 凭据”；L1 回归脚本同步断言新文案。
+- 验证通过：`cd web && pnpm lint`、`cd web && node --check scripts/styleL1.mjs`、`git diff --check -- web/src/pages/AdminDashboard/index.jsx web/scripts/styleL1.mjs progress.md`；内置 Browser 通过真实本地登录流打开 `/admin-dashboard`，确认新文案可见且旧标题不存在；定向 Playwright 覆盖桌面 `1440x900` 与移动端 `390x844`，确认标题和“启用 API 凭据”可见、页面无横向溢出、目标面板无内部溢出。
+- 验证受限：`cd web && pnpm style:l1` 在进入看板前的 `home-desktop` 场景失败，原因是当前登录页未出现脚本等待的“使用 Google 登录”文案；该失败不在本轮修改的 `/admin-dashboard` 区域。
+- 下一步：如需继续提升看板可读性，可按同一口径检查模型分布、Endpoint 分布等标题是否需要补充时间窗口。
+- 阻塞/风险：无。
+- 完成：删除授权登录主路径，移除前端授权按钮、`/admin-oauth` 页面、OAuth 回调页、自动生成 Google OAuth key 辅助逻辑和后台侧栏授权登录菜单；历史 `/oauth-login`、`/oauth/callback`、`/admin-oauth` 仅保留为重定向入口。
+- 完成：后端停止注册 `/auth/oauth/*` HTTP 路由，删除 OAuth handler 与 PKCE 测试，移除 OAuth 环境变量覆盖、配置 YAML/Compose 示例和配置 proto 字段；业务层 `LoginWithOAuth` 已删除。
+- 完成：README、架构说明、前端说明、服务 API/配置文档和 Compose 部署说明同步改为后台账号登录 + 下游 `ogw_` key 调用 API 的口径。
+- 验证通过：`cd server && go test ./...`、`cd web && pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`、`git diff --check`；`style:l1` 覆盖 20 个浏览器场景，确认登录页不再要求 Google 登录按钮，`/admin-oauth` 重定向到看板，后台壳子不显示“授权登录”入口。
+- 下一步：如需彻底清理数据库中的 `oauth_*` 字段和历史 repo 兼容方法，应单独走 Ent/Atlas migration，并评估现有 admin/users 历史数据。
+- 阻塞/风险：本轮不删除数据库 schema 中的 OAuth 绑定字段和历史迁移文件，避免无迁移破坏已部署数据库；项目名称、数据库名和镜像 slug 中的 `oauth` 仍按既有兼容口径保留。
+- 完成：将当前工作区构建为 `openai-oauth-api-service-server:20260508T232025-dcaee9e1-local` 并部署到 `8.218.4.199`；远端主路径为 `/data/openai-oauth-api-service/compose`，Compose 已启动 PostgreSQL 与 app-server，端口为 `8400/9400/5433`。
+- 完成：在远端按顺序启动 Postgres、执行 Atlas migration 到 `20260507124134`，再启动 app-server；远端 `.env`、管理员凭据文件均以 `600` 权限保存。
+- 验证通过：`cd server && go test ./...`、`cd web && pnpm install --frozen-lockfile && pnpm lint && pnpm test -- --run`、本地 Docker 生产镜像构建；远端 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`、`/admin-login` 内外网访问均返回 200，JSON-RPC `admin_login` 返回 `code=0` 且包含 `access_token`。
+- 下一步：如需启用真实 OpenAI 兼容转发，在远端 `/data/openai-oauth-api-service/compose/.env` 写入 `OPENAI_API_KEY` 后执行 `docker compose -f compose.yml up -d app-server`。
+- 阻塞/风险：本机 `server/.env` 未提供 `OPENAI_API_KEY`，本次部署的后台可用，但 `/v1` 上游转发在补齐真实 key 前不可用；首次迁移打包带出的 macOS `._*` 资源叉文件已移到远端 `/data/openai-oauth-api-service/deploy-trash`，未留在迁移目录。
+- 完成：通过远端管理员 JSON-RPC 登录创建 `opencode deployed test` 下游 key，并将本机 OpenCode 配置增加 `oauth-api-service` 自定义 provider；key 明文保存在本机 `~/.config/opencode/secrets/openai-oauth-api-service.key`，原配置备份为 `~/.config/opencode/opencode.json.bak-20260508232751-oauth-api-service`。
+- 验证通过：`opencode debug config` 可见 `oauth-api-service` provider，`opencode models oauth-api-service` 只返回 `oauth-api-service/gpt-5.4` 与 `oauth-api-service/gpt-5.5`；使用该 key 调用 `http://8.218.4.199:8400/v1/models` 返回 2 个模型，后台 usage 记录 `models 200`。
+- 验证受限：`opencode run --pure -m oauth-api-service/gpt-5.5 --variant high` 已打到远端 `/v1/chat/completions`，后台 usage 记录多条 `chat.completions 500 upstream_config_error gpt-5.5`；失败原因是远端 `OPENAI_API_KEY` 仍为空，不是下游 key 或 OpenCode provider 配置失败。
+- 下一步：给远端 `.env` 补真实 `OPENAI_API_KEY` 并重启 app-server 后，重新跑一次 `opencode run --pure -m oauth-api-service/gpt-5.5 --variant high --format json "Reply with OK only."`，再核对 usage 是否记录成功请求和 token 用量。
+- 阻塞/风险：本轮为验证链路创建了一个可用下游 key；如后续不需要保留，应在后台删除该 `opencode deployed test` API 凭据，避免长期暴露额外凭据。
+- 完成：为 `openai.saurick.space` 配置系统 Nginx HTTPS 反代到 `127.0.0.1:8400`，证书目录为 `/etc/nginx/certs/openai.saurick.space`，续签脚本为 `/usr/local/sbin/renew-openai-saurick-space-cert.sh`，续签日志为 `/var/log/acme/openai-saurick-space-renew.log`。
+- 完成：使用最新 Cloudflare token 校验通过 `saurick.space` zone 权限，删除 `openai.saurick.space` 上残留的未代理 AAAA 记录，只保留 `A openai -> 8.218.4.199` 且 proxied；acme.sh 已切换为 Cloudflare DNS-01，`Le_Webroot='dns_cf'`。
+- 完成：本机 OpenCode `oauth-api-service` provider 改为 `https://openai.saurick.space/v1`，并按 OpenCode 官方 custom provider 口径把下游 key 写入 `options.apiKey`；原配置备份为 `~/.config/opencode/opencode.json.bak-20260508154441-openai-domain`。
+- 验证通过：`nginx -t`、`systemctl is-active nginx cron docker`、续签脚本手动执行通过；origin 直连 `https://openai.saurick.space/admin-login` 与 Cloudflare 代理路径均返回 200，`/readyz` 返回 `ready`；`opencode models oauth-api-service` 返回 `gpt-5.4/gpt-5.5`，使用该 key 调用 `https://openai.saurick.space/v1/models` 返回 2 个模型。
+- 验证受限：本地 `opencode run --pure -m oauth-api-service/gpt-5.5 --variant high` 已不再报 `OpenAI API key is missing`，请求已进入服务器并被 usage 记录为 `chat.completions 500 upstream_config_error gpt-5.5`；远端 `OPENAI_API_KEY` 仍为空，真实模型回复和 token 用量统计必须等补齐上游 OpenAI API key 后才能通过。
+- 阻塞/风险：Cloudflare token 已保存到服务器 root-only 文件 `/root/.acme-env/cloudflare-openai-saurick-space.env`，权限 `600`；不要写入仓库。当前证书有效期到 `2026-08-06 15:02:30 GMT`。
+- 验证补充：按最新 Cloudflare token 重新验证自动续签链路，`/root/.acme-env/cloudflare-openai-saurick-space.env` 中 token active，具备 `saurick.space` zone 访问与 DNS 写权限；已通过 Cloudflare API 创建、查询、删除临时 TXT 记录 `_codex-renew-test.openai.saurick.space`。
+- 验证补充：手动执行 `/usr/local/sbin/renew-openai-saurick-space-cert.sh` 通过，日志显示 acme.sh 按 ARI 下一续签窗口跳过当前未到期证书，并在随后执行 `nginx -t` 与 reload 成功；cron 仍为 `23 3 * * * /usr/local/sbin/renew-openai-saurick-space-cert.sh`。
+- 验证补充：`https://openai.saurick.space/admin-login` 返回 200，`/readyz` 返回 `ready`，`https://openai.saurick.space/v1/models` 使用 OpenCode 下游 key 返回 `gpt-5.4,gpt-5.5`。`opencode run` 保留退出码复测为超时 `142`，服务器 usage 同步记录 `chat.completions 500 upstream_config_error gpt-5.5`；远端 `OPENAI_API_KEY_set=no`，没有上游 key 前无法把真实消息测试跑到模型返回。
+- 完成：将前端 favicon 替换为本地内联的 Codex 彩色图标版本，并同步更新未被当前 HTML 直接引用的 `src/assets/icons/favicon.png` 备用资产。
+- 完成：按要求将 Codex favicon 内部渐变从蓝色系调整为黄橙红暖色系。
+- 下一步：部署新前端构建后，浏览器可能需要清理 favicon 缓存或强制刷新后才会显示新图标。
+- 阻塞/风险：无。
+- 验证补充：重新确认 `8.218.4.199` 上 `openai.saurick.space` 的 Nginx、cron、Docker 均为 active，`nginx -t` 通过，证书为 Let's Encrypt `E8`，有效期到 `2026-08-06 15:02:30 GMT`；crontab 保持 `23 3 * * * /usr/local/sbin/renew-openai-saurick-space-cert.sh`，acme 配置为 `Le_Webroot='dns_cf'`。
+- 验证补充：本地 OpenCode `oauth-api-service` provider 已能列出 `oauth-api-service/gpt-5.4` 与 `oauth-api-service/gpt-5.5`；`https://openai.saurick.space/readyz` 返回 `ready`，使用本地下游 key 调用 `https://openai.saurick.space/v1/models` 返回 `gpt-5.4,gpt-5.5`。
+- 验证受限：使用同一个下游 key 调用 `https://openai.saurick.space/v1/chat/completions` 返回 `upstream_config_error` / `OpenAI 上游未配置`，远端 `.env` 当前 `OPENAI_API_KEY_set=no`；本地 OpenCode 的 `apiKey missing` 问题已排除，完整模型回复和 token 统计仍必须等远端写入真实上游 `OPENAI_API_KEY` 并重启 app-server 后复测。
+- 完成：新增 `codex_cli` 上游模式，当前 Go 网关在 `OAUTH_API_UPSTREAM_PROVIDER=codex_cli` 时会用容器内 Codex CLI 调用服务器挂载的 `/root/.codex` 登录态；客户端仍只使用本系统签发的 `ogw_...` 下游 key，usage 仍由本系统记录。
+- 完成：生产镜像 `openai-oauth-api-service-server:20260509T035005-codex-cli` 已包含 `codex-cli 0.129.0`；远端 Compose 已切到该镜像，挂载 `CODEX_HOST_HOME=/root/.codex`，并将 `APP_MEM_LIMIT` 提高到 `900m` 以容纳 Codex CLI 子进程。
+- 验证通过：容器内 `CODEX_HOME=/root/.codex codex login status` 显示 `Logged in using ChatGPT`；本地新建下游 key `ogw_FGkHh2lW` 并写入 OpenCode provider，`opencode models oauth-api-service` 返回 `gpt-5.4/gpt-5.5`。
+- 验证通过：直接调用 `https://openai.saurick.space/v1/chat/completions` 返回 `HTTP 200` 和 `OK`；本地执行 `opencode run --pure -m oauth-api-service/gpt-5.5 --variant high --format json "Reply with OK only."` 退出码为 0 并输出 `OK`。
+- 验证通过：后台 usage 最新记录显示 `ogw_FGkHh2lW chat.completions gpt-5.5 HTTP 200 success=true total_tokens=5401 input/output=5400/1`，此前 `upstream_config_error` 已不再出现在新 key 的调用链路。
+- 阻塞/风险：`codex_cli` 模式每次请求都会启动一次 Codex CLI，低配服务器不适合高并发；token 用量来自 Codex/OpenCode 返回或网关估算口径，适合作为统一出口统计，不等同于官方 API 逐项计费账单。
+- 修复：针对 OpenCode 桌面端 `Bad Gateway retrying`，将 `codex_cli` upstream 改为只转发最近 user/assistant 对话，忽略 OpenCode 自带的大段 system/developer/tool 提示词；同时对 Codex CLI upstream 加进程内串行锁，避免桌面端主回复、标题生成等并发请求同时启动多个 Codex CLI 进程争用服务器 Codex 登录态。
+- 修复：usage 写入改用 5 秒后台 context，避免客户端取消或桌面端重试时导致 `record gateway usage failed: context deadline exceeded` 丢统计；本地 OpenCode provider 显式设置 `timeout=600000`。
+- 验证通过：部署 `openai-oauth-api-service-server:20260509T041155-codex-cli-serial` 后，3 个并发请求（含 stream）全部返回 `HTTP 200`，内容分别为 `A/B/C`；本地 `opencode run --pure -m oauth-api-service/gpt-5.5 --variant high --format json "只回复 OK"` 返回 `OK` 且退出码为 0；OpenCode 桌面窗口当前显示 `OK`，不再停留在 Bad Gateway。
+- 完成：按维护者确认删除服务器试装残留目录 `/root/.openclaw`，删除前大小约 `700M`，当前功能不依赖该目录且无 OpenClaw 进程运行。
+- 验证通过：删除后服务器根分区可用空间约 `2.9G`，`openai-oauth-api-service-server:20260509T041155-codex-cli-serial` 仍为 Up，`/readyz` 返回 `ready`；本地 `opencode run --pure -m oauth-api-service/gpt-5.5 --variant high --format json "只回复 OK"` 继续返回 `OK`。
+
+- 完成：参考 `trade-erp` 表格选择口径优化 `/admin-keys`：选择框不再被后台全局 input 高度撑成长条；API 凭据表改为单击行即可选中当前记录，切换其他行时互斥选择，点击已选 checkbox 可清空当前选择，行内编辑/启停/删除/复制按钮不触发行选择。
+- 完成：继续按 `trade-erp` 工具条口径收口筛选和操作：API 凭据页补“搜索 / 模型 / 状态”三列筛选工具条，按钮统一为白底描边、绿色主按钮和红色危险按钮；当前操作行承载清空已选、编辑、启停和删除，行内操作按钮也改成同一套紧凑按钮样式。调用明细页筛选区同步改成同一工具条样式。
+- 完成：新增轻量表格选择 helper 与单元测试，并把 `/admin-keys` L1 浏览器回归扩展到选择框盒模型、筛选工具条、模型/状态筛选、当前操作行、行点击互斥选择和 checkbox 清空选择。
+- 验证通过：`cd web && pnpm lint`、`cd web && pnpm css`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4184 pnpm style:l1`、`git diff --check`；`style:l1` 覆盖 `/admin-keys` 桌面/移动端选择框盒模型、筛选工具条、当前操作行、行点击互斥选择与清空选择，以及 `/admin-usage` 工具条渲染。
+- 阻塞/风险：本轮只给已有选择列的 API 凭据表增加行选择语义；模型表、usage 表和看板表目前没有选择列，不强行增加行选择。内置浏览器本轮尝试真实登录时被 Browser virtual clipboard 缺失阻断在登录页，未作为最终验收依据；视觉留证以 `style:l1` 生成的 `/Users/simon/projects/openai-oauth-api-service/web/output/playwright/style-l1/admin-keys-desktop.png`、`admin-keys-mobile.png` 和 `admin-usage-desktop.png` 为准。
+- 完成：按“新建按钮 + 弹窗”口径继续调整后台表格页；`/admin-keys` 移除页面内新增/编辑表单，工具条增加“新建 API 凭据”按钮，新增和编辑都进入弹窗；`/admin-models` 同步移除页面内模型表单，增加“新建模型”按钮，新增和编辑统一在弹窗中完成。
+- 完成：新增后台弹窗样式，覆盖桌面与移动端视口约束；弹窗内保留原有备注、模型限制、百万 token 额度、模型 ID、归属方和默认启用字段，不改变后端 RPC 语义。
+- 验证通过：`cd web && pnpm css`、`cd web && pnpm test`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx src/common/utils/tableInteraction.js src/common/utils/tableInteraction.test.mjs`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4185 pnpm style:l1`；`style:l1` 覆盖 20 个场景，并新增 API 凭据/模型新建弹窗打开、字段存在、按钮存在、桌面/移动端弹窗不溢出视口的断言。
+- 验证补充：全量 `cd web && pnpm lint` 后续已通过；此前 `web/src/pages/AdminDashboard/index.jsx:260` 的 a11y lint 阻断不再复现。
+- 完成：继续对齐 `trade-erp` 表格交互，API 凭据行支持单击单选、双击打开编辑弹窗；模型行支持双击打开编辑弹窗；行内按钮、选择框、下拉和复制等交互控件不会触发行双击编辑。
+- 完成：新增后台轻量分页控件，默认每页 8 条，支持 `8/10/20/50/100` 切换；API 凭据表、凭据 Token 统计表、模型表和调用明细表均接入分页。筛选或搜索变化后回到第 1 页，数据减少导致当前页越界时自动回退到最后一页；调用明细分页按后端 `limit/offset` 请求。
+- 完成：同步 `web/README.md` 的后台表格交互说明，并把 `style:l1` mock 数据扩展到可验证翻页的 10 条凭据 / 10 个模型 / 12 条调用总数。
+- 验证通过：`cd web && pnpm lint`、`cd web && pnpm css`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4189 pnpm style:l1`、`git diff --check`；`style:l1` 覆盖双击编辑弹窗、分页控件、下一页/上一页切换、usage 分页 `offset=8` 请求、桌面/移动端表格和分页盒模型。
+- 完成：删除普通 OpenAI API 上游模式，`/v1/chat/completions` 与 `/v1/responses` 当前只走服务器 Codex CLI 登录态；同步移除 `OAUTH_API_UPSTREAM_PROVIDER=openai_api`、服务端 `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `UPSTREAM_PROXY_URL` 注入、`data.openai` 配置、普通 HTTP upstream 转发、上游模型同步 RPC 和对应错误码。
+- 完成：部署模板、配置示例、README、后端 API/配置文档和后台说明同步改为 Codex CLI 统一上游出口口径；客户端侧仍可把本系统 `ogw_...` 下游 key 填入 OpenAI 兼容 SDK 的 `OPENAI_API_KEY`。
+- 验证通过：`cd server && make config`、`node scripts/gen-error-codes.mjs --check`、`cd server && go test ./...`、`cd web && pnpm test -- --run`、`git diff --check`。
+- 下一步：部署时确保目标服务器已完成 `codex login`，并通过 `CODEX_HOST_HOME` 挂载登录态；如需重新引入普通 OpenAI API 直连，应作为新的上游类型单独设计，不从旧 `openai_api` 分支回填。
+- 阻塞/风险：历史 `legacy-python-mvp/` 仍保留早期直连 OpenAI API 参考实现，未纳入当前主路径清理；`progress.md` 较早历史记录仍可能提到旧上游 key，作为历史上下文保留，不作为当前真源。
+- 完成：API 凭据页移除独立“搜索”按钮，搜索输入框改为输入后自动触发查询；模型和状态筛选、重置、新建入口保持原有布局与语义。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4187 pnpm style:l1`、`git diff --check -- web/src/pages/AdminApi/index.jsx web/scripts/styleL1.mjs progress.md`；`style:l1` 已覆盖 `/admin-keys` 桌面/移动端无搜索按钮、搜索输入框存在、输入 `prod` 后自动请求 `key_list search=prod`，以及弹窗、行选择和相邻区域不溢出。
+- 下一步：如需进一步降低频繁输入时的后端请求量，可按实际使用反馈调整自动搜索延迟。
+- 阻塞/风险：无。
