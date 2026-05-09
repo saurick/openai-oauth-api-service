@@ -1,6 +1,6 @@
 # OpenAI OAuth API Service
 
-OpenAI OAuth API Service 是一个长期维护的 OpenAI 兼容 API 转发与 token/usage 统计管理项目。系统通过后台账号登录管理上游连接，向下游签发独立 API key，并统一记录 usage、状态码、延迟、字节数和 token 用量。
+OpenAI OAuth API Service 是一个长期维护的 OpenAI 兼容 API 转发与 token/usage 统计管理项目。系统通过后台账号登录管理 API 凭据，向下游签发独立 API key，并通过服务器 Codex CLI 登录态统一执行上游调用，记录 usage、状态码、延迟、字节数和 token 用量。
 
 ## 边界
 
@@ -9,7 +9,7 @@ OpenAI OAuth API Service 是一个长期维护的 OpenAI 兼容 API 转发与 to
 | 支持 | 管理员账号登录、本系统 JWT 签发与后台权限控制 |
 | 支持 | 下游 API key 签发、吊销、配额、usage 监控 |
 | 支持 | OpenAI 兼容 API 转发，例如 `/v1/responses`、`/v1/chat/completions` |
-| 支持 | 统一上游代理、结构化日志、健康检查、Compose 部署 |
+| 支持 | Codex CLI 统一上游出口、结构化日志、健康检查、Compose 部署 |
 
 ## 技术栈
 
@@ -88,14 +88,15 @@ OAUTH_API_OAUTH_CLIENT_SECRET=...
 OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS=https://your-admin.example.com
 ```
 
-本地 Google OAuth Client 只需要登记后端固定回调 `http://localhost:8400/auth/oauth/callback`。前端当前端口会通过 signed state 自动回跳；生产环境继续登记线上 HTTPS 后端回调，并用 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` 明确允许前端后台域名。
+本地 Google OAuth Client 只需要登记后端固定回调 `http://localhost:8400/auth/oauth/callback`。前端当前端口会通过 signed state 自动回跳，例如 `http://localhost:5176/oauth/callback`；生产环境继续登记线上 HTTPS 后端回调，并用 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` 明确允许前端后台域名。
 
-API 转发的上游连接可通过环境变量或 Secret 注入，例如：
+API 转发统一使用服务器 Codex CLI 登录态，部署时配置 Codex 登录态挂载和 CLI 参数：
 
 ```bash
-OPENAI_API_KEY=sk-proj-...
-OPENAI_BASE_URL=https://api.openai.com/v1
-UPSTREAM_PROXY_URL=socks5://127.0.0.1:7890
+CODEX_HOST_HOME=/root/.codex
+CODEX_CONTAINER_HOME=/root/.codex
+CODEX_CLI_BIN=codex
+CODEX_CLI_TIMEOUT_SECONDS=600
 ```
 
 管理后台入口：
@@ -103,7 +104,7 @@ UPSTREAM_PROXY_URL=socks5://127.0.0.1:7890
 - 管理登录：`/admin-login`
 - API 运营控制台：`/admin-api`
 
-开发与当前个人部署默认会初始化管理员账号 `admin/adminadmin`。不要在部署时擅自生成或替换管理员密码；如需改密，应由维护者明确指定后再调整 `OAUTH_API_ADMIN_PASSWORD` 并重启服务。JWT secret、数据库密码和上游 API key 仍必须通过私有环境变量配置。
+开发与当前个人部署默认会初始化管理员账号 `admin/adminadmin`。不要在部署时擅自生成或替换管理员密码；如需改密，应由维护者明确指定后再调整 `OAUTH_API_ADMIN_PASSWORD` 并重启服务。JWT secret、数据库密码和 Codex 登录态路径仍必须通过私有环境变量配置。
 
 ## 下游调用 API
 
@@ -120,7 +121,7 @@ export OPENAI_BASE_URL=http://localhost:8400/v1
 export OPENAI_API_KEY=ogw_xxx
 ```
 
-生产环境把 `OPENAI_BASE_URL` 换成部署域名下的 `/v1`。这里的 `ogw_` key 是本系统下游 key；上游 OpenAI 或兼容模型服务仍由服务端通过 `OPENAI_API_KEY`、`OPENAI_BASE_URL` 和可选代理统一配置。
+生产环境把 `OPENAI_BASE_URL` 换成部署域名下的 `/v1`。这里的 `ogw_` key 是本系统下游 key；上游调用由服务端通过服务器 Codex CLI 登录态统一执行。
 
 ## 常用质量命令
 

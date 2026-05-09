@@ -13,15 +13,20 @@ const VARIANTS = {
   adminLogin: {
     root: 'bg-[#f7fbfc] text-slate-950',
     bg: (
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(155deg,#eaf6fb_0%,#f9fcfd_48%,#fff7df_100%)]" />
+      <div className="admin-login-shell-bg pointer-events-none absolute inset-0 bg-[linear-gradient(155deg,#eaf6fb_0%,#f9fcfd_48%,#fff7df_100%)]" />
     ),
   },
   admin: {
     root: 'bg-[#f4f8f5] text-slate-950',
     bg: (
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,#fbfdfb_0%,#f3f8f4_100%)]" />
+      <div className="admin-shell-bg pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,#fbfdfb_0%,#f3f8f4_100%)]" />
     ),
   },
+}
+
+const THEME_SCOPE_BY_VARIANT = {
+  admin: 'admin-shell',
+  adminLogin: 'admin-login-shell',
 }
 
 // 提供应用级背景和承载层；后台页通过 variant 收口不同视觉。
@@ -31,12 +36,13 @@ export default function AppShell({
   variant = 'dark',
 }) {
   const current = VARIANTS[variant] || VARIANTS.dark
+  const themeScope = THEME_SCOPE_BY_VARIANT[variant] || ''
 
   return (
     <div
       className={`relative min-h-screen ${
-        variant === 'dark' ? 'overflow-hidden' : 'overflow-x-hidden'
-      } ${current.root} ${className}`}
+        variant === 'dark' ? 'overflow-hidden' : ''
+      } ${current.root} ${themeScope} ${className}`}
     >
       {current.bg}
       <div className="relative min-h-screen">{children}</div>

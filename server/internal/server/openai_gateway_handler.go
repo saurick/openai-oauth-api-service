@@ -1,15 +1,12 @@
 package server
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	stdhttp "net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"regexp"
@@ -29,7 +26,6 @@ import (
 
 const (
 	maxGatewayRequestBytes   = 32 << 20
-	maxCapturedStreamBytes   = 32 << 20
 	defaultCodexCLITimeout   = 600 * time.Second
 	gatewayUsageWriteTimeout = 5 * time.Second
 )
@@ -263,72 +259,7 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		}
 	}
 
-	if h.useCodexCLIUpstream() {
-		h.handleCodexCLIProxy(w, r, key, requestID, endpoint, requestModel, stream, body, start)
-		return
-	}
-
-	upstreamReq, err := h.buildUpstreamRequest(r, body)
-	if err != nil {
-		status := stdhttp.StatusInternalServerError
-		h.writeGatewayError(w, status, err, "upstream_config_error")
-		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
-			APIKeyID:     key.ID,
-			APIKeyPrefix: key.KeyPrefix,
-			RequestID:    requestID,
-			Method:       r.Method,
-			Path:         r.URL.Path,
-			Endpoint:     endpoint,
-			Model:        requestModel,
-			StatusCode:   status,
-			Success:      false,
-			Stream:       stream,
-			RequestBytes: int64(len(body)),
-			DurationMS:   time.Since(start).Milliseconds(),
-			ErrorType:    "upstream_config_error",
-			CreatedAt:    time.Now(),
-		})
-		return
-	}
-
-	client, err := h.buildHTTPClient()
-	if err != nil {
-		status := stdhttp.StatusInternalServerError
-		h.writeGatewayError(w, status, err, "upstream_proxy_config_error")
-		return
-	}
-
-	upstreamResp, err := client.Do(upstreamReq)
-	if err != nil {
-		status := stdhttp.StatusBadGateway
-		h.writeGatewayError(w, status, err, "upstream_request_failed")
-		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
-			APIKeyID:     key.ID,
-			APIKeyPrefix: key.KeyPrefix,
-			RequestID:    requestID,
-			Method:       r.Method,
-			Path:         r.URL.Path,
-			Endpoint:     endpoint,
-			Model:        requestModel,
-			StatusCode:   status,
-			Success:      false,
-			Stream:       stream,
-			RequestBytes: int64(len(body)),
-			DurationMS:   time.Since(start).Milliseconds(),
-			ErrorType:    "upstream_request_failed",
-			CreatedAt:    time.Now(),
-		})
-		return
-	}
-	defer func() {
-		_ = upstreamResp.Body.Close()
-	}()
-
-	if stream || strings.Contains(upstreamResp.Header.Get("Content-Type"), "text/event-stream") {
-		h.proxyStream(w, r, upstreamResp, key, requestID, endpoint, requestModel, int64(len(body)), start)
-		return
-	}
-	h.proxyJSON(w, r, upstreamResp, key, requestID, endpoint, requestModel, int64(len(body)), start)
+	h.handleCodexCLIProxy(w, r, key, requestID, endpoint, requestModel, stream, body, start)
 }
 
 func (h *openAIGatewayHandler) gatewayRateLimitEnabled() bool {
@@ -336,10 +267,6 @@ func (h *openAIGatewayHandler) gatewayRateLimitEnabled() bool {
 		return true
 	}
 	return h.dataCfg.Api.RateLimitEnabled
-}
-
-func (h *openAIGatewayHandler) useCodexCLIUpstream() bool {
-	return strings.EqualFold(strings.TrimSpace(os.Getenv("OAUTH_API_UPSTREAM_PROVIDER")), "codex_cli")
 }
 
 func (h *openAIGatewayHandler) handleCodexCLIProxy(
@@ -456,7 +383,7 @@ func (h *openAIGatewayHandler) runCodexCLI(ctx context.Context, path string, bod
 		model = strings.TrimSpace(os.Getenv("CODEX_CLI_MODEL"))
 	}
 	if model == "" {
-		model = "gpt-5.5"
+		model = biz.DefaultCodexModelID
 	}
 
 	timeout := codexCLITimeout()
@@ -789,184 +716,6 @@ func responsesUsagePayload(metrics openAIUsageMetrics) map[string]any {
 	}
 }
 
-func (h *openAIGatewayHandler) proxyJSON(
-	w stdhttp.ResponseWriter,
-	r *stdhttp.Request,
-	upstreamResp *stdhttp.Response,
-	key *biz.GatewayAPIKey,
-	requestID string,
-	endpoint string,
-	requestModel string,
-	requestBytes int64,
-	start time.Time,
-) {
-	body, readErr := io.ReadAll(upstreamResp.Body)
-	if readErr != nil {
-		h.writeGatewayError(w, stdhttp.StatusBadGateway, readErr, "upstream_read_failed")
-		return
-	}
-
-	copyGatewayResponseHeaders(w.Header(), upstreamResp.Header)
-	w.WriteHeader(upstreamResp.StatusCode)
-	_, _ = w.Write(body)
-
-	metrics := extractUsageFromJSON(body)
-	if metrics.Model == "" {
-		metrics.Model = requestModel
-	}
-	errorType := ""
-	if upstreamResp.StatusCode < 200 || upstreamResp.StatusCode >= 300 {
-		errorType = fmt.Sprintf("upstream_http_%d", upstreamResp.StatusCode)
-	}
-	h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
-		APIKeyID:        key.ID,
-		APIKeyPrefix:    key.KeyPrefix,
-		RequestID:       requestID,
-		Method:          r.Method,
-		Path:            r.URL.Path,
-		Endpoint:        endpoint,
-		Model:           metrics.Model,
-		StatusCode:      upstreamResp.StatusCode,
-		Success:         upstreamResp.StatusCode >= 200 && upstreamResp.StatusCode < 300,
-		Stream:          false,
-		InputTokens:     metrics.InputTokens,
-		OutputTokens:    metrics.OutputTokens,
-		TotalTokens:     metrics.TotalTokens,
-		CachedTokens:    metrics.CachedTokens,
-		ReasoningTokens: metrics.ReasoningTokens,
-		RequestBytes:    requestBytes,
-		ResponseBytes:   int64(len(body)),
-		DurationMS:      time.Since(start).Milliseconds(),
-		ErrorType:       errorType,
-		CreatedAt:       time.Now(),
-	})
-}
-
-func (h *openAIGatewayHandler) proxyStream(
-	w stdhttp.ResponseWriter,
-	r *stdhttp.Request,
-	upstreamResp *stdhttp.Response,
-	key *biz.GatewayAPIKey,
-	requestID string,
-	endpoint string,
-	requestModel string,
-	requestBytes int64,
-	start time.Time,
-) {
-	copyGatewayResponseHeaders(w.Header(), upstreamResp.Header)
-	w.WriteHeader(upstreamResp.StatusCode)
-
-	flusher, _ := w.(stdhttp.Flusher)
-	buf := make([]byte, 32*1024)
-	var captured bytes.Buffer
-	responseBytes := int64(0)
-	var readErr error
-	for {
-		n, err := upstreamResp.Body.Read(buf)
-		if n > 0 {
-			chunk := buf[:n]
-			responseBytes += int64(n)
-			if captured.Len() < maxCapturedStreamBytes {
-				remaining := maxCapturedStreamBytes - captured.Len()
-				if n > remaining {
-					_, _ = captured.Write(chunk[:remaining])
-				} else {
-					_, _ = captured.Write(chunk)
-				}
-			}
-			_, _ = w.Write(chunk)
-			if flusher != nil {
-				flusher.Flush()
-			}
-		}
-		if err != nil {
-			if !errors.Is(err, io.EOF) {
-				readErr = err
-			}
-			break
-		}
-	}
-
-	metrics := extractUsageFromSSE(captured.Bytes())
-	if metrics.Model == "" {
-		metrics.Model = requestModel
-	}
-	errorType := ""
-	if upstreamResp.StatusCode < 200 || upstreamResp.StatusCode >= 300 {
-		errorType = fmt.Sprintf("upstream_http_%d", upstreamResp.StatusCode)
-	}
-	if readErr != nil {
-		errorType = "upstream_stream_read_failed"
-	}
-
-	h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
-		APIKeyID:        key.ID,
-		APIKeyPrefix:    key.KeyPrefix,
-		RequestID:       requestID,
-		Method:          r.Method,
-		Path:            r.URL.Path,
-		Endpoint:        endpoint,
-		Model:           metrics.Model,
-		StatusCode:      upstreamResp.StatusCode,
-		Success:         readErr == nil && upstreamResp.StatusCode >= 200 && upstreamResp.StatusCode < 300,
-		Stream:          true,
-		InputTokens:     metrics.InputTokens,
-		OutputTokens:    metrics.OutputTokens,
-		TotalTokens:     metrics.TotalTokens,
-		CachedTokens:    metrics.CachedTokens,
-		ReasoningTokens: metrics.ReasoningTokens,
-		RequestBytes:    requestBytes,
-		ResponseBytes:   responseBytes,
-		DurationMS:      time.Since(start).Milliseconds(),
-		ErrorType:       errorType,
-		CreatedAt:       time.Now(),
-	})
-}
-
-func (h *openAIGatewayHandler) buildUpstreamRequest(r *stdhttp.Request, body []byte) (*stdhttp.Request, error) {
-	if h.dataCfg == nil || h.dataCfg.Openai == nil || strings.TrimSpace(h.dataCfg.Openai.ApiKey) == "" {
-		return nil, errors.New(errcode.APIUpstreamNotConfigured.Message)
-	}
-	baseURL := strings.TrimRight(strings.TrimSpace(h.dataCfg.Openai.BaseUrl), "/")
-	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1"
-	}
-	path := strings.TrimPrefix(r.URL.Path, "/v1")
-	target := baseURL + path
-	if r.URL.RawQuery != "" {
-		target += "?" + r.URL.RawQuery
-	}
-
-	req, err := stdhttp.NewRequestWithContext(r.Context(), r.Method, target, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	copyGatewayRequestHeaders(req.Header, r.Header)
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(h.dataCfg.Openai.ApiKey))
-	req.Header.Set("Content-Type", "application/json")
-	if requestID := requestIDFromRequest(r); requestID != "" {
-		req.Header.Set("X-Request-ID", requestID)
-	}
-	return req, nil
-}
-
-func (h *openAIGatewayHandler) buildHTTPClient() (*stdhttp.Client, error) {
-	timeout := 600 * time.Second
-	if h.dataCfg != nil && h.dataCfg.Openai != nil && h.dataCfg.Openai.RequestTimeoutSeconds > 0 {
-		timeout = time.Duration(h.dataCfg.Openai.RequestTimeoutSeconds) * time.Second
-	}
-
-	transport := stdhttp.DefaultTransport.(*stdhttp.Transport).Clone()
-	if h.dataCfg != nil && h.dataCfg.Openai != nil && strings.TrimSpace(h.dataCfg.Openai.UpstreamProxyUrl) != "" {
-		proxyURL, err := url.Parse(strings.TrimSpace(h.dataCfg.Openai.UpstreamProxyUrl))
-		if err != nil {
-			return nil, err
-		}
-		transport.Proxy = stdhttp.ProxyURL(proxyURL)
-	}
-	return &stdhttp.Client{Transport: transport, Timeout: timeout}, nil
-}
-
 func (h *openAIGatewayHandler) recordUsage(ctx context.Context, key *biz.GatewayAPIKey, item *biz.GatewayUsageLog) {
 	if item == nil {
 		return
@@ -1065,156 +814,9 @@ func gatewayEndpointFromPath(path string) string {
 	}
 }
 
-func extractUsageFromJSON(body []byte) openAIUsageMetrics {
-	var payload map[string]any
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return openAIUsageMetrics{}
-	}
-	return usageFromPayload(payload)
-}
-
-func extractUsageFromSSE(body []byte) openAIUsageMetrics {
-	scanner := bufio.NewScanner(bytes.NewReader(body))
-	scanner.Buffer(make([]byte, 1024), maxCapturedStreamBytes)
-	var out openAIUsageMetrics
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if !strings.HasPrefix(line, "data:") {
-			continue
-		}
-		line = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if line == "" || line == "[DONE]" {
-			continue
-		}
-		var payload map[string]any
-		if err := json.Unmarshal([]byte(line), &payload); err != nil {
-			continue
-		}
-		metrics := usageFromPayload(payload)
-		if metrics.Model != "" {
-			out.Model = metrics.Model
-		}
-		if metrics.TotalTokens > 0 || metrics.InputTokens > 0 || metrics.OutputTokens > 0 {
-			out.InputTokens = metrics.InputTokens
-			out.OutputTokens = metrics.OutputTokens
-			out.TotalTokens = metrics.TotalTokens
-			out.CachedTokens = metrics.CachedTokens
-			out.ReasoningTokens = metrics.ReasoningTokens
-		}
-	}
-	return out
-}
-
-func usageFromPayload(payload map[string]any) openAIUsageMetrics {
-	if payload == nil {
-		return openAIUsageMetrics{}
-	}
-	model := stringValue(payload["model"])
-	if response, ok := payload["response"].(map[string]any); ok {
-		nested := usageFromPayload(response)
-		if nested.Model == "" {
-			nested.Model = model
-		}
-		return nested
-	}
-	usage, _ := payload["usage"].(map[string]any)
-	if usage == nil {
-		return openAIUsageMetrics{Model: model}
-	}
-
-	inputTokens := int64Value(usage["input_tokens"])
-	if inputTokens == 0 {
-		inputTokens = int64Value(usage["prompt_tokens"])
-	}
-	outputTokens := int64Value(usage["output_tokens"])
-	if outputTokens == 0 {
-		outputTokens = int64Value(usage["completion_tokens"])
-	}
-	totalTokens := int64Value(usage["total_tokens"])
-	if totalTokens == 0 {
-		totalTokens = inputTokens + outputTokens
-	}
-
-	cachedTokens := int64(0)
-	if details, ok := usage["input_tokens_details"].(map[string]any); ok {
-		cachedTokens = int64Value(details["cached_tokens"])
-	}
-	if cachedTokens == 0 {
-		if details, ok := usage["prompt_tokens_details"].(map[string]any); ok {
-			cachedTokens = int64Value(details["cached_tokens"])
-		}
-	}
-
-	reasoningTokens := int64(0)
-	if details, ok := usage["output_tokens_details"].(map[string]any); ok {
-		reasoningTokens = int64Value(details["reasoning_tokens"])
-	}
-	if reasoningTokens == 0 {
-		if details, ok := usage["completion_tokens_details"].(map[string]any); ok {
-			reasoningTokens = int64Value(details["reasoning_tokens"])
-		}
-	}
-
-	return openAIUsageMetrics{
-		Model:           model,
-		InputTokens:     inputTokens,
-		OutputTokens:    outputTokens,
-		TotalTokens:     totalTokens,
-		CachedTokens:    cachedTokens,
-		ReasoningTokens: reasoningTokens,
-	}
-}
-
-func int64Value(v any) int64 {
-	switch x := v.(type) {
-	case int64:
-		return x
-	case int:
-		return int64(x)
-	case float64:
-		return int64(x)
-	case json.Number:
-		n, _ := x.Int64()
-		return n
-	default:
-		return 0
-	}
-}
-
 func stringValue(v any) string {
 	if s, ok := v.(string); ok {
 		return strings.TrimSpace(s)
 	}
 	return ""
-}
-
-func copyGatewayRequestHeaders(dst, src stdhttp.Header) {
-	for key, values := range src {
-		if isHopByHopHeader(key) || strings.EqualFold(key, "Authorization") || strings.EqualFold(key, "Content-Length") {
-			continue
-		}
-		for _, value := range values {
-			dst.Add(key, value)
-		}
-	}
-}
-
-func copyGatewayResponseHeaders(dst, src stdhttp.Header) {
-	for key, values := range src {
-		if isHopByHopHeader(key) || strings.EqualFold(key, "Content-Length") {
-			continue
-		}
-		for _, value := range values {
-			dst.Add(key, value)
-		}
-	}
-}
-
-func isHopByHopHeader(key string) bool {
-	switch strings.ToLower(key) {
-	case "connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade":
-		return true
-	default:
-		return false
-	}
 }

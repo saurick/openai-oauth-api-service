@@ -18,31 +18,33 @@ import (
 const GatewayAPIKeyPrefix = "ogw_"
 
 var (
-	ErrGatewayAPIKeyNotFound  = errors.New("gateway api key not found")
-	ErrGatewayAPIKeyDisabled  = errors.New("gateway api key disabled")
-	ErrGatewayModelDisabled   = errors.New("gateway model disabled")
-	ErrGatewayModelNotAllowed = errors.New("gateway model not allowed")
-	ErrGatewayRateLimited     = errors.New("gateway rate limited")
-	ErrGatewayQuotaExceeded   = errors.New("gateway quota exceeded")
-	ErrGatewayPolicyInvalid   = errors.New("gateway policy invalid")
-	ErrGatewayExportRange     = errors.New("gateway export range too large")
-	ErrGatewayModelSyncFailed = errors.New("gateway model sync failed")
+	ErrGatewayAPIKeyNotFound    = errors.New("gateway api key not found")
+	ErrGatewayAPIKeyDisabled    = errors.New("gateway api key disabled")
+	ErrGatewayModelDisabled     = errors.New("gateway model disabled")
+	ErrGatewayModelNotAllowed   = errors.New("gateway model not allowed")
+	ErrGatewayModelCatalogFixed = errors.New("gateway model catalog fixed")
+	ErrGatewayRateLimited       = errors.New("gateway rate limited")
+	ErrGatewayQuotaExceeded     = errors.New("gateway quota exceeded")
+	ErrGatewayPolicyInvalid     = errors.New("gateway policy invalid")
+	ErrGatewayExportRange       = errors.New("gateway export range too large")
 )
 
 type GatewayAPIKey struct {
-	ID               int
-	OwnerUserID      int
-	Name             string
-	PlainKey         string
-	KeyPrefix        string
-	KeyLast4         string
-	Disabled         bool
-	QuotaRequests    int64
-	QuotaTotalTokens int64
-	AllowedModels    []string
-	LastUsedAt       *time.Time
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID                int
+	OwnerUserID       int
+	Name              string
+	PlainKey          string
+	KeyPrefix         string
+	KeyLast4          string
+	Disabled          bool
+	QuotaRequests     int64
+	QuotaTotalTokens  int64
+	QuotaDailyTokens  int64
+	QuotaWeeklyTokens int64
+	AllowedModels     []string
+	LastUsedAt        *time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 type CreatedGatewayAPIKey struct {
@@ -149,21 +151,25 @@ type GatewayUsageKeySummary struct {
 }
 
 type CreateGatewayAPIKeyInput struct {
-	Name             string
-	OwnerUserID      int
-	QuotaRequests    int64
-	QuotaTotalTokens int64
-	AllowedModels    []string
+	Name              string
+	OwnerUserID       int
+	QuotaRequests     int64
+	QuotaTotalTokens  int64
+	QuotaDailyTokens  int64
+	QuotaWeeklyTokens int64
+	AllowedModels     []string
 }
 
 type UpdateGatewayAPIKeyInput struct {
-	ID               int
-	Name             string
-	OwnerUserID      int
-	QuotaRequests    int64
-	QuotaTotalTokens int64
-	AllowedModels    []string
-	Disabled         bool
+	ID                int
+	Name              string
+	OwnerUserID       int
+	QuotaRequests     int64
+	QuotaTotalTokens  int64
+	QuotaDailyTokens  int64
+	QuotaWeeklyTokens int64
+	AllowedModels     []string
+	Disabled          bool
 }
 
 type GatewayPolicy struct {
@@ -335,6 +341,13 @@ func NormalizeGatewayBearer(auth string) string {
 func (uc *GatewayUsecase) CreateAPIKey(ctx context.Context, input CreateGatewayAPIKeyInput) (*CreatedGatewayAPIKey, error) {
 	input.Name = strings.TrimSpace(input.Name)
 	input.QuotaTotalTokens = normalizeNonNegativeInt64(input.QuotaTotalTokens)
+	input.QuotaDailyTokens = normalizeNonNegativeInt64(input.QuotaDailyTokens)
+	input.QuotaWeeklyTokens = normalizeNonNegativeInt64(input.QuotaWeeklyTokens)
+	allowedModels, err := normalizeAllowedCodexModels(input.AllowedModels)
+	if err != nil {
+		return nil, err
+	}
+	input.AllowedModels = allowedModels
 
 	secret, err := NewGatewayAPIKeySecret()
 	if err != nil {
@@ -368,6 +381,13 @@ func (uc *GatewayUsecase) UpdateAPIKey(ctx context.Context, input UpdateGatewayA
 	}
 	input.Name = strings.TrimSpace(input.Name)
 	input.QuotaTotalTokens = normalizeNonNegativeInt64(input.QuotaTotalTokens)
+	input.QuotaDailyTokens = normalizeNonNegativeInt64(input.QuotaDailyTokens)
+	input.QuotaWeeklyTokens = normalizeNonNegativeInt64(input.QuotaWeeklyTokens)
+	allowedModels, err := normalizeAllowedCodexModels(input.AllowedModels)
+	if err != nil {
+		return nil, err
+	}
+	input.AllowedModels = allowedModels
 	if input.Name == "" {
 		input.Name = "key " + strconv.Itoa(input.ID)
 	}
@@ -427,6 +447,9 @@ func (uc *GatewayUsecase) ValidateModelAccess(ctx context.Context, key *GatewayA
 	if modelID == "" {
 		return nil
 	}
+	if !IsOfficialCodexModelID(modelID) {
+		return ErrGatewayModelDisabled
+	}
 
 	model, err := uc.repo.GetModelByID(ctx, modelID)
 	if err != nil {
@@ -454,26 +477,55 @@ func (uc *GatewayUsecase) CheckAPIKeyTokenQuota(ctx context.Context, key *Gatewa
 	if key == nil || key.ID <= 0 {
 		return ErrGatewayAPIKeyNotFound
 	}
-	if key.QuotaTotalTokens <= 0 {
+	dailyLimit := key.QuotaDailyTokens
+	weeklyLimit := effectiveAPIKeyWeeklyTokens(key)
+	if dailyLimit <= 0 && weeklyLimit <= 0 {
 		return nil
 	}
 	if now.IsZero() {
 		now = time.Now()
 	}
-	summary, err := uc.repo.SummarizeUsage(ctx, GatewayUsageFilter{
-		KeyID:   key.ID,
-		EndTime: now,
-	})
-	if err != nil {
-		return err
-	}
-	if summary == nil {
+
+	checkTokenWindow := func(limit int64, start time.Time) error {
+		if limit <= 0 {
+			return nil
+		}
+		summary, err := uc.repo.SummarizeUsage(ctx, GatewayUsageFilter{
+			KeyID: key.ID, StartTime: start, EndTime: now,
+		})
+		if err != nil {
+			return err
+		}
+		if summary != nil && summary.TotalTokens >= limit {
+			return ErrGatewayQuotaExceeded
+		}
 		return nil
 	}
-	if summary.TotalTokens >= key.QuotaTotalTokens {
-		return ErrGatewayQuotaExceeded
+
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	if err := checkTokenWindow(dailyLimit, dayStart); err != nil {
+		return err
 	}
-	return nil
+	return checkTokenWindow(weeklyLimit, weekStart(dayStart))
+}
+
+func effectiveAPIKeyWeeklyTokens(key *GatewayAPIKey) int64 {
+	if key == nil {
+		return 0
+	}
+	if key.QuotaWeeklyTokens > 0 {
+		return key.QuotaWeeklyTokens
+	}
+	if key.QuotaDailyTokens <= 0 && key.QuotaTotalTokens > 0 {
+		return key.QuotaTotalTokens
+	}
+	return 0
+}
+
+func weekStart(dayStart time.Time) time.Time {
+	weekday := int(dayStart.Weekday())
+	daysSinceMonday := (weekday + 6) % 7
+	return dayStart.AddDate(0, 0, -daysSinceMonday)
 }
 
 func (uc *GatewayUsecase) CheckPolicy(ctx context.Context, key *GatewayAPIKey, modelID string, now time.Time) error {
@@ -593,6 +645,9 @@ func (uc *GatewayUsecase) UpsertPolicy(ctx context.Context, item GatewayPolicy) 
 	if item.APIKeyID <= 0 || item.ModelID == "" {
 		return nil, ErrGatewayPolicyInvalid
 	}
+	if item.ModelID != "*" && !IsOfficialCodexModelID(item.ModelID) {
+		return nil, ErrGatewayPolicyInvalid
+	}
 	return uc.repo.UpsertPolicy(ctx, item)
 }
 
@@ -610,6 +665,9 @@ func (uc *GatewayUsecase) ListModelPrices(ctx context.Context) ([]*GatewayModelP
 func (uc *GatewayUsecase) UpsertModelPrice(ctx context.Context, item GatewayModelPrice) (*GatewayModelPrice, error) {
 	item.ModelID = strings.TrimSpace(item.ModelID)
 	if item.ModelID == "" {
+		return nil, ErrBadParam
+	}
+	if !IsOfficialCodexModelID(item.ModelID) {
 		return nil, ErrBadParam
 	}
 	return uc.repo.UpsertModelPrice(ctx, item)
@@ -710,6 +768,9 @@ func (uc *GatewayUsecase) UpsertModel(ctx context.Context, model GatewayModel) (
 	if model.ModelID == "" {
 		return nil, ErrBadParam
 	}
+	if !IsOfficialCodexModelID(model.ModelID) {
+		return nil, ErrBadParam
+	}
 	if model.Source == "" {
 		model.Source = "manual"
 	}
@@ -720,6 +781,9 @@ func (uc *GatewayUsecase) UpsertSyncedModel(ctx context.Context, model GatewayMo
 	model.ModelID = strings.TrimSpace(model.ModelID)
 	model.OwnedBy = strings.TrimSpace(model.OwnedBy)
 	if model.ModelID == "" {
+		return nil, ErrBadParam
+	}
+	if !IsOfficialCodexModelID(model.ModelID) {
 		return nil, ErrBadParam
 	}
 	model.Source = "upstream"
@@ -766,6 +830,29 @@ func normalizeNonNegativeInt64(value int64) int64 {
 		return 0
 	}
 	return value
+}
+
+func normalizeAllowedCodexModels(in []string) ([]string, error) {
+	if len(in) == 0 {
+		return []string{}, nil
+	}
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, item := range in {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if !IsOfficialCodexModelID(item) {
+			return nil, ErrBadParam
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	return out, nil
 }
 
 func alertMetricValue(metric string, summary *GatewayUsageSummary) float64 {

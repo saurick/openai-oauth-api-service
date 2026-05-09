@@ -52,6 +52,8 @@ var (
 		{Name: "disabled", Type: field.TypeBool, Default: false},
 		{Name: "quota_requests", Type: field.TypeInt64, Default: 0},
 		{Name: "quota_total_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "quota_daily_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "quota_weekly_tokens", Type: field.TypeInt64, Default: 0},
 		{Name: "allowed_models", Type: field.TypeJSON, Nullable: true},
 		{Name: "last_used_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},

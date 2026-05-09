@@ -56,10 +56,8 @@ HTTP 路由：
 - `usage_buckets`
 - `usage_key_summaries`
 - `model_list`
-- `model_upsert`
-- `model_delete`
+- `official_model_price_list`
 - `model_set_enabled`
-- `model_sync`
 - `policy_list`
 - `policy_upsert`
 - `policy_delete`
@@ -76,7 +74,9 @@ HTTP 路由：
 - `user_usage_summary`
 - `user_usage_list`
 
-用途：管理员管理下游 API key、组织用户归属、key+model 策略、模型列表、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；数据库保存 `plain_key` 用于后台展示，同时保存 `key_hash` 用于鉴权匹配，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
+用途：管理员管理下游 API key、组织用户归属、key+model 策略、固定官方模型列表启停、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；数据库保存 `plain_key` 用于后台展示，同时保存 `key_hash` 用于鉴权匹配，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
+
+模型目录以服务端代码中的官方 Codex 列表为真源，管理端只允许读取和启停；`model_upsert` / `model_delete` 不作为正式管理接口开放。
 
 普通组织用户只允许调用 `api.user_key_list`、`api.user_usage_summary` 和 `api.user_usage_list`，并且后端按当前登录用户过滤 `owner_user_id`，不返回其他用户 key。
 
@@ -98,8 +98,7 @@ HTTP 路由：
 鉴权：
 
 - 下游请求必须使用 `Authorization: Bearer ogw_...`
-- 上游请求由服务端使用 `OPENAI_API_KEY` / `data.openai.apiKey` 注入
-- 统一上游代理由 `UPSTREAM_PROXY_URL` / `data.openai.upstreamProxyUrl` 控制
+- 上游请求由服务端通过服务器 Codex CLI 登录态执行，客户端不接触上游凭据
 
 usage 记录：
 
@@ -187,7 +186,8 @@ usage 记录：
 - `plain_key`
 - `allowed_models`
 - `quota_requests`
-- `quota_total_tokens`
+- `quota_daily_tokens`
+- `quota_weekly_tokens`
 - `disabled`
 - `owner_user_id`
 
@@ -221,7 +221,7 @@ usage 记录：
 - `items[].total_tokens`
 - `items[].estimated_cost_usd`
 
-当前只支持 `group_by=day`。费用估算从模型价格表读取本地数据库价格真源；价格缺失时返回 `null`，前端显示“未配置价格”。reasoning tokens 作为输出 tokens 子集展示，不重复计费。
+当前只支持 `group_by=day`。费用估算优先读取数据库模型价格覆盖值，未配置时回落到服务端内置 OpenAI Codex 模型价格表；仍无价格时返回 `null`，前端显示“未配置价格”。reasoning tokens 作为输出 tokens 子集展示，不重复计费。
 
 ### `api.usage_key_summaries`
 
@@ -243,7 +243,18 @@ usage 记录：
 - `items[].average_duration_ms`
 - `items[].estimated_cost_usd`
 
-筛选条件与 `api.usage_list` 保持一致。费用估算仍以本地模型价格表为真源；窗口内存在未配置价格的模型时，对应 key 的 `estimated_cost_usd` 返回 `null`。
+筛选条件与 `api.usage_list` 保持一致。费用估算优先使用数据库价格覆盖值，再回落到内置官方价格表；窗口内存在未配置价格的模型时，对应 key 的 `estimated_cost_usd` 返回 `null`。
+
+### `api.official_model_price_list`
+
+返回当前代码内置的 Codex 客户端可用模型中已定价模型的价格表，用于前端费用展示和费用估算兜底；当前已定价模型为 `gpt-5.5`、`gpt-5.4`、`gpt-5.4-mini`、`gpt-5.3-codex`、`gpt-5.2`：
+
+- `items[].model_id`
+- `items[].input_usd_per_million`
+- `items[].cached_input_usd_per_million`
+- `items[].output_usd_per_million`
+
+说明：价格单位为 USD / 1M tokens。`gpt-5.3-codex-spark` 保留在 Codex 客户端可用模型候选中，但仍是 research preview，价格未定，不进入费用估算单价表；长上下文、Batch、Flex、Priority 和区域处理加价需要新增口径字段后再接入。
 
 ## 不再属于模板主干的业务能力
 

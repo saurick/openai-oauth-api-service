@@ -1,10 +1,175 @@
 # Progress
 
+- 修复：业务看板折线图尖峰线段溢出到下方卡片的问题；根因是绝对定位 SVG 没有显式绘图区高度，浏览器按 SVG 自身比例计算盒子，导致线段脱离 30 天趋势容器。现在折线 SVG 被包进固定绘图区并填满该区域。
+- 验证补充：`style:l1` 增加折线绘图区盒模型断言，确认 `data-trend-line` 和 `data-trend-line-box` 都被限制在 `data-trend-chart` 内，避免尖峰再次穿透到相邻面板。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4337 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminDashboard/index.jsx web/scripts/styleL1.mjs progress.md`。
+- 阻塞/风险：本轮只修复折线图前端布局，不修改指标计算、tooltip 内容或后端聚合数据。
+
+- 完成：API 凭据级 Token 限制从单一 `quota_total_tokens` 调整为每日 / 每周两个窗口；新增 Ent 字段与 Atlas 迁移 `quota_daily_tokens`、`quota_weekly_tokens`，创建、编辑、列表展示和转发前额度检查统一使用新字段。
+- 兼容：旧 RPC 入参 `quota_total_tokens` 仍会作为每周额度兼容接入；旧数据如果只有历史总额度，会在业务映射中按每周额度展示和拦截，避免后台看不到的旧残值继续暗中生效。新前端保存时只提交每日 / 每周字段。
+- 验证通过：`cd server && make data`、`cd server && go test ./internal/biz ./internal/data ./internal/server`、`cd web && pnpm lint`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && pnpm style:l1`。
+- 阻塞/风险：本轮已生成 migration，但未对当前数据库执行 `make migrate_apply`；部署或本地联调新后端前需要先应用迁移。内置 Browser 无法注入 `style:l1` 所需的 mock 管理员态和 mock `/rpc/api` 路由，本轮页面交互验收以仓库 `style:l1` 的 21 个 Playwright 场景为准。
+
+- 完成：业务看板 30 天趋势新增“柱状 / 折线”切换；默认保留柱状图用于看每日量级，折线图复用同一组 `usage_buckets` 数据、指标按钮和 hover / focus 明细浮层用于看走势。
+- 验证补充：`style:l1` 断言默认柱状状态、折线切换按钮、折线 SVG 和趋势点数量，并在折线模式下继续验证错误 / Token 指标 hover 明细。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4336 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminDashboard/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`。
+- 阻塞/风险：本轮只扩展前端图表呈现方式，不新增图表区块、不请求额外接口、不修改后端聚合口径；真实本地 `/admin-dashboard` 仍需要管理员登录态和后端数据，最终交互验收以 `style:l1` 的 mock 管理员态桌面 / 移动端场景为准。
+
+- 完成：业务看板 30 天趋势图新增页面内 hover / focus 明细浮层，替代原来只依赖浏览器原生 `title` 的弱提示；请求、错误、费用、延迟和 Token 指标都会展示对应日期和值，Token / 错误指标补充组成明细。
+- 验证补充：`style:l1` 新增趋势柱 `data-trend-bar` 与 `data-trend-tooltip` 断言，覆盖错误指标 hover 明细和 Token 指标切换后的 hover 明细。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4334 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminDashboard/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`。
+- 阻塞/风险：本轮只调整 `/admin-dashboard` 图表交互和展示文案，不修改 `usage_buckets` 后端聚合口径；内置 Browser 打开真实本地 `/admin-dashboard` 会按未登录态跳转 `/admin-login`，无法复用 `style:l1` 的 mock 管理员态和 mock usage 数据，交互验收以 `style:l1` 的桌面 / 移动端 Playwright 场景为准。
+
+- 完成：删除业务看板里的“调用状态概览”整块；错误率和 API 凭据启用状态已由顶部核心卡覆盖，首页不再用重复进度条占用整行。
+- 调整：`style:l1` 不再要求调用状态概览，继续断言核心指标、30 天趋势、Token 构成、模型 / 接口分布、最近调用和明细入口存在。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4333 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminDashboard/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`。
+- 阻塞/风险：本轮只调整 `/admin-dashboard` 展示层和前端回归口径，不修改后端接口、usage 真源或 `/admin-usage` 深度统计页面。
+
+- 完成：按“不过度精简”口径恢复业务看板里的 Token 构成、调用状态概览、模型用量分布和接口分布；这些模块保留概览和排障价值，但不恢复凭据宽表、目录导航和 30 天按天明细。
+- 调整：业务看板仍不请求 `usage_key_summaries`，避免首页重新拉完整凭据窗口统计；深度凭据统计继续放在 `/admin-usage`「用量日志」。
+- 验证补充：`style:l1` 更新为中等密度口径，断言 Token 构成、调用状态、模型 / 接口分布存在，同时继续断言凭据看板和 30 天按天统计不回首页。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4331 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminDashboard/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`。
+- 阻塞/风险：本轮只调整 `/admin-dashboard` 展示层，不修改后端接口、usage 真源或 `/admin-usage` 深度统计页面；内置 Browser 本轮打开临时本地端口时被浏览器侧拦截为 `ERR_BLOCKED_BY_CLIENT`，最终视觉回归以 `style:l1` 的桌面 / 移动端 Playwright 场景为准。
+
+- 完成：将 `/admin-analytics` 的凭据统计合并进 `/admin-usage`，侧栏只保留「用量日志」入口；旧 `/admin-analytics` 兼容跳转到 `/admin-usage`。
+- 完成：`/admin-usage` 新增「每日汇总 / 凭据统计 / 调用明细 / 异常请求」分段视图，复用现有 `usage_list`、`usage_buckets` 和 `usage_key_summaries` 真源；调用明细补费用估算列和请求详情弹窗，详情仅展示 usage、状态和排障字段，不展示请求 / 响应正文。
+- 验证补充：`style:l1` 覆盖旧链接跳转、用量日志分段、每日聚合、凭据窗口统计、明细分页、180 天窗口切换、异常请求强制失败筛选和详情弹窗盒模型。
+- 阻塞/风险：本轮只做前端信息架构合并与现有接口展示，不新增后端接口、schema、导出或按模型拆分的每日聚合；每日汇总当前按日期聚合，不按模型再拆行。
+
+- 完成：精简 `/admin-dashboard` 业务看板，只保留 6 张核心指标卡、30 天趋势和最近调用样本；移除首页目录导航、凭据宽表、Token 构成、状态分布、模型 / 接口分布和 30 天按天明细。
+- 调整：业务看板数据请求减少为 `summary`、`key_list`、`usage_list` 和 `usage_buckets`，不再为首页请求 8 个 `usage_key_summaries` 凭据窗口；凭据明细和深度分析继续放在独立用量统计 / 调用明细页面。
+- 验证补充：`style:l1` 按精简口径更新断言，确认核心指标、趋势切换、最近调用和明细入口存在，同时确认被移除的非必要区块不再回到业务看板。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4329 NODE_USE_ENV_PROXY=0 pnpm style:l1`；内置 Browser 打开真实本地 `/admin-dashboard`，确认桌面 / 移动端核心指标、30 天趋势和最近调用可见，旧业务看板区块无残留，趋势“错误”切换生效，控制台仅有 React Router v7 future flag 既有 warning。
+- 阻塞/风险：本轮只调整业务看板首页展示和前端请求范围，不修改后端接口、usage 真源、独立用量统计页或调用明细页。
+
+- 完成：业务看板顶部新增今日消费、今日请求、错误率、响应耗时、当前 RPM/TPM 和 API 凭据 6 张核心指标卡；复用现有 `summary`、`key_list`、`usage_list` 和 `usage_buckets` 真源，不新增后端接口、schema 或伪造余额数据。
+- 完成：30 天趋势图支持请求、错误、费用、延迟和 Token 指标切换；Token 模式保留输入 / 缓存输入 / 输出堆叠，其余指标按单指标柱状展示。
+- 验证补充：`style:l1` 更新 mock 和断言，覆盖核心指标卡、趋势指标按钮、趋势切换交互、凭据窗口切换、搜索、内部滚动和 token 说明 tooltip。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4326 NODE_USE_ENV_PROXY=0 pnpm style:l1`；内置 Browser 打开真实本地 `/admin-dashboard`，确认桌面 / 移动端核心卡片和趋势按钮可见，趋势“错误”切换生效，控制台仅有 React Router v7 future flag 既有 warning。
+- 阻塞/风险：当前后端没有余额 / 冻结余额真源，因此本轮未添加余额卡；响应 P95 取最近调用样本计算，不是后端全量分位数，后续如需严格 P95 应在后端聚合层补统计口径。
+
+- 完成：模型管理页按固定官方列表收口，移除“新建模型”、行内编辑、删除和模型弹窗；页面只保留代码内 Codex 模型目录展示、官方价格展示和启停操作。
+- 修复：管理端 `api.model_upsert` / `api.model_delete` 不再作为正式接口开放，调用时返回固定模型目录错误，避免绕过前端写入手工模型或删除固定模型。
+- 文档：同步更新 `web/README.md` 与 `server/docs/api.md`，明确模型目录以服务端代码官方列表为真源，后续官方列表更新通过代码同步。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd server && go test ./internal/biz ./internal/data`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4326 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
+- 阻塞/风险：本轮不改当前官方模型集合与价格口径；以后 OpenAI 官方列表或价格变化时，需要继续同步 `server/internal/biz/official_model_prices.go` 和前端固定目录兜底。历史 usage 文本记录仍保留原模型值，不做重写。
+
+- 修复：暗夜模式下后台顶部栏仍显示浅色的问题；根因是顶部栏使用 `bg-white/95`，此前主题覆盖只接管了 `bg-white`，未覆盖带透明度的 Tailwind 背景类。
+- 验证补充：`style:l1` 在后台暗色态新增 `header` 背景亮度断言，要求顶部栏和内容面板一样进入暗色主题。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx scripts/styleL1.mjs`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4325 NODE_USE_ENV_PROXY=0 pnpm style:l1`；本地 Playwright 打开 `/admin-dashboard` 暗色态，确认顶部栏背景为 `rgb(17, 24, 39)`、文字为浅色，已不再显示浅色顶部栏。
+
+- 完成：`/admin-keys` API 凭据表新增“创建时间”和“更新时间”独立列，直接展示后端 `key_list` 已返回的 `created_at` / `updated_at`；空态列数同步调整，不改接口、schema 或历史数据。
+- 验证补充：`style:l1` 为 API 凭据 mock 数据补 `created_at` / `updated_at`，并断言桌面/移动端 key 表格存在创建时间、更新时间列且当前页 8 条均展示有效时间；同时 mock `/auth/oauth/config`，避免本地后端未提供 OAuth 配置时首页场景被 404 控制台错误提前拦截。
+- 验证通过：`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4322 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminApi/index.jsx web/scripts/styleL1.mjs progress.md`；内置 Browser 打开真实本地 `/admin-keys`，确认“创建时间”和“更新时间”列可见、行选择仍能选中 1 行，控制台仅有 React Router v7 future flag 既有 warning。
+- 阻塞/风险：本轮只调整 API 凭据列表展示和回归脚本，不修改创建、编辑、删除、导出、用量统计或后端字段真源；历史数据若 `created_at` / `updated_at` 异常仍按现有 `fmtTs` 口径显示 `-` 或原值兜底。内置 Browser 截图接口本轮仍出现 `Page.captureScreenshot` 超时，视觉留证以 `style:l1` 生成截图为准。
+
+- 完成：后台主题切换从浅色 / 暗夜二态升级为「跟系统 / 浅色 / 暗夜」三态；默认模式为 `system`，首次进入不再固定浅色，系统偏好变化时会同步刷新实际生效主题。
+- 验证补充：`style:l1` 主题断言改为验证默认 `system` 选中、手动切到 `dark` 后刷新保持、再切回 `system` 后持久化，避免主题模式和最终生效颜色混用。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/index.jsx src/common/theme/adminTheme.js src/common/components/layout/AdminThemeToggle.jsx scripts/styleL1.mjs`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4323 NODE_USE_ENV_PROXY=0 pnpm style:l1`；本地 Playwright 打开 `/admin-login`，确认缺省无 `admin_theme` 时进入 `system`，三种选项可见，切到 `dark` 后刷新保持，再切回 `system` 后持久化。
+
+- 完成：管理员登录页和后台壳子新增浅色 / 暗夜模式切换；主题以 `admin_theme` 为唯一前端持久化键，初始化优先读取本地选择，缺省跟随系统偏好，并在刷新后保持。
+- 调整：暗色覆盖收口在 `admin-frame` / `admin-login-shell` 作用域，复用同一个主题按钮和 CSS 变量，覆盖通用面板、表格、筛选栏、弹窗、按钮、状态标签和登录表单，避免逐页散落硬编码补丁。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/index.jsx src/common/theme/adminTheme.js src/common/components/layout/AdminThemeToggle.jsx src/common/components/layout/AppShell.jsx src/common/components/layout/AdminFrame.jsx src/common/components/layout/SurfacePanel.jsx src/pages/AdminLogin/index.jsx scripts/styleL1.mjs`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4321 NODE_USE_ENV_PROXY=0 pnpm style:l1`；内置 Browser 打开本地 `/admin-login`，确认主题按钮可从浅色切到暗色并刷新保持，只有 React Router v7 future flag 既有 warning。
+- 阻塞/风险：本轮只实现前端主题，不修改后端接口、鉴权、数据库或部署配置；内置 Browser 的截图能力仍出现 `Page.captureScreenshot` 超时，视觉留证改用本地 Playwright 截图。
+
 - 完成：恢复可选管理员 Google/OIDC 登录，并把本地回调改为动态前端端口方案。OAuth provider 固定回调后端 `/auth/oauth/callback`；`/auth/oauth/start` 会从 `frontend_origin`、`Origin` 或 `Referer` 收敛当前前端 origin，写入 signed state，授权完成后通过 `/oauth/callback` URL fragment 写入管理员 JWT 并跳回原后台路径。
 - 完成：新增 `/auth/oauth/config` 供前端判断是否显示 OAuth 登录按钮；默认未配置 `OAUTH_API_OAUTH_CLIENT_ID / CLIENT_SECRET` 时 OAuth 关闭，不影响账号密码登录。生产前端 origin 需通过 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` allowlist 明确放行；本地 `localhost / 127.0.0.1 / ::1` 支持任意端口。
 - 文档：同步更新 README、运维说明、服务配置说明、Compose `.env.example` / `compose.yml` / README、前端说明和架构说明；本地 Google Console 回调现在登记 `http://localhost:8400/auth/oauth/callback`，不再登记 Vite 端口。
 - 验证通过：`gofmt`；`cd server && go test ./internal/biz ./internal/server -run 'Test(AdminAuthUsecase_LoginWithOAuth|OAuth|RegisterHealthRoutes)'`；`cd server && go test ./internal/data`；`cd web && pnpm test`；`cd web && pnpm lint`；`cd web && pnpm css`；`cd web && pnpm build`；`cd web && pnpm style:l1`；`git diff --check`。
 - 阻塞/风险：本轮未配置真实 Google Client，也未跑真实外部授权链路；OAuth 管理员只允许匹配已有管理员用户名的邮箱或已绑定 `admin_users.oauth_provider/oauth_subject`，不会自动创建管理员。当前工作区已有大量其他未提交改动，本轮只追加 OAuth 动态回调相关实现与文档。
+
+- 修复：分页“每页条数”下拉改为向上展开；`SearchableSelect` 新增 `menuPlacement`，默认仍向下，只有表格分页传 `top`，避免影响筛选栏和弹窗里的选择器。
+- 验证补充：分页盒模型回归同步检查 `data-menu-placement="top"`，并断言菜单底部位于输入框上方，防止后续又退回向下展开。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4315 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminApi/index.jsx web/src/tailwind.css web/scripts/styleL1.mjs progress.md`；本地 Playwright 登录真实 `/admin-keys`，桌面与移动端均确认分页菜单向上展开、无祖先裁剪。
+
+- 完成：重新规划业务看板信息架构，新增顶部看板目录导航，将“凭据 Token 窗口”和“24h 凭据消耗”合并为单个“凭据看板”；凭据看板支持时间窗口切换、名称/前缀搜索、排序和模块内滚动，避免凭据增多时拉长整个业务看板页面。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx src/common/components/layout/SurfacePanel.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4309 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`；内置 Browser 打开真实本地 `/admin-dashboard`，确认页面身份、看板目录、凭据看板、窗口切换和搜索空态，只有 React Router v7 future flag 既有 warning。
+- 阻塞/风险：本轮只调整前端看板展示与回归脚本，不修改后端 usage/key 聚合接口、数据库 schema 或历史 usage 真源；`usage_key_summaries` 仍按后端当前限制返回聚合结果。真实本地库当前没有凭据数据，真实 Browser 验证只能覆盖空态；带凭据数据的桌面/移动端状态由 `style:l1` mock 回归覆盖。
+
+- 完成：新增后台一级入口 `/admin-analytics`「用量统计」，左侧菜单从“转发配置”中拆出独立“用量统计”分组；第一版先承载凭据维度 Token 窗口统计和搜索 / 模型 / 状态筛选。
+- 调整：`/admin-keys` 回归为纯 API 凭据管理页，不再内嵌“凭据 Token 统计”宽表；调用明细继续保留在用量统计分组下。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/common/components/layout/AppShell.jsx src/App.jsx src/common/components/layout/AdminFrame.jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4314 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/App.jsx web/src/common/components/layout/AppShell.jsx web/src/common/components/layout/AdminFrame.jsx web/src/pages/AdminApi/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`；`style:l1` 覆盖 `/admin-analytics` 桌面和移动端，确认用量统计菜单、凭据维度表格、筛选入口、分页和横向溢出回归。
+- 阻塞/风险：本轮只做前端信息架构和现有聚合接口展示迁移，不新增后端接口、schema、导出、告警或延迟/错误率分析。
+
+- 修复：模型口径改为对齐 Codex 客户端模型菜单，候选和后端种子模型包含 `gpt-5.5`、`gpt-5.4`、`gpt-5.4-mini`、`gpt-5.3-codex`、`gpt-5.3-codex-spark`、`gpt-5.2`，不再只保留 `gpt-5.3-codex`。
+- 完成：价格表补齐上述已发布 API token 价格的模型；`gpt-5.3-codex-spark` 作为 research preview 保留在候选中，但显示“价格未定”，避免把未定价模型伪造成免费。
+- 验证通过：`gofmt -w server/internal/biz/official_model_prices.go server/internal/biz/gateway_test.go server/internal/data/gateway_repo.go server/internal/data/jsonrpc_gateway_test.go`、`cd server && go test ./internal/biz ./internal/data ./internal/server`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4306 pnpm style:l1`、`git diff --check`。
+- 阻塞/风险：Spark 价格仍以 OpenAI Codex rate card 的 research preview 口径处理，费用估算不会为它伪造 USD 单价。
+
+- 修复：后台浅色 `SurfacePanel` 不再默认 `overflow-hidden`，避免分页“每页条数”等绝对定位下拉菜单超出面板内容区后被父容器裁剪；表格自身仍由独立 `tableWrapClass` 保持圆角裁剪和横向滚动。
+- 验证补充：`style:l1` 新增分页每页条数下拉菜单盒模型断言，检查打开后的菜单尺寸以及祖先 `overflow` 容器不会裁剪菜单。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/common/components/layout/SurfacePanel.jsx scripts/styleL1.mjs`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`；本地 Playwright 登录真实 `/admin-keys`，桌面和移动端打开分页每页条数下拉，盒模型均确认无裁剪祖先。
+- 阻塞/风险：`cd web && STYLE_L1_PORT=4311 NODE_USE_ENV_PROXY=0 pnpm style:l1` 进入 `/admin-keys` 后停在既有断言“缺少 key 表格分页器”，但真实页面和截图均存在分页器；该失败不来自本轮新增的下拉裁剪断言。内置 Browser 截图接口本轮 `Page.captureScreenshot` 超时，最终视觉留证使用本地 Playwright 截图。
+
+- 修复：模型管理弹窗前端新增 Codex 候选过滤与 `gpt-5.3-codex` 价格兜底，即使旧后端或旧 mock 返回 `gpt-5.5` / `gpt-5.5-pro`，新建模型候选也不会再显示非 Codex 模型。
+- 修复：模型列表前端同步过滤非 Codex 模型，避免旧 `model_list` 残值在表格和模型限制下拉里继续回显。
+- 验证通过：`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4303 pnpm style:l1`、`cd server && go test ./internal/biz ./internal/data ./internal/server`、`git diff --check`；`style:l1` 已故意注入旧 `gpt-5.5` / `gpt-5.5-pro` 候选并验证弹窗输入 `gpt-5.5` 时只显示 Codex 空态，输入 `codex` 时只出现 `gpt-5.3-codex`。
+- 阻塞/风险：前端兜底只负责展示和提交入口过滤；数据库里的历史旧模型残值仍以服务端启动清理为准，历史 usage 日志不重写。
+
+- 完成：模型口径收口为仅保留 OpenAI Codex 当前非废弃模型 `gpt-5.3-codex`；内置官方价格候选、默认种子模型、Codex CLI 默认模型、前端模型管理默认值与 L1 mock 均同步为 `gpt-5.3-codex`。
+- 完成：后端新增非 Codex 模型准入保护，创建/编辑 key 的 `allowed_models`、模型新增/同步、价格覆盖和 key+model policy 均拒绝非 Codex 模型；服务启动种子会清理模型表、模型价格覆盖、策略和 key `allowed_models` 中的非 Codex 残值。
+- 验证通过：`cd server && go test ./internal/biz ./internal/data ./internal/server`、`cd server && go test ./...`、`cd web && pnpm test`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm lint`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4299 pnpm style:l1`、`git diff --check`。
+- 阻塞/风险：`STYLE_L1_PORT=4192` 首次执行时端口已被占用，未进入页面验证；已换用 `4299` 完整通过。历史 usage 日志里已经记录的旧模型值不会被本轮重写，统计筛选仍会按历史日志原值保留。
+
+- 完成：移除后台顶部和模型管理工具栏里的“刷新当前页”按钮，保留页面进入、筛选、分页等既有数据加载逻辑。
+- 修复：同步更新 `style:l1` 中已过期的 key / 模型分页断言，按当前 mock 数据口径分别校验 10 条凭据和 1 条 Codex 模型。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4192 NODE_USE_ENV_PROXY=0 pnpm style:l1`；内置浏览器打开本地 `/admin-models` 并点击“新建模型”，确认页面和弹窗均不再出现“刷新当前页”，无新增应用运行错误。
+- 阻塞/风险：本轮只移除前端刷新入口并修正回归脚本断言，不修改 `loadAll` 数据加载逻辑、后端接口或数据库；浏览器控制台仍有 React Router v7 future flag 既有 warning。
+
+- 修复：模型管理弹窗的官方模型候选列表从普通文档流改为绝对定位浮层，避免下拉展开时把弹窗内容和底部按钮整体顶高。
+- 验证通过：`cd web && pnpm lint`、`cd web && pnpm css`、`cd web && pnpm build`；Playwright 盒模型回归确认新建模型弹窗打开下拉前后高度均为 `433.6875px`，候选列表为 `position: absolute` 且无新增控制台 error。
+- 阻塞/风险：本轮只修正模型管理弹窗候选列表撑高问题，不调整其他弹窗布局结构。
+
+- 完成：模型管理弹窗官方模型选择支持输入时筛选，输入关键字即时过滤官方模型价格列表；只有选择或精确匹配官方模型 ID 后才允许保存，归属方继续固定为 `openai`。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4188 pnpm style:l1`、`git diff --check`；内置浏览器打开本地 `/admin-models`，输入 `mini` 后可筛选并选择 `gpt-5.4-mini`，价格预览同步显示 `$0.75 / $0.075 / $4.5`，无新增控制台 error。
+- 阻塞/风险：本轮只调整模型管理弹窗的官方模型选择交互，不新增运行时自动抓取官方价格；内置价格仍需随 OpenAI 调价同步更新。
+
+- 完成：调用明细页时间范围补充 `5 年` 选项，继续复用现有 `usage_list` 的 `start_time/end_time/limit/offset` 查询。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm css`、`git diff --check -- web/src/pages/AdminApi/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`；临时 Playwright 验证真实本地 `/admin-usage` 可看到并选择 `5 年`，页面摘要显示 `5 年 范围内第` 且无 console error。
+- 阻塞/风险：本轮只增加前端时间窗口选项和回归断言，不改后端接口、数据库或导出逻辑。完整 `style:l1` 当前阻塞在本轮无关的 `/admin-keys` 每页条数下拉被祖先 `overflow` 裁剪断言，未作为本轮通过项。
+
+- 完成：调用明细页新增时间范围筛选，支持 `24h/7 天/30 天/90 天/180 天/1 年/2 年/3 年`，并把 `usage_list` 请求收口到现有 `start_time/end_time/limit/offset` 主路径；页面摘要改为显示当前窗口和当前页范围。
+- 完成：补充调用明细页分页与时间窗口的浏览器级回归断言，覆盖时间范围选项、切换 180 天后请求窗口和翻页 `offset`。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm build`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/`、`git diff --check -- web/src/pages/AdminApi/index.jsx web/src/tailwind.css web/scripts/styleL1.mjs web/README.md progress.md`、`cd web && NO_PROXY=127.0.0.1,localhost STYLE_L1_PORT=4191 pnpm style:l1`；内置浏览器打开真实本地 `/admin-usage`，确认 180 天窗口回显 6 条历史记录且无 console error。
+- 阻塞/风险：本轮只调整调用明细页前端筛选和文档，不改 usage 日志真源、后端接口、数据库或导出逻辑；大窗口查询性能继续依赖现有 usage log 索引与后端分页。内置浏览器截图能力本轮在 CDP `Page.captureScreenshot` 超时，截图留证以 `style:l1` 生成的 `web/output/playwright/style-l1/admin-usage-desktop.png` 和 `admin-usage-mobile.png` 为准。
+
+- 完成：将后台现有原生下拉框替换为可输入筛选的受控选择组件，覆盖分页每页条数、API 凭据页模型/状态筛选、API 凭据表单允许模型、调用明细页时间范围/凭据/模型/状态筛选；模型管理弹窗保留已有官方模型输入筛选。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm lint`、`cd web && pnpm build`、`cd web && STYLE_L1_BASE_URL=http://127.0.0.1:4190 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
+- 下一步：如后续新增独立策略、价格或告警规则菜单，新增筛选/选择入口默认复用同一可筛选选择组件。
+- 阻塞/风险：本轮只覆盖当前 `web/src/pages/AdminApi/index.jsx` 中的下拉入口；仓库中存在大量本轮前已有未提交改动，未对无关页面和服务端改动做回归。
+
+- 完成：业务看板新增“凭据 Token 窗口”只读统计表并上移到顶部概览卡片下方，按每个 API 凭据展示 24h、7 天、30 天、180 天、360 天、1 年、3 年和 5 年总 Token；原有“24h 凭据消耗”继续保留请求数、成功/失败、输入/输出、费用估算和平均耗时。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm lint`、`cd web && pnpm build`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4191 pnpm style:l1`、`git diff --check`；内置浏览器打开真实本地 `/admin-dashboard`，确认“凭据 Token 窗口”位于 `30 天调用趋势` 前，且 `24h` 到 `5 年` 窗口列可见，页面无新增控制台 error。
+- 阻塞/风险：业务看板统计继续以 usage 日志 `created_at` 与 `total_tokens` 为真源；本轮只新增总 Token 窗口表，不在看板里展开每个窗口的输入/输出/缓存拆分，避免看板信息密度失控。
+
+- 完成：将费用估算从“必须手动维护模型价格”调整为优先使用数据库覆盖价、缺省回落到内置 OpenAI API 官方 Standard 短上下文 token 单价；新增 `api.official_model_price_list` 给前端选择和展示官方模型价格。
+- 完成：模型管理弹窗的模型 ID 从手填改为官方模型可输入筛选选择，归属方固定为 `openai`；模型列表新增输入、缓存输入和输出的 USD / 1M token 单价展示。
+- 验证通过：`cd server && go test ./...`、`cd web && pnpm test`、`cd web && pnpm lint`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4188 pnpm style:l1`、`git diff --check`。
+- 下一步：如需严格覆盖长上下文、Batch、Flex、Priority 或区域处理加价，需要为 usage 增加计费模式 / 上下文档位字段，再扩展估算公式。
+- 阻塞/风险：内置官方价格表按 2026-05-09 官方文档维护，OpenAI 调价后需要同步更新代码；本轮不自动抓取线上价格页，避免运行时依赖外部页面结构。
+
+- 完成：`/admin-keys` 新增“凭据 Token 统计”表，按每个 API 凭据展示 24h、7 天、30 天、180 天、360 天、1 年、3 年和 5 年总 Token；实现复用现有 `api.usage_key_summaries` 的 `start_time/end_time` 过滤，不新增后端接口、schema 或迁移。
+- 修复：业务看板 Token 说明问号从可聚焦 `span` 改为语义化 `button`，避免 `jsx-a11y/no-noninteractive-tabindex` 阻断前端 lint。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm lint`、`cd web && pnpm build`、`cd web && pnpm css`、`cd web && STYLE_L1_PORT=4187 pnpm style:l1`、`cd web && node --check scripts/styleL1.mjs`、`git diff --check`；内置浏览器打开本地 `/admin-keys`，使用真实本地后端登录后确认“凭据 Token 统计”和 `24h` 到 `5 年` 窗口列可见，页面无新增控制台 error。
+- 阻塞/风险：统计以当前 usage 日志的 `created_at` 和 `total_tokens` 为真源；没有调用的 key 显示 0，历史日志缺失 token 时不会伪造补值。本轮只展示总 Token，不新增各窗口的输入/输出/缓存拆分列，避免 API 凭据页表格过宽。
+
+- 完成：按“全局已有刷新入口”口径，移除 `/admin-keys` 与 `/admin-usage` 主内容区表格工具栏里的“刷新当前页”，保留后台顶部全局刷新按钮。
+- 验证：已补充 `style:l1` 断言，覆盖 API 凭据页和调用明细页主内容区不再出现表格级刷新入口。
+- 阻塞/风险：本轮只调整前端按钮入口，不改 `loadAll` 数据刷新逻辑、接口、后端或数据库。
+
+- 完成：为业务看板中的输入 Token、缓存输入、输出 Token 和 Reasoning 输出字段补充问号说明入口；覆盖 Token 构成、24h 凭据消耗表和 30 天按天统计表，说明文案按后端 usage 解析口径收口到 input/output/cached/reasoning token。
+- 修复：问号说明从浏览器原生 `title` 改为应用内自定义 tooltip，hover 或键盘 focus 到问号时直接显示说明，避免原生 title 延迟或不稳定导致看不到说明。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4186 pnpm style:l1`、`cd web && node --check scripts/styleL1.mjs`；`style:l1` 已真实 hover `Reasoning 输出` 问号并断言 tooltip 可见、非透明、尺寸正常且包含 `reasoning_tokens` 文案。
+- 阻塞/风险：单文件 `pnpm exec eslint --fix src/pages/AdminDashboard/index.jsx` 在当前 ESLint 配置下只返回“文件被忽略” warning；本轮为前端展示说明，不修改后端统计字段、接口或数据库。
+
+- 完成：将本地前端 Vite 开发端口从 `5175` 顺延到 `5176`，并开启 `strictPort`，避免与 `plush-toy-erp` 桌面端 `5175` 互抢；同步更新根 README 和运维说明中的本地访问地址。
+- 验证通过：`curl -I http://127.0.0.1:5176/` 返回 `HTTP/1.1 200 OK`；`git diff --check` 通过。
+- 下一步：如需联调 Google OAuth，本地 OAuth Client 回调地址应改填 `http://localhost:5176/auth/oauth/callback`；生产仍按 HTTPS 域名配置，不使用本地 Vite 端口。
+- 阻塞/风险：本轮只调整本地前端开发端口与文档，未修改后端 `8400/9400`、生产 Compose、Dockerfile、数据库或线上服务。
+
+- 完成：将后台 `/admin-keys` 的 API 凭据 Token 总额度改为按“百万 token”填写与展示；前端仍向后端提交原始 `quota_total_tokens` token 数，保持接口和数据库语义不变。
+- 验证通过：`cd web && pnpm lint`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && pnpm style:l1`、`git diff --check`；内置浏览器打开 `/admin-keys`，确认表单文案、列表列头和编辑态回显均使用百万单位。
+- 阻塞/风险：本轮只调整 API 凭据管理页的前端单位换算，不改后端字段、迁移、转发限额判定或其他用量统计页面。
 
 - 完成：复核 dev/prod 管理员密码口径，确认 `server/configs/dev/config.yaml`、`server/configs/dev/config.local.example.yaml`、`server/configs/prod/config.yaml`、`server/deploy/compose/prod/.env.example`、远端 prod `.env` 和运行容器均为 `admin/adminadmin`，未发现代码或部署脚本要求生成随机管理员密码。
 - 完成：同步 README、部署文档、Compose 文档、配置文档和运维文档，明确当前个人部署默认保持 `admin/adminadmin`，部署过程不得擅自生成或替换管理员密码；如需改密必须由维护者明确指定。
@@ -266,3 +431,28 @@
 - 修复：针对 OpenCode 桌面端 `Bad Gateway retrying`，将 `codex_cli` upstream 改为只转发最近 user/assistant 对话，忽略 OpenCode 自带的大段 system/developer/tool 提示词；同时对 Codex CLI upstream 加进程内串行锁，避免桌面端主回复、标题生成等并发请求同时启动多个 Codex CLI 进程争用服务器 Codex 登录态。
 - 修复：usage 写入改用 5 秒后台 context，避免客户端取消或桌面端重试时导致 `record gateway usage failed: context deadline exceeded` 丢统计；本地 OpenCode provider 显式设置 `timeout=600000`。
 - 验证通过：部署 `openai-oauth-api-service-server:20260509T041155-codex-cli-serial` 后，3 个并发请求（含 stream）全部返回 `HTTP 200`，内容分别为 `A/B/C`；本地 `opencode run --pure -m oauth-api-service/gpt-5.5 --variant high --format json "只回复 OK"` 返回 `OK` 且退出码为 0；OpenCode 桌面窗口当前显示 `OK`，不再停留在 Bad Gateway。
+- 完成：按维护者确认删除服务器试装残留目录 `/root/.openclaw`，删除前大小约 `700M`，当前功能不依赖该目录且无 OpenClaw 进程运行。
+- 验证通过：删除后服务器根分区可用空间约 `2.9G`，`openai-oauth-api-service-server:20260509T041155-codex-cli-serial` 仍为 Up，`/readyz` 返回 `ready`；本地 `opencode run --pure -m oauth-api-service/gpt-5.5 --variant high --format json "只回复 OK"` 继续返回 `OK`。
+
+- 完成：参考 `trade-erp` 表格选择口径优化 `/admin-keys`：选择框不再被后台全局 input 高度撑成长条；API 凭据表改为单击行即可选中当前记录，切换其他行时互斥选择，点击已选 checkbox 可清空当前选择，行内编辑/启停/删除/复制按钮不触发行选择。
+- 完成：继续按 `trade-erp` 工具条口径收口筛选和操作：API 凭据页补“搜索 / 模型 / 状态”三列筛选工具条，按钮统一为白底描边、绿色主按钮和红色危险按钮；当前操作行承载清空已选、编辑、启停和删除，行内操作按钮也改成同一套紧凑按钮样式。调用明细页筛选区同步改成同一工具条样式。
+- 完成：新增轻量表格选择 helper 与单元测试，并把 `/admin-keys` L1 浏览器回归扩展到选择框盒模型、筛选工具条、模型/状态筛选、当前操作行、行点击互斥选择和 checkbox 清空选择。
+- 验证通过：`cd web && pnpm lint`、`cd web && pnpm css`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4184 pnpm style:l1`、`git diff --check`；`style:l1` 覆盖 `/admin-keys` 桌面/移动端选择框盒模型、筛选工具条、当前操作行、行点击互斥选择与清空选择，以及 `/admin-usage` 工具条渲染。
+- 阻塞/风险：本轮只给已有选择列的 API 凭据表增加行选择语义；模型表、usage 表和看板表目前没有选择列，不强行增加行选择。内置浏览器本轮尝试真实登录时被 Browser virtual clipboard 缺失阻断在登录页，未作为最终验收依据；视觉留证以 `style:l1` 生成的 `/Users/simon/projects/openai-oauth-api-service/web/output/playwright/style-l1/admin-keys-desktop.png`、`admin-keys-mobile.png` 和 `admin-usage-desktop.png` 为准。
+- 完成：按“新建按钮 + 弹窗”口径继续调整后台表格页；`/admin-keys` 移除页面内新增/编辑表单，工具条增加“新建 API 凭据”按钮，新增和编辑都进入弹窗；`/admin-models` 同步移除页面内模型表单，增加“新建模型”按钮，新增和编辑统一在弹窗中完成。
+- 完成：新增后台弹窗样式，覆盖桌面与移动端视口约束；弹窗内保留原有备注、模型限制、百万 token 额度、模型 ID、归属方和默认启用字段，不改变后端 RPC 语义。
+- 验证通过：`cd web && pnpm css`、`cd web && pnpm test`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx src/common/utils/tableInteraction.js src/common/utils/tableInteraction.test.mjs`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4185 pnpm style:l1`；`style:l1` 覆盖 20 个场景，并新增 API 凭据/模型新建弹窗打开、字段存在、按钮存在、桌面/移动端弹窗不溢出视口的断言。
+- 验证补充：全量 `cd web && pnpm lint` 后续已通过；此前 `web/src/pages/AdminDashboard/index.jsx:260` 的 a11y lint 阻断不再复现。
+- 完成：继续对齐 `trade-erp` 表格交互，API 凭据行支持单击单选、双击打开编辑弹窗；模型行支持双击打开编辑弹窗；行内按钮、选择框、下拉和复制等交互控件不会触发行双击编辑。
+- 完成：新增后台轻量分页控件，默认每页 8 条，支持 `8/10/20/50/100` 切换；API 凭据表、凭据 Token 统计表、模型表和调用明细表均接入分页。筛选或搜索变化后回到第 1 页，数据减少导致当前页越界时自动回退到最后一页；调用明细分页按后端 `limit/offset` 请求。
+- 完成：同步 `web/README.md` 的后台表格交互说明，并把 `style:l1` mock 数据扩展到可验证翻页的 10 条凭据 / 10 个模型 / 12 条调用总数。
+- 验证通过：`cd web && pnpm lint`、`cd web && pnpm css`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4189 pnpm style:l1`、`git diff --check`；`style:l1` 覆盖双击编辑弹窗、分页控件、下一页/上一页切换、usage 分页 `offset=8` 请求、桌面/移动端表格和分页盒模型。
+- 完成：删除普通 OpenAI API 上游模式，`/v1/chat/completions` 与 `/v1/responses` 当前只走服务器 Codex CLI 登录态；同步移除 `OAUTH_API_UPSTREAM_PROVIDER=openai_api`、服务端 `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `UPSTREAM_PROXY_URL` 注入、`data.openai` 配置、普通 HTTP upstream 转发、上游模型同步 RPC 和对应错误码。
+- 完成：部署模板、配置示例、README、后端 API/配置文档和后台说明同步改为 Codex CLI 统一上游出口口径；客户端侧仍可把本系统 `ogw_...` 下游 key 填入 OpenAI 兼容 SDK 的 `OPENAI_API_KEY`。
+- 验证通过：`cd server && make config`、`node scripts/gen-error-codes.mjs --check`、`cd server && go test ./...`、`cd web && pnpm test -- --run`、`git diff --check`。
+- 下一步：部署时确保目标服务器已完成 `codex login`，并通过 `CODEX_HOST_HOME` 挂载登录态；如需重新引入普通 OpenAI API 直连，应作为新的上游类型单独设计，不从旧 `openai_api` 分支回填。
+- 阻塞/风险：历史 `legacy-python-mvp/` 仍保留早期直连 OpenAI API 参考实现，未纳入当前主路径清理；`progress.md` 较早历史记录仍可能提到旧上游 key，作为历史上下文保留，不作为当前真源。
+- 完成：API 凭据页移除独立“搜索”按钮，搜索输入框改为输入后自动触发查询；模型和状态筛选、重置、新建入口保持原有布局与语义。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4187 pnpm style:l1`、`git diff --check -- web/src/pages/AdminApi/index.jsx web/scripts/styleL1.mjs progress.md`；`style:l1` 已覆盖 `/admin-keys` 桌面/移动端无搜索按钮、搜索输入框存在、输入 `prod` 后自动请求 `key_list search=prod`，以及弹窗、行选择和相邻区域不溢出。
+- 下一步：如需进一步降低频繁输入时的后端请求量，可按实际使用反馈调整自动搜索延迟。
+- 阻塞/风险：无。

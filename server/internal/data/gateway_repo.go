@@ -45,6 +45,8 @@ func (r *gatewayRepo) CreateAPIKey(ctx context.Context, input biz.CreateGatewayA
 		SetKeyLast4(secret.KeyLast4).
 		SetQuotaRequests(input.QuotaRequests).
 		SetQuotaTotalTokens(input.QuotaTotalTokens).
+		SetQuotaDailyTokens(input.QuotaDailyTokens).
+		SetQuotaWeeklyTokens(input.QuotaWeeklyTokens).
 		SetAllowedModels(normalizeStringList(input.AllowedModels))
 	if input.OwnerUserID > 0 {
 		create.SetOwnerUserID(input.OwnerUserID)
@@ -120,6 +122,8 @@ func (r *gatewayRepo) UpdateAPIKey(ctx context.Context, input biz.UpdateGatewayA
 		SetName(input.Name).
 		SetQuotaRequests(input.QuotaRequests).
 		SetQuotaTotalTokens(input.QuotaTotalTokens).
+		SetQuotaDailyTokens(input.QuotaDailyTokens).
+		SetQuotaWeeklyTokens(input.QuotaWeeklyTokens).
 		SetAllowedModels(normalizeStringList(input.AllowedModels)).
 		SetDisabled(input.Disabled)
 	if input.OwnerUserID > 0 {
@@ -817,11 +821,20 @@ func (r *gatewayRepo) GetModelByID(ctx context.Context, modelID string) (*biz.Ga
 }
 
 func (r *gatewayRepo) EnsureDefaultModels(ctx context.Context) error {
-	defaults := []biz.GatewayModel{
-		{ModelID: "gpt-5.4", OwnedBy: "openai", Enabled: true, Source: "seed"},
-		{ModelID: "gpt-5.5", OwnedBy: "openai", Enabled: true, Source: "seed"},
+	defaults := make([]biz.GatewayModel, 0, len(biz.CodexModelIDs))
+	for _, modelID := range biz.CodexModelIDs {
+		defaults = append(defaults, biz.GatewayModel{
+			ModelID: modelID,
+			OwnedBy: "openai",
+			Enabled: true,
+			Source:  "seed",
+		})
 	}
+	allowedModelIDs := make([]string, 0, len(defaults))
+	allowedModelSet := make(map[string]struct{}, len(defaults))
 	for _, item := range defaults {
+		allowedModelIDs = append(allowedModelIDs, item.ModelID)
+		allowedModelSet[item.ModelID] = struct{}{}
 		exists, err := r.data.postgres.GatewayModel.Query().
 			Where(gatewaymodel.ModelIDEQ(item.ModelID)).
 			Exist(ctx)
@@ -832,6 +845,54 @@ func (r *gatewayRepo) EnsureDefaultModels(ctx context.Context) error {
 			continue
 		}
 		if _, err := r.UpsertModel(ctx, item); err != nil {
+			return err
+		}
+	}
+	if err := r.pruneGatewayModels(ctx, allowedModelIDs, allowedModelSet); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *gatewayRepo) pruneGatewayModels(ctx context.Context, allowedModelIDs []string, allowedModelSet map[string]struct{}) error {
+	list, err := r.data.postgres.GatewayModel.Query().All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, item := range list {
+		if item == nil {
+			continue
+		}
+		if _, ok := allowedModelSet[item.ModelID]; ok {
+			continue
+		}
+		if err := r.DeleteModel(ctx, item.ID); err != nil && !ent.IsNotFound(err) {
+			return err
+		}
+	}
+	if _, err := r.data.postgres.GatewayModelPrice.Delete().
+		Where(gatewaymodelprice.ModelIDNotIn(allowedModelIDs...)).
+		Exec(ctx); err != nil {
+		return err
+	}
+	if _, err := r.data.postgres.GatewayPolicy.Delete().
+		Where(gatewaypolicy.ModelIDNEQ("*"), gatewaypolicy.ModelIDNotIn(allowedModelIDs...)).
+		Exec(ctx); err != nil {
+		return err
+	}
+	keys, err := r.data.postgres.GatewayAPIKey.Query().All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, key := range keys {
+		current := normalizeStringList(key.AllowedModels)
+		next := filterAllowedStrings(current, allowedModelSet)
+		if sameStringList(current, next) {
+			continue
+		}
+		if err := r.data.postgres.GatewayAPIKey.UpdateOneID(key.ID).
+			SetAllowedModels(next).
+			Exec(ctx); err != nil {
 			return err
 		}
 	}
@@ -1037,11 +1098,11 @@ GROUP BY COALESCE(l.api_key_id, 0), l.model`
 }
 
 func (r *gatewayRepo) listModelPriceMap(ctx context.Context) (map[string]*biz.GatewayModelPrice, error) {
+	out := biz.OfficialModelPriceMap()
 	list, err := r.ListModelPrices(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string]*biz.GatewayModelPrice, len(list))
 	for _, item := range list {
 		if item != nil {
 			out[item.ModelID] = item
@@ -1098,20 +1159,26 @@ func mapGatewayAPIKey(item *ent.GatewayAPIKey) *biz.GatewayAPIKey {
 	if item.OwnerUserID != nil {
 		ownerUserID = *item.OwnerUserID
 	}
+	quotaWeeklyTokens := item.QuotaWeeklyTokens
+	if quotaWeeklyTokens <= 0 && item.QuotaDailyTokens <= 0 && item.QuotaTotalTokens > 0 {
+		quotaWeeklyTokens = item.QuotaTotalTokens
+	}
 	return &biz.GatewayAPIKey{
-		ID:               item.ID,
-		OwnerUserID:      ownerUserID,
-		Name:             item.Name,
-		PlainKey:         item.PlainKey,
-		KeyPrefix:        item.KeyPrefix,
-		KeyLast4:         item.KeyLast4,
-		Disabled:         item.Disabled,
-		QuotaRequests:    item.QuotaRequests,
-		QuotaTotalTokens: item.QuotaTotalTokens,
-		AllowedModels:    normalizeStringList(item.AllowedModels),
-		LastUsedAt:       item.LastUsedAt,
-		CreatedAt:        item.CreatedAt,
-		UpdatedAt:        item.UpdatedAt,
+		ID:                item.ID,
+		OwnerUserID:       ownerUserID,
+		Name:              item.Name,
+		PlainKey:          item.PlainKey,
+		KeyPrefix:         item.KeyPrefix,
+		KeyLast4:          item.KeyLast4,
+		Disabled:          item.Disabled,
+		QuotaRequests:     item.QuotaRequests,
+		QuotaTotalTokens:  item.QuotaTotalTokens,
+		QuotaDailyTokens:  item.QuotaDailyTokens,
+		QuotaWeeklyTokens: quotaWeeklyTokens,
+		AllowedModels:     normalizeStringList(item.AllowedModels),
+		LastUsedAt:        item.LastUsedAt,
+		CreatedAt:         item.CreatedAt,
+		UpdatedAt:         item.UpdatedAt,
 	}
 }
 
@@ -1270,4 +1337,26 @@ func removeString(in []string, target string) []string {
 		}
 	}
 	return out
+}
+
+func filterAllowedStrings(in []string, allowed map[string]struct{}) []string {
+	out := make([]string, 0, len(in))
+	for _, item := range in {
+		if _, ok := allowed[item]; ok {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func sameStringList(a []string, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

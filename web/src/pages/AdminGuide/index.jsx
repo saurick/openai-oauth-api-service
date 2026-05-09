@@ -11,7 +11,7 @@ const DEFAULT_ITEMS = [
 const CUSTOMIZE_ITEMS = [
   'API key 创建、启停、模型白名单和完整 key 展示',
   'OpenAI 兼容 /v1/models、/v1/chat/completions、/v1/responses 调用入口',
-  '模型列表管理、usage 看板、最近请求、导出、价格、告警和统一上游代理配置',
+  '模型列表管理、usage 看板、最近请求、导出、价格、告警和 Codex CLI 上游配置',
 ]
 
 const NEXT_ITEMS = [

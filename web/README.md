@@ -33,7 +33,10 @@ pnpm build
 ```
 
 - `pnpm style:l1` 是当前仓库最小浏览器级样式回归，会自动拉起本地 Vite 并覆盖根路径、历史 `/login`、`/register`、`/oauth-login`、`/portal` 到管理员登录的收口，管理员登录、未登录访问 `/admin-menu` 的重定向，以及注入测试管理员态后的 `/admin-dashboard` 桌面与移动端页面、`/admin-accounts` 和 `/admin-oauth` 到看板的收口。
-- API 运营后台路径为 `/admin-dashboard`，生产运行依赖真实后端 `/rpc/api` 数据；兼容保留 `/admin-api`、`/admin-keys`、`/admin-models` 和 `/admin-usage` 入口。`style:l1` 使用 mock 数据覆盖登录后的基础样式、调用趋势可视化面板和盒模型回归。
+- API 运营后台路径为 `/admin-dashboard`，生产运行依赖真实后端 `/rpc/api` 数据；兼容保留 `/admin-api`、`/admin-keys`、`/admin-models`、`/admin-analytics` 和 `/admin-usage` 入口，其中 `/admin-analytics` 会回跳到合并后的 `/admin-usage`。`style:l1` 使用 mock 数据覆盖登录后的基础样式、调用趋势可视化面板和盒模型回归。
+- 业务看板保留今日消费、今日请求、错误率、响应耗时、当前 RPM/TPM、API 凭据、30 天趋势、Token 构成、模型 / 接口分布和最近调用样本；30 天趋势支持柱状 / 折线切换，并支持 hover / focus 查看日期与指标明细；凭据宽表、调用状态细分和按天明细进入统一的 `/admin-usage`「用量日志」，避免首页信息过载。
+- API 运营后台表格默认每页 8 条，并支持 `8/10/20/50/100` 切换；用量日志支持按 `24h/7 天/30 天/90 天/180 天/1 年/2 年/3 年/5 年` 时间窗口分页查询，并在同一入口提供每日汇总、凭据统计、调用明细和异常请求视图。API 凭据表支持单击行单选、双击行打开编辑弹窗，凭据级 Token 限制按每日和每周两个窗口配置；模型表使用代码内固定官方目录，只保留启停操作。
+- 管理员登录页和 API 运营后台支持「跟系统 / 浅色 / 暗夜」三种主题模式，默认跟随系统偏好，并通过浏览器 `localStorage` 在刷新后保持手动选择。
 - `pnpm test` 当前只负责验证错误码常量与登录态错误分类这类最小前端基线；它不替代浏览器里的样式 / box 模型验收。
 
 ## 环境变量

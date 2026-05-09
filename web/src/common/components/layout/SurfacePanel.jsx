@@ -5,11 +5,13 @@ export default function SurfacePanel({
   children,
   className = '',
   variant = 'dark',
+  ...rest
 }) {
   if (variant === 'admin') {
     return (
       <div
-        className={`relative overflow-hidden rounded-lg border border-[#dde8df] bg-white shadow-[0_2px_10px_rgba(24,61,42,0.08)] ${className}`}
+        {...rest}
+        className={`admin-surface-panel relative rounded-lg border border-[#dde8df] bg-white shadow-[0_2px_10px_rgba(24,61,42,0.08)] ${className}`}
       >
         {children}
       </div>
@@ -18,6 +20,7 @@ export default function SurfacePanel({
 
   return (
     <div
+      {...rest}
       className={`border-white/12 relative overflow-hidden rounded-[32px] border bg-slate-950/75 shadow-[0_24px_80px_rgba(15,23,42,0.45)] backdrop-blur ${className}`}
     >
       <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/50 to-transparent" />

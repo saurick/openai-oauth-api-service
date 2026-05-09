@@ -15,13 +15,11 @@ var (
 	UnknownMethod     = Definition{Name: "UnknownMethod", Code: 40020, Message: "未知接口"}
 	UserInvalidParam  = Definition{Name: "UserInvalidParam", Code: 40030, Message: "参数不合法"}
 
-	UserSetDisabledInvalid   = Definition{Name: "UserSetDisabledInvalid", Code: 40071, Message: "参数错误：user_id 无效"}
-	APIKeyInvalid            = Definition{Name: "APIKeyInvalid", Code: 40101, Message: "API key 无效"}
-	APIKeyDisabled           = Definition{Name: "APIKeyDisabled", Code: 40102, Message: "API key 已禁用"}
-	APIModelDisabled         = Definition{Name: "APIModelDisabled", Code: 40320, Message: "模型已禁用"}
-	APIModelNotAllowed       = Definition{Name: "APIModelNotAllowed", Code: 40321, Message: "当前 key 不允许使用该模型"}
-	APIUpstreamNotConfigured = Definition{Name: "APIUpstreamNotConfigured", Code: 50030, Message: "OpenAI 上游未配置"}
-	APIUpstreamFailed        = Definition{Name: "APIUpstreamFailed", Code: 50200, Message: "OpenAI 上游请求失败"}
+	UserSetDisabledInvalid = Definition{Name: "UserSetDisabledInvalid", Code: 40071, Message: "参数错误：user_id 无效"}
+	APIKeyInvalid          = Definition{Name: "APIKeyInvalid", Code: 40101, Message: "API key 无效"}
+	APIKeyDisabled         = Definition{Name: "APIKeyDisabled", Code: 40102, Message: "API key 已禁用"}
+	APIModelDisabled       = Definition{Name: "APIModelDisabled", Code: 40320, Message: "模型已禁用"}
+	APIModelNotAllowed     = Definition{Name: "APIModelNotAllowed", Code: 40321, Message: "当前 key 不允许使用该模型"}
 
 	AdminRequired    = Definition{Name: "AdminRequired", Code: 40301, Message: "需要管理员权限"}
 	AuthRequired     = Definition{Name: "AuthRequired", Code: 40302, Message: "未登录"}
@@ -52,8 +50,6 @@ var definitions = []Definition{
 	APIKeyDisabled,
 	APIModelDisabled,
 	APIModelNotAllowed,
-	APIUpstreamNotConfigured,
-	APIUpstreamFailed,
 	AdminRequired,
 	AuthRequired,
 	AdminDisabled,

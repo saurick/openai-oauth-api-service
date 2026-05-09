@@ -44,23 +44,15 @@ message Data {
     }
     Admin admin = 3;
   }
-  message OpenAI {
-    string apiKey = 1;
-    string baseUrl = 2;
-    string upstreamProxyUrl = 3;
-    int32 requestTimeoutSeconds = 4;
-  }
   message Api {
     bool rateLimitEnabled = 1;
     int32 exportMaxDays = 2;
-    int32 modelSyncTimeoutSeconds = 3;
     int32 alertRetentionDays = 4;
   }
 
   Postgres postgres = 1;
   Etcd etcd = 2;
   Auth auth = 3;
-  OpenAI openai = 4;
   Api api = 5;
 }
 

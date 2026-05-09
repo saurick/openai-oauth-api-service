@@ -38,16 +38,9 @@ data:
       username: "admin"
       password: "adminadmin"
 
-  openai:
-    apiKey: ""
-    baseUrl: "https://api.openai.com/v1"
-    upstreamProxyUrl: ""
-    requestTimeoutSeconds: 600
-
   api:
     rateLimitEnabled: true
     exportMaxDays: 90
-    modelSyncTimeoutSeconds: 30
     alertRetentionDays: 30
 
 # notify:

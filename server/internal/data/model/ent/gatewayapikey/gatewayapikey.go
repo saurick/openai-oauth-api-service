@@ -31,6 +31,10 @@ const (
 	FieldQuotaRequests = "quota_requests"
 	// FieldQuotaTotalTokens holds the string denoting the quota_total_tokens field in the database.
 	FieldQuotaTotalTokens = "quota_total_tokens"
+	// FieldQuotaDailyTokens holds the string denoting the quota_daily_tokens field in the database.
+	FieldQuotaDailyTokens = "quota_daily_tokens"
+	// FieldQuotaWeeklyTokens holds the string denoting the quota_weekly_tokens field in the database.
+	FieldQuotaWeeklyTokens = "quota_weekly_tokens"
 	// FieldAllowedModels holds the string denoting the allowed_models field in the database.
 	FieldAllowedModels = "allowed_models"
 	// FieldLastUsedAt holds the string denoting the last_used_at field in the database.
@@ -55,6 +59,8 @@ var Columns = []string{
 	FieldDisabled,
 	FieldQuotaRequests,
 	FieldQuotaTotalTokens,
+	FieldQuotaDailyTokens,
+	FieldQuotaWeeklyTokens,
 	FieldAllowedModels,
 	FieldLastUsedAt,
 	FieldCreatedAt,
@@ -90,6 +96,10 @@ var (
 	DefaultQuotaRequests int64
 	// DefaultQuotaTotalTokens holds the default value on creation for the "quota_total_tokens" field.
 	DefaultQuotaTotalTokens int64
+	// DefaultQuotaDailyTokens holds the default value on creation for the "quota_daily_tokens" field.
+	DefaultQuotaDailyTokens int64
+	// DefaultQuotaWeeklyTokens holds the default value on creation for the "quota_weekly_tokens" field.
+	DefaultQuotaWeeklyTokens int64
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -149,6 +159,16 @@ func ByQuotaRequests(opts ...sql.OrderTermOption) OrderOption {
 // ByQuotaTotalTokens orders the results by the quota_total_tokens field.
 func ByQuotaTotalTokens(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldQuotaTotalTokens, opts...).ToFunc()
+}
+
+// ByQuotaDailyTokens orders the results by the quota_daily_tokens field.
+func ByQuotaDailyTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaDailyTokens, opts...).ToFunc()
+}
+
+// ByQuotaWeeklyTokens orders the results by the quota_weekly_tokens field.
+func ByQuotaWeeklyTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaWeeklyTokens, opts...).ToFunc()
 }
 
 // ByLastUsedAt orders the results by the last_used_at field.

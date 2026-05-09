@@ -10,16 +10,18 @@ import (
 func TestMapGatewayAPIKeyForRPCIsStructCompatible(t *testing.T) {
 	now := time.Unix(100, 0)
 	item := &biz.GatewayAPIKey{
-		ID:               1,
-		Name:             "smoke",
-		PlainKey:         "ogw_plain",
-		KeyPrefix:        "ogw_test",
-		KeyLast4:         "abcd",
-		AllowedModels:    []string{"gpt-5.4", "gpt-5.5"},
-		QuotaRequests:    100,
-		QuotaTotalTokens: 200,
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		ID:                1,
+		Name:              "smoke",
+		PlainKey:          "ogw_plain",
+		KeyPrefix:         "ogw_test",
+		KeyLast4:          "abcd",
+		AllowedModels:     []string{"gpt-5.5", "gpt-5.3-codex"},
+		QuotaRequests:     100,
+		QuotaTotalTokens:  200,
+		QuotaDailyTokens:  300,
+		QuotaWeeklyTokens: 900,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 
 	data := mapGatewayAPIKeyForRPC(item, true)
@@ -32,11 +34,15 @@ func TestMapGatewayAPIKeyForRPCIsStructCompatible(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected allowed_models to decode as []any, got %T", s.AsMap()["allowed_models"])
 	}
-	if len(models) != 2 || models[0] != "gpt-5.4" || models[1] != "gpt-5.5" {
+	if len(models) != 2 || models[0] != "gpt-5.5" || models[1] != "gpt-5.3-codex" {
 		t.Fatalf("unexpected allowed_models: %#v", models)
 	}
 	if s.AsMap()["plain_key"] != "ogw_plain" {
 		t.Fatalf("plain_key = %#v, want ogw_plain", s.AsMap()["plain_key"])
+	}
+	if s.AsMap()["quota_daily_tokens"] != float64(300) ||
+		s.AsMap()["quota_weekly_tokens"] != float64(900) {
+		t.Fatalf("unexpected quota token windows: %#v", s.AsMap())
 	}
 }
 

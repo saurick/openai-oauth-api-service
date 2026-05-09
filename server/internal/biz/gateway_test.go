@@ -33,6 +33,25 @@ func TestNewGatewayAPIKeySecretStoresOnlyDerivedParts(t *testing.T) {
 	}
 }
 
+func TestOfficialModelPriceMapContainsStandardTokenRates(t *testing.T) {
+	prices := OfficialModelPriceMap()
+	price := prices["gpt-5.5"]
+	if price == nil {
+		t.Fatalf("expected gpt-5.5 official price")
+	}
+	if price.InputUSDPerMillion != 5 || price.CachedInputUSDPerMillion != 0.5 || price.OutputUSDPerMillion != 30 {
+		t.Fatalf("unexpected gpt-5.5 price: %+v", price)
+	}
+
+	price.InputUSDPerMillion = 999
+	if OfficialModelPriceMap()["gpt-5.5"].InputUSDPerMillion != 5 {
+		t.Fatalf("official price map should return independent copies")
+	}
+	if !IsOfficialCodexModelID("gpt-5.3-codex-spark") {
+		t.Fatalf("expected spark research preview to be allowed")
+	}
+}
+
 func TestGatewayUsecaseCreateAPIKeyAllowsBlankRemark(t *testing.T) {
 	repo := &gatewayPolicyTestRepo{}
 	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
@@ -67,7 +86,7 @@ func TestGatewayUsecaseCheckPolicyRateAndQuota(t *testing.T) {
 	}
 	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
 
-	err := uc.CheckPolicy(context.Background(), &GatewayAPIKey{ID: 9}, "gpt-5.4", now)
+	err := uc.CheckPolicy(context.Background(), &GatewayAPIKey{ID: 9}, DefaultCodexModelID, now)
 	if err != ErrGatewayRateLimited {
 		t.Fatalf("CheckPolicy err = %v, want ErrGatewayRateLimited", err)
 	}
@@ -75,7 +94,7 @@ func TestGatewayUsecaseCheckPolicyRateAndQuota(t *testing.T) {
 	repo.summaryByStart[now.Add(-time.Minute)] = &GatewayUsageSummary{TotalRequests: 1}
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	repo.summaryByStart[dayStart] = &GatewayUsageSummary{TotalRequests: 10}
-	err = uc.CheckPolicy(context.Background(), &GatewayAPIKey{ID: 9}, "gpt-5.4", now)
+	err = uc.CheckPolicy(context.Background(), &GatewayAPIKey{ID: 9}, DefaultCodexModelID, now)
 	if err != ErrGatewayQuotaExceeded {
 		t.Fatalf("CheckPolicy err = %v, want ErrGatewayQuotaExceeded", err)
 	}
@@ -83,21 +102,39 @@ func TestGatewayUsecaseCheckPolicyRateAndQuota(t *testing.T) {
 
 func TestGatewayUsecaseCheckAPIKeyTokenQuota(t *testing.T) {
 	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	weekStart := weekStart(dayStart)
 	repo := &gatewayPolicyTestRepo{
 		summaryByStart: map[time.Time]*GatewayUsageSummary{
-			time.Time{}: {TotalTokens: 100},
+			dayStart:  {TotalTokens: 100},
+			weekStart: {TotalTokens: 500},
 		},
 	}
 	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
 
-	err := uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9, QuotaTotalTokens: 100}, now)
+	err := uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9, QuotaDailyTokens: 100}, now)
 	if err != ErrGatewayQuotaExceeded {
 		t.Fatalf("CheckAPIKeyTokenQuota err = %v, want ErrGatewayQuotaExceeded", err)
 	}
 
-	err = uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9, QuotaTotalTokens: 101}, now)
+	err = uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9, QuotaDailyTokens: 101}, now)
 	if err != nil {
 		t.Fatalf("CheckAPIKeyTokenQuota err = %v, want nil", err)
+	}
+
+	err = uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9, QuotaWeeklyTokens: 500}, now)
+	if err != ErrGatewayQuotaExceeded {
+		t.Fatalf("CheckAPIKeyTokenQuota weekly err = %v, want ErrGatewayQuotaExceeded", err)
+	}
+
+	err = uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9, QuotaWeeklyTokens: 501}, now)
+	if err != nil {
+		t.Fatalf("CheckAPIKeyTokenQuota weekly err = %v, want nil", err)
+	}
+
+	err = uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9, QuotaTotalTokens: 500}, now)
+	if err != ErrGatewayQuotaExceeded {
+		t.Fatalf("CheckAPIKeyTokenQuota legacy total err = %v, want ErrGatewayQuotaExceeded", err)
 	}
 
 	err = uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9}, now)
@@ -133,6 +170,20 @@ func TestGatewayUsecaseDeleteAPIKeysRejectsEmptyIDs(t *testing.T) {
 
 	if _, err := uc.DeleteAPIKeys(context.Background(), []int{0, -1}); err != ErrBadParam {
 		t.Fatalf("DeleteAPIKeys() err = %v, want ErrBadParam", err)
+	}
+}
+
+func TestGatewayUsecaseRejectsNonCodexModels(t *testing.T) {
+	uc := NewGatewayUsecase(&gatewayPolicyTestRepo{}, log.NewStdLogger(testWriter{}), nil)
+
+	if err := uc.ValidateModelAccess(context.Background(), &GatewayAPIKey{}, "gpt-5.5-pro"); err != ErrGatewayModelDisabled {
+		t.Fatalf("ValidateModelAccess() err = %v, want ErrGatewayModelDisabled", err)
+	}
+	if _, err := uc.UpsertModel(context.Background(), GatewayModel{ModelID: "gpt-5.5-pro"}); err != ErrBadParam {
+		t.Fatalf("UpsertModel() err = %v, want ErrBadParam", err)
+	}
+	if err := uc.ValidateModelAccess(context.Background(), &GatewayAPIKey{}, DefaultCodexModelID); err != nil {
+		t.Fatalf("ValidateModelAccess() codex err = %v, want nil", err)
 	}
 }
 

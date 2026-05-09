@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '@/common/components/layout/AppShell'
+import AdminThemeToggle from '@/common/components/layout/AdminThemeToggle'
 import { AUTH_SCOPE, persistAuth } from '@/common/auth/auth'
 import { ADMIN_BASE_PATH } from '@/common/utils/adminRpc'
 import { getActionErrorMessage } from '@/common/utils/errorMessage'
@@ -87,6 +88,9 @@ export default function AdminLoginPage() {
 
   return (
     <AppShell variant="adminLogin">
+      <div className="absolute right-4 top-4 z-10 sm:right-6 sm:top-6">
+        <AdminThemeToggle />
+      </div>
       <div className="flex min-h-screen items-center justify-center px-4 py-8 sm:px-6">
         <div className="w-full max-w-[660px] rounded-lg border border-[#d3e1dc] bg-white px-6 py-7 shadow-[0_6px_24px_rgba(34,70,54,0.12)] sm:px-8 md:px-10">
           <div className="mb-7">

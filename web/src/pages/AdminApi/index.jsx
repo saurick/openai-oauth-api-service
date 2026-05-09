@@ -1,52 +1,144 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
 import AdminFrame from '@/common/components/layout/AdminFrame'
 import SurfacePanel from '@/common/components/layout/SurfacePanel'
 import { AUTH_SCOPE } from '@/common/auth/auth'
 import { ADMIN_BASE_PATH } from '@/common/utils/adminRpc'
 import { getActionErrorMessage } from '@/common/utils/errorMessage'
 import { JsonRpc } from '@/common/utils/jsonRpc'
+import {
+  getExclusiveTableSelectionAfterClick,
+  isInteractiveTableTarget,
+  TABLE_ROW_INTERACTION_TITLE,
+  toggleExclusiveTableSelection,
+} from '@/common/utils/tableInteraction'
 
 const PAGE_SIZE = 30
 const DASHBOARD_USAGE_SIZE = 8
 const DAY_SECONDS = 24 * 60 * 60
+const DEFAULT_TABLE_PAGE_SIZE = 8
+const TABLE_PAGE_SIZE_OPTIONS = [8, 10, 20, 50, 100]
+const MAX_TABLE_FETCH_SIZE = 200
+const KEY_TOKEN_WINDOWS = [
+  { key: '24h', label: '24h', seconds: DAY_SECONDS },
+  { key: '7d', label: '7 天', seconds: 7 * DAY_SECONDS },
+  { key: '30d', label: '30 天', seconds: 30 * DAY_SECONDS },
+  { key: '180d', label: '180 天', seconds: 180 * DAY_SECONDS },
+  { key: '360d', label: '360 天', seconds: 360 * DAY_SECONDS },
+  { key: '1y', label: '1 年', seconds: 365 * DAY_SECONDS },
+  { key: '3y', label: '3 年', seconds: 3 * 365 * DAY_SECONDS },
+  { key: '5y', label: '5 年', seconds: 5 * 365 * DAY_SECONDS },
+]
 const tableWrapClass = 'overflow-hidden rounded-lg border border-[#dde8df]'
-const tableClass = 'text-left text-sm text-[#1f2d25]'
+const tableClass = 'admin-data-table text-left text-sm text-[#1f2d25]'
 const thClass =
   'whitespace-nowrap bg-[#f5fbf7] px-4 py-3 font-semibold text-[#66736b]'
 const tdClass = 'px-4 py-4 text-[#1f2d25]'
+const selectionThClass =
+  'w-12 whitespace-nowrap bg-[#f5fbf7] px-3 py-3 text-center'
+const selectionTdClass = 'w-12 px-3 py-4 text-center'
 const inputClass =
   'rounded-md border border-[#d6ded8] bg-white px-3 py-2.5 text-sm text-[#1f2d25] outline-none transition placeholder:text-[#9aa39e] focus:border-[#238a43] focus:ring-2 focus:ring-[#238a43]/15'
 const fieldClass = 'grid gap-1.5 text-sm font-medium text-[#365141]'
 const fieldHintClass = 'text-xs font-normal leading-5 text-[#7b8780]'
 const primaryButtonClass =
-  'rounded-md bg-[#238a43] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1d7538] disabled:cursor-not-allowed disabled:bg-[#cbd8d0] disabled:text-[#7b8780]'
+  'admin-button admin-button-primary'
 const secondaryButtonClass =
-  'rounded-md border border-[#cfd9d2] bg-white px-4 py-2.5 text-sm font-semibold text-[#365141] transition hover:border-[#238a43] hover:text-[#238a43] disabled:cursor-not-allowed disabled:opacity-60'
-const dangerButtonClass =
-  'rounded-md bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-200 disabled:text-rose-700'
-const tableActionButtonClass =
-  'rounded-md bg-[#f5fbf7] px-3 py-2 text-xs font-semibold text-[#238a43] transition hover:bg-[#e7efe9] disabled:cursor-not-allowed disabled:opacity-60'
+  'admin-button admin-button-default'
+const dangerButtonClass = 'admin-button admin-button-danger'
+const tableActionButtonClass = 'admin-button admin-button-compact'
+const tableDangerButtonClass = 'admin-button admin-button-compact-danger'
+const tablePrimaryButtonClass = 'admin-button admin-button-compact-primary'
+const toolbarClass = 'admin-module-toolbar'
+const filterGroupClass = 'admin-module-filter-group'
+const primaryActionsClass = 'admin-module-primary-actions'
+const selectionRowClass =
+  'admin-module-toolbar-row admin-module-toolbar-row-compact'
+const selectionBlockClass = 'admin-module-selection-block'
+const selectionActionsClass = 'admin-module-selection-actions'
+const selectionTagClass = 'admin-selection-tag'
 
 const MODEL_LIMIT_OPTIONS = [{ label: '允许全部模型', value: '' }]
-
-const MODEL_ID_OPTIONS = ['gpt-5.4', 'gpt-5.5']
+const KEY_STATUS_FILTER_OPTIONS = [
+  { label: '全部状态', value: '' },
+  { label: '启用', value: 'enabled' },
+  { label: '禁用', value: 'disabled' },
+]
+const USAGE_SUCCESS_FILTER_OPTIONS = [
+  { label: '全部状态', value: '' },
+  { label: '成功', value: 'true' },
+  { label: '失败', value: 'false' },
+]
+const DEFAULT_USAGE_TIME_RANGE = '24h'
+const USAGE_TIME_RANGE_OPTIONS = [
+  { label: '24h', value: '24h', seconds: DAY_SECONDS },
+  { label: '7 天', value: '7d', seconds: 7 * DAY_SECONDS },
+  { label: '30 天', value: '30d', seconds: 30 * DAY_SECONDS },
+  { label: '90 天', value: '90d', seconds: 90 * DAY_SECONDS },
+  { label: '180 天', value: '180d', seconds: 180 * DAY_SECONDS },
+  { label: '1 年', value: '1y', seconds: 365 * DAY_SECONDS },
+  { label: '2 年', value: '2y', seconds: 2 * 365 * DAY_SECONDS },
+  { label: '3 年', value: '3y', seconds: 3 * 365 * DAY_SECONDS },
+  { label: '5 年', value: '5y', seconds: 5 * 365 * DAY_SECONDS },
+]
+const USAGE_TAB_OPTIONS = [
+  { key: 'daily', label: '每日汇总' },
+  { key: 'keys', label: '凭据统计' },
+  { key: 'details', label: '调用明细' },
+  { key: 'errors', label: '异常请求' },
+]
+const TOKEN_LIMIT_UNIT = 1_000_000
+const CODEX_MODEL_CATALOG = [
+  {
+    cached_input_usd_per_million: 0.5,
+    input_usd_per_million: 5,
+    model_id: 'gpt-5.5',
+    output_usd_per_million: 30,
+  },
+  {
+    cached_input_usd_per_million: 0.25,
+    input_usd_per_million: 2.5,
+    model_id: 'gpt-5.4',
+    output_usd_per_million: 15,
+  },
+  {
+    cached_input_usd_per_million: 0.075,
+    input_usd_per_million: 0.75,
+    model_id: 'gpt-5.4-mini',
+    output_usd_per_million: 4.5,
+  },
+  {
+    cached_input_usd_per_million: 0.175,
+    input_usd_per_million: 1.75,
+    model_id: 'gpt-5.3-codex',
+    output_usd_per_million: 14,
+  },
+  {
+    model_id: 'gpt-5.3-codex-spark',
+    price_note: 'research preview，价格未定',
+  },
+  {
+    cached_input_usd_per_million: 0.175,
+    input_usd_per_million: 1.75,
+    model_id: 'gpt-5.2',
+    output_usd_per_million: 14,
+  },
+]
+const CODEX_MODEL_IDS = new Set(
+  CODEX_MODEL_CATALOG.map((item) => item.model_id)
+)
 
 const INITIAL_KEY_FORM = {
   remark: '',
   allowedModels: '',
-  tokenLimit: '',
-}
-
-const INITIAL_MODEL_FORM = {
-  modelId: 'gpt-5.4',
-  ownedBy: 'openai',
-  enabled: true,
+  dailyTokenLimit: '',
+  weeklyTokenLimit: '',
 }
 
 const INITIAL_USAGE_FILTERS = {
   keyId: '',
   model: '',
   success: '',
+  timeRange: DEFAULT_USAGE_TIME_RANGE,
 }
 
 const VIEW_CONFIG = {
@@ -56,17 +148,26 @@ const VIEW_CONFIG = {
       '汇总 API 转发、Token 用量、费用估算和最近异常线索，不承载配置操作。',
   },
   keys: {
+    section: '转发配置',
     title: 'API 凭据',
     description: '生成、搜索、启停和删除给客户端调用本服务使用的 ogw_ 凭据。',
   },
   models: {
+    section: '转发配置',
     title: '模型管理',
     description: '维护 `/v1/models` 返回项，并控制请求是否允许使用对应模型。',
   },
-  usage: {
-    title: '调用明细',
+  analytics: {
+    section: '用量统计',
+    title: '用量统计',
     description:
-      '查看 24 小时内最近请求，按凭据、模型和状态排查 Token、耗时与错误类型。',
+      '先按凭据维度汇总 Token 窗口，后续可继续扩展模型、趋势、错误率和延迟分析。',
+  },
+  usage: {
+    section: '用量统计',
+    title: '用量日志',
+    description:
+      '统一查看每日汇总、凭据统计、调用明细和异常请求，排查 Token、费用、耗时与错误类型。',
   },
 }
 
@@ -79,11 +180,120 @@ function fmtNumber(v) {
   return new Intl.NumberFormat().format(asInt(v, 0))
 }
 
+function fmtDecimalNumber(v) {
+  const n = Number(v)
+  return new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(n) ? n : 0)
+}
+
+function tokenLimitInputToTokens(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return Math.round(n * TOKEN_LIMIT_UNIT)
+}
+
+function tokenLimitTokensToInput(value) {
+  const tokens = asInt(value, 0)
+  if (tokens <= 0) return ''
+  return String(tokens / TOKEN_LIMIT_UNIT)
+}
+
+function fmtTokenLimit(value) {
+  const tokens = asInt(value, 0)
+  if (tokens <= 0) return '不限'
+  return `${fmtDecimalNumber(tokens / TOKEN_LIMIT_UNIT)} 百万`
+}
+
+function renderTokenLimitWindow(label, value) {
+  return (
+    <div className="whitespace-nowrap">
+      <span className="text-[#7b8780]">{label}：</span>
+      <span>{fmtTokenLimit(value)}</span>
+    </div>
+  )
+}
+
 function fmtTs(ts) {
   if (!ts) return '-'
   const d = new Date(Number(ts) * 1000)
   if (Number.isNaN(d.getTime())) return String(ts)
   return d.toLocaleString()
+}
+
+function fmtDate(ts) {
+  if (!ts) return '-'
+  const d = new Date(Number(ts) * 1000)
+  if (Number.isNaN(d.getTime())) return String(ts)
+  return d.toLocaleDateString()
+}
+
+function fmtCost(v) {
+  if (v == null || v === '') return '未配置价格'
+  const n = Number(v)
+  if (!Number.isFinite(n)) return '未配置价格'
+  return `$${n.toFixed(4)}`
+}
+
+function fmtRate(part, total) {
+  const safeTotal = asInt(total, 0)
+  if (safeTotal <= 0) return '0%'
+  const value = (asInt(part, 0) / safeTotal) * 100
+  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)}%`
+}
+
+function createInitialPagination() {
+  return {
+    current: 1,
+    pageSize: DEFAULT_TABLE_PAGE_SIZE,
+  }
+}
+
+function getTotalPages(total, pageSize) {
+  return Math.max(1, Math.ceil(asInt(total, 0) / Math.max(1, pageSize)))
+}
+
+function clampPagination(pagination, total) {
+  const pageSize = Math.max(1, asInt(pagination?.pageSize, DEFAULT_TABLE_PAGE_SIZE))
+  const totalPages = getTotalPages(total, pageSize)
+  const current = Math.min(
+    Math.max(1, asInt(pagination?.current, 1)),
+    totalPages
+  )
+  return { current, pageSize }
+}
+
+function paginateItems(items, pagination) {
+  const list = Array.isArray(items) ? items : []
+  const { current, pageSize } = clampPagination(pagination, list.length)
+  const start = (current - 1) * pageSize
+  return list.slice(start, start + pageSize)
+}
+
+function getPaginationOffset(pagination) {
+  const pageSize = Math.max(
+    1,
+    asInt(pagination?.pageSize, DEFAULT_TABLE_PAGE_SIZE)
+  )
+  const current = Math.max(1, asInt(pagination?.current, 1))
+  return (current - 1) * pageSize
+}
+
+function getUsageTimeRange(value) {
+  return (
+    USAGE_TIME_RANGE_OPTIONS.find((item) => item.value === value) ||
+    USAGE_TIME_RANGE_OPTIONS[0]
+  )
+}
+
+function usageFiltersForTab(filters, tab) {
+  if (tab === 'errors') {
+    return {
+      ...filters,
+      success: 'false',
+    }
+  }
+  return filters
 }
 
 function splitModels(value) {
@@ -93,14 +303,281 @@ function splitModels(value) {
     .filter(Boolean)
 }
 
-function getModelOptions(models, currentValue = '') {
+function isCodexModelId(modelId) {
+  return CODEX_MODEL_IDS.has(String(modelId || '').trim())
+}
+
+function normalizeCodexModelPrices(items) {
+  const pricesByModelID = new Map(
+    CODEX_MODEL_CATALOG.map((item) => [item.model_id, item])
+  )
+  for (const item of Array.isArray(items) ? items : []) {
+    if (item?.model_id && isCodexModelId(item.model_id)) {
+      pricesByModelID.set(item.model_id, item)
+    }
+  }
+  return Array.from(pricesByModelID.values())
+}
+
+function normalizeCodexModels(items) {
+  const modelsByID = new Map()
+  for (const item of CODEX_MODEL_CATALOG) {
+    modelsByID.set(item.model_id, {
+      enabled: true,
+      model_id: item.model_id,
+      owned_by: 'openai',
+      source: 'seed',
+    })
+  }
+  for (const item of Array.isArray(items) ? items : []) {
+    if (item?.model_id && isCodexModelId(item.model_id)) {
+      modelsByID.set(item.model_id, item)
+    }
+  }
+  return Array.from(modelsByID.values())
+}
+
+function getModelOptions(models, currentValue = '', officialPrices = []) {
   const values = []
+  const officialModelIDs = new Set(
+    (Array.isArray(officialPrices) ? officialPrices : [])
+      .map((item) => item?.model_id)
+      .filter(Boolean)
+  )
   for (const item of Array.isArray(models) ? models : []) {
+    if (
+      item?.model_id &&
+      (officialModelIDs.size === 0 || officialModelIDs.has(item.model_id))
+    ) {
+      values.push(item.model_id)
+    }
+  }
+  for (const item of Array.isArray(officialPrices) ? officialPrices : []) {
     if (item?.model_id) values.push(item.model_id)
   }
-  values.push(...MODEL_ID_OPTIONS)
-  if (currentValue) values.push(currentValue)
+  if (
+    currentValue &&
+    (officialModelIDs.size === 0 || officialModelIDs.has(currentValue))
+  ) {
+    values.push(currentValue)
+  }
   return Array.from(new Set(values.filter(Boolean)))
+}
+
+function mapPricesByModelID(items) {
+  return new Map(
+    (Array.isArray(items) ? items : [])
+      .filter((item) => item?.model_id)
+      .map((item) => [item.model_id, item])
+  )
+}
+
+function fmtPricePerMillion(value) {
+  if (value == null || value === '') return '未配置'
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '未配置'
+  if (n === 0) return '$0'
+  return `$${new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 4,
+  }).format(n)}`
+}
+
+function fmtPriceTriplet(price) {
+  if (!price) return '未配置官方标准价'
+  if (price.price_note) return price.price_note
+  return `输入 ${fmtPricePerMillion(price.input_usd_per_million)} / 缓存 ${fmtPricePerMillion(price.cached_input_usd_per_million)} / 输出 ${fmtPricePerMillion(price.output_usd_per_million)}`
+}
+
+function normalizeSelectOptions(options) {
+  return (Array.isArray(options) ? options : [])
+    .map((option) => {
+      if (typeof option === 'string' || typeof option === 'number') {
+        return {
+          label: String(option),
+          value: String(option),
+        }
+      }
+      return {
+        label: String(option?.label ?? option?.value ?? ''),
+        value: String(option?.value ?? ''),
+      }
+    })
+    .filter((option) => option.label)
+}
+
+function SearchableSelect({
+  ariaLabel,
+  className = inputClass,
+  disabled = false,
+  menuPlacement = 'bottom',
+  onChange,
+  options,
+  placeholder = '输入筛选',
+  value,
+}) {
+  const listboxId = useId()
+  const rootRef = useRef(null)
+  const inputRef = useRef(null)
+  const normalizedOptions = useMemo(
+    () => normalizeSelectOptions(options),
+    [options]
+  )
+  const selectedOption = useMemo(
+    () =>
+      normalizedOptions.find((option) => String(option.value) === String(value)) ||
+      null,
+    [normalizedOptions, value]
+  )
+  const selectedLabel = selectedOption?.label || ''
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState(selectedLabel)
+
+  useEffect(() => {
+    if (!open) {
+      setQuery(selectedLabel)
+    }
+  }, [open, selectedLabel])
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const handlePointerDown = (event) => {
+      if (rootRef.current?.contains(event.target)) return
+      setOpen(false)
+      setQuery(selectedLabel)
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => window.removeEventListener('pointerdown', handlePointerDown)
+  }, [open, selectedLabel])
+
+  const activeQuery = query === selectedLabel ? '' : query.trim().toLowerCase()
+  const filteredOptions = activeQuery
+    ? normalizedOptions.filter((option) => {
+        const label = option.label.toLowerCase()
+        const optionValue = String(option.value).toLowerCase()
+        return label.includes(activeQuery) || optionValue.includes(activeQuery)
+      })
+    : normalizedOptions
+
+  const selectOption = (option) => {
+    onChange?.(option.value)
+    setQuery(option.label)
+    setOpen(false)
+  }
+
+  const resetToSelected = () => {
+    setOpen(false)
+    setQuery(selectedLabel)
+  }
+
+  return (
+    <div
+      ref={rootRef}
+      className="admin-searchable-select"
+      data-menu-placement={menuPlacement}
+      data-open={open ? 'true' : 'false'}
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-controls={listboxId}
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        autoComplete="off"
+        disabled={disabled}
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => {
+          setOpen(true)
+          window.requestAnimationFrame(() => inputRef.current?.select())
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            resetToSelected()
+            return
+          }
+          if (e.key === 'Enter' && open) {
+            e.preventDefault()
+            if (filteredOptions.length > 0) {
+              selectOption(filteredOptions[0])
+            }
+          }
+        }}
+        onBlur={(e) => {
+          if (!rootRef.current?.contains(e.relatedTarget)) {
+            resetToSelected()
+          }
+        }}
+        className={`${className} admin-searchable-select-input`}
+        placeholder={placeholder}
+      />
+      <div className="admin-searchable-select-caret" aria-hidden="true" />
+      {open && !disabled ? (
+        <div
+          id={listboxId}
+          role="listbox"
+          className="admin-searchable-select-menu"
+        >
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((option) => {
+              const selected = String(option.value) === String(value)
+              return (
+                <button
+                  key={`${option.value}-${option.label}`}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className={`admin-searchable-select-option ${
+                    selected ? 'admin-searchable-select-option-active' : ''
+                  }`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => selectOption(option)}
+                >
+                  {option.label}
+                </button>
+              )
+            })
+          ) : (
+            <div className="admin-searchable-select-empty">无匹配选项</div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function mapStatsByKeyID(items) {
+  return new Map(
+    (Array.isArray(items) ? items : []).map((item) => [
+      asInt(item.api_key_id, 0),
+      item,
+    ])
+  )
+}
+
+function mergeKeyTokenStats(keys, statsByWindow) {
+  return (Array.isArray(keys) ? keys : []).map((key) => {
+    const keyID = asInt(key.id, 0)
+    const tokens = {}
+    for (const windowItem of KEY_TOKEN_WINDOWS) {
+      const stat = statsByWindow?.[windowItem.key]?.get(keyID)
+      tokens[windowItem.key] = asInt(stat?.total_tokens, 0)
+    }
+    return {
+      disabled: Boolean(key.disabled),
+      id: keyID,
+      name: key.name || '无备注',
+      prefix: key.key_prefix || '-',
+      tokens,
+    }
+  })
 }
 
 function SummaryCard({ label, value, sub }) {
@@ -155,10 +632,86 @@ function CopyButton({ value, label = '复制' }) {
       type="button"
       onClick={copy}
       disabled={!value}
-      className="shrink-0 rounded-md border border-[#cfd9d2] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#365141] transition hover:border-[#238a43] hover:text-[#238a43] disabled:cursor-not-allowed disabled:opacity-60"
+      className={tableActionButtonClass}
     >
       {copied ? '已复制' : label}
     </button>
+  )
+}
+
+function TablePagination({ total, pagination, onChange, disabled = false }) {
+  const currentState = clampPagination(pagination, total)
+  const totalPages = getTotalPages(total, currentState.pageSize)
+  const start =
+    total > 0 ? (currentState.current - 1) * currentState.pageSize + 1 : 0
+  const end = Math.min(total, currentState.current * currentState.pageSize)
+
+  const setCurrent = (current) => {
+    onChange?.({
+      current: Math.min(Math.max(1, current), totalPages),
+      pageSize: currentState.pageSize,
+    })
+  }
+
+  const setPageSize = (pageSize) => {
+    onChange?.({
+      current: 1,
+      pageSize,
+    })
+  }
+
+  return (
+    <div className="admin-table-pagination" aria-label="表格分页">
+      <div className="admin-table-pagination-summary">
+        共 {fmtNumber(total)} 条
+        <span>
+          {start}-{end}
+        </span>
+        <span>
+          第 {currentState.current} / {totalPages} 页
+        </span>
+      </div>
+      <div className="admin-table-pagination-controls">
+        <label className="admin-table-page-size">
+          每页
+          <SearchableSelect
+            value={currentState.pageSize}
+            onChange={(nextValue) =>
+              setPageSize(asInt(nextValue, DEFAULT_TABLE_PAGE_SIZE))
+            }
+            disabled={disabled}
+            ariaLabel="每页条数"
+            className="admin-table-page-size-input"
+            menuPlacement="top"
+            options={TABLE_PAGE_SIZE_OPTIONS}
+          />
+          条
+        </label>
+        <button
+          type="button"
+          onClick={() => setCurrent(currentState.current - 1)}
+          disabled={disabled || currentState.current <= 1}
+          className="admin-page-button"
+        >
+          上一页
+        </button>
+        <button
+          type="button"
+          className="admin-page-button admin-page-button-current"
+          disabled
+        >
+          {currentState.current}
+        </button>
+        <button
+          type="button"
+          onClick={() => setCurrent(currentState.current + 1)}
+          disabled={disabled || currentState.current >= totalPages}
+          className="admin-page-button"
+        >
+          下一页
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -180,27 +733,94 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const [summary, setSummary] = useState({})
   const [keys, setKeys] = useState([])
   const [keyTotal, setKeyTotal] = useState(0)
+  const [keyTokenStatsByWindow, setKeyTokenStatsByWindow] = useState({})
   const [models, setModels] = useState([])
   const [modelTotal, setModelTotal] = useState(0)
+  const [officialModelPrices, setOfficialModelPrices] = useState([])
   const [usageItems, setUsageItems] = useState([])
   const [usageTotal, setUsageTotal] = useState(0)
+  const [usageBuckets, setUsageBuckets] = useState([])
+  const [usageTab, setUsageTab] = useState('daily')
+  const [selectedUsageItem, setSelectedUsageItem] = useState(null)
   const [newKey, setNewKey] = useState(null)
   const [editingKeyId, setEditingKeyId] = useState(null)
+  const [keyModalOpen, setKeyModalOpen] = useState(false)
   const [keyForm, setKeyForm] = useState(INITIAL_KEY_FORM)
-  const [modelForm, setModelForm] = useState(INITIAL_MODEL_FORM)
   const [keySearchInput, setKeySearchInput] = useState('')
   const [keySearch, setKeySearch] = useState('')
+  const [keyModelFilter, setKeyModelFilter] = useState('')
+  const [keyStatusFilter, setKeyStatusFilter] = useState('')
+  const [keyPagination, setKeyPagination] = useState(createInitialPagination)
+  const [keyStatsPagination, setKeyStatsPagination] = useState(
+    createInitialPagination
+  )
+  const [modelPagination, setModelPagination] = useState(
+    createInitialPagination
+  )
+  const [usagePagination, setUsagePagination] = useState(
+    createInitialPagination
+  )
   const [selectedKeyIds, setSelectedKeyIds] = useState([])
   const [usageFilters, setUsageFilters] = useState(INITIAL_USAGE_FILTERS)
+  const [appliedUsageFilters, setAppliedUsageFilters] = useState(
+    INITIAL_USAGE_FILTERS
+  )
   const selectedKeyIdSet = useMemo(
     () => new Set(selectedKeyIds),
     [selectedKeyIds]
   )
-  const selectedAllVisibleKeys =
-    keys.length > 0 && keys.every((item) => selectedKeyIdSet.has(item.id))
   const modelOptions = useMemo(
-    () => getModelOptions(models, keyForm.allowedModels),
-    [keyForm.allowedModels, models]
+    () => getModelOptions(models, keyForm.allowedModels, officialModelPrices),
+    [keyForm.allowedModels, models, officialModelPrices]
+  )
+  const officialModelPriceByID = useMemo(
+    () => mapPricesByModelID(officialModelPrices),
+    [officialModelPrices]
+  )
+  const selectedKey = useMemo(() => {
+    if (selectedKeyIds.length !== 1) return null
+    return (
+      keys.find((item) => String(item.id) === String(selectedKeyIds[0])) || null
+    )
+  }, [keys, selectedKeyIds])
+  const selectedKeyText = selectedKey
+    ? selectedKey.name || selectedKey.key_prefix || `凭据 ${selectedKey.id}`
+    : '请先单击或勾选一条凭据'
+  const filteredKeys = useMemo(
+    () =>
+      keys.filter((item) => {
+        const modelMatched = keyModelFilter
+          ? Array.isArray(item.allowed_models) &&
+            item.allowed_models.includes(keyModelFilter)
+          : true
+        const statusMatched =
+          keyStatusFilter === 'enabled'
+            ? !item.disabled
+            : keyStatusFilter === 'disabled'
+              ? !!item.disabled
+              : true
+        return modelMatched && statusMatched
+      }),
+    [keyModelFilter, keyStatusFilter, keys]
+  )
+  const hasActiveKeyFilters = Boolean(
+    keySearch || keySearchInput || keyModelFilter || keyStatusFilter
+  )
+  const keyTokenStatsRows = useMemo(
+    () => mergeKeyTokenStats(filteredKeys, keyTokenStatsByWindow),
+    [filteredKeys, keyTokenStatsByWindow]
+  )
+  const paginatedKeys = useMemo(
+    () => paginateItems(filteredKeys, keyPagination),
+    [filteredKeys, keyPagination]
+  )
+  const paginatedKeyTokenStatsRows = useMemo(
+    () => paginateItems(keyTokenStatsRows, keyStatsPagination),
+    [keyStatsPagination, keyTokenStatsRows]
+  )
+  const paginatedModels = useMemo(
+    () => paginateItems(models, modelPagination),
+    [modelPagination, models]
   )
 
   const setKeyListState = (res) => {
@@ -212,9 +832,13 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   }
 
   const setModelListState = (res) => {
-    const items = Array.isArray(res?.data?.items) ? res.data.items : []
+    const items = normalizeCodexModels(res?.data?.items)
     setModels(items)
-    setModelTotal(asInt(res?.data?.total, items.length))
+    setModelTotal(items.length)
+  }
+
+  const setOfficialModelPriceState = (res) => {
+    setOfficialModelPrices(normalizeCodexModelPrices(res?.data?.items))
   }
 
   const setUsageListState = (res) => {
@@ -225,11 +849,16 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     }
   }
 
-  const buildUsageParams = (startTime, filters = usageFilters) => {
+  const setUsageBucketsState = (res) => {
+    setUsageBuckets(Array.isArray(res?.data?.items) ? res.data.items : [])
+  }
+
+  const buildUsageWindowParams = (filters, now, seconds) => {
+    const timeRange = getUsageTimeRange(filters.timeRange)
+    const windowSeconds = seconds || timeRange.seconds
     const params = {
-      limit: PAGE_SIZE,
-      offset: 0,
-      start_time: startTime,
+      end_time: now,
+      start_time: now - windowSeconds,
     }
     if (filters.keyId) params.key_id = asInt(filters.keyId, 0)
     if (filters.model) params.model = filters.model
@@ -237,19 +866,39 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     return params
   }
 
-  const loadAll = async ({ usageFilterOverride } = {}) => {
+  const buildUsageParams = (
+    filters = appliedUsageFilters,
+    pagination = usagePagination,
+    now = Math.floor(Date.now() / 1000)
+  ) => ({
+    ...buildUsageWindowParams(filters, now),
+    limit: pagination.pageSize || PAGE_SIZE,
+    offset: getPaginationOffset(pagination),
+  })
+
+  const loadAll = async ({
+    usageFilterOverride,
+    usagePaginationOverride,
+    usageTabOverride,
+  } = {}) => {
     setLoading(true)
     setErrMsg('')
     try {
       const now = Math.floor(Date.now() / 1000)
       const startTime = now - DAY_SECONDS
-      const activeUsageFilters = usageFilterOverride || usageFilters
+      const activeUsageFilters = usageFilterOverride || appliedUsageFilters
+      const activeUsagePagination = usagePaginationOverride || usagePagination
+      const activeUsageTab = usageTabOverride || usageTab
+      const effectiveUsageFilters = usageFiltersForTab(
+        activeUsageFilters,
+        activeUsageTab
+      )
 
       if (currentView === 'dashboard') {
         const [summaryRes, keysRes, modelsRes, usageRes] = await Promise.all([
           apiRpc.call('summary', { start_time: startTime }),
-          apiRpc.call('key_list', { limit: 100, offset: 0 }),
-          apiRpc.call('model_list', { limit: 200, offset: 0 }),
+          apiRpc.call('key_list', { limit: MAX_TABLE_FETCH_SIZE, offset: 0 }),
+          apiRpc.call('model_list', { limit: MAX_TABLE_FETCH_SIZE, offset: 0 }),
           apiRpc.call('usage_list', {
             limit: DASHBOARD_USAGE_SIZE,
             offset: 0,
@@ -264,37 +913,100 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       }
 
       if (currentView === 'keys') {
-        const [keysRes, modelsRes] = await Promise.all([
-          apiRpc.call('key_list', {
-            limit: 100,
-            offset: 0,
-            search: keySearch,
-          }),
-          apiRpc.call('model_list', { limit: 200, offset: 0 }),
-        ])
+        const [keysRes, modelsRes] =
+          await Promise.all([
+            apiRpc.call('key_list', {
+              limit: MAX_TABLE_FETCH_SIZE,
+              offset: 0,
+              search: keySearch,
+            }),
+            apiRpc.call('model_list', { limit: MAX_TABLE_FETCH_SIZE, offset: 0 }),
+          ])
         setKeyListState(keysRes)
         setModelListState(modelsRes)
         return
       }
 
-      if (currentView === 'models') {
-        setModelListState(
-          await apiRpc.call('model_list', { limit: 200, offset: 0 })
+      if (currentView === 'analytics') {
+        const [keysRes, modelsRes, ...keyTokenStatsResults] =
+          await Promise.all([
+            apiRpc.call('key_list', {
+              limit: MAX_TABLE_FETCH_SIZE,
+              offset: 0,
+              search: keySearch,
+            }),
+            apiRpc.call('model_list', { limit: MAX_TABLE_FETCH_SIZE, offset: 0 }),
+            ...KEY_TOKEN_WINDOWS.map((windowItem) =>
+              apiRpc.call('usage_key_summaries', {
+                end_time: now,
+                limit: MAX_TABLE_FETCH_SIZE,
+                offset: 0,
+                start_time: now - windowItem.seconds,
+              })
+            ),
+          ])
+        setKeyListState(keysRes)
+        setModelListState(modelsRes)
+        setKeyTokenStatsByWindow(
+          Object.fromEntries(
+            KEY_TOKEN_WINDOWS.map((windowItem, index) => [
+              windowItem.key,
+              mapStatsByKeyID(keyTokenStatsResults[index]?.data?.items),
+            ])
+          )
         )
         return
       }
 
-      const [keysRes, modelsRes, usageRes] = await Promise.all([
-        apiRpc.call('key_list', { limit: 100, offset: 0 }),
-        apiRpc.call('model_list', { limit: 200, offset: 0 }),
-        apiRpc.call(
-          'usage_list',
-          buildUsageParams(startTime, activeUsageFilters)
-        ),
-      ])
+      if (currentView === 'models') {
+        const [modelsRes, officialPricesRes] = await Promise.all([
+          apiRpc.call('model_list', {
+            limit: MAX_TABLE_FETCH_SIZE,
+            offset: 0,
+          }),
+          apiRpc.call('official_model_price_list', {}),
+        ])
+        setModelListState(modelsRes)
+        setOfficialModelPriceState(officialPricesRes)
+        return
+      }
+
+      const [keysRes, modelsRes, usageRes, bucketsRes, ...keyTokenStatsResults] =
+        await Promise.all([
+          apiRpc.call('key_list', { limit: MAX_TABLE_FETCH_SIZE, offset: 0 }),
+          apiRpc.call('model_list', { limit: MAX_TABLE_FETCH_SIZE, offset: 0 }),
+          apiRpc.call(
+            'usage_list',
+            buildUsageParams(effectiveUsageFilters, activeUsagePagination, now)
+          ),
+          apiRpc.call('usage_buckets', {
+            ...buildUsageWindowParams(effectiveUsageFilters, now),
+            group_by: 'day',
+          }),
+          ...KEY_TOKEN_WINDOWS.map((windowItem) =>
+            apiRpc.call('usage_key_summaries', {
+              ...buildUsageWindowParams(
+                effectiveUsageFilters,
+                now,
+                windowItem.seconds
+              ),
+              limit: MAX_TABLE_FETCH_SIZE,
+              offset: 0,
+            })
+          ),
+        ])
       setKeyListState(keysRes)
       setModelListState(modelsRes)
       setUsageListState(usageRes)
+      setUsageBucketsState(bucketsRes)
+      setKeyTokenStatsByWindow(
+        Object.fromEntries(
+          KEY_TOKEN_WINDOWS.map((windowItem, index) => [
+            windowItem.key,
+            mapStatsByKeyID(keyTokenStatsResults[index]?.data?.items),
+          ])
+        )
+      )
     } catch (e) {
       setErrMsg(getActionErrorMessage(e, '加载 API 数据'))
     } finally {
@@ -304,7 +1016,61 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
   useEffect(() => {
     loadAll()
-  }, [currentView, keySearch])
+  }, [
+    currentView,
+    keySearch,
+    usagePagination.current,
+    usagePagination.pageSize,
+  ])
+
+  useEffect(() => {
+    setKeyPagination((current) => ({ ...current, current: 1 }))
+    setKeyStatsPagination((current) => ({ ...current, current: 1 }))
+  }, [keySearch, keyModelFilter, keyStatusFilter])
+
+  useEffect(() => {
+    setKeyPagination((current) => {
+      const next = clampPagination(current, filteredKeys.length)
+      return next.current === current.current && next.pageSize === current.pageSize
+        ? current
+        : next
+    })
+  }, [filteredKeys.length])
+
+  useEffect(() => {
+    setKeyStatsPagination((current) => {
+      const next = clampPagination(current, keyTokenStatsRows.length)
+      return next.current === current.current && next.pageSize === current.pageSize
+        ? current
+        : next
+    })
+  }, [keyTokenStatsRows.length])
+
+  useEffect(() => {
+    setModelPagination((current) => {
+      const next = clampPagination(current, models.length)
+      return next.current === current.current && next.pageSize === current.pageSize
+        ? current
+        : next
+    })
+  }, [models.length])
+
+  useEffect(() => {
+    setUsagePagination((current) => {
+      const next = clampPagination(current, usageTotal)
+      return next.current === current.current && next.pageSize === current.pageSize
+        ? current
+        : next
+    })
+  }, [usageTotal])
+
+  useEffect(() => {
+    const nextSearch = keySearchInput.trim()
+    const timer = window.setTimeout(() => {
+      setKeySearch((current) => (current === nextSearch ? current : nextSearch))
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [keySearchInput])
 
   const saveKey = async (e) => {
     e.preventDefault()
@@ -316,20 +1082,31 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         await apiRpc.call('key_update', {
           key_id: editingKeyId,
           name: keyForm.remark.trim(),
-          quota_total_tokens: asInt(keyForm.tokenLimit, 0),
+          quota_daily_tokens: tokenLimitInputToTokens(
+            keyForm.dailyTokenLimit
+          ),
+          quota_weekly_tokens: tokenLimitInputToTokens(
+            keyForm.weeklyTokenLimit
+          ),
           allowed_models: splitModels(keyForm.allowedModels),
           disabled: !!currentKey?.disabled,
         })
       } else {
         const result = await apiRpc.call('key_create', {
           name: keyForm.remark.trim(),
-          quota_total_tokens: asInt(keyForm.tokenLimit, 0),
+          quota_daily_tokens: tokenLimitInputToTokens(
+            keyForm.dailyTokenLimit
+          ),
+          quota_weekly_tokens: tokenLimitInputToTokens(
+            keyForm.weeklyTokenLimit
+          ),
           allowed_models: splitModels(keyForm.allowedModels),
         })
         setNewKey(result?.data || null)
       }
       setKeyForm(INITIAL_KEY_FORM)
       setEditingKeyId(null)
+      setKeyModalOpen(false)
       await loadAll()
     } catch (err) {
       setErrMsg(
@@ -341,37 +1118,42 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     }
   }
 
+  const openCreateKey = () => {
+    setNewKey(null)
+    setEditingKeyId(null)
+    setKeyForm(INITIAL_KEY_FORM)
+    setKeyModalOpen(true)
+  }
+
   const startEditKey = (item) => {
+    const allowedModel =
+      Array.isArray(item.allowed_models) && item.allowed_models.length > 0
+        ? item.allowed_models[0]
+        : ''
     setNewKey(null)
     setEditingKeyId(item.id)
     setKeyForm({
       remark: item.name || '',
       allowedModels:
-        Array.isArray(item.allowed_models) && item.allowed_models.length > 0
-          ? item.allowed_models[0]
+        allowedModel && officialModelPriceByID.has(allowedModel)
+          ? allowedModel
           : '',
-      tokenLimit:
-        asInt(item.quota_total_tokens, 0) > 0
-          ? String(asInt(item.quota_total_tokens, 0))
-          : '',
+      dailyTokenLimit: tokenLimitTokensToInput(item.quota_daily_tokens),
+      weeklyTokenLimit: tokenLimitTokensToInput(item.quota_weekly_tokens),
     })
+    setKeyModalOpen(true)
   }
 
   const cancelEditKey = () => {
     setEditingKeyId(null)
     setKeyForm(INITIAL_KEY_FORM)
+    setKeyModalOpen(false)
   }
 
-  const submitKeySearch = async (e) => {
-    e.preventDefault()
+  const handleKeySearchInputChange = (e) => {
     setErrMsg('')
     setSelectedKeyIds([])
-    const nextSearch = keySearchInput.trim()
-    if (nextSearch === keySearch) {
-      await loadAll()
-      return
-    }
-    setKeySearch(nextSearch)
+    setKeySearchInput(e.target.value)
   }
 
   const clearKeySearch = () => {
@@ -379,6 +1161,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     setSelectedKeyIds([])
     setKeySearchInput('')
     setKeySearch('')
+    setKeyModelFilter('')
+    setKeyStatusFilter('')
   }
 
   const deleteKey = async (item) => {
@@ -422,23 +1206,28 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     }
   }
 
-  const toggleKeySelection = (keyId, checked) => {
-    setSelectedKeyIds((current) => {
-      if (checked) {
-        return current.includes(keyId) ? current : [...current, keyId]
-      }
-      return current.filter((id) => id !== keyId)
-    })
+  const selectKeyRow = (keyId) => {
+    setSelectedKeyIds(getExclusiveTableSelectionAfterClick(keyId))
   }
 
-  const toggleAllVisibleKeys = (checked) => {
-    const visibleIds = keys.map((item) => item.id)
-    setSelectedKeyIds((current) => {
-      if (checked) {
-        return Array.from(new Set([...current, ...visibleIds]))
-      }
-      return current.filter((id) => !visibleIds.includes(id))
-    })
+  const toggleKeySelection = (keyId, checked) => {
+    setSelectedKeyIds((current) =>
+      toggleExclusiveTableSelection(current, keyId, checked)
+    )
+  }
+
+  const handleKeyRowClick = (event, keyId) => {
+    if (isInteractiveTableTarget(event.target)) {
+      return
+    }
+    selectKeyRow(keyId)
+  }
+
+  const handleKeyRowDoubleClick = (event, item) => {
+    if (isInteractiveTableTarget(event.target)) {
+      return
+    }
+    startEditKey(item)
   }
 
   const setKeyDisabled = async (keyId, disabled) => {
@@ -467,58 +1256,25 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     }
   }
 
-  const saveModel = async (e) => {
-    e.preventDefault()
-    const modelId = modelForm.modelId.trim()
-    if (!modelId) {
-      setErrMsg('请输入模型 ID')
-      return
+  const switchUsageTab = (nextTab) => {
+    if (nextTab === usageTab) return
+    const nextPagination = {
+      ...usagePagination,
+      current: 1,
     }
-
-    setErrMsg('')
-    try {
-      await apiRpc.call('model_upsert', {
-        model_id: modelId,
-        owned_by: modelForm.ownedBy.trim() || 'openai',
-        enabled: modelForm.enabled,
-      })
-      setModelForm(INITIAL_MODEL_FORM)
-      await loadAll()
-    } catch (err) {
-      setErrMsg(getActionErrorMessage(err, '保存模型'))
-    }
-  }
-
-  const editModel = (item) => {
-    setModelForm({
-      modelId: item.model_id || '',
-      ownedBy: item.owned_by || 'openai',
-      enabled: !!item.enabled,
+    setUsageTab(nextTab)
+    setUsagePagination(nextPagination)
+    loadAll({
+      usagePaginationOverride: nextPagination,
+      usageTabOverride: nextTab,
     })
-  }
-
-  const deleteModel = async (item) => {
-    // eslint-disable-next-line no-alert
-    const confirmed = window.confirm(
-      `确认删除模型 ${item.model_id}？删除后会同步清理相关策略、价格和 key 模型限制。`
-    )
-    if (!confirmed) {
-      return
-    }
-    setErrMsg('')
-    try {
-      await apiRpc.call('model_delete', { id: item.id })
-      await loadAll()
-    } catch (err) {
-      setErrMsg(getActionErrorMessage(err, '删除模型'))
-    }
   }
 
   const renderUsageTable = (compact = false) => (
     <div className={tableWrapClass}>
       <div className="overflow-auto">
         <table
-          className={`${tableClass} ${compact ? 'min-w-[820px]' : 'min-w-[1080px]'}`}
+          className={`${tableClass} ${compact ? 'min-w-[820px]' : 'min-w-[1280px]'}`}
         >
           <thead>
             <tr>
@@ -528,8 +1284,10 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               <th className={thClass}>模型</th>
               <th className={thClass}>状态</th>
               <th className={thClass}>Token</th>
+              {!compact ? <th className={thClass}>费用估算</th> : null}
               {!compact ? <th className={thClass}>耗时</th> : null}
               {!compact ? <th className={thClass}>错误</th> : null}
+              {!compact ? <th className={thClass}>详情</th> : null}
             </tr>
           </thead>
           <tbody className="divide-y divide-[#e7efe9] bg-white">
@@ -560,6 +1318,11 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     </div>
                   </td>
                   {!compact ? (
+                    <td className={`${tdClass} whitespace-nowrap`}>
+                      {fmtCost(item.estimated_cost_usd)}
+                    </td>
+                  ) : null}
+                  {!compact ? (
                     <td className={tdClass}>
                       {fmtNumber(item.duration_ms)} ms
                     </td>
@@ -567,12 +1330,23 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   {!compact ? (
                     <td className={tdClass}>{item.error_type || '-'}</td>
                   ) : null}
+                  {!compact ? (
+                    <td className={tdClass}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedUsageItem(item)}
+                        className={tableActionButtonClass}
+                      >
+                        详情
+                      </button>
+                    </td>
+                  ) : null}
                 </tr>
               ))
             ) : (
               <tr>
                 <td
-                  colSpan={compact ? 6 : 8}
+                  colSpan={compact ? 6 : 10}
                   className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                 >
                   {loading ? '加载中...' : '暂无调用记录'}
@@ -631,407 +1405,572 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     )
   }
 
-  const renderKeys = () => (
+  const renderKeyTokenStats = ({
+    title = '凭据 Token 统计',
+    description = '按当前凭据列表汇总各时间窗口的总 Token；无调用显示 0。',
+    showFilters = false,
+  } = {}) => (
     <SurfacePanel variant="admin" className="p-5 sm:p-6">
-      <div className="space-y-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-[#1f2d25]">API 凭据</h2>
-            <div className="mt-1 text-sm text-[#7b8780]">
-              共 {keyTotal} 个；用于客户端调用本服务的 OpenAI 兼容接口。
+      <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-[#1f2d25]">
+            {title}
+          </h2>
+          <div className="mt-1 text-sm text-[#7b8780]">
+            {description}
+          </div>
+        </div>
+        <div className="text-sm text-[#7b8780]">
+          {fmtNumber(keyTokenStatsRows.length)} 个凭据
+        </div>
+      </div>
+
+      {showFilters ? (
+        <div className={`${toolbarClass} mb-5`}>
+          <div className="admin-module-toolbar-row">
+            <div className={filterGroupClass}>
+              <label className="sr-only" htmlFor="analytics-key-search">
+                搜索凭据统计
+              </label>
+              <input
+                id="analytics-key-search"
+                value={keySearchInput}
+                onChange={handleKeySearchInputChange}
+                className={inputClass}
+                placeholder="搜索备注、完整凭据、前缀或后四位"
+              />
+              <SearchableSelect
+                value={keyModelFilter}
+                onChange={(nextValue) => {
+                  setSelectedKeyIds([])
+                  setKeyModelFilter(nextValue)
+                }}
+                ariaLabel="按模型筛选"
+                options={[
+                  { label: '全部模型', value: '' },
+                  ...modelOptions.map((modelId) => ({
+                    label: modelId,
+                    value: modelId,
+                  })),
+                ]}
+                placeholder="输入模型筛选"
+              />
+              <SearchableSelect
+                value={keyStatusFilter}
+                onChange={(nextValue) => {
+                  setSelectedKeyIds([])
+                  setKeyStatusFilter(nextValue)
+                }}
+                ariaLabel="按状态筛选"
+                options={KEY_STATUS_FILTER_OPTIONS}
+                placeholder="输入状态筛选"
+              />
+            </div>
+            <div className={primaryActionsClass}>
+              {hasActiveKeyFilters ? (
+                <button
+                  type="button"
+                  onClick={clearKeySearch}
+                  disabled={loading}
+                  className={secondaryButtonClass}
+                >
+                  重置
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
+      ) : null}
 
-        <form
-          onSubmit={saveKey}
-          className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"
-        >
-          <label className={fieldClass}>
-            备注名称
-            <input
-              value={keyForm.remark}
-              onChange={(e) =>
-                setKeyForm((current) => ({
-                  ...current,
-                  remark: e.target.value,
-                }))
-              }
-              className={inputClass}
-              placeholder="例如内部测试 key"
-            />
-            <span className={fieldHintClass}>留空时后端会生成默认备注。</span>
-          </label>
-          <label className={fieldClass}>
-            允许模型
-            <select
-              value={keyForm.allowedModels}
-              onChange={(e) =>
-                setKeyForm((current) => ({
-                  ...current,
-                  allowedModels: e.target.value,
-                }))
-              }
-              className={inputClass}
-            >
-              {MODEL_LIMIT_OPTIONS.map((option) => (
-                <option key={option.label} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-              {modelOptions.map((modelId) => (
-                <option key={modelId} value={modelId}>
-                  仅允许 {modelId}
-                </option>
-              ))}
-            </select>
-            <span className={fieldHintClass}>
-              选项来自模型管理页，避免填入不存在的模型。
-            </span>
-          </label>
-          <label className={fieldClass}>
-            Token 总额度
-            <input
-              type="number"
-              min="0"
-              step="1"
-              value={keyForm.tokenLimit}
-              onChange={(e) =>
-                setKeyForm((current) => ({
-                  ...current,
-                  tokenLimit: e.target.value,
-                }))
-              }
-              className={inputClass}
-              placeholder="0 表示不限"
-            />
-            <span className={fieldHintClass}>
-              达到额度后，该凭据的转发请求会返回 429。
-            </span>
-          </label>
-          <button
-            type="submit"
-            disabled={loading}
-            className={primaryButtonClass}
-          >
-            {editingKeyId ? '保存凭据' : '生成 API 凭据'}
-          </button>
-          {editingKeyId ? (
-            <button
-              type="button"
-              onClick={cancelEditKey}
-              className="rounded-md border border-[#d6ded8] bg-white px-4 py-2.5 text-sm font-semibold text-[#1f2d25] transition hover:border-[#238a43] hover:text-[#238a43]"
-            >
-              取消编辑
-            </button>
-          ) : null}
-        </form>
-
-        <div className="flex flex-col gap-3 rounded-lg border border-[#e7efe9] bg-[#fbfdfb] p-3 lg:flex-row lg:items-center lg:justify-between">
-          <form
-            onSubmit={submitKeySearch}
-            className="flex flex-1 flex-col gap-2 sm:flex-row"
-          >
-            <label className="sr-only" htmlFor="key-search">
-              搜索凭据
-            </label>
-            <input
-              id="key-search"
-              value={keySearchInput}
-              onChange={(e) => setKeySearchInput(e.target.value)}
-              className={`${inputClass} flex-1`}
-              placeholder="搜索备注、完整凭据、前缀或后四位"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className={primaryButtonClass}
-            >
-              搜索
-            </button>
-            {keySearch ? (
-              <button
-                type="button"
-                onClick={clearKeySearch}
-                disabled={loading}
-                className={secondaryButtonClass}
-              >
-                清空
-              </button>
-            ) : null}
-          </form>
-          <button
-            type="button"
-            onClick={deleteSelectedKeys}
-            disabled={loading || selectedKeyIds.length === 0}
-            className={dangerButtonClass}
-          >
-            批量删除
-            {selectedKeyIds.length > 0 ? `（${selectedKeyIds.length}）` : ''}
-          </button>
-        </div>
-
-        <div className={tableWrapClass}>
-          <div className="overflow-auto">
-            <table className={`${tableClass} min-w-[940px]`}>
-              <thead>
-                <tr>
-                  <th className={thClass}>
-                    <input
-                      type="checkbox"
-                      checked={selectedAllVisibleKeys}
-                      onChange={(e) => toggleAllVisibleKeys(e.target.checked)}
-                      aria-label="选择当前列表所有 key"
-                      className="h-4 w-4 rounded border-[#cfd9d2] text-[#238a43] focus:ring-[#238a43]"
-                    />
+      <div className={tableWrapClass}>
+        <div className="overflow-auto">
+          <table className={`${tableClass} min-w-[1040px]`}>
+            <thead>
+              <tr>
+                <th className={thClass}>备注</th>
+                <th className={thClass}>状态</th>
+                {KEY_TOKEN_WINDOWS.map((windowItem) => (
+                  <th key={windowItem.key} className={thClass}>
+                    {windowItem.label} Token
                   </th>
-                  <th className={thClass}>备注</th>
-                  <th className={thClass}>完整凭据</th>
-                  <th className={thClass}>模型限制</th>
-                  <th className={thClass}>Token 限制</th>
-                  <th className={thClass}>状态</th>
-                  <th className={thClass}>操作</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#e7efe9] bg-white">
+              {keyTokenStatsRows.length > 0 ? (
+                paginatedKeyTokenStatsRows.map((item) => (
+                  <tr key={String(item.id)}>
+                    <td className={tdClass}>
+                      <div className="max-w-[260px] truncate font-medium text-[#1f2d25]">
+                        {item.name}
+                      </div>
+                      <div className="mt-1 font-mono text-xs text-[#7b8780]">
+                        {item.prefix}
+                      </div>
+                    </td>
+                    <td className={tdClass}>
+                      <StatusBadge active={!item.disabled} />
+                    </td>
+                    {KEY_TOKEN_WINDOWS.map((windowItem) => (
+                      <td
+                        key={windowItem.key}
+                        className={`${tdClass} whitespace-nowrap font-semibold`}
+                      >
+                        {fmtNumber(item.tokens[windowItem.key])}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan={KEY_TOKEN_WINDOWS.length + 2}
+                    className="px-4 py-10 text-center text-sm text-[#9aa39e]"
+                  >
+                    {hasActiveKeyFilters
+                      ? '没有匹配的 API 凭据统计'
+                      : loading
+                        ? '加载中...'
+                        : '暂无 API 凭据统计'}
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-[#e7efe9] bg-white">
-                {keys.length > 0 ? (
-                  keys.map((item) => (
-                    <tr key={String(item.id)} className="align-top">
-                      <td className={tdClass}>
-                        <input
-                          type="checkbox"
-                          checked={selectedKeyIdSet.has(item.id)}
-                          onChange={(e) =>
-                            toggleKeySelection(item.id, e.target.checked)
-                          }
-                          aria-label={`选择 ${item.name || item.key_prefix || item.id}`}
-                          className="h-4 w-4 rounded border-[#cfd9d2] text-[#238a43] focus:ring-[#238a43]"
-                        />
-                      </td>
-                      <td className={`${tdClass} font-medium`}>
-                        {item.name || '无备注'}
-                        <div className="mt-1 text-xs text-[#9aa39e]">
-                          最近使用：{fmtTs(item.last_used_at)}
-                        </div>
-                      </td>
-                      <td className={`${tdClass} font-mono text-xs`}>
-                        <div className="flex max-w-[360px] items-start gap-2">
-                          <span className="min-w-0 break-all">
-                            {item.plain_key ||
-                              `${item.key_prefix}…${item.key_last4}`}
-                          </span>
-                          {item.plain_key ? (
-                            <CopyButton value={item.plain_key} />
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className={tdClass}>
-                        {Array.isArray(item.allowed_models) &&
-                        item.allowed_models.length > 0
-                          ? item.allowed_models.join(', ')
-                          : '不限'}
-                      </td>
-                      <td className={tdClass}>
-                        {asInt(item.quota_total_tokens, 0) > 0
-                          ? fmtNumber(item.quota_total_tokens)
-                          : '不限'}
-                      </td>
-                      <td className={tdClass}>
-                        <StatusBadge
-                          active={!item.disabled}
-                          trueText="启用"
-                          falseText="禁用"
-                        />
-                      </td>
-                      <td className={tdClass}>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => startEditKey(item)}
-                            disabled={loading}
-                            className={tableActionButtonClass}
-                          >
-                            编辑
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setKeyDisabled(item.id, !item.disabled)
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <TablePagination
+        total={keyTokenStatsRows.length}
+        pagination={keyStatsPagination}
+        onChange={setKeyStatsPagination}
+        disabled={loading}
+      />
+    </SurfacePanel>
+  )
+
+  const renderKeys = () => (
+    <div className="space-y-5">
+      <SurfacePanel variant="admin" className="p-5 sm:p-6">
+        <div className="space-y-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-[#1f2d25]">API 凭据</h2>
+              <div className="mt-1 text-sm text-[#7b8780]">
+                共 {keyTotal} 个；用于客户端调用本服务的 OpenAI 兼容接口。
+              </div>
+            </div>
+          </div>
+
+          <div className={toolbarClass}>
+            <div className="admin-module-toolbar-row">
+              <div className={filterGroupClass}>
+                <label className="sr-only" htmlFor="key-search">
+                  搜索凭据
+                </label>
+                <input
+                  id="key-search"
+                  value={keySearchInput}
+                  onChange={handleKeySearchInputChange}
+                  className={inputClass}
+                  placeholder="搜索备注、完整凭据、前缀或后四位"
+                />
+                <SearchableSelect
+                  value={keyModelFilter}
+                  onChange={(nextValue) => {
+                    setSelectedKeyIds([])
+                    setKeyModelFilter(nextValue)
+                  }}
+                  ariaLabel="按模型筛选"
+                  options={[
+                    { label: '全部模型', value: '' },
+                    ...modelOptions.map((modelId) => ({
+                      label: modelId,
+                      value: modelId,
+                    })),
+                  ]}
+                  placeholder="输入模型筛选"
+                />
+                <SearchableSelect
+                  value={keyStatusFilter}
+                  onChange={(nextValue) => {
+                    setSelectedKeyIds([])
+                    setKeyStatusFilter(nextValue)
+                  }}
+                  ariaLabel="按状态筛选"
+                  options={KEY_STATUS_FILTER_OPTIONS}
+                  placeholder="输入状态筛选"
+                />
+              </div>
+              <div className={primaryActionsClass}>
+                {hasActiveKeyFilters ? (
+                  <button
+                    type="button"
+                    onClick={clearKeySearch}
+                    disabled={loading}
+                    className={secondaryButtonClass}
+                  >
+                    重置
+                  </button>
+              ) : null}
+                <button
+                  type="button"
+                  onClick={openCreateKey}
+                  disabled={loading}
+                  className={primaryButtonClass}
+                >
+                  新建 API 凭据
+                </button>
+              </div>
+            </div>
+            <div className={selectionRowClass}>
+              <div className={selectionBlockClass}>
+                <span className="font-semibold text-[#1f2d25]">当前操作</span>
+                <span
+                  className={`${selectionTagClass} ${
+                  selectedKey ? 'admin-selection-tag-active' : ''
+                }`}
+                >
+                  {selectedKeyText}
+                </span>
+              </div>
+              <div className={selectionActionsClass}>
+                {selectedKey ? (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedKeyIds([])}
+                    className="admin-link-button"
+                  >
+                    清空已选
+                  </button>
+              ) : null}
+                <button
+                  type="button"
+                  onClick={() => selectedKey && startEditKey(selectedKey)}
+                  disabled={loading || !selectedKey}
+                  className={tableActionButtonClass}
+                >
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                  selectedKey &&
+                  setKeyDisabled(selectedKey.id, !selectedKey.disabled)
+                }
+                  disabled={loading || !selectedKey}
+                  className={tablePrimaryButtonClass}
+                >
+                  {selectedKey?.disabled ? '启用' : '禁用'}
+                </button>
+                <button
+                  type="button"
+                  onClick={deleteSelectedKeys}
+                  disabled={loading || selectedKeyIds.length === 0}
+                  className={dangerButtonClass}
+                >
+                  删除
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className={tableWrapClass}>
+            <div className="overflow-auto">
+              <table className={`${tableClass} min-w-[1220px]`}>
+                <thead>
+                  <tr>
+                    <th className={selectionThClass}>选择</th>
+                    <th className={thClass}>备注</th>
+                    <th className={thClass}>创建时间</th>
+                    <th className={thClass}>更新时间</th>
+                    <th className={thClass}>完整凭据</th>
+                    <th className={thClass}>模型限制</th>
+                    <th className={thClass}>Token 日 / 周限制（百万）</th>
+                    <th className={thClass}>状态</th>
+                    <th className={thClass}>操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#e7efe9] bg-white">
+                  {filteredKeys.length > 0 ? (
+                  paginatedKeys.map((item) => {
+                    const isSelected = selectedKeyIdSet.has(item.id)
+                    return (
+                      <tr
+                        key={String(item.id)}
+                        className={`admin-table-row align-top ${
+                          isSelected ? 'admin-table-row-selected' : ''
+                        }`}
+                        onClick={(event) => handleKeyRowClick(event, item.id)}
+                        onDoubleClick={(event) =>
+                          handleKeyRowDoubleClick(event, item)
+                        }
+                        aria-selected={isSelected}
+                        title={TABLE_ROW_INTERACTION_TITLE}
+                      >
+                        <td className={selectionTdClass}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) =>
+                              toggleKeySelection(item.id, e.target.checked)
                             }
-                            disabled={loading}
-                            className={`rounded-md px-4 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                              item.disabled
-                                ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
-                            }`}
-                          >
-                            {item.disabled ? '启用' : '禁用'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteKey(item)}
-                            disabled={loading}
-                            className="rounded-md bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            删除
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`选择 ${item.name || item.key_prefix || item.id}`}
+                            className="admin-checkbox"
+                          />
+                        </td>
+                        <td className={`${tdClass} font-medium`}>
+                          {item.name || '无备注'}
+                          <div className="mt-1 text-xs text-[#9aa39e]">
+                            最近使用：{fmtTs(item.last_used_at)}
+                          </div>
+                        </td>
+                        <td className={`${tdClass} whitespace-nowrap text-sm`}>
+                          {fmtTs(item.created_at)}
+                        </td>
+                        <td className={`${tdClass} whitespace-nowrap text-sm`}>
+                          {fmtTs(item.updated_at)}
+                        </td>
+                        <td className={`${tdClass} font-mono text-xs`}>
+                          <div className="flex max-w-[360px] items-start gap-2">
+                            <span className="min-w-0 break-all">
+                              {item.plain_key ||
+                                `${item.key_prefix}…${item.key_last4}`}
+                            </span>
+                            {item.plain_key ? (
+                              <CopyButton value={item.plain_key} />
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className={tdClass}>
+                          {Array.isArray(item.allowed_models) &&
+                          item.allowed_models.length > 0
+                            ? item.allowed_models.join(', ')
+                            : '不限'}
+                        </td>
+                        <td className={tdClass}>
+                          <div className="grid gap-1 text-sm">
+                            {renderTokenLimitWindow(
+                              '每日',
+                              item.quota_daily_tokens
+                            )}
+                            {renderTokenLimitWindow(
+                              '每周',
+                              item.quota_weekly_tokens
+                            )}
+                          </div>
+                        </td>
+                        <td className={tdClass}>
+                          <StatusBadge
+                            active={!item.disabled}
+                            trueText="启用"
+                            falseText="禁用"
+                          />
+                        </td>
+                        <td className={tdClass}>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startEditKey(item)}
+                              disabled={loading}
+                              className={tableActionButtonClass}
+                            >
+                              编辑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setKeyDisabled(item.id, !item.disabled)
+                              }
+                              disabled={loading}
+                              className={
+                                item.disabled
+                                  ? tablePrimaryButtonClass
+                                  : tableDangerButtonClass
+                              }
+                            >
+                              {item.disabled ? '启用' : '禁用'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteKey(item)}
+                              disabled={loading}
+                              className={tableDangerButtonClass}
+                            >
+                              删除
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
                 ) : (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={9}
                       className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                     >
-                      {keySearch ? '没有匹配的 API 凭据' : '暂无 API 凭据'}
+                      {hasActiveKeyFilters
+                        ? '没有匹配的 API 凭据'
+                        : '暂无 API 凭据'}
                     </td>
                   </tr>
                 )}
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
+          <TablePagination
+            total={filteredKeys.length}
+            pagination={keyPagination}
+            onChange={setKeyPagination}
+            disabled={loading}
+          />
         </div>
-      </div>
-    </SurfacePanel>
+      </SurfacePanel>
+    </div>
   )
+
+  const renderAnalytics = () => {
+    const activeKeys = keyTokenStatsRows.filter((item) => !item.disabled).length
+    const total24hTokens = keyTokenStatsRows.reduce(
+      (sum, item) => sum + asInt(item.tokens['24h'], 0),
+      0
+    )
+    const total30dTokens = keyTokenStatsRows.reduce(
+      (sum, item) => sum + asInt(item.tokens['30d'], 0),
+      0
+    )
+
+    return (
+      <div className="space-y-5">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <SummaryCard
+            label="凭据数"
+            value={fmtNumber(keyTokenStatsRows.length)}
+            sub={`${fmtNumber(activeKeys)} 个启用`}
+          />
+          <SummaryCard
+            label="24h Token"
+            value={fmtNumber(total24hTokens)}
+            sub="按当前筛选后的凭据汇总"
+          />
+          <SummaryCard
+            label="30 天 Token"
+            value={fmtNumber(total30dTokens)}
+            sub="按当前筛选后的凭据汇总"
+          />
+          <SummaryCard
+            label="统计维度"
+            value="凭据"
+            sub="模型、趋势和错误率后续扩展"
+          />
+        </div>
+
+        {renderKeyTokenStats({
+          title: '凭据维度',
+          description:
+            '按当前凭据列表汇总各时间窗口的总 Token；无调用显示 0。',
+          showFilters: true,
+        })}
+      </div>
+    )
+  }
 
   const renderModels = () => (
     <SurfacePanel variant="admin" className="p-5 sm:p-6">
       <div className="space-y-5">
-        <div>
-          <h2 className="text-lg font-semibold text-[#1f2d25]">模型管理</h2>
-          <div className="mt-1 text-sm text-[#7b8780]">
-            共 {modelTotal} 个；列表会进入 `/v1/models`
-            返回项，并参与请求启停校验。
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-[#1f2d25]">模型管理</h2>
+            <div className="mt-1 text-sm text-[#7b8780]">
+              共 {modelTotal} 个；列表会进入 `/v1/models`
+              返回项，并参与请求启停校验。
+            </div>
           </div>
         </div>
 
-        <form
-          onSubmit={saveModel}
-          className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto_auto]"
-        >
-          <label className={fieldClass}>
-            模型 ID
-            <input
-              value={modelForm.modelId}
-              onChange={(e) =>
-                setModelForm((current) => ({
-                  ...current,
-                  modelId: e.target.value,
-                }))
-              }
-              className={inputClass}
-              placeholder="例如 gpt-5.5"
-            />
-          </label>
-          <label className={fieldClass}>
-            归属方
-            <input
-              value={modelForm.ownedBy}
-              onChange={(e) =>
-                setModelForm((current) => ({
-                  ...current,
-                  ownedBy: e.target.value,
-                }))
-              }
-              className={inputClass}
-              placeholder="openai"
-            />
-          </label>
-          <label className="flex items-center gap-2 rounded-md border border-[#d6ded8] bg-white px-3 py-2.5 text-sm font-medium text-[#1f2d25] lg:self-end">
-            <input
-              type="checkbox"
-              checked={modelForm.enabled}
-              onChange={(e) =>
-                setModelForm((current) => ({
-                  ...current,
-                  enabled: e.target.checked,
-                }))
-              }
-              className="h-4 w-4 rounded border-[#c8d4cc] text-[#238a43] focus:ring-[#238a43]"
-            />
-            默认启用
-          </label>
-          <button
-            type="submit"
-            disabled={loading || !modelForm.modelId.trim()}
-            className={`${primaryButtonClass} lg:self-end`}
-          >
-            保存模型
-          </button>
-        </form>
+        <div className={toolbarClass}>
+          <div className="admin-module-toolbar-row">
+            <div className={selectionBlockClass}>
+              <span className="font-semibold text-[#1f2d25]">模型操作</span>
+              <span className={selectionTagClass}>
+                模型列表随代码固定维护，此页只控制启停
+              </span>
+            </div>
+          </div>
+        </div>
 
         <div className={tableWrapClass}>
           <div className="overflow-auto">
-            <table className={`${tableClass} min-w-[680px]`}>
+            <table className={`${tableClass} min-w-[980px]`}>
               <thead>
                 <tr>
                   <th className={thClass}>模型</th>
                   <th className={thClass}>来源</th>
+                  <th className={thClass}>输入 $/1M</th>
+                  <th className={thClass}>缓存输入 $/1M</th>
+                  <th className={thClass}>输出 $/1M</th>
                   <th className={thClass}>状态</th>
                   <th className={thClass}>操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e7efe9] bg-white">
                 {models.length > 0 ? (
-                  models.map((item) => (
-                    <tr key={String(item.id)} className="align-top">
-                      <td className={`${tdClass} font-mono`}>
-                        {item.model_id}
-                        <div className="mt-1 text-xs text-[#9aa39e]">
-                          {item.owned_by || '-'}
-                        </div>
-                      </td>
-                      <td className={tdClass}>{item.source || '-'}</td>
-                      <td className={tdClass}>
-                        <StatusBadge
-                          active={!!item.enabled}
-                          trueText="启用"
-                          falseText="禁用"
-                        />
-                      </td>
-                      <td className={tdClass}>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => editModel(item)}
-                            disabled={loading}
-                            className={tableActionButtonClass}
-                          >
-                            编辑
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setModelEnabled(item.id, !item.enabled)
-                            }
-                            disabled={loading}
-                            className={`rounded-md px-4 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                              item.enabled
-                                ? 'bg-rose-50 text-rose-700 hover:bg-rose-100'
-                                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                            }`}
-                          >
-                            {item.enabled ? '禁用' : '启用'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteModel(item)}
-                            disabled={loading}
-                            className="rounded-md bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            删除
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  paginatedModels.map((item) => {
+                    const price = officialModelPriceByID.get(item.model_id)
+                    return (
+                      <tr key={String(item.id)} className="align-top">
+                        <td className={`${tdClass} font-mono`}>
+                          {item.model_id}
+                          <div className="mt-1 text-xs text-[#9aa39e]">
+                            {item.owned_by || '-'}
+                          </div>
+                        </td>
+                        <td className={tdClass}>{item.source || '-'}</td>
+                        <td className={tdClass}>
+                          {fmtPricePerMillion(price?.input_usd_per_million)}
+                        </td>
+                        <td className={tdClass}>
+                          {fmtPricePerMillion(
+                            price?.cached_input_usd_per_million
+                          )}
+                        </td>
+                        <td className={tdClass}>
+                          {fmtPricePerMillion(price?.output_usd_per_million)}
+                        </td>
+                        <td className={tdClass}>
+                          <StatusBadge
+                            active={!!item.enabled}
+                            trueText="启用"
+                            falseText="禁用"
+                          />
+                        </td>
+                        <td className={tdClass}>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setModelEnabled(item.id, !item.enabled)
+                              }
+                              disabled={loading}
+                              className={
+                                item.enabled
+                                  ? tableDangerButtonClass
+                                  : tablePrimaryButtonClass
+                              }
+                            >
+                              {item.enabled ? '禁用' : '启用'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
                 ) : (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={7}
                       className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                     >
                       暂无模型
@@ -1042,122 +1981,539 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             </table>
           </div>
         </div>
+        <TablePagination
+          total={models.length}
+          pagination={modelPagination}
+          onChange={setModelPagination}
+          disabled={loading}
+        />
       </div>
     </SurfacePanel>
   )
 
-  const renderUsage = () => (
-    <SurfacePanel variant="admin" className="p-5 sm:p-6">
-      <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-[#1f2d25]">最近调用</h2>
-          <div className="mt-1 text-sm text-[#7b8780]">
-            24 小时内最近 {usageItems.length} 条 / 共 {usageTotal} 条。
+  const renderKeyModal = () => {
+    if (!keyModalOpen) return null
+
+    return (
+      <div className="admin-modal-backdrop">
+        <button
+          type="button"
+          className="admin-modal-overlay"
+          aria-label="关闭弹窗"
+          onClick={cancelEditKey}
+        />
+        <div
+          className="admin-modal-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="key-modal-title"
+        >
+          <div className="admin-modal-header">
+            <div>
+              <h2 id="key-modal-title" className="admin-modal-title">
+                {editingKeyId ? '编辑 API 凭据' : '新建 API 凭据'}
+              </h2>
+              <p className="admin-modal-description">
+                设置备注、模型限制和 token 总额度。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={cancelEditKey}
+              className="admin-modal-close"
+              aria-label="关闭弹窗"
+            >
+              ×
+            </button>
+          </div>
+          <form onSubmit={saveKey} className="admin-modal-form">
+            <label className={fieldClass}>
+              备注名称
+              <input
+                value={keyForm.remark}
+                onChange={(e) =>
+                  setKeyForm((current) => ({
+                    ...current,
+                    remark: e.target.value,
+                  }))
+                }
+                className={inputClass}
+                placeholder="例如内部测试 key"
+              />
+              <span className={fieldHintClass}>留空时后端会生成默认备注。</span>
+            </label>
+            <label className={fieldClass}>
+              允许模型
+              <SearchableSelect
+                value={keyForm.allowedModels}
+                onChange={(nextValue) =>
+                  setKeyForm((current) => ({
+                    ...current,
+                    allowedModels: nextValue,
+                  }))
+                }
+                ariaLabel="允许模型"
+                options={[
+                  ...MODEL_LIMIT_OPTIONS,
+                  ...modelOptions.map((modelId) => ({
+                    label: `仅允许 ${modelId}`,
+                    value: modelId,
+                  })),
+                ]}
+                placeholder="输入模型筛选"
+              />
+              <span className={fieldHintClass}>
+                选项来自模型管理页，避免填入不存在的模型。
+              </span>
+            </label>
+            <label className={fieldClass}>
+              每日 Token 限制（百万）
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={keyForm.dailyTokenLimit}
+                onChange={(e) =>
+                  setKeyForm((current) => ({
+                    ...current,
+                    dailyTokenLimit: e.target.value,
+                  }))
+                }
+                className={inputClass}
+                placeholder="0 表示不限，1 = 100 万 token"
+              />
+              <span className={fieldHintClass}>
+                按自然日统计；达到每日额度后，该凭据的转发请求会返回 429。
+              </span>
+            </label>
+            <label className={fieldClass}>
+              每周 Token 限制（百万）
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={keyForm.weeklyTokenLimit}
+                onChange={(e) =>
+                  setKeyForm((current) => ({
+                    ...current,
+                    weeklyTokenLimit: e.target.value,
+                  }))
+                }
+                className={inputClass}
+                placeholder="0 表示不限，1 = 100 万 token"
+              />
+              <span className={fieldHintClass}>
+                按自然周统计；留空或 0 表示不限制每周 token。
+              </span>
+            </label>
+            <div className="admin-modal-footer">
+              <button
+                type="button"
+                onClick={cancelEditKey}
+                className={secondaryButtonClass}
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className={primaryButtonClass}
+              >
+                {editingKeyId ? '保存凭据' : '生成 API 凭据'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  const renderUsageDetailModal = () => {
+    if (!selectedUsageItem) return null
+
+    const detailRows = [
+      ['时间', fmtTs(selectedUsageItem.created_at)],
+      ['请求 ID', selectedUsageItem.request_id || '-'],
+      ['凭据', selectedUsageItem.api_key_prefix || '-'],
+      ['接口', selectedUsageItem.endpoint || selectedUsageItem.path || '-'],
+      ['方法', selectedUsageItem.method || '-'],
+      ['模型', selectedUsageItem.model || '-'],
+      ['状态码', `HTTP ${selectedUsageItem.status_code || '-'}`],
+      ['是否成功', selectedUsageItem.success ? '成功' : '失败'],
+      ['输入 Token', fmtNumber(selectedUsageItem.input_tokens)],
+      ['输出 Token', fmtNumber(selectedUsageItem.output_tokens)],
+      ['缓存 Token', fmtNumber(selectedUsageItem.cached_tokens)],
+      ['Reasoning Token', fmtNumber(selectedUsageItem.reasoning_tokens)],
+      ['总 Token', fmtNumber(selectedUsageItem.total_tokens)],
+      ['请求字节', fmtNumber(selectedUsageItem.request_bytes)],
+      ['响应字节', fmtNumber(selectedUsageItem.response_bytes)],
+      ['耗时', `${fmtNumber(selectedUsageItem.duration_ms)} ms`],
+      ['费用估算', fmtCost(selectedUsageItem.estimated_cost_usd)],
+      ['错误类型', selectedUsageItem.error_type || '-'],
+    ]
+
+    return (
+      <div className="admin-modal-backdrop">
+        <button
+          type="button"
+          className="admin-modal-overlay"
+          aria-label="关闭调用详情"
+          onClick={() => setSelectedUsageItem(null)}
+        />
+        <div
+          className="admin-modal-panel admin-usage-detail-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="usage-detail-title"
+        >
+          <div className="admin-modal-header">
+            <div>
+              <h2 id="usage-detail-title" className="admin-modal-title">
+                调用详情
+              </h2>
+              <p className="admin-modal-description">
+                仅展示 usage、状态和排障字段；请求正文和响应正文不落库。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedUsageItem(null)}
+              className="admin-modal-close"
+              aria-label="关闭弹窗"
+            >
+              ×
+            </button>
+          </div>
+          <div className="admin-usage-detail-grid">
+            {detailRows.map(([label, value]) => (
+              <div key={label} className="admin-usage-detail-item">
+                <div className="admin-usage-detail-label">{label}</div>
+                <div className="admin-usage-detail-value">{value}</div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          loadAll({ usageFilterOverride: usageFilters })
-        }}
-        className="mb-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto_auto]"
-      >
-        <label className={fieldClass}>
-          调用凭据
-          <select
-            value={usageFilters.keyId}
-            onChange={(e) =>
-              setUsageFilters((current) => ({
-                ...current,
-                keyId: e.target.value,
-              }))
-            }
-            className={inputClass}
-          >
-            <option value="">全部凭据</option>
-            {keys.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name || item.key_prefix || `凭据 ${item.id}`}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className={fieldClass}>
-          请求模型
-          <select
-            value={usageFilters.model}
-            onChange={(e) =>
-              setUsageFilters((current) => ({
-                ...current,
-                model: e.target.value,
-              }))
-            }
-            className={inputClass}
-          >
-            <option value="">全部模型</option>
-            {modelOptions.map((modelId) => (
-              <option key={modelId} value={modelId}>
-                {modelId}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className={fieldClass}>
-          请求状态
-          <select
-            value={usageFilters.success}
-            onChange={(e) =>
-              setUsageFilters((current) => ({
-                ...current,
-                success: e.target.value,
-              }))
-            }
-            className={inputClass}
-          >
-            <option value="">全部状态</option>
-            <option value="true">成功</option>
-            <option value="false">失败</option>
-          </select>
-        </label>
-        <button
-          type="submit"
-          disabled={loading}
-          className={`${primaryButtonClass} lg:self-end`}
-        >
-          应用筛选
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setUsageFilters(INITIAL_USAGE_FILTERS)
-            loadAll({ usageFilterOverride: INITIAL_USAGE_FILTERS })
-          }}
-          disabled={loading}
-          className={`${secondaryButtonClass} lg:self-end`}
-        >
-          重置
-        </button>
-      </form>
-      {renderUsageTable(false)}
-    </SurfacePanel>
+    )
+  }
+
+  const renderUsageSummaryCards = () => (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <SummaryCard
+        label="请求数"
+        value={fmtNumber(summary.total_requests)}
+        sub={`${fmtNumber(summary.success_requests)} 成功 / ${fmtNumber(summary.failed_requests)} 失败`}
+      />
+      <SummaryCard
+        label="总 Token"
+        value={fmtNumber(summary.total_tokens)}
+        sub={`${fmtNumber(summary.input_tokens)} 输入 / ${fmtNumber(summary.output_tokens)} 输出`}
+      />
+      <SummaryCard
+        label="费用估算"
+        value={fmtCost(summary.estimated_cost_usd)}
+        sub="按当前模型价格口径估算"
+      />
+      <SummaryCard
+        label="错误率"
+        value={fmtRate(summary.failed_requests, summary.total_requests)}
+        sub={`${fmtNumber(summary.average_duration_ms)} ms 平均耗时`}
+      />
+    </div>
   )
+
+  const renderDailyUsage = () => {
+    const rows = [...usageBuckets].reverse()
+
+    return (
+      <SurfacePanel variant="admin" className="p-5 sm:p-6">
+        <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-[#1f2d25]">每日汇总</h2>
+            <div className="mt-1 text-sm text-[#7b8780]">
+              按当前筛选条件聚合每天请求、Token、费用估算、错误率和平均耗时。
+            </div>
+          </div>
+          <div className="text-sm text-[#7b8780]">
+            {fmtNumber(rows.length)} 天
+          </div>
+        </div>
+        <div className={tableWrapClass}>
+          <div className="overflow-auto">
+            <table className={`${tableClass} min-w-[1180px]`}>
+              <thead>
+                <tr>
+                  <th className={thClass}>日期</th>
+                  <th className={thClass}>请求</th>
+                  <th className={thClass}>输入 Token</th>
+                  <th className={thClass}>输出 Token</th>
+                  <th className={thClass}>缓存 Token</th>
+                  <th className={thClass}>总 Token</th>
+                  <th className={thClass}>费用估算</th>
+                  <th className={thClass}>错误率</th>
+                  <th className={thClass}>平均耗时</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#e7efe9] bg-white">
+                {rows.length > 0 ? (
+                  rows.map((item) => (
+                    <tr key={String(item.bucket_start)}>
+                      <td className={`${tdClass} whitespace-nowrap`}>
+                        {fmtDate(item.bucket_start)}
+                      </td>
+                      <td className={`${tdClass} font-semibold`}>
+                        {fmtNumber(item.total_requests)}
+                        <div className="mt-1 text-xs font-normal text-[#9aa39e]">
+                          {fmtNumber(item.success_requests)} 成功 /{' '}
+                          {fmtNumber(item.failed_requests)} 失败
+                        </div>
+                      </td>
+                      <td className={tdClass}>{fmtNumber(item.input_tokens)}</td>
+                      <td className={tdClass}>{fmtNumber(item.output_tokens)}</td>
+                      <td className={tdClass}>{fmtNumber(item.cached_tokens)}</td>
+                      <td className={`${tdClass} font-semibold`}>
+                        {fmtNumber(item.total_tokens)}
+                      </td>
+                      <td className={`${tdClass} whitespace-nowrap`}>
+                        {fmtCost(item.estimated_cost_usd)}
+                      </td>
+                      <td className={tdClass}>
+                        {fmtRate(item.failed_requests, item.total_requests)}
+                      </td>
+                      <td className={tdClass}>
+                        {fmtNumber(item.average_duration_ms)} ms
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="px-4 py-10 text-center text-sm text-[#9aa39e]"
+                    >
+                      {loading ? '加载中...' : '暂无每日汇总'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </SurfacePanel>
+    )
+  }
+
+  const renderUsage = () => {
+    const activeTimeRange = getUsageTimeRange(appliedUsageFilters.timeRange)
+    const activePagination = clampPagination(usagePagination, usageTotal)
+    const usageStart =
+      usageTotal > 0
+        ? (activePagination.current - 1) * activePagination.pageSize + 1
+        : 0
+    const usageEnd = Math.min(
+      usageTotal,
+      activePagination.current * activePagination.pageSize
+    )
+    const detailTitle = usageTab === 'errors' ? '异常请求' : '调用明细'
+    const detailDescription =
+      usageTab === 'errors'
+        ? '仅展示失败请求，用于排查上游错误、限流、鉴权和网关异常。'
+        : '按请求级 usage 真源展示状态、Token、费用估算、耗时和错误类型。'
+
+    return (
+      <div className="space-y-5">
+        {renderUsageSummaryCards()}
+
+        <SurfacePanel variant="admin" className="p-5 sm:p-6">
+          <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-[#1f2d25]">
+                用量日志
+              </h2>
+              <div className="mt-1 text-sm text-[#7b8780]">
+                {activeTimeRange.label} 范围内第 {usageStart}-{usageEnd} 条 / 共{' '}
+                {usageTotal} 条请求。
+              </div>
+            </div>
+          </div>
+
+          <div className={`${toolbarClass} mb-5`}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                const nextFilters = usageFilters
+                const nextPagination = {
+                  ...usagePagination,
+                  current: 1,
+                }
+                setAppliedUsageFilters(nextFilters)
+                setUsagePagination(nextPagination)
+                loadAll({
+                  usageFilterOverride: nextFilters,
+                  usagePaginationOverride: nextPagination,
+                })
+              }}
+              className="admin-module-toolbar-row"
+            >
+              <div className={`${filterGroupClass} admin-module-filter-group-wide`}>
+                <label className={fieldClass}>
+                  时间范围
+                  <SearchableSelect
+                    value={usageFilters.timeRange}
+                    onChange={(nextValue) =>
+                      setUsageFilters((current) => ({
+                        ...current,
+                        timeRange: nextValue,
+                      }))
+                    }
+                    ariaLabel="时间范围"
+                    options={USAGE_TIME_RANGE_OPTIONS}
+                    placeholder="输入时间范围"
+                  />
+                </label>
+                <label className={fieldClass}>
+                  调用凭据
+                  <SearchableSelect
+                    value={usageFilters.keyId}
+                    onChange={(nextValue) =>
+                      setUsageFilters((current) => ({
+                        ...current,
+                        keyId: nextValue,
+                      }))
+                    }
+                    ariaLabel="调用凭据"
+                    options={[
+                      { label: '全部凭据', value: '' },
+                      ...keys.map((item) => ({
+                        label: item.name || item.key_prefix || `凭据 ${item.id}`,
+                        value: String(item.id),
+                      })),
+                    ]}
+                    placeholder="输入凭据筛选"
+                  />
+                </label>
+                <label className={fieldClass}>
+                  请求模型
+                  <SearchableSelect
+                    value={usageFilters.model}
+                    onChange={(nextValue) =>
+                      setUsageFilters((current) => ({
+                        ...current,
+                        model: nextValue,
+                      }))
+                    }
+                    ariaLabel="请求模型"
+                    options={[
+                      { label: '全部模型', value: '' },
+                      ...modelOptions.map((modelId) => ({
+                        label: modelId,
+                        value: modelId,
+                      })),
+                    ]}
+                    placeholder="输入模型筛选"
+                  />
+                </label>
+                <label className={fieldClass}>
+                  请求状态
+                  <SearchableSelect
+                    value={usageFilters.success}
+                    onChange={(nextValue) =>
+                      setUsageFilters((current) => ({
+                        ...current,
+                        success: nextValue,
+                      }))
+                    }
+                    ariaLabel="请求状态"
+                    options={USAGE_SUCCESS_FILTER_OPTIONS}
+                    placeholder="输入状态筛选"
+                  />
+                </label>
+              </div>
+              <div className={primaryActionsClass}>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className={primaryButtonClass}
+                >
+                  应用筛选
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextPagination = {
+                      ...usagePagination,
+                      current: 1,
+                    }
+                    setUsageFilters(INITIAL_USAGE_FILTERS)
+                    setAppliedUsageFilters(INITIAL_USAGE_FILTERS)
+                    setUsagePagination(nextPagination)
+                    loadAll({
+                      usageFilterOverride: INITIAL_USAGE_FILTERS,
+                      usagePaginationOverride: nextPagination,
+                    })
+                  }}
+                  disabled={loading}
+                  className={secondaryButtonClass}
+                >
+                  重置
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div className="admin-view-tabs" role="tablist" aria-label="用量日志视图">
+            {USAGE_TAB_OPTIONS.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                role="tab"
+                aria-selected={usageTab === item.key}
+                onClick={() => switchUsageTab(item.key)}
+                className="admin-view-tab"
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </SurfacePanel>
+
+        {usageTab === 'daily' ? renderDailyUsage() : null}
+        {usageTab === 'keys'
+          ? renderKeyTokenStats({
+              title: '凭据统计',
+              description:
+                '按当前筛选条件汇总每个 API 凭据的 Token 窗口；无调用显示 0。',
+              showFilters: true,
+            })
+          : null}
+        {usageTab === 'details' || usageTab === 'errors' ? (
+          <SurfacePanel variant="admin" className="p-5 sm:p-6">
+            <div className="mb-5">
+              <h2 className="text-lg font-semibold text-[#1f2d25]">
+                {detailTitle}
+              </h2>
+              <div className="mt-1 text-sm text-[#7b8780]">
+                {detailDescription}
+              </div>
+            </div>
+            {renderUsageTable(false)}
+            <TablePagination
+              total={usageTotal}
+              pagination={usagePagination}
+              onChange={setUsagePagination}
+              disabled={loading}
+            />
+          </SurfacePanel>
+        ) : null}
+      </div>
+    )
+  }
 
   return (
     <AdminFrame
-      breadcrumb={`配置管理 / ${currentConfig.title}`}
+      breadcrumb={`${currentConfig.section || '配置管理'} / ${currentConfig.title}`}
       title={currentConfig.title}
       description={currentConfig.description}
-      actions={
-        <button
-          type="button"
-          onClick={loadAll}
-          disabled={loading}
-          className="rounded-md bg-[#238a43] px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-[#1d7538] disabled:cursor-not-allowed disabled:bg-[#cbd8d0] disabled:text-[#7b8780]"
-        >
-          {loading ? '刷新中...' : '刷新'}
-        </button>
-      }
     >
       <div className="space-y-6">
         {errMsg ? (
@@ -1182,8 +2538,11 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         {currentView === 'dashboard' ? renderDashboard() : null}
         {currentView === 'keys' ? renderKeys() : null}
         {currentView === 'models' ? renderModels() : null}
+        {currentView === 'analytics' ? renderAnalytics() : null}
         {currentView === 'usage' ? renderUsage() : null}
       </div>
+      {currentView === 'keys' ? renderKeyModal() : null}
+      {renderUsageDetailModal()}
     </AdminFrame>
   )
 }

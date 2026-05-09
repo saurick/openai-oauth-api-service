@@ -182,6 +182,48 @@ func (_u *GatewayAPIKeyUpdate) AddQuotaTotalTokens(v int64) *GatewayAPIKeyUpdate
 	return _u
 }
 
+// SetQuotaDailyTokens sets the "quota_daily_tokens" field.
+func (_u *GatewayAPIKeyUpdate) SetQuotaDailyTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.ResetQuotaDailyTokens()
+	_u.mutation.SetQuotaDailyTokens(v)
+	return _u
+}
+
+// SetNillableQuotaDailyTokens sets the "quota_daily_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdate) SetNillableQuotaDailyTokens(v *int64) *GatewayAPIKeyUpdate {
+	if v != nil {
+		_u.SetQuotaDailyTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaDailyTokens adds value to the "quota_daily_tokens" field.
+func (_u *GatewayAPIKeyUpdate) AddQuotaDailyTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.AddQuotaDailyTokens(v)
+	return _u
+}
+
+// SetQuotaWeeklyTokens sets the "quota_weekly_tokens" field.
+func (_u *GatewayAPIKeyUpdate) SetQuotaWeeklyTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.ResetQuotaWeeklyTokens()
+	_u.mutation.SetQuotaWeeklyTokens(v)
+	return _u
+}
+
+// SetNillableQuotaWeeklyTokens sets the "quota_weekly_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdate) SetNillableQuotaWeeklyTokens(v *int64) *GatewayAPIKeyUpdate {
+	if v != nil {
+		_u.SetQuotaWeeklyTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaWeeklyTokens adds value to the "quota_weekly_tokens" field.
+func (_u *GatewayAPIKeyUpdate) AddQuotaWeeklyTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.AddQuotaWeeklyTokens(v)
+	return _u
+}
+
 // SetAllowedModels sets the "allowed_models" field.
 func (_u *GatewayAPIKeyUpdate) SetAllowedModels(v []string) *GatewayAPIKeyUpdate {
 	_u.mutation.SetAllowedModels(v)
@@ -347,6 +389,18 @@ func (_u *GatewayAPIKeyUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if value, ok := _u.mutation.AddedQuotaTotalTokens(); ok {
 		_spec.AddField(gatewayapikey.FieldQuotaTotalTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaDailyTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaDailyTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaDailyTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaDailyTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaWeeklyTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaWeeklyTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaWeeklyTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaWeeklyTokens, field.TypeInt64, value)
 	}
 	if value, ok := _u.mutation.AllowedModels(); ok {
 		_spec.SetField(gatewayapikey.FieldAllowedModels, field.TypeJSON, value)
@@ -538,6 +592,48 @@ func (_u *GatewayAPIKeyUpdateOne) SetNillableQuotaTotalTokens(v *int64) *Gateway
 // AddQuotaTotalTokens adds value to the "quota_total_tokens" field.
 func (_u *GatewayAPIKeyUpdateOne) AddQuotaTotalTokens(v int64) *GatewayAPIKeyUpdateOne {
 	_u.mutation.AddQuotaTotalTokens(v)
+	return _u
+}
+
+// SetQuotaDailyTokens sets the "quota_daily_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) SetQuotaDailyTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.ResetQuotaDailyTokens()
+	_u.mutation.SetQuotaDailyTokens(v)
+	return _u
+}
+
+// SetNillableQuotaDailyTokens sets the "quota_daily_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdateOne) SetNillableQuotaDailyTokens(v *int64) *GatewayAPIKeyUpdateOne {
+	if v != nil {
+		_u.SetQuotaDailyTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaDailyTokens adds value to the "quota_daily_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) AddQuotaDailyTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.AddQuotaDailyTokens(v)
+	return _u
+}
+
+// SetQuotaWeeklyTokens sets the "quota_weekly_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) SetQuotaWeeklyTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.ResetQuotaWeeklyTokens()
+	_u.mutation.SetQuotaWeeklyTokens(v)
+	return _u
+}
+
+// SetNillableQuotaWeeklyTokens sets the "quota_weekly_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdateOne) SetNillableQuotaWeeklyTokens(v *int64) *GatewayAPIKeyUpdateOne {
+	if v != nil {
+		_u.SetQuotaWeeklyTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaWeeklyTokens adds value to the "quota_weekly_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) AddQuotaWeeklyTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.AddQuotaWeeklyTokens(v)
 	return _u
 }
 
@@ -736,6 +832,18 @@ func (_u *GatewayAPIKeyUpdateOne) sqlSave(ctx context.Context) (_node *GatewayAP
 	}
 	if value, ok := _u.mutation.AddedQuotaTotalTokens(); ok {
 		_spec.AddField(gatewayapikey.FieldQuotaTotalTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaDailyTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaDailyTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaDailyTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaDailyTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaWeeklyTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaWeeklyTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaWeeklyTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaWeeklyTokens, field.TypeInt64, value)
 	}
 	if value, ok := _u.mutation.AllowedModels(); ok {
 		_spec.SetField(gatewayapikey.FieldAllowedModels, field.TypeJSON, value)

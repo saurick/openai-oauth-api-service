@@ -80,34 +80,16 @@
 - 这组字段决定用户 token 签名和默认管理员初始化逻辑。
 - 初始化新项目后必须替换模板里的 JWT 密钥；当前个人部署的默认管理员账号保持 `admin/adminadmin`。不要在部署流程中擅自生成或替换管理员密码，如需改密应由维护者明确指定后再调整 `OAUTH_API_ADMIN_PASSWORD`。
 
-## `data.openai`
-
-- `data.openai.apiKey`
-- `data.openai.baseUrl`
-- `data.openai.upstreamProxyUrl`
-- `data.openai.requestTimeoutSeconds`
-
-说明：
-
-- 这是 OpenAI 兼容转发链路的上游配置。
-- `apiKey` 用于配置 OpenAI 兼容上游鉴权。
-- `baseUrl` 默认使用 `https://api.openai.com/v1`，兼容测试时可指向本地 mock upstream。
-- `upstreamProxyUrl` 为空时直连上游；需要统一出口时可配置 HTTP 或 SOCKS5 代理。
-- `requestTimeoutSeconds` 控制上游请求超时，流式请求同样受该超时约束。
-
 ## Codex CLI 上游环境变量
 
-这组配置不进入 `conf.proto`，只用于个人部署的统一出口模式：
+服务端只保留 Codex CLI 作为 `/v1` 上游：
 
-- `OAUTH_API_UPSTREAM_PROVIDER`
-  - `openai_api`：默认值，使用 `data.openai.apiKey` / `OPENAI_API_KEY`。
-  - `codex_cli`：使用容器内 Codex CLI 调用服务器 Codex 登录态。
 - `CODEX_HOST_HOME`：宿主机 Codex 登录态目录，Compose 默认挂载到容器。
 - `CODEX_CONTAINER_HOME`：容器内 `CODEX_HOME`，默认 `/root/.codex`。
 - `CODEX_CLI_BIN`：Codex CLI 可执行文件，默认 `codex`。
 - `CODEX_CLI_TIMEOUT_SECONDS`：单次 Codex CLI upstream 超时，默认 `600` 秒。
 
-`codex_cli` 模式适合多台客户端统一走本服务出口：客户端只保存 `ogw_...` 下游 key，服务端统一使用服务器 Codex 登录态，并继续记录 usage。该模式会为每次 `/v1/chat/completions` 或 `/v1/responses` 启动一次 Codex CLI；服务端会串行执行 Codex CLI upstream，避免多个 CLI 进程同时争用 Codex 登录态和本地状态。低配服务器应提高 `APP_MEM_LIMIT`，客户端 provider timeout 建议不低于 600 秒。
+该模式适合多台客户端统一走本服务出口：客户端只保存 `ogw_...` 下游 key，服务端统一使用服务器 Codex 登录态，并继续记录 usage。服务端会为每次 `/v1/chat/completions` 或 `/v1/responses` 启动一次 Codex CLI，并串行执行 Codex CLI upstream，避免多个 CLI 进程同时争用 Codex 登录态和本地状态。低配服务器应提高 `APP_MEM_LIMIT`，客户端 provider timeout 建议不低于 600 秒。
 
 ## 可选管理员 OAuth 环境变量
 
@@ -128,16 +110,14 @@ OAuth provider 的回调地址固定登记后端 `/auth/oauth/callback`，例如
 
 - `data.api.rateLimitEnabled`
 - `data.api.exportMaxDays`
-- `data.api.modelSyncTimeoutSeconds`
 - `data.api.alertRetentionDays`
 
 说明：
 
 - `rateLimitEnabled=true` 时，`/v1/chat/completions` 与 `/v1/responses` 会在转发前检查 key+model 策略；关闭后仍保留 key 状态与模型权限校验。
 - `exportMaxDays` 控制 `/admin/exports/usage.csv` 和 `/admin/exports/usage.json` 的最大导出时间范围。
-- `modelSyncTimeoutSeconds` 只控制后台模型同步动作；它会调用配置的 OpenAI 兼容上游 `GET /models`，不会抓取网页价格。
 - `alertRetentionDays` 是站内告警事件保留天数的生产配置口径，当前事件写入与确认已落库，清理任务后续接入时复用该字段。
-- 模型价格默认为空，必须在后台价格表维护；价格缺失时 usage 费用估算返回 `null`，前端显示“未配置价格”，不硬编码美元单价。
+- usage 费用估算优先使用数据库模型价格表覆盖值；未配置覆盖值时，回落到服务端内置 Codex 客户端可用模型中已定价模型的价格表。当前模型候选集合为 `gpt-5.5`、`gpt-5.4`、`gpt-5.4-mini`、`gpt-5.3-codex`、`gpt-5.3-codex-spark`、`gpt-5.2`；其中 `gpt-5.3-codex-spark` 为 research preview，价格未定，不进入费用估算单价表，长上下文、Batch、Flex、Priority 和区域处理加价暂不纳入当前估算口径。
 
 ## 初始化后必须改的字段
 
@@ -147,11 +127,8 @@ OAuth provider 的回调地址固定登记后端 `/auth/oauth/callback`，例如
 - `data.auth.jwtSecret`
 - `data.auth.admin.username`
 - `data.auth.admin.password`
-- `data.openai.apiKey`
-- `data.openai.upstreamProxyUrl`
 - `data.api.rateLimitEnabled`
 - `data.api.exportMaxDays`
-- `data.api.modelSyncTimeoutSeconds`
 - `data.api.alertRetentionDays`
 - `trace.jaeger.traceName`
 - `trace.jaeger.endpoint`

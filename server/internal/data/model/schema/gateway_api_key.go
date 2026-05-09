@@ -40,6 +40,10 @@ func (GatewayAPIKey) Fields() []ent.Field {
 			Default(0),
 		field.Int64("quota_total_tokens").
 			Default(0),
+		field.Int64("quota_daily_tokens").
+			Default(0),
+		field.Int64("quota_weekly_tokens").
+			Default(0),
 		field.JSON("allowed_models", []string{}).
 			Optional(),
 		field.Time("last_used_at").

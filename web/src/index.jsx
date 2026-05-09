@@ -6,6 +6,10 @@ import { HelmetProvider } from 'react-helmet-async'
 import './tailwind.css'
 import App from './App'
 import { AppAlertProvider } from '@/common/components/modal/AppAlertProvider'
+import {
+  applyAdminThemeMode,
+  getInitialAdminThemeMode,
+} from '@/common/theme/adminTheme'
 
 // 只在开发环境 & 打开开关时启用 mock
 if (import.meta.env.DEV && import.meta.env.VITE_ENABLE_RPC_MOCK === 'true') {
@@ -14,6 +18,8 @@ if (import.meta.env.DEV && import.meta.env.VITE_ENABLE_RPC_MOCK === 'true') {
     setupJsonRpcMockServer()
   })()
 }
+
+applyAdminThemeMode(getInitialAdminThemeMode())
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {

@@ -167,12 +167,20 @@ func init() {
 	gatewayapikeyDescQuotaTotalTokens := gatewayapikeyFields[8].Descriptor()
 	// gatewayapikey.DefaultQuotaTotalTokens holds the default value on creation for the quota_total_tokens field.
 	gatewayapikey.DefaultQuotaTotalTokens = gatewayapikeyDescQuotaTotalTokens.Default.(int64)
+	// gatewayapikeyDescQuotaDailyTokens is the schema descriptor for quota_daily_tokens field.
+	gatewayapikeyDescQuotaDailyTokens := gatewayapikeyFields[9].Descriptor()
+	// gatewayapikey.DefaultQuotaDailyTokens holds the default value on creation for the quota_daily_tokens field.
+	gatewayapikey.DefaultQuotaDailyTokens = gatewayapikeyDescQuotaDailyTokens.Default.(int64)
+	// gatewayapikeyDescQuotaWeeklyTokens is the schema descriptor for quota_weekly_tokens field.
+	gatewayapikeyDescQuotaWeeklyTokens := gatewayapikeyFields[10].Descriptor()
+	// gatewayapikey.DefaultQuotaWeeklyTokens holds the default value on creation for the quota_weekly_tokens field.
+	gatewayapikey.DefaultQuotaWeeklyTokens = gatewayapikeyDescQuotaWeeklyTokens.Default.(int64)
 	// gatewayapikeyDescCreatedAt is the schema descriptor for created_at field.
-	gatewayapikeyDescCreatedAt := gatewayapikeyFields[11].Descriptor()
+	gatewayapikeyDescCreatedAt := gatewayapikeyFields[13].Descriptor()
 	// gatewayapikey.DefaultCreatedAt holds the default value on creation for the created_at field.
 	gatewayapikey.DefaultCreatedAt = gatewayapikeyDescCreatedAt.Default.(func() time.Time)
 	// gatewayapikeyDescUpdatedAt is the schema descriptor for updated_at field.
-	gatewayapikeyDescUpdatedAt := gatewayapikeyFields[12].Descriptor()
+	gatewayapikeyDescUpdatedAt := gatewayapikeyFields[14].Descriptor()
 	// gatewayapikey.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	gatewayapikey.DefaultUpdatedAt = gatewayapikeyDescUpdatedAt.Default.(func() time.Time)
 	// gatewayapikey.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

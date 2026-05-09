@@ -2,11 +2,8 @@ package data
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -73,11 +70,12 @@ func (d *JsonrpcData) handleGateway(
 
 	case "key_create":
 		item, err := d.gatewayUC.CreateAPIKey(ctx, biz.CreateGatewayAPIKeyInput{
-			Name:             getString(pm, "name"),
-			OwnerUserID:      getInt(pm, "owner_user_id", 0),
-			QuotaRequests:    getInt64(pm, "quota_requests", 0),
-			QuotaTotalTokens: getInt64(pm, "quota_total_tokens", 0),
-			AllowedModels:    getStringList(pm, "allowed_models"),
+			Name:              getString(pm, "name"),
+			OwnerUserID:       getInt(pm, "owner_user_id", 0),
+			QuotaRequests:     getInt64(pm, "quota_requests", 0),
+			QuotaDailyTokens:  getInt64(pm, "quota_daily_tokens", 0),
+			QuotaWeeklyTokens: getInt64WithFallback(pm, "quota_weekly_tokens", "quota_total_tokens"),
+			AllowedModels:     getStringList(pm, "allowed_models"),
 		})
 		if err != nil {
 			return id, d.mapGatewayError(ctx, err), nil
@@ -93,13 +91,14 @@ func (d *JsonrpcData) handleGateway(
 	case "key_update":
 		keyID := getInt(pm, "key_id", 0)
 		item, err := d.gatewayUC.UpdateAPIKey(ctx, biz.UpdateGatewayAPIKeyInput{
-			ID:               keyID,
-			Name:             getString(pm, "name"),
-			OwnerUserID:      getInt(pm, "owner_user_id", 0),
-			QuotaRequests:    getInt64(pm, "quota_requests", 0),
-			QuotaTotalTokens: getInt64(pm, "quota_total_tokens", 0),
-			AllowedModels:    getStringList(pm, "allowed_models"),
-			Disabled:         getBool(pm, "disabled", false),
+			ID:                keyID,
+			Name:              getString(pm, "name"),
+			OwnerUserID:       getInt(pm, "owner_user_id", 0),
+			QuotaRequests:     getInt64(pm, "quota_requests", 0),
+			QuotaDailyTokens:  getInt64(pm, "quota_daily_tokens", 0),
+			QuotaWeeklyTokens: getInt64WithFallback(pm, "quota_weekly_tokens", "quota_total_tokens"),
+			AllowedModels:     getStringList(pm, "allowed_models"),
+			Disabled:          getBool(pm, "disabled", false),
 		})
 		if err != nil {
 			return id, d.mapGatewayError(ctx, err), nil
@@ -229,26 +228,15 @@ func (d *JsonrpcData) handleGateway(
 			"enabled_only": enabledOnly,
 		}), nil
 
+	case "official_model_price_list":
+		items := make([]any, 0, len(biz.OfficialModelPrices))
+		for _, item := range biz.OfficialModelPrices {
+			items = append(items, mapGatewayPriceForRPC(item))
+		}
+		return id, okResult("获取官方模型价格成功", map[string]any{"items": items}), nil
+
 	case "model_upsert":
-		enabled := true
-		if _, ok := pm["enabled"]; ok {
-			enabled = getBool(pm, "enabled", true)
-		}
-		item, err := d.gatewayUC.UpsertModel(ctx, biz.GatewayModel{
-			ModelID:     getString(pm, "model_id"),
-			OwnedBy:     getString(pm, "owned_by"),
-			CreatedUnix: getInt64(pm, "created_unix", 0),
-			Enabled:     enabled,
-			Source:      "manual",
-		})
-		if err != nil {
-			return id, d.mapGatewayError(ctx, err), nil
-		}
-		d.auditGateway(ctx, "api.model_upsert", "api_model", item.ModelID, map[string]any{
-			"enabled": item.Enabled,
-			"source":  item.Source,
-		})
-		return id, okResult("保存模型成功", mapGatewayModelForRPC(item)), nil
+		return id, d.mapGatewayError(ctx, biz.ErrGatewayModelCatalogFixed), nil
 
 	case "model_set_enabled":
 		modelID := getInt(pm, "id", 0)
@@ -265,26 +253,7 @@ func (d *JsonrpcData) handleGateway(
 		}), nil
 
 	case "model_delete":
-		modelID := getInt(pm, "id", 0)
-		if err := d.gatewayUC.DeleteModel(ctx, modelID); err != nil {
-			return id, d.mapGatewayError(ctx, err), nil
-		}
-		d.auditGateway(ctx, "api.model_delete", "api_model", fmt.Sprint(modelID), nil)
-		return id, okResult("删除模型成功", map[string]any{"id": modelID}), nil
-
-	case "model_sync":
-		items, err := d.syncGatewayModels(ctx)
-		if err != nil {
-			return id, d.mapGatewayError(ctx, err), nil
-		}
-		d.auditGateway(ctx, "api.model_sync", "api_model", "upstream", map[string]any{
-			"count": len(items),
-		})
-		arr := make([]any, 0, len(items))
-		for _, item := range items {
-			arr = append(arr, mapGatewayModelForRPC(item))
-		}
-		return id, okResult("同步上游模型成功，新模型默认禁用", map[string]any{"items": arr, "count": len(arr)}), nil
+		return id, d.mapGatewayError(ctx, biz.ErrGatewayModelCatalogFixed), nil
 
 	case "policy_list":
 		apiKeyID := getInt(pm, "api_key_id", 0)
@@ -456,6 +425,8 @@ func (d *JsonrpcData) mapGatewayError(ctx context.Context, err error) *v1.Jsonrp
 		return &v1.JsonrpcResult{Code: errcode.APIModelDisabled.Code, Message: errcode.APIModelDisabled.Message}
 	case errors.Is(err, biz.ErrGatewayModelNotAllowed):
 		return &v1.JsonrpcResult{Code: errcode.APIModelNotAllowed.Code, Message: errcode.APIModelNotAllowed.Message}
+	case errors.Is(err, biz.ErrGatewayModelCatalogFixed):
+		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "模型列表为固定官方目录，不支持手工新增或删除"}
 	case errors.Is(err, biz.ErrGatewayRateLimited):
 		return &v1.JsonrpcResult{Code: errcode.APIOperationFailed.Code, Message: "API key 限流超限"}
 	case errors.Is(err, biz.ErrGatewayQuotaExceeded):
@@ -464,8 +435,6 @@ func (d *JsonrpcData) mapGatewayError(ctx context.Context, err error) *v1.Jsonrp
 		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "模型策略参数错误"}
 	case errors.Is(err, biz.ErrGatewayExportRange):
 		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "导出时间范围过大"}
-	case errors.Is(err, biz.ErrGatewayModelSyncFailed):
-		return &v1.JsonrpcResult{Code: errcode.APIOperationFailed.Code, Message: "模型同步失败"}
 	default:
 		return &v1.JsonrpcResult{Code: errcode.APIOperationFailed.Code, Message: errcode.APIOperationFailed.Message}
 	}
@@ -542,71 +511,6 @@ func (d *JsonrpcData) auditGateway(ctx context.Context, action, targetType, targ
 		}
 	}
 	d.gatewayUC.CreateAuditLog(ctx, item)
-}
-
-type upstreamModelsResponse struct {
-	Data []struct {
-		ID      string `json:"id"`
-		OwnedBy string `json:"owned_by"`
-		Created int64  `json:"created"`
-	} `json:"data"`
-}
-
-func (d *JsonrpcData) syncGatewayModels(ctx context.Context) ([]*biz.GatewayModel, error) {
-	if d.cfg == nil || d.cfg.Openai == nil || strings.TrimSpace(d.cfg.Openai.ApiKey) == "" {
-		return nil, biz.ErrGatewayModelSyncFailed
-	}
-	baseURL := strings.TrimRight(strings.TrimSpace(d.cfg.Openai.BaseUrl), "/")
-	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1"
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/models", nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(d.cfg.Openai.ApiKey))
-
-	timeout := 30 * time.Second
-	if d.cfg.Openai.RequestTimeoutSeconds > 0 {
-		timeout = time.Duration(d.cfg.Openai.RequestTimeoutSeconds) * time.Second
-	}
-	if d.cfg.Api != nil && d.cfg.Api.ModelSyncTimeoutSeconds > 0 {
-		timeout = time.Duration(d.cfg.Api.ModelSyncTimeoutSeconds) * time.Second
-	}
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	if proxyRaw := strings.TrimSpace(d.cfg.Openai.UpstreamProxyUrl); proxyRaw != "" {
-		proxyURL, err := url.Parse(proxyRaw)
-		if err != nil {
-			return nil, err
-		}
-		transport.Proxy = http.ProxyURL(proxyURL)
-	}
-	client := &http.Client{Transport: transport, Timeout: timeout}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, biz.ErrGatewayModelSyncFailed
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, biz.ErrGatewayModelSyncFailed
-	}
-	var payload upstreamModelsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, err
-	}
-	out := make([]*biz.GatewayModel, 0, len(payload.Data))
-	for _, item := range payload.Data {
-		model, err := d.gatewayUC.UpsertSyncedModel(ctx, biz.GatewayModel{
-			ModelID:     item.ID,
-			OwnedBy:     item.OwnedBy,
-			CreatedUnix: item.Created,
-		})
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, model)
-	}
-	return out, nil
 }
 
 func okResult(message string, data map[string]any) *v1.JsonrpcResult {
@@ -730,17 +634,19 @@ func mapGatewayAPIKeyForRPC(item *biz.GatewayAPIKey, includePlainKey bool) map[s
 		return map[string]any{}
 	}
 	data := map[string]any{
-		"id":                 item.ID,
-		"owner_user_id":      item.OwnerUserID,
-		"name":               item.Name,
-		"key_prefix":         item.KeyPrefix,
-		"key_last4":          item.KeyLast4,
-		"disabled":           item.Disabled,
-		"quota_requests":     item.QuotaRequests,
-		"quota_total_tokens": item.QuotaTotalTokens,
-		"allowed_models":     stringListForRPC(item.AllowedModels),
-		"created_at":         item.CreatedAt.Unix(),
-		"updated_at":         item.UpdatedAt.Unix(),
+		"id":                  item.ID,
+		"owner_user_id":       item.OwnerUserID,
+		"name":                item.Name,
+		"key_prefix":          item.KeyPrefix,
+		"key_last4":           item.KeyLast4,
+		"disabled":            item.Disabled,
+		"quota_requests":      item.QuotaRequests,
+		"quota_total_tokens":  item.QuotaTotalTokens,
+		"quota_daily_tokens":  item.QuotaDailyTokens,
+		"quota_weekly_tokens": item.QuotaWeeklyTokens,
+		"allowed_models":      stringListForRPC(item.AllowedModels),
+		"created_at":          item.CreatedAt.Unix(),
+		"updated_at":          item.UpdatedAt.Unix(),
 	}
 	if includePlainKey {
 		data["plain_key"] = item.PlainKey
@@ -915,6 +821,14 @@ func mapGatewayPriceForRPC(item *biz.GatewayModelPrice) map[string]any {
 	if item == nil {
 		return map[string]any{}
 	}
+	createdAt := int64(0)
+	if !item.CreatedAt.IsZero() {
+		createdAt = item.CreatedAt.Unix()
+	}
+	updatedAt := int64(0)
+	if !item.UpdatedAt.IsZero() {
+		updatedAt = item.UpdatedAt.Unix()
+	}
 	return map[string]any{
 		"id":                            item.ID,
 		"model_id":                      item.ModelID,
@@ -923,8 +837,8 @@ func mapGatewayPriceForRPC(item *biz.GatewayModelPrice) map[string]any {
 		"output_usd_per_million":        item.OutputUSDPerMillion,
 		"reasoning_tokens_billed_as":    "output_tokens",
 		"reasoning_tokens_double_count": false,
-		"created_at":                    item.CreatedAt.Unix(),
-		"updated_at":                    item.UpdatedAt.Unix(),
+		"created_at":                    createdAt,
+		"updated_at":                    updatedAt,
 	}
 }
 
