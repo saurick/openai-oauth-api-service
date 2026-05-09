@@ -58,7 +58,7 @@
     "preview": "vite preview",
     "playwright:install": "playwright install chromium",
     "style:l1": "node ./scripts/styleL1.mjs",
-    "test": "node --test src/common/consts/errorCodes.test.mjs src/common/utils/errorMessage.test.mjs",
+    "test": "node --test src/common/consts/errorCodes.test.mjs src/common/utils/errorMessage.test.mjs src/common/utils/tableInteraction.test.mjs",
     "gen:error-codes": "node ../scripts/gen-error-codes.mjs",
     "prebuild": "pnpm gen:error-codes",
     "pretest": "pnpm gen:error-codes"

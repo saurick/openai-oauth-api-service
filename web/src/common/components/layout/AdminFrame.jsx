@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import AppShell from '@/common/components/layout/AppShell'
+import AdminThemeToggle from '@/common/components/layout/AdminThemeToggle'
 import { AUTH_SCOPE, getCurrentUser, logout } from '@/common/auth/auth'
 import { ADMIN_BASE_PATH } from '@/common/utils/adminRpc'
 import { JsonRpc } from '@/common/utils/jsonRpc'
@@ -15,7 +16,12 @@ const NAV_GROUPS = [
     items: [
       { to: '/admin-keys', label: 'API 凭据', icon: KeyIcon },
       { to: '/admin-models', label: '模型管理', icon: RouteIcon },
-      { to: '/admin-usage', label: '调用明细', icon: ListIcon },
+    ],
+  },
+  {
+    label: '用量统计',
+    items: [
+      { to: '/admin-usage', label: '用量日志', icon: ChartIcon },
     ],
   },
 ]
@@ -124,6 +130,7 @@ export default function AdminFrame({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {actions}
+                <AdminThemeToggle />
                 <span className="rounded-md border border-[#f0c868] bg-[#fff8df] px-3 py-1.5 text-xs font-semibold text-[#c07a00]">
                   超级管理员
                 </span>
@@ -210,11 +217,11 @@ function KeyIcon() {
   )
 }
 
-function ListIcon() {
+function ChartIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
       <path
-        d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"
+        d="M5 19V5m0 14h14M9 16v-5m4 5V8m4 8v-7"
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"

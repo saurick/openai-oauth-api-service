@@ -395,6 +395,13 @@ func getInt64(m map[string]any, key string, def int64) int64 {
 	}
 }
 
+func getInt64WithFallback(m map[string]any, key, fallbackKey string) int64 {
+	if v, ok := m[key]; ok && v != nil {
+		return getInt64(m, key, 0)
+	}
+	return getInt64(m, fallbackKey, 0)
+}
+
 func getFloat(m map[string]any, key string, def float64) float64 {
 	v, ok := m[key]
 	if !ok || v == nil {

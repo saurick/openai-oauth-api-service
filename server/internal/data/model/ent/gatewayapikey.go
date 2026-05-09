@@ -36,6 +36,10 @@ type GatewayAPIKey struct {
 	QuotaRequests int64 `json:"quota_requests,omitempty"`
 	// QuotaTotalTokens holds the value of the "quota_total_tokens" field.
 	QuotaTotalTokens int64 `json:"quota_total_tokens,omitempty"`
+	// QuotaDailyTokens holds the value of the "quota_daily_tokens" field.
+	QuotaDailyTokens int64 `json:"quota_daily_tokens,omitempty"`
+	// QuotaWeeklyTokens holds the value of the "quota_weekly_tokens" field.
+	QuotaWeeklyTokens int64 `json:"quota_weekly_tokens,omitempty"`
 	// AllowedModels holds the value of the "allowed_models" field.
 	AllowedModels []string `json:"allowed_models,omitempty"`
 	// LastUsedAt holds the value of the "last_used_at" field.
@@ -56,7 +60,7 @@ func (*GatewayAPIKey) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case gatewayapikey.FieldDisabled:
 			values[i] = new(sql.NullBool)
-		case gatewayapikey.FieldID, gatewayapikey.FieldOwnerUserID, gatewayapikey.FieldQuotaRequests, gatewayapikey.FieldQuotaTotalTokens:
+		case gatewayapikey.FieldID, gatewayapikey.FieldOwnerUserID, gatewayapikey.FieldQuotaRequests, gatewayapikey.FieldQuotaTotalTokens, gatewayapikey.FieldQuotaDailyTokens, gatewayapikey.FieldQuotaWeeklyTokens:
 			values[i] = new(sql.NullInt64)
 		case gatewayapikey.FieldName, gatewayapikey.FieldKeyHash, gatewayapikey.FieldPlainKey, gatewayapikey.FieldKeyPrefix, gatewayapikey.FieldKeyLast4:
 			values[i] = new(sql.NullString)
@@ -137,6 +141,18 @@ func (_m *GatewayAPIKey) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field quota_total_tokens", values[i])
 			} else if value.Valid {
 				_m.QuotaTotalTokens = value.Int64
+			}
+		case gatewayapikey.FieldQuotaDailyTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field quota_daily_tokens", values[i])
+			} else if value.Valid {
+				_m.QuotaDailyTokens = value.Int64
+			}
+		case gatewayapikey.FieldQuotaWeeklyTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field quota_weekly_tokens", values[i])
+			} else if value.Valid {
+				_m.QuotaWeeklyTokens = value.Int64
 			}
 		case gatewayapikey.FieldAllowedModels:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -227,6 +243,12 @@ func (_m *GatewayAPIKey) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("quota_total_tokens=")
 	builder.WriteString(fmt.Sprintf("%v", _m.QuotaTotalTokens))
+	builder.WriteString(", ")
+	builder.WriteString("quota_daily_tokens=")
+	builder.WriteString(fmt.Sprintf("%v", _m.QuotaDailyTokens))
+	builder.WriteString(", ")
+	builder.WriteString("quota_weekly_tokens=")
+	builder.WriteString(fmt.Sprintf("%v", _m.QuotaWeeklyTokens))
 	builder.WriteString(", ")
 	builder.WriteString("allowed_models=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AllowedModels))

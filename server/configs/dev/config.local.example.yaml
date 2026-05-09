@@ -11,7 +11,3 @@ data:
     admin:
       username: "admin"
       password: "adminadmin"
-  openai:
-    apiKey: "sk-proj-local-openai-key"
-    baseUrl: "https://api.openai.com/v1"
-    upstreamProxyUrl: ""

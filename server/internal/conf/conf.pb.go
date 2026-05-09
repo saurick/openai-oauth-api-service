@@ -147,7 +147,6 @@ type Data struct {
 	Postgres      *Data_Postgres         `protobuf:"bytes,1,opt,name=postgres,proto3" json:"postgres,omitempty"`
 	Etcd          *Data_Etcd             `protobuf:"bytes,2,opt,name=etcd,proto3" json:"etcd,omitempty"`
 	Auth          *Data_Auth             `protobuf:"bytes,3,opt,name=auth,proto3" json:"auth,omitempty"`
-	Openai        *Data_OpenAI           `protobuf:"bytes,4,opt,name=openai,proto3" json:"openai,omitempty"`
 	Api           *Data_Api              `protobuf:"bytes,5,opt,name=api,proto3" json:"api,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -200,13 +199,6 @@ func (x *Data) GetEtcd() *Data_Etcd {
 func (x *Data) GetAuth() *Data_Auth {
 	if x != nil {
 		return x.Auth
-	}
-	return nil
-}
-
-func (x *Data) GetOpenai() *Data_OpenAI {
-	if x != nil {
-		return x.Openai
 	}
 	return nil
 }
@@ -626,87 +618,18 @@ func (x *Data_Auth) GetAdmin() *Data_Auth_Admin {
 	return nil
 }
 
-type Data_OpenAI struct {
-	state                 protoimpl.MessageState `protogen:"open.v1"`
-	ApiKey                string                 `protobuf:"bytes,1,opt,name=apiKey,proto3" json:"apiKey,omitempty"`
-	BaseUrl               string                 `protobuf:"bytes,2,opt,name=baseUrl,proto3" json:"baseUrl,omitempty"`
-	UpstreamProxyUrl      string                 `protobuf:"bytes,3,opt,name=upstreamProxyUrl,proto3" json:"upstreamProxyUrl,omitempty"`
-	RequestTimeoutSeconds int32                  `protobuf:"varint,4,opt,name=requestTimeoutSeconds,proto3" json:"requestTimeoutSeconds,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
-}
-
-func (x *Data_OpenAI) Reset() {
-	*x = Data_OpenAI{}
-	mi := &file_conf_conf_proto_msgTypes[11]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Data_OpenAI) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Data_OpenAI) ProtoMessage() {}
-
-func (x *Data_OpenAI) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[11]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Data_OpenAI.ProtoReflect.Descriptor instead.
-func (*Data_OpenAI) Descriptor() ([]byte, []int) {
-	return file_conf_conf_proto_rawDescGZIP(), []int{2, 3}
-}
-
-func (x *Data_OpenAI) GetApiKey() string {
-	if x != nil {
-		return x.ApiKey
-	}
-	return ""
-}
-
-func (x *Data_OpenAI) GetBaseUrl() string {
-	if x != nil {
-		return x.BaseUrl
-	}
-	return ""
-}
-
-func (x *Data_OpenAI) GetUpstreamProxyUrl() string {
-	if x != nil {
-		return x.UpstreamProxyUrl
-	}
-	return ""
-}
-
-func (x *Data_OpenAI) GetRequestTimeoutSeconds() int32 {
-	if x != nil {
-		return x.RequestTimeoutSeconds
-	}
-	return 0
-}
-
 type Data_Api struct {
-	state                   protoimpl.MessageState `protogen:"open.v1"`
-	RateLimitEnabled        bool                   `protobuf:"varint,1,opt,name=rateLimitEnabled,proto3" json:"rateLimitEnabled,omitempty"`
-	ExportMaxDays           int32                  `protobuf:"varint,2,opt,name=exportMaxDays,proto3" json:"exportMaxDays,omitempty"`
-	ModelSyncTimeoutSeconds int32                  `protobuf:"varint,3,opt,name=modelSyncTimeoutSeconds,proto3" json:"modelSyncTimeoutSeconds,omitempty"`
-	AlertRetentionDays      int32                  `protobuf:"varint,4,opt,name=alertRetentionDays,proto3" json:"alertRetentionDays,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	RateLimitEnabled   bool                   `protobuf:"varint,1,opt,name=rateLimitEnabled,proto3" json:"rateLimitEnabled,omitempty"`
+	ExportMaxDays      int32                  `protobuf:"varint,2,opt,name=exportMaxDays,proto3" json:"exportMaxDays,omitempty"`
+	AlertRetentionDays int32                  `protobuf:"varint,4,opt,name=alertRetentionDays,proto3" json:"alertRetentionDays,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *Data_Api) Reset() {
 	*x = Data_Api{}
-	mi := &file_conf_conf_proto_msgTypes[12]
+	mi := &file_conf_conf_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -718,7 +641,7 @@ func (x *Data_Api) String() string {
 func (*Data_Api) ProtoMessage() {}
 
 func (x *Data_Api) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[12]
+	mi := &file_conf_conf_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -731,7 +654,7 @@ func (x *Data_Api) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data_Api.ProtoReflect.Descriptor instead.
 func (*Data_Api) Descriptor() ([]byte, []int) {
-	return file_conf_conf_proto_rawDescGZIP(), []int{2, 4}
+	return file_conf_conf_proto_rawDescGZIP(), []int{2, 3}
 }
 
 func (x *Data_Api) GetRateLimitEnabled() bool {
@@ -744,13 +667,6 @@ func (x *Data_Api) GetRateLimitEnabled() bool {
 func (x *Data_Api) GetExportMaxDays() int32 {
 	if x != nil {
 		return x.ExportMaxDays
-	}
-	return 0
-}
-
-func (x *Data_Api) GetModelSyncTimeoutSeconds() int32 {
-	if x != nil {
-		return x.ModelSyncTimeoutSeconds
 	}
 	return 0
 }
@@ -772,7 +688,7 @@ type Data_Auth_Admin struct {
 
 func (x *Data_Auth_Admin) Reset() {
 	*x = Data_Auth_Admin{}
-	mi := &file_conf_conf_proto_msgTypes[13]
+	mi := &file_conf_conf_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -784,7 +700,7 @@ func (x *Data_Auth_Admin) String() string {
 func (*Data_Auth_Admin) ProtoMessage() {}
 
 func (x *Data_Auth_Admin) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[13]
+	mi := &file_conf_conf_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -825,7 +741,7 @@ type Trace_Jaeger struct {
 
 func (x *Trace_Jaeger) Reset() {
 	*x = Trace_Jaeger{}
-	mi := &file_conf_conf_proto_msgTypes[14]
+	mi := &file_conf_conf_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -837,7 +753,7 @@ func (x *Trace_Jaeger) String() string {
 func (*Trace_Jaeger) ProtoMessage() {}
 
 func (x *Trace_Jaeger) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[14]
+	mi := &file_conf_conf_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -884,7 +800,7 @@ type Notify_Telegram struct {
 
 func (x *Notify_Telegram) Reset() {
 	*x = Notify_Telegram{}
-	mi := &file_conf_conf_proto_msgTypes[15]
+	mi := &file_conf_conf_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -896,7 +812,7 @@ func (x *Notify_Telegram) String() string {
 func (*Notify_Telegram) ProtoMessage() {}
 
 func (x *Notify_Telegram) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[15]
+	mi := &file_conf_conf_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -947,12 +863,11 @@ const file_conf_conf_proto_rawDesc = "" +
 	"\x04GRPC\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x123\n" +
-	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\"\xe8\x06\n" +
+	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\"\xde\x04\n" +
 	"\x04Data\x125\n" +
 	"\bpostgres\x18\x01 \x01(\v2\x19.kratos.api.Data.PostgresR\bpostgres\x12)\n" +
 	"\x04etcd\x18\x02 \x01(\v2\x15.kratos.api.Data.EtcdR\x04etcd\x12)\n" +
-	"\x04auth\x18\x03 \x01(\v2\x15.kratos.api.Data.AuthR\x04auth\x12/\n" +
-	"\x06openai\x18\x04 \x01(\v2\x17.kratos.api.Data.OpenAIR\x06openai\x12&\n" +
+	"\x04auth\x18\x03 \x01(\v2\x15.kratos.api.Data.AuthR\x04auth\x12&\n" +
 	"\x03api\x18\x05 \x01(\v2\x14.kratos.api.Data.ApiR\x03api\x1a2\n" +
 	"\bPostgres\x12\x10\n" +
 	"\x03dsn\x18\x01 \x01(\tR\x03dsn\x12\x14\n" +
@@ -965,16 +880,10 @@ const file_conf_conf_proto_rawDesc = "" +
 	"\x05admin\x18\x03 \x01(\v2\x1b.kratos.api.Data.Auth.AdminR\x05admin\x1a?\n" +
 	"\x05Admin\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x1a\n" +
-	"\bpassword\x18\x02 \x01(\tR\bpassword\x1a\x9c\x01\n" +
-	"\x06OpenAI\x12\x16\n" +
-	"\x06apiKey\x18\x01 \x01(\tR\x06apiKey\x12\x18\n" +
-	"\abaseUrl\x18\x02 \x01(\tR\abaseUrl\x12*\n" +
-	"\x10upstreamProxyUrl\x18\x03 \x01(\tR\x10upstreamProxyUrl\x124\n" +
-	"\x15requestTimeoutSeconds\x18\x04 \x01(\x05R\x15requestTimeoutSeconds\x1a\xc1\x01\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\x1a\x87\x01\n" +
 	"\x03Api\x12*\n" +
 	"\x10rateLimitEnabled\x18\x01 \x01(\bR\x10rateLimitEnabled\x12$\n" +
-	"\rexportMaxDays\x18\x02 \x01(\x05R\rexportMaxDays\x128\n" +
-	"\x17modelSyncTimeoutSeconds\x18\x03 \x01(\x05R\x17modelSyncTimeoutSeconds\x12.\n" +
+	"\rexportMaxDays\x18\x02 \x01(\x05R\rexportMaxDays\x12.\n" +
 	"\x12alertRetentionDays\x18\x04 \x01(\x05R\x12alertRetentionDays\"\x93\x01\n" +
 	"\x05Trace\x120\n" +
 	"\x06jaeger\x18\x01 \x01(\v2\x18.kratos.api.Trace.JaegerR\x06jaeger\x1aX\n" +
@@ -1002,7 +911,7 @@ func file_conf_conf_proto_rawDescGZIP() []byte {
 	return file_conf_conf_proto_rawDescData
 }
 
-var file_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_conf_conf_proto_goTypes = []any{
 	(*Bootstrap)(nil),           // 0: kratos.api.Bootstrap
 	(*Server)(nil),              // 1: kratos.api.Server
@@ -1015,12 +924,11 @@ var file_conf_conf_proto_goTypes = []any{
 	(*Data_Postgres)(nil),       // 8: kratos.api.Data.Postgres
 	(*Data_Etcd)(nil),           // 9: kratos.api.Data.Etcd
 	(*Data_Auth)(nil),           // 10: kratos.api.Data.Auth
-	(*Data_OpenAI)(nil),         // 11: kratos.api.Data.OpenAI
-	(*Data_Api)(nil),            // 12: kratos.api.Data.Api
-	(*Data_Auth_Admin)(nil),     // 13: kratos.api.Data.Auth.Admin
-	(*Trace_Jaeger)(nil),        // 14: kratos.api.Trace.Jaeger
-	(*Notify_Telegram)(nil),     // 15: kratos.api.Notify.Telegram
-	(*durationpb.Duration)(nil), // 16: google.protobuf.Duration
+	(*Data_Api)(nil),            // 11: kratos.api.Data.Api
+	(*Data_Auth_Admin)(nil),     // 12: kratos.api.Data.Auth.Admin
+	(*Trace_Jaeger)(nil),        // 13: kratos.api.Trace.Jaeger
+	(*Notify_Telegram)(nil),     // 14: kratos.api.Notify.Telegram
+	(*durationpb.Duration)(nil), // 15: google.protobuf.Duration
 }
 var file_conf_conf_proto_depIdxs = []int32{
 	1,  // 0: kratos.api.Bootstrap.server:type_name -> kratos.api.Server
@@ -1032,18 +940,17 @@ var file_conf_conf_proto_depIdxs = []int32{
 	8,  // 6: kratos.api.Data.postgres:type_name -> kratos.api.Data.Postgres
 	9,  // 7: kratos.api.Data.etcd:type_name -> kratos.api.Data.Etcd
 	10, // 8: kratos.api.Data.auth:type_name -> kratos.api.Data.Auth
-	11, // 9: kratos.api.Data.openai:type_name -> kratos.api.Data.OpenAI
-	12, // 10: kratos.api.Data.api:type_name -> kratos.api.Data.Api
-	14, // 11: kratos.api.Trace.jaeger:type_name -> kratos.api.Trace.Jaeger
-	15, // 12: kratos.api.Notify.telegram:type_name -> kratos.api.Notify.Telegram
-	16, // 13: kratos.api.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	16, // 14: kratos.api.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	13, // 15: kratos.api.Data.Auth.admin:type_name -> kratos.api.Data.Auth.Admin
-	16, // [16:16] is the sub-list for method output_type
-	16, // [16:16] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	11, // 9: kratos.api.Data.api:type_name -> kratos.api.Data.Api
+	13, // 10: kratos.api.Trace.jaeger:type_name -> kratos.api.Trace.Jaeger
+	14, // 11: kratos.api.Notify.telegram:type_name -> kratos.api.Notify.Telegram
+	15, // 12: kratos.api.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	15, // 13: kratos.api.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	12, // 14: kratos.api.Data.Auth.admin:type_name -> kratos.api.Data.Auth.Admin
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_conf_conf_proto_init() }
@@ -1057,7 +964,7 @@ func file_conf_conf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_conf_conf_proto_rawDesc), len(file_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

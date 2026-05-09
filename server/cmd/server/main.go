@@ -137,22 +137,6 @@ func overrideFromEnv(dataCfg *conf.Data, baseLogger log.Logger) {
 		helper.Info("admin password overridden from env")
 	}
 
-	if dataCfg.Openai == nil {
-		dataCfg.Openai = &conf.Data_OpenAI{}
-	}
-	if v := strings.TrimSpace(os.Getenv("OPENAI_API_KEY")); v != "" {
-		dataCfg.Openai.ApiKey = v
-		helper.Info("openai api key overridden from env")
-	}
-	if v := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL")); v != "" {
-		dataCfg.Openai.BaseUrl = v
-		helper.Info("openai base url overridden from env")
-	}
-	if v := strings.TrimSpace(os.Getenv("UPSTREAM_PROXY_URL")); v != "" {
-		dataCfg.Openai.UpstreamProxyUrl = v
-		helper.Info("openai upstream proxy overridden from env")
-	}
-
 	if dataCfg.Api == nil {
 		dataCfg.Api = &conf.Data_Api{}
 	}
@@ -166,12 +150,6 @@ func overrideFromEnv(dataCfg *conf.Data, baseLogger log.Logger) {
 		if parsed, err := strconv.Atoi(v); err == nil {
 			dataCfg.Api.ExportMaxDays = int32(parsed)
 			helper.Info("api export max days overridden from env")
-		}
-	}
-	if v := strings.TrimSpace(os.Getenv("OAUTH_API_MODEL_SYNC_TIMEOUT_SECONDS")); v != "" {
-		if parsed, err := strconv.Atoi(v); err == nil {
-			dataCfg.Api.ModelSyncTimeoutSeconds = int32(parsed)
-			helper.Info("api model sync timeout overridden from env")
 		}
 	}
 	if v := strings.TrimSpace(os.Getenv("OAUTH_API_ALERT_RETENTION_DAYS")); v != "" {

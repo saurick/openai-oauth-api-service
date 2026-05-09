@@ -98,6 +98,14 @@ const App = () => {
             }
           />
           <Route
+            path="/admin-analytics"
+            element={
+              <AuthGuard requireAdmin>
+                <Navigate to="/admin-usage" replace />
+              </AuthGuard>
+            }
+          />
+          <Route
             path="/admin-usage"
             element={
               <AuthGuard requireAdmin>

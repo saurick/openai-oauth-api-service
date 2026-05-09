@@ -39,16 +39,14 @@ cp .env.example .env
 
 真实密钥不要提交到仓库。关键密钥包括：
 
-- `OPENAI_API_KEY`
 - `CODEX_HOST_HOME` 指向的 Codex 登录态目录
 - `OAUTH_API_JWT_SECRET`
 - `POSTGRES_DSN`
-- 代理认证信息
 
-上游有两种模式：
+API 上游统一使用服务器 Codex CLI 登录态：
 
-- `OAUTH_API_UPSTREAM_PROVIDER=openai_api`：默认模式，服务端使用 `OPENAI_API_KEY` 调用 OpenAI 兼容上游。
-- `OAUTH_API_UPSTREAM_PROVIDER=codex_cli`：个人统一出口模式，app-server 容器内调用 Codex CLI，并通过 `CODEX_HOST_HOME` 挂载服务器上的 Codex 登录态。该模式下多台客户端仍只使用本系统签发的 `ogw_...` 下游 key。
+- app-server 容器内调用 Codex CLI，并通过 `CODEX_HOST_HOME` 挂载服务器上的 Codex 登录态。
+- 多台客户端仍只使用本系统签发的 `ogw_...` 下游 key。
 
 当前个人部署的管理员账号默认保持 `admin/adminadmin`。不要在部署时擅自生成或替换 `OAUTH_API_ADMIN_PASSWORD`；只有维护者明确要求改密时才调整该变量并重启服务。
 

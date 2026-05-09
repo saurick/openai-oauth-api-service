@@ -114,6 +114,34 @@ func (_c *GatewayAPIKeyCreate) SetNillableQuotaTotalTokens(v *int64) *GatewayAPI
 	return _c
 }
 
+// SetQuotaDailyTokens sets the "quota_daily_tokens" field.
+func (_c *GatewayAPIKeyCreate) SetQuotaDailyTokens(v int64) *GatewayAPIKeyCreate {
+	_c.mutation.SetQuotaDailyTokens(v)
+	return _c
+}
+
+// SetNillableQuotaDailyTokens sets the "quota_daily_tokens" field if the given value is not nil.
+func (_c *GatewayAPIKeyCreate) SetNillableQuotaDailyTokens(v *int64) *GatewayAPIKeyCreate {
+	if v != nil {
+		_c.SetQuotaDailyTokens(*v)
+	}
+	return _c
+}
+
+// SetQuotaWeeklyTokens sets the "quota_weekly_tokens" field.
+func (_c *GatewayAPIKeyCreate) SetQuotaWeeklyTokens(v int64) *GatewayAPIKeyCreate {
+	_c.mutation.SetQuotaWeeklyTokens(v)
+	return _c
+}
+
+// SetNillableQuotaWeeklyTokens sets the "quota_weekly_tokens" field if the given value is not nil.
+func (_c *GatewayAPIKeyCreate) SetNillableQuotaWeeklyTokens(v *int64) *GatewayAPIKeyCreate {
+	if v != nil {
+		_c.SetQuotaWeeklyTokens(*v)
+	}
+	return _c
+}
+
 // SetAllowedModels sets the "allowed_models" field.
 func (_c *GatewayAPIKeyCreate) SetAllowedModels(v []string) *GatewayAPIKeyCreate {
 	_c.mutation.SetAllowedModels(v)
@@ -213,6 +241,14 @@ func (_c *GatewayAPIKeyCreate) defaults() {
 		v := gatewayapikey.DefaultQuotaTotalTokens
 		_c.mutation.SetQuotaTotalTokens(v)
 	}
+	if _, ok := _c.mutation.QuotaDailyTokens(); !ok {
+		v := gatewayapikey.DefaultQuotaDailyTokens
+		_c.mutation.SetQuotaDailyTokens(v)
+	}
+	if _, ok := _c.mutation.QuotaWeeklyTokens(); !ok {
+		v := gatewayapikey.DefaultQuotaWeeklyTokens
+		_c.mutation.SetQuotaWeeklyTokens(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := gatewayapikey.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -273,6 +309,12 @@ func (_c *GatewayAPIKeyCreate) check() error {
 	}
 	if _, ok := _c.mutation.QuotaTotalTokens(); !ok {
 		return &ValidationError{Name: "quota_total_tokens", err: errors.New(`ent: missing required field "GatewayAPIKey.quota_total_tokens"`)}
+	}
+	if _, ok := _c.mutation.QuotaDailyTokens(); !ok {
+		return &ValidationError{Name: "quota_daily_tokens", err: errors.New(`ent: missing required field "GatewayAPIKey.quota_daily_tokens"`)}
+	}
+	if _, ok := _c.mutation.QuotaWeeklyTokens(); !ok {
+		return &ValidationError{Name: "quota_weekly_tokens", err: errors.New(`ent: missing required field "GatewayAPIKey.quota_weekly_tokens"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "GatewayAPIKey.created_at"`)}
@@ -341,6 +383,14 @@ func (_c *GatewayAPIKeyCreate) createSpec() (*GatewayAPIKey, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.QuotaTotalTokens(); ok {
 		_spec.SetField(gatewayapikey.FieldQuotaTotalTokens, field.TypeInt64, value)
 		_node.QuotaTotalTokens = value
+	}
+	if value, ok := _c.mutation.QuotaDailyTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaDailyTokens, field.TypeInt64, value)
+		_node.QuotaDailyTokens = value
+	}
+	if value, ok := _c.mutation.QuotaWeeklyTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaWeeklyTokens, field.TypeInt64, value)
+		_node.QuotaWeeklyTokens = value
 	}
 	if value, ok := _c.mutation.AllowedModels(); ok {
 		_spec.SetField(gatewayapikey.FieldAllowedModels, field.TypeJSON, value)

@@ -958,30 +958,34 @@ func (m *AdminUserMutation) ResetEdge(name string) error {
 // GatewayAPIKeyMutation represents an operation that mutates the GatewayAPIKey nodes in the graph.
 type GatewayAPIKeyMutation struct {
 	config
-	op                    Op
-	typ                   string
-	id                    *int
-	owner_user_id         *int
-	addowner_user_id      *int
-	name                  *string
-	key_hash              *string
-	plain_key             *string
-	key_prefix            *string
-	key_last4             *string
-	disabled              *bool
-	quota_requests        *int64
-	addquota_requests     *int64
-	quota_total_tokens    *int64
-	addquota_total_tokens *int64
-	allowed_models        *[]string
-	appendallowed_models  []string
-	last_used_at          *time.Time
-	created_at            *time.Time
-	updated_at            *time.Time
-	clearedFields         map[string]struct{}
-	done                  bool
-	oldValue              func(context.Context) (*GatewayAPIKey, error)
-	predicates            []predicate.GatewayAPIKey
+	op                     Op
+	typ                    string
+	id                     *int
+	owner_user_id          *int
+	addowner_user_id       *int
+	name                   *string
+	key_hash               *string
+	plain_key              *string
+	key_prefix             *string
+	key_last4              *string
+	disabled               *bool
+	quota_requests         *int64
+	addquota_requests      *int64
+	quota_total_tokens     *int64
+	addquota_total_tokens  *int64
+	quota_daily_tokens     *int64
+	addquota_daily_tokens  *int64
+	quota_weekly_tokens    *int64
+	addquota_weekly_tokens *int64
+	allowed_models         *[]string
+	appendallowed_models   []string
+	last_used_at           *time.Time
+	created_at             *time.Time
+	updated_at             *time.Time
+	clearedFields          map[string]struct{}
+	done                   bool
+	oldValue               func(context.Context) (*GatewayAPIKey, error)
+	predicates             []predicate.GatewayAPIKey
 }
 
 var _ ent.Mutation = (*GatewayAPIKeyMutation)(nil)
@@ -1480,6 +1484,118 @@ func (m *GatewayAPIKeyMutation) ResetQuotaTotalTokens() {
 	m.addquota_total_tokens = nil
 }
 
+// SetQuotaDailyTokens sets the "quota_daily_tokens" field.
+func (m *GatewayAPIKeyMutation) SetQuotaDailyTokens(i int64) {
+	m.quota_daily_tokens = &i
+	m.addquota_daily_tokens = nil
+}
+
+// QuotaDailyTokens returns the value of the "quota_daily_tokens" field in the mutation.
+func (m *GatewayAPIKeyMutation) QuotaDailyTokens() (r int64, exists bool) {
+	v := m.quota_daily_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQuotaDailyTokens returns the old "quota_daily_tokens" field's value of the GatewayAPIKey entity.
+// If the GatewayAPIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayAPIKeyMutation) OldQuotaDailyTokens(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQuotaDailyTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQuotaDailyTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQuotaDailyTokens: %w", err)
+	}
+	return oldValue.QuotaDailyTokens, nil
+}
+
+// AddQuotaDailyTokens adds i to the "quota_daily_tokens" field.
+func (m *GatewayAPIKeyMutation) AddQuotaDailyTokens(i int64) {
+	if m.addquota_daily_tokens != nil {
+		*m.addquota_daily_tokens += i
+	} else {
+		m.addquota_daily_tokens = &i
+	}
+}
+
+// AddedQuotaDailyTokens returns the value that was added to the "quota_daily_tokens" field in this mutation.
+func (m *GatewayAPIKeyMutation) AddedQuotaDailyTokens() (r int64, exists bool) {
+	v := m.addquota_daily_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetQuotaDailyTokens resets all changes to the "quota_daily_tokens" field.
+func (m *GatewayAPIKeyMutation) ResetQuotaDailyTokens() {
+	m.quota_daily_tokens = nil
+	m.addquota_daily_tokens = nil
+}
+
+// SetQuotaWeeklyTokens sets the "quota_weekly_tokens" field.
+func (m *GatewayAPIKeyMutation) SetQuotaWeeklyTokens(i int64) {
+	m.quota_weekly_tokens = &i
+	m.addquota_weekly_tokens = nil
+}
+
+// QuotaWeeklyTokens returns the value of the "quota_weekly_tokens" field in the mutation.
+func (m *GatewayAPIKeyMutation) QuotaWeeklyTokens() (r int64, exists bool) {
+	v := m.quota_weekly_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQuotaWeeklyTokens returns the old "quota_weekly_tokens" field's value of the GatewayAPIKey entity.
+// If the GatewayAPIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayAPIKeyMutation) OldQuotaWeeklyTokens(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQuotaWeeklyTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQuotaWeeklyTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQuotaWeeklyTokens: %w", err)
+	}
+	return oldValue.QuotaWeeklyTokens, nil
+}
+
+// AddQuotaWeeklyTokens adds i to the "quota_weekly_tokens" field.
+func (m *GatewayAPIKeyMutation) AddQuotaWeeklyTokens(i int64) {
+	if m.addquota_weekly_tokens != nil {
+		*m.addquota_weekly_tokens += i
+	} else {
+		m.addquota_weekly_tokens = &i
+	}
+}
+
+// AddedQuotaWeeklyTokens returns the value that was added to the "quota_weekly_tokens" field in this mutation.
+func (m *GatewayAPIKeyMutation) AddedQuotaWeeklyTokens() (r int64, exists bool) {
+	v := m.addquota_weekly_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetQuotaWeeklyTokens resets all changes to the "quota_weekly_tokens" field.
+func (m *GatewayAPIKeyMutation) ResetQuotaWeeklyTokens() {
+	m.quota_weekly_tokens = nil
+	m.addquota_weekly_tokens = nil
+}
+
 // SetAllowedModels sets the "allowed_models" field.
 func (m *GatewayAPIKeyMutation) SetAllowedModels(s []string) {
 	m.allowed_models = &s
@@ -1700,7 +1816,7 @@ func (m *GatewayAPIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GatewayAPIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 15)
 	if m.owner_user_id != nil {
 		fields = append(fields, gatewayapikey.FieldOwnerUserID)
 	}
@@ -1727,6 +1843,12 @@ func (m *GatewayAPIKeyMutation) Fields() []string {
 	}
 	if m.quota_total_tokens != nil {
 		fields = append(fields, gatewayapikey.FieldQuotaTotalTokens)
+	}
+	if m.quota_daily_tokens != nil {
+		fields = append(fields, gatewayapikey.FieldQuotaDailyTokens)
+	}
+	if m.quota_weekly_tokens != nil {
+		fields = append(fields, gatewayapikey.FieldQuotaWeeklyTokens)
 	}
 	if m.allowed_models != nil {
 		fields = append(fields, gatewayapikey.FieldAllowedModels)
@@ -1766,6 +1888,10 @@ func (m *GatewayAPIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.QuotaRequests()
 	case gatewayapikey.FieldQuotaTotalTokens:
 		return m.QuotaTotalTokens()
+	case gatewayapikey.FieldQuotaDailyTokens:
+		return m.QuotaDailyTokens()
+	case gatewayapikey.FieldQuotaWeeklyTokens:
+		return m.QuotaWeeklyTokens()
 	case gatewayapikey.FieldAllowedModels:
 		return m.AllowedModels()
 	case gatewayapikey.FieldLastUsedAt:
@@ -1801,6 +1927,10 @@ func (m *GatewayAPIKeyMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldQuotaRequests(ctx)
 	case gatewayapikey.FieldQuotaTotalTokens:
 		return m.OldQuotaTotalTokens(ctx)
+	case gatewayapikey.FieldQuotaDailyTokens:
+		return m.OldQuotaDailyTokens(ctx)
+	case gatewayapikey.FieldQuotaWeeklyTokens:
+		return m.OldQuotaWeeklyTokens(ctx)
 	case gatewayapikey.FieldAllowedModels:
 		return m.OldAllowedModels(ctx)
 	case gatewayapikey.FieldLastUsedAt:
@@ -1881,6 +2011,20 @@ func (m *GatewayAPIKeyMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetQuotaTotalTokens(v)
 		return nil
+	case gatewayapikey.FieldQuotaDailyTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQuotaDailyTokens(v)
+		return nil
+	case gatewayapikey.FieldQuotaWeeklyTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQuotaWeeklyTokens(v)
+		return nil
 	case gatewayapikey.FieldAllowedModels:
 		v, ok := value.([]string)
 		if !ok {
@@ -1926,6 +2070,12 @@ func (m *GatewayAPIKeyMutation) AddedFields() []string {
 	if m.addquota_total_tokens != nil {
 		fields = append(fields, gatewayapikey.FieldQuotaTotalTokens)
 	}
+	if m.addquota_daily_tokens != nil {
+		fields = append(fields, gatewayapikey.FieldQuotaDailyTokens)
+	}
+	if m.addquota_weekly_tokens != nil {
+		fields = append(fields, gatewayapikey.FieldQuotaWeeklyTokens)
+	}
 	return fields
 }
 
@@ -1940,6 +2090,10 @@ func (m *GatewayAPIKeyMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedQuotaRequests()
 	case gatewayapikey.FieldQuotaTotalTokens:
 		return m.AddedQuotaTotalTokens()
+	case gatewayapikey.FieldQuotaDailyTokens:
+		return m.AddedQuotaDailyTokens()
+	case gatewayapikey.FieldQuotaWeeklyTokens:
+		return m.AddedQuotaWeeklyTokens()
 	}
 	return nil, false
 }
@@ -1969,6 +2123,20 @@ func (m *GatewayAPIKeyMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddQuotaTotalTokens(v)
+		return nil
+	case gatewayapikey.FieldQuotaDailyTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddQuotaDailyTokens(v)
+		return nil
+	case gatewayapikey.FieldQuotaWeeklyTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddQuotaWeeklyTokens(v)
 		return nil
 	}
 	return fmt.Errorf("unknown GatewayAPIKey numeric field %s", name)
@@ -2044,6 +2212,12 @@ func (m *GatewayAPIKeyMutation) ResetField(name string) error {
 		return nil
 	case gatewayapikey.FieldQuotaTotalTokens:
 		m.ResetQuotaTotalTokens()
+		return nil
+	case gatewayapikey.FieldQuotaDailyTokens:
+		m.ResetQuotaDailyTokens()
+		return nil
+	case gatewayapikey.FieldQuotaWeeklyTokens:
+		m.ResetQuotaWeeklyTokens()
 		return nil
 	case gatewayapikey.FieldAllowedModels:
 		m.ResetAllowedModels()
