@@ -1,5 +1,11 @@
 # Progress
 
+- 完成：提交并推送 `main` 提交 `e18ce39`（`完善 API 后台与 Codex 上游能力`），随后按低配服务器发布边界将本地构建镜像 `oauth-api-service-server:20260509T093830-e18ce39b` 部署到 `8.218.4.199`。
+- 完成：本地完成镜像构建与 `docker save`，上传镜像包到远端 `/data/openai-oauth-api-service/releases/`；远端只执行 `docker load`、Atlas migration、`docker compose up -d app-server` 和部署后检查，没有在服务器执行构建。
+- 完成：远端 Atlas migration 已从 `20260507124134` 升到 `20260509091545`，新增 `gateway_api_keys.quota_daily_tokens` 与 `quota_weekly_tokens`；Compose 当前 app-server 镜像为 `oauth-api-service-server:20260509T093830-e18ce39b`。
+- 验证通过：远端 `/readyz` 返回 `ready`，`/admin-login` 返回 HTTP 200，`admin/adminadmin` JSON-RPC 登录返回 `code=0 登录成功`，`api.summary` 返回 `code=0 total_requests=52`，`api.key_list` 返回 `code=0 total=2`，migration status 为 latest 且 pending 为 0。
+- 阻塞/风险：全量 QA 通过但 `govulncheck` 提示 Go 1.25.9 标准库与 `golang.org/x/net` 有已知漏洞，脚本默认仅提示不阻断；后续应升级到包含修复的 Go 1.25.10 / x/net 版本后重建镜像。
+
 - 修复：业务看板折线图尖峰线段溢出到下方卡片的问题；根因是绝对定位 SVG 没有显式绘图区高度，浏览器按 SVG 自身比例计算盒子，导致线段脱离 30 天趋势容器。现在折线 SVG 被包进固定绘图区并填满该区域。
 - 验证补充：`style:l1` 增加折线绘图区盒模型断言，确认 `data-trend-line` 和 `data-trend-line-box` 都被限制在 `data-trend-chart` 内，避免尖峰再次穿透到相邻面板。
 - 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4337 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminDashboard/index.jsx web/scripts/styleL1.mjs progress.md`。
