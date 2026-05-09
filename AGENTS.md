@@ -30,6 +30,7 @@
 
 - 当前仓库主部署方式是 Docker Compose。
 - 低配服务器只负责 `docker load`、`docker compose up`、migration 与 smoke，不作为构建机使用；部署时必须在本地或 CI 先完成镜像构建、打包和上传，禁止在服务器上执行 `docker build`、`pnpm build`、`go build`、`make build_server` 等重构建步骤。
+- 多项目低配 Docker 宿主机发布完成、健康检查和必要回归通过后，应清理未被任何容器使用的旧镜像和构建缓存：优先执行 `docker image prune -a -f` 与 `docker builder prune -f`；清理前后记录 `df -h /`、`docker system df`、`docker ps --format '{{.Names}} {{.Status}} {{.Image}}'`。禁止在发布清理中执行 `docker system prune --volumes`、`docker volume prune`，也禁止删除 `/data`、数据库目录、compose `.env`、上传目录或运行中容器依赖的镜像。若需要保留回滚能力，应至少保留当前运行版本，磁盘允许时再额外保留上一版镜像。
 - 当前个人部署的管理员账号默认保持 `admin/adminadmin`；部署时不得擅自生成、写入或同步随机管理员密码。只有用户明确要求改密时，才调整 `OAUTH_API_ADMIN_PASSWORD` 并重启 `app-server`。
 - Kubernetes、dashboard、lab-ha 和远端 SSH 发布脚本已从主路径裁剪；后续确实需要时再按真实环境新增，不从旧模板回填占位清单。
 - Compose 环境变量以 `server/deploy/compose/prod/.env.example` 为入口，真实 `.env` 不提交。
