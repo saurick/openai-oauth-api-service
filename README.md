@@ -92,7 +92,7 @@ UPSTREAM_PROXY_URL=socks5://127.0.0.1:7890
 - 管理登录：`/admin-login`
 - API 运营控制台：`/admin-api`
 
-开发配置默认会初始化管理员账号 `admin/adminadmin`；共享或部署前必须替换默认管理员密码和 JWT secret。
+开发与当前个人部署默认会初始化管理员账号 `admin/adminadmin`。不要在部署时擅自生成或替换管理员密码；如需改密，应由维护者明确指定后再调整 `OAUTH_API_ADMIN_PASSWORD` 并重启服务。JWT secret、数据库密码和上游 API key 仍必须通过私有环境变量配置。
 
 ## 下游调用 API
 

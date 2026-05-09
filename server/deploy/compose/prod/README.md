@@ -25,9 +25,30 @@ docker compose -f compose.yml up -d
 POSTGRES_PASSWORD=...
 POSTGRES_DSN=...
 OAUTH_API_JWT_SECRET=...
-OAUTH_API_ADMIN_PASSWORD=...
+```
+
+普通 OpenAI API 上游使用：
+
+```bash
+OAUTH_API_UPSTREAM_PROVIDER=openai_api
 OPENAI_API_KEY=...
 ```
+
+个人统一出口可改用服务器 Codex 登录态：
+
+```bash
+OAUTH_API_UPSTREAM_PROVIDER=codex_cli
+CODEX_HOST_HOME=/root/.codex
+CODEX_CONTAINER_HOME=/root/.codex
+CODEX_CLI_BIN=codex
+CODEX_CLI_TIMEOUT_SECONDS=600
+APP_MEM_LIMIT=900m
+APP_MEM_RESERVATION=256m
+```
+
+`codex_cli` 模式要求服务器先完成 `codex login`，app-server 容器会挂载 `CODEX_HOST_HOME` 并在容器内调用 Codex CLI。客户端仍只配置本系统签发的 `ogw_...` 下游 key。
+
+管理员账号默认保持 `admin/adminadmin`。只有维护者明确要求改密时，才设置 `OAUTH_API_ADMIN_PASSWORD` 并重启 `app-server`；部署过程不要擅自生成随机管理员密码。
 
 如需统一上游代理：
 
