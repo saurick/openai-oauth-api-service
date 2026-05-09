@@ -92,7 +92,10 @@ ENV BUILD_TIME=${BUILD_TIME}
 ENV IMAGE_TAG=${IMAGE_TAG}
 ENV TZ=Asia/Shanghai
 
-RUN apk add --no-cache tzdata ca-certificates
+RUN apk add --no-cache tzdata ca-certificates nodejs npm && \
+    npm config set registry https://registry.npmmirror.com && \
+    npm install -g @openai/codex@0.129.0 && \
+    npm cache clean --force
 
 WORKDIR /app
 

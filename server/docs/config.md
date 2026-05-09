@@ -78,7 +78,7 @@
 说明：
 
 - 这组字段决定用户 token 签名和默认管理员初始化逻辑。
-- 初始化新项目后，必须替换模板里的默认密钥和管理员密码。
+- 初始化新项目后必须替换模板里的 JWT 密钥；当前个人部署的默认管理员账号保持 `admin/adminadmin`。不要在部署流程中擅自生成或替换管理员密码，如需改密应由维护者明确指定后再调整 `OAUTH_API_ADMIN_PASSWORD`。
 
 ## `data.openai`
 
@@ -94,6 +94,20 @@
 - `baseUrl` 默认使用 `https://api.openai.com/v1`，兼容测试时可指向本地 mock upstream。
 - `upstreamProxyUrl` 为空时直连上游；需要统一出口时可配置 HTTP 或 SOCKS5 代理。
 - `requestTimeoutSeconds` 控制上游请求超时，流式请求同样受该超时约束。
+
+## Codex CLI 上游环境变量
+
+这组配置不进入 `conf.proto`，只用于个人部署的统一出口模式：
+
+- `OAUTH_API_UPSTREAM_PROVIDER`
+  - `openai_api`：默认值，使用 `data.openai.apiKey` / `OPENAI_API_KEY`。
+  - `codex_cli`：使用容器内 Codex CLI 调用服务器 Codex 登录态。
+- `CODEX_HOST_HOME`：宿主机 Codex 登录态目录，Compose 默认挂载到容器。
+- `CODEX_CONTAINER_HOME`：容器内 `CODEX_HOME`，默认 `/root/.codex`。
+- `CODEX_CLI_BIN`：Codex CLI 可执行文件，默认 `codex`。
+- `CODEX_CLI_TIMEOUT_SECONDS`：单次 Codex CLI upstream 超时，默认 `600` 秒。
+
+`codex_cli` 模式适合多台客户端统一走本服务出口：客户端只保存 `ogw_...` 下游 key，服务端统一使用服务器 Codex 登录态，并继续记录 usage。该模式会为每次 `/v1/chat/completions` 或 `/v1/responses` 启动一次 Codex CLI；服务端会串行执行 Codex CLI upstream，避免多个 CLI 进程同时争用 Codex 登录态和本地状态。低配服务器应提高 `APP_MEM_LIMIT`，客户端 provider timeout 建议不低于 600 秒。
 
 ## `data.api`
 

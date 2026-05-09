@@ -10,7 +10,12 @@ import (
 	"io"
 	stdhttp "net/http"
 	"net/url"
+	"os"
+	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"server/internal/biz"
@@ -23,9 +28,15 @@ import (
 )
 
 const (
-	maxGatewayRequestBytes = 32 << 20
-	maxCapturedStreamBytes = 32 << 20
+	maxGatewayRequestBytes   = 32 << 20
+	maxCapturedStreamBytes   = 32 << 20
+	defaultCodexCLITimeout   = 600 * time.Second
+	gatewayUsageWriteTimeout = 5 * time.Second
 )
+
+var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+
+var codexCLIUpstreamMu sync.Mutex
 
 type openAIUsageMetrics struct {
 	Model           string
@@ -252,6 +263,11 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		}
 	}
 
+	if h.useCodexCLIUpstream() {
+		h.handleCodexCLIProxy(w, r, key, requestID, endpoint, requestModel, stream, body, start)
+		return
+	}
+
 	upstreamReq, err := h.buildUpstreamRequest(r, body)
 	if err != nil {
 		status := stdhttp.StatusInternalServerError
@@ -320,6 +336,457 @@ func (h *openAIGatewayHandler) gatewayRateLimitEnabled() bool {
 		return true
 	}
 	return h.dataCfg.Api.RateLimitEnabled
+}
+
+func (h *openAIGatewayHandler) useCodexCLIUpstream() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("OAUTH_API_UPSTREAM_PROVIDER")), "codex_cli")
+}
+
+func (h *openAIGatewayHandler) handleCodexCLIProxy(
+	w stdhttp.ResponseWriter,
+	r *stdhttp.Request,
+	key *biz.GatewayAPIKey,
+	requestID string,
+	endpoint string,
+	requestModel string,
+	stream bool,
+	body []byte,
+	start time.Time,
+) {
+	content, metrics, err := h.runCodexCLI(r.Context(), r.URL.Path, body, requestModel)
+	if err != nil {
+		status := stdhttp.StatusBadGateway
+		h.writeGatewayError(w, status, err, "codex_cli_upstream_failed")
+		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+			APIKeyID:     key.ID,
+			APIKeyPrefix: key.KeyPrefix,
+			RequestID:    requestID,
+			Method:       r.Method,
+			Path:         r.URL.Path,
+			Endpoint:     endpoint,
+			Model:        requestModel,
+			StatusCode:   status,
+			Success:      false,
+			Stream:       stream,
+			RequestBytes: int64(len(body)),
+			DurationMS:   time.Since(start).Milliseconds(),
+			ErrorType:    "codex_cli_upstream_failed",
+			CreatedAt:    time.Now(),
+		})
+		return
+	}
+	if metrics.Model == "" {
+		metrics.Model = requestModel
+	}
+
+	if stream {
+		responseBytes := h.writeCodexCLIChatStream(w, metrics.Model, content, metrics)
+		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+			APIKeyID:      key.ID,
+			APIKeyPrefix:  key.KeyPrefix,
+			RequestID:     requestID,
+			Method:        r.Method,
+			Path:          r.URL.Path,
+			Endpoint:      endpoint,
+			Model:         metrics.Model,
+			StatusCode:    stdhttp.StatusOK,
+			Success:       true,
+			Stream:        true,
+			InputTokens:   metrics.InputTokens,
+			OutputTokens:  metrics.OutputTokens,
+			TotalTokens:   metrics.TotalTokens,
+			RequestBytes:  int64(len(body)),
+			ResponseBytes: responseBytes,
+			DurationMS:    time.Since(start).Milliseconds(),
+			CreatedAt:     time.Now(),
+		})
+		return
+	}
+
+	var responseBody []byte
+	var marshalErr error
+	if r.URL.Path == "/v1/responses" {
+		responseBody, marshalErr = json.Marshal(buildCodexCLIResponsesPayload(metrics.Model, content, metrics))
+	} else {
+		responseBody, marshalErr = json.Marshal(buildCodexCLIChatPayload(metrics.Model, content, metrics))
+	}
+	if marshalErr != nil {
+		h.writeGatewayError(w, stdhttp.StatusInternalServerError, marshalErr, "codex_cli_response_encode_failed")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(stdhttp.StatusOK)
+	_, _ = w.Write(responseBody)
+	h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+		APIKeyID:      key.ID,
+		APIKeyPrefix:  key.KeyPrefix,
+		RequestID:     requestID,
+		Method:        r.Method,
+		Path:          r.URL.Path,
+		Endpoint:      endpoint,
+		Model:         metrics.Model,
+		StatusCode:    stdhttp.StatusOK,
+		Success:       true,
+		Stream:        false,
+		InputTokens:   metrics.InputTokens,
+		OutputTokens:  metrics.OutputTokens,
+		TotalTokens:   metrics.TotalTokens,
+		RequestBytes:  int64(len(body)),
+		ResponseBytes: int64(len(responseBody)),
+		DurationMS:    time.Since(start).Milliseconds(),
+		CreatedAt:     time.Now(),
+	})
+}
+
+func (h *openAIGatewayHandler) runCodexCLI(ctx context.Context, path string, body []byte, requestModel string) (string, openAIUsageMetrics, error) {
+	prompt, err := promptFromGatewayRequest(path, body)
+	if err != nil {
+		return "", openAIUsageMetrics{}, err
+	}
+	if strings.TrimSpace(prompt) == "" {
+		return "", openAIUsageMetrics{}, fmt.Errorf("codex cli upstream prompt is empty")
+	}
+
+	codexCLIUpstreamMu.Lock()
+	defer codexCLIUpstreamMu.Unlock()
+
+	model := strings.TrimSpace(requestModel)
+	if model == "" {
+		model = strings.TrimSpace(os.Getenv("CODEX_CLI_MODEL"))
+	}
+	if model == "" {
+		model = "gpt-5.5"
+	}
+
+	timeout := codexCLITimeout()
+	cmdCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	bin := strings.TrimSpace(os.Getenv("CODEX_CLI_BIN"))
+	if bin == "" {
+		bin = "codex"
+	}
+	args := []string{
+		"exec",
+		"--skip-git-repo-check",
+		"--ephemeral",
+		"--ignore-user-config",
+		"--ignore-rules",
+		"-s", "read-only",
+		"-m", model,
+		"-",
+	}
+	cmd := exec.CommandContext(cmdCtx, bin, args...)
+	cmd.Stdin = strings.NewReader(prompt)
+	cmd.Env = os.Environ()
+	if home := strings.TrimSpace(os.Getenv("CODEX_HOME")); home != "" {
+		cmd.Env = append(cmd.Env, "CODEX_HOME="+home)
+	}
+	if pathEnv := strings.TrimSpace(os.Getenv("CODEX_CLI_PATH")); pathEnv != "" {
+		cmd.Env = append(cmd.Env, "PATH="+pathEnv+":"+os.Getenv("PATH"))
+	}
+	output, err := cmd.CombinedOutput()
+	if cmdCtx.Err() == context.DeadlineExceeded {
+		return "", openAIUsageMetrics{}, fmt.Errorf("codex cli upstream timed out after %s", timeout)
+	}
+	if err != nil {
+		return "", openAIUsageMetrics{}, fmt.Errorf("codex cli upstream failed: %w: %s", err, summarizeCommandOutput(output))
+	}
+
+	content := extractCodexCLIAnswer(output)
+	if strings.TrimSpace(content) == "" {
+		return "", openAIUsageMetrics{}, fmt.Errorf("codex cli upstream returned empty answer")
+	}
+	metrics := estimateCodexCLIUsage(model, prompt, content)
+	return content, metrics, nil
+}
+
+func promptFromGatewayRequest(path string, body []byte) (string, error) {
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", err
+	}
+	if path == "/v1/responses" {
+		return promptFromResponsesPayload(payload), nil
+	}
+	return promptFromChatCompletionsPayload(payload), nil
+}
+
+func promptFromChatCompletionsPayload(payload map[string]any) string {
+	messages, _ := payload["messages"].([]any)
+	parts := make([]string, 0, len(messages))
+	for _, item := range messages {
+		message, _ := item.(map[string]any)
+		if message == nil {
+			continue
+		}
+		role := strings.TrimSpace(stringValue(message["role"]))
+		if role != "user" && role != "assistant" {
+			continue
+		}
+		content := contentTextValue(message["content"])
+		if strings.TrimSpace(content) == "" {
+			continue
+		}
+		parts = append(parts, role+":\n"+content)
+	}
+	parts = lastStringItems(parts, 8)
+	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+}
+
+func promptFromResponsesPayload(payload map[string]any) string {
+	input := payload["input"]
+	switch v := input.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case []any:
+		parts := make([]string, 0, len(v))
+		for _, item := range v {
+			message, _ := item.(map[string]any)
+			if message == nil {
+				continue
+			}
+			role := strings.TrimSpace(stringValue(message["role"]))
+			if role != "user" && role != "assistant" {
+				continue
+			}
+			content := contentTextValue(message["content"])
+			if strings.TrimSpace(content) == "" {
+				continue
+			}
+			parts = append(parts, role+":\n"+content)
+		}
+		parts = lastStringItems(parts, 8)
+		return strings.TrimSpace(strings.Join(parts, "\n\n"))
+	default:
+		return strings.TrimSpace(contentTextValue(input))
+	}
+}
+
+func lastStringItems(items []string, limit int) []string {
+	if limit <= 0 || len(items) <= limit {
+		return items
+	}
+	return items[len(items)-limit:]
+}
+
+func contentTextValue(value any) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case []any:
+		parts := make([]string, 0, len(v))
+		for _, item := range v {
+			switch typed := item.(type) {
+			case string:
+				if strings.TrimSpace(typed) != "" {
+					parts = append(parts, typed)
+				}
+			case map[string]any:
+				if text := stringValue(typed["text"]); strings.TrimSpace(text) != "" {
+					parts = append(parts, text)
+					continue
+				}
+				if text := stringValue(typed["input_text"]); strings.TrimSpace(text) != "" {
+					parts = append(parts, text)
+				}
+			}
+		}
+		return strings.Join(parts, "\n")
+	case map[string]any:
+		return stringValue(v["text"])
+	default:
+		return ""
+	}
+}
+
+func codexCLITimeout() time.Duration {
+	if raw := strings.TrimSpace(os.Getenv("CODEX_CLI_TIMEOUT_SECONDS")); raw != "" {
+		if seconds, err := strconv.Atoi(raw); err == nil && seconds > 0 {
+			return time.Duration(seconds) * time.Second
+		}
+	}
+	return defaultCodexCLITimeout
+}
+
+func extractCodexCLIAnswer(output []byte) string {
+	text := ansiEscapePattern.ReplaceAllString(string(output), "")
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	marker := "\ntokens used\n"
+	if idx := strings.LastIndex(text, marker); idx >= 0 {
+		after := strings.TrimSpace(text[idx+len(marker):])
+		lines := strings.Split(after, "\n")
+		if len(lines) >= 2 {
+			return strings.TrimSpace(strings.Join(lines[1:], "\n"))
+		}
+	}
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if line := strings.TrimSpace(lines[i]); line != "" {
+			return line
+		}
+	}
+	return ""
+}
+
+func summarizeCommandOutput(output []byte) string {
+	text := ansiEscapePattern.ReplaceAllString(string(output), "")
+	text = strings.TrimSpace(text)
+	const maxLen = 800
+	if len(text) > maxLen {
+		text = text[len(text)-maxLen:]
+	}
+	return text
+}
+
+func estimateCodexCLIUsage(model string, prompt string, content string) openAIUsageMetrics {
+	inputTokens := estimateTokenCount(prompt)
+	outputTokens := estimateTokenCount(content)
+	return openAIUsageMetrics{
+		Model:        model,
+		InputTokens:  inputTokens,
+		OutputTokens: outputTokens,
+		TotalTokens:  inputTokens + outputTokens,
+	}
+}
+
+func estimateTokenCount(text string) int64 {
+	runes := int64(len([]rune(text)))
+	if runes == 0 {
+		return 0
+	}
+	tokens := (runes + 3) / 4
+	if tokens < 1 {
+		return 1
+	}
+	return tokens
+}
+
+func buildCodexCLIChatPayload(model string, content string, metrics openAIUsageMetrics) map[string]any {
+	now := time.Now().Unix()
+	return map[string]any{
+		"id":      fmt.Sprintf("chatcmpl-codex-%d", now),
+		"object":  "chat.completion",
+		"created": now,
+		"model":   model,
+		"choices": []map[string]any{
+			{
+				"index": 0,
+				"message": map[string]any{
+					"role":    "assistant",
+					"content": content,
+				},
+				"finish_reason": "stop",
+			},
+		},
+		"usage": chatUsagePayload(metrics),
+	}
+}
+
+func buildCodexCLIResponsesPayload(model string, content string, metrics openAIUsageMetrics) map[string]any {
+	now := time.Now().Unix()
+	return map[string]any{
+		"id":                  fmt.Sprintf("resp_codex_%d", now),
+		"object":              "response",
+		"created_at":          now,
+		"model":               model,
+		"status":              "completed",
+		"output_text":         content,
+		"parallel_tool_calls": false,
+		"output": []map[string]any{
+			{
+				"id":     fmt.Sprintf("msg_codex_%d", now),
+				"type":   "message",
+				"role":   "assistant",
+				"status": "completed",
+				"content": []map[string]any{
+					{
+						"type": "output_text",
+						"text": content,
+					},
+				},
+			},
+		},
+		"usage": responsesUsagePayload(metrics),
+	}
+}
+
+func (h *openAIGatewayHandler) writeCodexCLIChatStream(w stdhttp.ResponseWriter, model string, content string, metrics openAIUsageMetrics) int64 {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(stdhttp.StatusOK)
+	flusher, _ := w.(stdhttp.Flusher)
+
+	id := fmt.Sprintf("chatcmpl-codex-%d", time.Now().Unix())
+	created := time.Now().Unix()
+	chunks := []map[string]any{
+		{
+			"id":      id,
+			"object":  "chat.completion.chunk",
+			"created": created,
+			"model":   model,
+			"choices": []map[string]any{
+				{
+					"index": 0,
+					"delta": map[string]any{
+						"role":    "assistant",
+						"content": content,
+					},
+					"finish_reason": nil,
+				},
+			},
+		},
+		{
+			"id":      id,
+			"object":  "chat.completion.chunk",
+			"created": created,
+			"model":   model,
+			"choices": []map[string]any{
+				{
+					"index":         0,
+					"delta":         map[string]any{},
+					"finish_reason": "stop",
+				},
+			},
+			"usage": chatUsagePayload(metrics),
+		},
+	}
+
+	responseBytes := int64(0)
+	for _, chunk := range chunks {
+		body, _ := json.Marshal(chunk)
+		line := append([]byte("data: "), body...)
+		line = append(line, '\n', '\n')
+		n, _ := w.Write(line)
+		responseBytes += int64(n)
+		if flusher != nil {
+			flusher.Flush()
+		}
+	}
+	n, _ := w.Write([]byte("data: [DONE]\n\n"))
+	responseBytes += int64(n)
+	if flusher != nil {
+		flusher.Flush()
+	}
+	return responseBytes
+}
+
+func chatUsagePayload(metrics openAIUsageMetrics) map[string]any {
+	return map[string]any{
+		"prompt_tokens":     metrics.InputTokens,
+		"completion_tokens": metrics.OutputTokens,
+		"total_tokens":      metrics.TotalTokens,
+	}
+}
+
+func responsesUsagePayload(metrics openAIUsageMetrics) map[string]any {
+	return map[string]any{
+		"input_tokens":  metrics.InputTokens,
+		"output_tokens": metrics.OutputTokens,
+		"total_tokens":  metrics.TotalTokens,
+	}
 }
 
 func (h *openAIGatewayHandler) proxyJSON(
@@ -504,11 +971,13 @@ func (h *openAIGatewayHandler) recordUsage(ctx context.Context, key *biz.Gateway
 	if item == nil {
 		return
 	}
-	if err := h.gatewayUC.CreateUsageLog(ctx, item); err != nil {
+	writeCtx, cancel := context.WithTimeout(context.Background(), gatewayUsageWriteTimeout)
+	defer cancel()
+	if err := h.gatewayUC.CreateUsageLog(writeCtx, item); err != nil {
 		h.log.WithContext(ctx).Errorf("record gateway usage failed: %v", err)
 	}
 	if key != nil && key.ID > 0 {
-		if err := h.gatewayUC.TouchAPIKeyUsed(ctx, key.ID, time.Now()); err != nil {
+		if err := h.gatewayUC.TouchAPIKeyUsed(writeCtx, key.ID, time.Now()); err != nil {
 			h.log.WithContext(ctx).Warnf("touch gateway key failed: %v", err)
 		}
 	}

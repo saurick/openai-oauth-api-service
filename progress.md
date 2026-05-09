@@ -1,8 +1,20 @@
 # Progress
 
+- 完成：复核 dev/prod 管理员密码口径，确认 `server/configs/dev/config.yaml`、`server/configs/dev/config.local.example.yaml`、`server/configs/prod/config.yaml`、`server/deploy/compose/prod/.env.example`、远端 prod `.env` 和运行容器均为 `admin/adminadmin`，未发现代码或部署脚本要求生成随机管理员密码。
+- 完成：同步 README、部署文档、Compose 文档、配置文档和运维文档，明确当前个人部署默认保持 `admin/adminadmin`，部署过程不得擅自生成或替换管理员密码；如需改密必须由维护者明确指定。
+- 验证通过：只输出管理员密码长度和是否匹配默认值，未打印明文 secret；远端 prod `.env` 与容器均显示密码长度 10 且匹配默认口径。
+
+- 完成：将远端 prod Compose 目录中已失效的 `ADMIN_CREDENTIALS.txt` 和含旧管理员密码的 `.env.bak-20260508235936-admin-password` 移出主路径，放入 `/data/openai-oauth-api-service/deploy-trash/` 并保留 `600` 权限，避免后续误读旧凭据。
+- 验证通过：远端 `/data/openai-oauth-api-service/compose` 当前只保留 `.env` 与 `compose.yml`；当前 `.env` 中管理员账号为 `admin`，`OAUTH_API_ADMIN_PASSWORD` 长度为 10，即 `adminadmin` 口径。
+- 阻塞/风险：本轮按项目约定未永久删除远端旧文件；如确认需要不可恢复删除，应单独明确授权后再处理。
+
 - 完成：按低配服务器发布口径补充部署构建边界，更新 `AGENTS.md`、`server/deploy/README.md` 和 `server/deploy/compose/prod/README.md`，明确服务器只负责加载已构建镜像、启动 Compose、执行 migration 与部署后检查；镜像和前后端产物必须先在本地或 CI 构建并上传。
 - 验证通过：本轮为文档/协作约定改动，未触达运行时代码、schema、Compose 配置或线上服务；已检查 `progress.md` 规模，未达到归档阈值。
 - 阻塞/风险：未新增发布脚本自动拦截服务器侧构建命令；当前约束先收口到正式文档和项目协作规则。
+
+- 完成：将远端 prod `/data/openai-oauth-api-service/compose/.env` 的 `OAUTH_API_ADMIN_PASSWORD` 调整为 `adminadmin`，原 `.env` 已备份为 `.env.bak-20260508235936-admin-password`，并重建 `app-server` 让启动初始化同步 `admin_users` 密码哈希。
+- 验证通过：远端 `/readyz` 返回 `ready`；服务日志出现 `sync admin_users admin success`；`admin/adminadmin` 调用 `http://8.218.4.199:8400/rpc/auth` 返回 `code=0 登录成功`，错误密码仍返回 `10002 密码错误`；`/admin-login` 返回 HTTP 200。
+- 阻塞/风险：当前 prod 管理员密码按维护者要求保持默认口径；后续不得擅自替换，除非维护者明确要求改密。
 
 - 完成：接入 API 凭据级 `quota_total_tokens` 限制，转发前按该 key 历史 usage 总 token 判断是否超额，超额返回 HTTP 429 并记录 usage/audit；后台 API 凭据创建/编辑和列表恢复“Token 总额度”配置与展示，`0` 或空值表示不限。
 - 验证通过：`cd server && go test ./internal/biz ./internal/server`、`cd web && pnpm lint && pnpm test && pnpm build && pnpm css && pnpm style:l1`、`git diff --check`；内置浏览器使用 mock RPC 打开 `/admin-keys`，确认“Token 总额度”表单、“Token 限制”列和编辑态额度回显正常。
@@ -146,7 +158,7 @@
 - 修复：Dockerfile 固定容器构建使用 `pnpm@10.13.1`，避免新版 pnpm 拦截 `esbuild` 构建脚本导致镜像构建失败。
 - 验证通过：本地构建 `oauth-api-service-server:dev` 镜像并通过 SSH 导入服务器；远端 Atlas migration 已应用；`https://openai.saurick.space/admin-login` 通过 Nginx 反代返回 200；`/auth/oauth/config` 返回 OAuth 未启用。
 - 下一步：配置真实 OAuth/OIDC provider 后，将服务器 `.env` 中 `OAUTH_API_OAUTH_ENABLED` 与 provider 参数开启，再重启 `app-server`。
-- 阻塞/风险：服务器 Docker 代理指向 `192.168.0.107:7893` 且当前不可达，本轮未擅自修改代理；生产管理员密码暂按要求保留 `admin/adminadmin`，公网使用前建议尽快改强密码。
+- 阻塞/风险：服务器 Docker 代理指向 `192.168.0.107:7893` 且当前不可达，本轮未擅自修改代理；生产管理员密码按要求保留 `admin/adminadmin`，后续不得擅自生成或替换。
 - 完成：经授权对当前本机命中的开发库 `192.168.0.106:5432/openai_api_gateway` 执行 Atlas migration，将版本从 `20260430110943` 升级到 `20260507124134`，补齐 `owner_user_id`、OAuth 绑定字段、策略/价格/告警/审计表和 `plain_key` 字段。
 - 验证通过：`make migrate_status` 显示 pending 为 0；直连本地后端验证 `admin_login`、`api.summary`、`api.key_list`、`api.usage_list`、`api.usage_buckets`、`api.usage_key_summaries` 和 `api.model_list` 均返回 `code=0`；`go test ./...`、`pnpm lint`、`pnpm css`、`pnpm test`、`pnpm build` 通过。
 - 下一步：刷新本地后台页面；如需要真实 OpenAI OAuth 登录，再配置后端 OAuth/OIDC provider 参数并联调 `/auth/oauth/start -> /auth/oauth/callback`。
@@ -218,3 +230,33 @@
 - 验证通过：`cd server && go test ./...`、`cd web && pnpm install --frozen-lockfile && pnpm lint && pnpm test -- --run`、本地 Docker 生产镜像构建；远端 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`、`/admin-login` 内外网访问均返回 200，JSON-RPC `admin_login` 返回 `code=0` 且包含 `access_token`。
 - 下一步：如需启用真实 OpenAI 兼容转发，在远端 `/data/openai-oauth-api-service/compose/.env` 写入 `OPENAI_API_KEY` 后执行 `docker compose -f compose.yml up -d app-server`。
 - 阻塞/风险：本机 `server/.env` 未提供 `OPENAI_API_KEY`，本次部署的后台可用，但 `/v1` 上游转发在补齐真实 key 前不可用；首次迁移打包带出的 macOS `._*` 资源叉文件已移到远端 `/data/openai-oauth-api-service/deploy-trash`，未留在迁移目录。
+- 完成：通过远端管理员 JSON-RPC 登录创建 `opencode deployed test` 下游 key，并将本机 OpenCode 配置增加 `oauth-api-service` 自定义 provider；key 明文保存在本机 `~/.config/opencode/secrets/openai-oauth-api-service.key`，原配置备份为 `~/.config/opencode/opencode.json.bak-20260508232751-oauth-api-service`。
+- 验证通过：`opencode debug config` 可见 `oauth-api-service` provider，`opencode models oauth-api-service` 只返回 `oauth-api-service/gpt-5.4` 与 `oauth-api-service/gpt-5.5`；使用该 key 调用 `http://8.218.4.199:8400/v1/models` 返回 2 个模型，后台 usage 记录 `models 200`。
+- 验证受限：`opencode run --pure -m oauth-api-service/gpt-5.5 --variant high` 已打到远端 `/v1/chat/completions`，后台 usage 记录多条 `chat.completions 500 upstream_config_error gpt-5.5`；失败原因是远端 `OPENAI_API_KEY` 仍为空，不是下游 key 或 OpenCode provider 配置失败。
+- 下一步：给远端 `.env` 补真实 `OPENAI_API_KEY` 并重启 app-server 后，重新跑一次 `opencode run --pure -m oauth-api-service/gpt-5.5 --variant high --format json "Reply with OK only."`，再核对 usage 是否记录成功请求和 token 用量。
+- 阻塞/风险：本轮为验证链路创建了一个可用下游 key；如后续不需要保留，应在后台删除该 `opencode deployed test` API 凭据，避免长期暴露额外凭据。
+- 完成：为 `openai.saurick.space` 配置系统 Nginx HTTPS 反代到 `127.0.0.1:8400`，证书目录为 `/etc/nginx/certs/openai.saurick.space`，续签脚本为 `/usr/local/sbin/renew-openai-saurick-space-cert.sh`，续签日志为 `/var/log/acme/openai-saurick-space-renew.log`。
+- 完成：使用最新 Cloudflare token 校验通过 `saurick.space` zone 权限，删除 `openai.saurick.space` 上残留的未代理 AAAA 记录，只保留 `A openai -> 8.218.4.199` 且 proxied；acme.sh 已切换为 Cloudflare DNS-01，`Le_Webroot='dns_cf'`。
+- 完成：本机 OpenCode `oauth-api-service` provider 改为 `https://openai.saurick.space/v1`，并按 OpenCode 官方 custom provider 口径把下游 key 写入 `options.apiKey`；原配置备份为 `~/.config/opencode/opencode.json.bak-20260508154441-openai-domain`。
+- 验证通过：`nginx -t`、`systemctl is-active nginx cron docker`、续签脚本手动执行通过；origin 直连 `https://openai.saurick.space/admin-login` 与 Cloudflare 代理路径均返回 200，`/readyz` 返回 `ready`；`opencode models oauth-api-service` 返回 `gpt-5.4/gpt-5.5`，使用该 key 调用 `https://openai.saurick.space/v1/models` 返回 2 个模型。
+- 验证受限：本地 `opencode run --pure -m oauth-api-service/gpt-5.5 --variant high` 已不再报 `OpenAI API key is missing`，请求已进入服务器并被 usage 记录为 `chat.completions 500 upstream_config_error gpt-5.5`；远端 `OPENAI_API_KEY` 仍为空，真实模型回复和 token 用量统计必须等补齐上游 OpenAI API key 后才能通过。
+- 阻塞/风险：Cloudflare token 已保存到服务器 root-only 文件 `/root/.acme-env/cloudflare-openai-saurick-space.env`，权限 `600`；不要写入仓库。当前证书有效期到 `2026-08-06 15:02:30 GMT`。
+- 验证补充：按最新 Cloudflare token 重新验证自动续签链路，`/root/.acme-env/cloudflare-openai-saurick-space.env` 中 token active，具备 `saurick.space` zone 访问与 DNS 写权限；已通过 Cloudflare API 创建、查询、删除临时 TXT 记录 `_codex-renew-test.openai.saurick.space`。
+- 验证补充：手动执行 `/usr/local/sbin/renew-openai-saurick-space-cert.sh` 通过，日志显示 acme.sh 按 ARI 下一续签窗口跳过当前未到期证书，并在随后执行 `nginx -t` 与 reload 成功；cron 仍为 `23 3 * * * /usr/local/sbin/renew-openai-saurick-space-cert.sh`。
+- 验证补充：`https://openai.saurick.space/admin-login` 返回 200，`/readyz` 返回 `ready`，`https://openai.saurick.space/v1/models` 使用 OpenCode 下游 key 返回 `gpt-5.4,gpt-5.5`。`opencode run` 保留退出码复测为超时 `142`，服务器 usage 同步记录 `chat.completions 500 upstream_config_error gpt-5.5`；远端 `OPENAI_API_KEY_set=no`，没有上游 key 前无法把真实消息测试跑到模型返回。
+- 完成：将前端 favicon 替换为本地内联的 Codex 彩色图标版本，并同步更新未被当前 HTML 直接引用的 `src/assets/icons/favicon.png` 备用资产。
+- 完成：按要求将 Codex favicon 内部渐变从蓝色系调整为黄橙红暖色系。
+- 下一步：部署新前端构建后，浏览器可能需要清理 favicon 缓存或强制刷新后才会显示新图标。
+- 阻塞/风险：无。
+- 验证补充：重新确认 `8.218.4.199` 上 `openai.saurick.space` 的 Nginx、cron、Docker 均为 active，`nginx -t` 通过，证书为 Let's Encrypt `E8`，有效期到 `2026-08-06 15:02:30 GMT`；crontab 保持 `23 3 * * * /usr/local/sbin/renew-openai-saurick-space-cert.sh`，acme 配置为 `Le_Webroot='dns_cf'`。
+- 验证补充：本地 OpenCode `oauth-api-service` provider 已能列出 `oauth-api-service/gpt-5.4` 与 `oauth-api-service/gpt-5.5`；`https://openai.saurick.space/readyz` 返回 `ready`，使用本地下游 key 调用 `https://openai.saurick.space/v1/models` 返回 `gpt-5.4,gpt-5.5`。
+- 验证受限：使用同一个下游 key 调用 `https://openai.saurick.space/v1/chat/completions` 返回 `upstream_config_error` / `OpenAI 上游未配置`，远端 `.env` 当前 `OPENAI_API_KEY_set=no`；本地 OpenCode 的 `apiKey missing` 问题已排除，完整模型回复和 token 统计仍必须等远端写入真实上游 `OPENAI_API_KEY` 并重启 app-server 后复测。
+- 完成：新增 `codex_cli` 上游模式，当前 Go 网关在 `OAUTH_API_UPSTREAM_PROVIDER=codex_cli` 时会用容器内 Codex CLI 调用服务器挂载的 `/root/.codex` 登录态；客户端仍只使用本系统签发的 `ogw_...` 下游 key，usage 仍由本系统记录。
+- 完成：生产镜像 `openai-oauth-api-service-server:20260509T035005-codex-cli` 已包含 `codex-cli 0.129.0`；远端 Compose 已切到该镜像，挂载 `CODEX_HOST_HOME=/root/.codex`，并将 `APP_MEM_LIMIT` 提高到 `900m` 以容纳 Codex CLI 子进程。
+- 验证通过：容器内 `CODEX_HOME=/root/.codex codex login status` 显示 `Logged in using ChatGPT`；本地新建下游 key `ogw_FGkHh2lW` 并写入 OpenCode provider，`opencode models oauth-api-service` 返回 `gpt-5.4/gpt-5.5`。
+- 验证通过：直接调用 `https://openai.saurick.space/v1/chat/completions` 返回 `HTTP 200` 和 `OK`；本地执行 `opencode run --pure -m oauth-api-service/gpt-5.5 --variant high --format json "Reply with OK only."` 退出码为 0 并输出 `OK`。
+- 验证通过：后台 usage 最新记录显示 `ogw_FGkHh2lW chat.completions gpt-5.5 HTTP 200 success=true total_tokens=5401 input/output=5400/1`，此前 `upstream_config_error` 已不再出现在新 key 的调用链路。
+- 阻塞/风险：`codex_cli` 模式每次请求都会启动一次 Codex CLI，低配服务器不适合高并发；token 用量来自 Codex/OpenCode 返回或网关估算口径，适合作为统一出口统计，不等同于官方 API 逐项计费账单。
+- 修复：针对 OpenCode 桌面端 `Bad Gateway retrying`，将 `codex_cli` upstream 改为只转发最近 user/assistant 对话，忽略 OpenCode 自带的大段 system/developer/tool 提示词；同时对 Codex CLI upstream 加进程内串行锁，避免桌面端主回复、标题生成等并发请求同时启动多个 Codex CLI 进程争用服务器 Codex 登录态。
+- 修复：usage 写入改用 5 秒后台 context，避免客户端取消或桌面端重试时导致 `record gateway usage failed: context deadline exceeded` 丢统计；本地 OpenCode provider 显式设置 `timeout=600000`。
+- 验证通过：部署 `openai-oauth-api-service-server:20260509T041155-codex-cli-serial` 后，3 个并发请求（含 stream）全部返回 `HTTP 200`，内容分别为 `A/B/C`；本地 `opencode run --pure -m oauth-api-service/gpt-5.5 --variant high --format json "只回复 OK"` 返回 `OK` 且退出码为 0；OpenCode 桌面窗口当前显示 `OK`，不再停留在 Bad Gateway。

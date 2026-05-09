@@ -30,6 +30,7 @@
 
 - 当前仓库主部署方式是 Docker Compose。
 - 低配服务器只负责 `docker load`、`docker compose up`、migration 与 smoke，不作为构建机使用；部署时必须在本地或 CI 先完成镜像构建、打包和上传，禁止在服务器上执行 `docker build`、`pnpm build`、`go build`、`make build_server` 等重构建步骤。
+- 当前个人部署的管理员账号默认保持 `admin/adminadmin`；部署时不得擅自生成、写入或同步随机管理员密码。只有用户明确要求改密时，才调整 `OAUTH_API_ADMIN_PASSWORD` 并重启 `app-server`。
 - Kubernetes、dashboard、lab-ha 和远端 SSH 发布脚本已从主路径裁剪；后续确实需要时再按真实环境新增，不从旧模板回填占位清单。
 - Compose 环境变量以 `server/deploy/compose/prod/.env.example` 为入口，真实 `.env` 不提交。
 
