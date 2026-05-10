@@ -26,6 +26,7 @@ RUN npm install -g pnpm@10.13.1 && \
 COPY web/src ./src
 COPY web/public ./public
 COPY web/index.html ./
+COPY web/.env.production ./
 COPY web/vite.config.mjs ./
 COPY web/tailwind.config.js ./
 COPY web/postcss.config.js ./
@@ -92,7 +93,7 @@ ENV BUILD_TIME=${BUILD_TIME}
 ENV IMAGE_TAG=${IMAGE_TAG}
 ENV TZ=Asia/Shanghai
 
-RUN apk add --no-cache tzdata ca-certificates nodejs npm && \
+RUN apk add --no-cache tini tzdata ca-certificates nodejs npm && \
     npm config set registry https://registry.npmmirror.com && \
     npm install -g @openai/codex@0.129.0 && \
     npm cache clean --force
@@ -107,4 +108,5 @@ EXPOSE 8400
 EXPOSE 9400
 
 # 默认用 /app/configs （里面只有 prod/config.yaml）
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["/app/server", "-conf", "/app/configs"]

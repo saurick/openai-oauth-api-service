@@ -58,6 +58,7 @@ func TestMapGatewayUsageBucketForRPCIsStructCompatible(t *testing.T) {
 	start := time.Unix(1778000000, 0)
 	item := &biz.GatewayUsageBucket{
 		BucketStart:       start,
+		Model:             "gpt-5.4",
 		TotalRequests:     12,
 		SuccessRequests:   10,
 		FailedRequests:    2,
@@ -80,6 +81,9 @@ func TestMapGatewayUsageBucketForRPCIsStructCompatible(t *testing.T) {
 	got := s.AsMap()
 	if got["bucket_start"] != float64(start.Unix()) {
 		t.Fatalf("bucket_start = %#v, want %d", got["bucket_start"], start.Unix())
+	}
+	if got["model"] != "gpt-5.4" {
+		t.Fatalf("model = %#v, want gpt-5.4", got["model"])
 	}
 	if got["cached_tokens"] != float64(40) || got["reasoning_tokens"] != float64(20) {
 		t.Fatalf("unexpected token fields: %#v", got)
@@ -116,6 +120,44 @@ func TestMapGatewayUsageKeySummaryForRPCIsStructCompatible(t *testing.T) {
 	}
 	if got["estimated_cost_usd"] != cost {
 		t.Fatalf("estimated_cost_usd = %#v, want %v", got["estimated_cost_usd"], cost)
+	}
+}
+
+func TestMapGatewayUsageSessionSummaryForRPCIsStructCompatible(t *testing.T) {
+	cost := 1.23
+	first := time.Unix(1778000000, 0)
+	last := first.Add(5 * time.Minute)
+	item := &biz.GatewayUsageSessionSummary{
+		SessionID:         "session-123",
+		APIKeyID:          3,
+		APIKeyPrefix:      "ogw_test",
+		TotalRequests:     4,
+		SuccessRequests:   3,
+		FailedRequests:    1,
+		TotalTokens:       1200,
+		InputTokens:       800,
+		OutputTokens:      300,
+		CachedTokens:      100,
+		ReasoningTokens:   50,
+		AverageDurationMS: 456,
+		FirstSeenAt:       first,
+		LastSeenAt:        last,
+		EstimatedCostUSD:  &cost,
+	}
+
+	data := mapGatewayUsageSessionSummaryForRPC(item)
+	s := newDataStruct(data)
+	if s == nil {
+		t.Fatalf("expected gateway usage session summary rpc data to be structpb-compatible")
+	}
+
+	got := s.AsMap()
+	if got["session_id"] != "session-123" || got["api_key_id"] != float64(3) {
+		t.Fatalf("unexpected session fields: %#v", got)
+	}
+	if got["first_seen_at"] != float64(first.Unix()) ||
+		got["last_seen_at"] != float64(last.Unix()) {
+		t.Fatalf("unexpected time fields: %#v", got)
 	}
 }
 

@@ -47,6 +47,23 @@ func (d *JsonrpcData) handleGateway(
 			"summary": mapGatewaySummary(summary),
 		}), nil
 
+	case "gateway_upstream_get":
+		mode, err := d.gatewayUC.GetCodexUpstreamMode(ctx)
+		if err != nil {
+			return id, d.mapGatewayError(ctx, err), nil
+		}
+		return id, okResult("获取 Codex 上游模式成功", mapGatewayUpstreamModeForRPC(mode)), nil
+
+	case "gateway_upstream_set":
+		mode, err := d.gatewayUC.SetCodexUpstreamMode(ctx, getString(pm, "mode"))
+		if err != nil {
+			return id, d.mapGatewayError(ctx, err), nil
+		}
+		d.auditGateway(ctx, "api.gateway_upstream_set", "gateway_setting", biz.GatewaySettingCodexUpstreamMode, map[string]any{
+			"mode": mode,
+		})
+		return id, okResult("切换 Codex 上游模式成功", mapGatewayUpstreamModeForRPC(mode)), nil
+
 	case "key_list":
 		limit := getInt(pm, "limit", 30)
 		offset := getInt(pm, "offset", 0)
@@ -185,7 +202,7 @@ func (d *JsonrpcData) handleGateway(
 		}
 		return id, okResult("获取 usage 聚合成功", map[string]any{
 			"items":    items,
-			"group_by": "day",
+			"group_by": groupBy,
 		}), nil
 
 	case "usage_key_summaries":
@@ -203,6 +220,26 @@ func (d *JsonrpcData) handleGateway(
 		return id, okResult("获取 key usage 聚合成功", map[string]any{
 			"items": out,
 			"limit": limit,
+		}), nil
+
+	case "usage_session_summaries":
+		filter := gatewayUsageFilterFromParams(pm)
+		limit := getInt(pm, "limit", 30)
+		offset := getInt(pm, "offset", 0)
+		items, total, err := d.gatewayUC.ListUsageSessionSummaries(ctx, filter, limit, offset)
+		if err != nil {
+			l.Errorf("[api] usage_session_summaries failed err=%v", err)
+			return id, d.mapGatewayError(ctx, err), nil
+		}
+		out := make([]any, 0, len(items))
+		for _, item := range items {
+			out = append(out, mapGatewayUsageSessionSummaryForRPC(item))
+		}
+		return id, okResult("获取会话 usage 聚合成功", map[string]any{
+			"items":  out,
+			"total":  total,
+			"limit":  limit,
+			"offset": offset,
 		}), nil
 
 	case "model_list":
@@ -435,6 +472,8 @@ func (d *JsonrpcData) mapGatewayError(ctx context.Context, err error) *v1.Jsonrp
 		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "模型策略参数错误"}
 	case errors.Is(err, biz.ErrGatewayExportRange):
 		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "导出时间范围过大"}
+	case errors.Is(err, biz.ErrGatewayUpstreamModeInvalid):
+		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "Codex 上游模式参数错误"}
 	default:
 		return &v1.JsonrpcResult{Code: errcode.APIOperationFailed.Code, Message: errcode.APIOperationFailed.Message}
 	}
@@ -530,13 +569,15 @@ func gatewayUsageFilterFromParams(pm map[string]any) biz.GatewayUsageFilter {
 		end = time.Unix(endRaw, 0)
 	}
 	return biz.GatewayUsageFilter{
-		Limit:     getInt(pm, "limit", 30),
-		Offset:    getInt(pm, "offset", 0),
-		KeyID:     getInt(pm, "key_id", 0),
-		Model:     getString(pm, "model"),
-		Endpoint:  getString(pm, "endpoint"),
-		StartTime: start,
-		EndTime:   end,
+		Limit:        getInt(pm, "limit", 30),
+		Offset:       getInt(pm, "offset", 0),
+		KeyID:        getInt(pm, "key_id", 0),
+		SessionID:    getString(pm, "session_id"),
+		Model:        getString(pm, "model"),
+		Endpoint:     getString(pm, "endpoint"),
+		UpstreamMode: getString(pm, "upstream_mode"),
+		StartTime:    start,
+		EndTime:      end,
 		SuccessSet: func() bool {
 			_, ok := pm["success"]
 			return ok
@@ -690,27 +731,32 @@ func mapGatewayUsageForRPC(item *biz.GatewayUsageLog) map[string]any {
 		return map[string]any{}
 	}
 	data := map[string]any{
-		"id":               item.ID,
-		"api_key_id":       item.APIKeyID,
-		"api_key_prefix":   item.APIKeyPrefix,
-		"request_id":       item.RequestID,
-		"method":           item.Method,
-		"path":             item.Path,
-		"endpoint":         item.Endpoint,
-		"model":            item.Model,
-		"status_code":      item.StatusCode,
-		"success":          item.Success,
-		"stream":           item.Stream,
-		"input_tokens":     item.InputTokens,
-		"output_tokens":    item.OutputTokens,
-		"total_tokens":     item.TotalTokens,
-		"cached_tokens":    item.CachedTokens,
-		"reasoning_tokens": item.ReasoningTokens,
-		"request_bytes":    item.RequestBytes,
-		"response_bytes":   item.ResponseBytes,
-		"duration_ms":      item.DurationMS,
-		"error_type":       item.ErrorType,
-		"created_at":       item.CreatedAt.Unix(),
+		"id":                       item.ID,
+		"api_key_id":               item.APIKeyID,
+		"api_key_prefix":           item.APIKeyPrefix,
+		"session_id":               item.SessionID,
+		"request_id":               item.RequestID,
+		"method":                   item.Method,
+		"path":                     item.Path,
+		"endpoint":                 item.Endpoint,
+		"model":                    item.Model,
+		"status_code":              item.StatusCode,
+		"success":                  item.Success,
+		"stream":                   item.Stream,
+		"input_tokens":             item.InputTokens,
+		"output_tokens":            item.OutputTokens,
+		"total_tokens":             item.TotalTokens,
+		"cached_tokens":            item.CachedTokens,
+		"reasoning_tokens":         item.ReasoningTokens,
+		"request_bytes":            item.RequestBytes,
+		"response_bytes":           item.ResponseBytes,
+		"duration_ms":              item.DurationMS,
+		"upstream_configured_mode": item.UpstreamConfiguredMode,
+		"upstream_mode":            item.UpstreamMode,
+		"upstream_fallback":        item.UpstreamFallback,
+		"upstream_error_type":      item.UpstreamErrorType,
+		"error_type":               item.ErrorType,
+		"created_at":               item.CreatedAt.Unix(),
 	}
 	if item.EstimatedCostUSD != nil {
 		data["estimated_cost_usd"] = *item.EstimatedCostUSD
@@ -718,6 +764,27 @@ func mapGatewayUsageForRPC(item *biz.GatewayUsageLog) map[string]any {
 		data["estimated_cost_usd"] = nil
 	}
 	return data
+}
+
+func mapGatewayUpstreamModeForRPC(mode string) map[string]any {
+	mode = biz.NormalizeGatewayUpstreamMode(mode)
+	if mode == "" {
+		mode = biz.DefaultGatewayUpstreamMode()
+	}
+	return map[string]any{
+		"mode":         mode,
+		"default_mode": biz.DefaultGatewayUpstreamMode(),
+		"options": []any{
+			map[string]any{
+				"label": "Backend 优先",
+				"value": biz.GatewayUpstreamModeCodexBackend,
+			},
+			map[string]any{
+				"label": "强制 CLI",
+				"value": biz.GatewayUpstreamModeCodexCLI,
+			},
+		},
+	}
 }
 
 func mapGatewaySummary(item *biz.GatewayUsageSummary) map[string]any {
@@ -736,6 +803,9 @@ func mapGatewaySummary(item *biz.GatewayUsageSummary) map[string]any {
 		"total_bytes_in":      item.TotalBytesIn,
 		"total_bytes_out":     item.TotalBytesOut,
 		"average_duration_ms": item.AverageDurationMS,
+		"backend_requests":    item.BackendRequests,
+		"cli_requests":        item.CLIRequests,
+		"fallback_requests":   item.FallbackRequests,
 	}
 	if item.EstimatedCostUSD != nil {
 		data["estimated_cost_usd"] = *item.EstimatedCostUSD
@@ -751,6 +821,7 @@ func mapGatewayUsageBucketForRPC(item *biz.GatewayUsageBucket) map[string]any {
 	}
 	data := map[string]any{
 		"bucket_start":        item.BucketStart.Unix(),
+		"model":               item.Model,
 		"total_requests":      item.TotalRequests,
 		"success_requests":    item.SuccessRequests,
 		"failed_requests":     item.FailedRequests,
@@ -762,6 +833,9 @@ func mapGatewayUsageBucketForRPC(item *biz.GatewayUsageBucket) map[string]any {
 		"total_bytes_in":      item.TotalBytesIn,
 		"total_bytes_out":     item.TotalBytesOut,
 		"average_duration_ms": item.AverageDurationMS,
+		"backend_requests":    item.BackendRequests,
+		"cli_requests":        item.CLIRequests,
+		"fallback_requests":   item.FallbackRequests,
 	}
 	if item.EstimatedCostUSD != nil {
 		data["estimated_cost_usd"] = *item.EstimatedCostUSD
@@ -789,6 +863,40 @@ func mapGatewayUsageKeySummaryForRPC(item *biz.GatewayUsageKeySummary) map[strin
 		"cached_tokens":       item.CachedTokens,
 		"reasoning_tokens":    item.ReasoningTokens,
 		"average_duration_ms": item.AverageDurationMS,
+		"backend_requests":    item.BackendRequests,
+		"cli_requests":        item.CLIRequests,
+		"fallback_requests":   item.FallbackRequests,
+	}
+	if item.EstimatedCostUSD != nil {
+		data["estimated_cost_usd"] = *item.EstimatedCostUSD
+	} else {
+		data["estimated_cost_usd"] = nil
+	}
+	return data
+}
+
+func mapGatewayUsageSessionSummaryForRPC(item *biz.GatewayUsageSessionSummary) map[string]any {
+	if item == nil {
+		return map[string]any{}
+	}
+	data := map[string]any{
+		"session_id":          item.SessionID,
+		"api_key_id":          item.APIKeyID,
+		"api_key_prefix":      item.APIKeyPrefix,
+		"total_requests":      item.TotalRequests,
+		"success_requests":    item.SuccessRequests,
+		"failed_requests":     item.FailedRequests,
+		"total_tokens":        item.TotalTokens,
+		"input_tokens":        item.InputTokens,
+		"output_tokens":       item.OutputTokens,
+		"cached_tokens":       item.CachedTokens,
+		"reasoning_tokens":    item.ReasoningTokens,
+		"average_duration_ms": item.AverageDurationMS,
+		"backend_requests":    item.BackendRequests,
+		"cli_requests":        item.CLIRequests,
+		"fallback_requests":   item.FallbackRequests,
+		"first_seen_at":       item.FirstSeenAt.Unix(),
+		"last_seen_at":        item.LastSeenAt.Unix(),
 	}
 	if item.EstimatedCostUSD != nil {
 		data["estimated_cost_usd"] = *item.EstimatedCostUSD

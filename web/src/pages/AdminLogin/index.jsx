@@ -103,12 +103,12 @@ export default function AdminLoginPage() {
                   API SERVICE
                 </div>
                 <div className="mt-1 text-sm font-extrabold uppercase tracking-[0.03em] text-[#173b59] sm:text-lg">
-                  OpenAI OAuth API Service
+                  Saurick API Console
                 </div>
               </div>
             </div>
             <h1 className="mt-6 text-2xl font-bold text-[#202422]">
-              OAuth API 管理后台
+              API 管理后台
             </h1>
           </div>
 

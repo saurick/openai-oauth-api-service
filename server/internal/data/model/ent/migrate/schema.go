@@ -278,11 +278,33 @@ var (
 			},
 		},
 	}
+	// GatewaySettingsColumns holds the columns for the "gateway_settings" table.
+	GatewaySettingsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "key", Type: field.TypeString, Size: 128},
+		{Name: "value", Type: field.TypeString, Size: 512, Default: ""},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// GatewaySettingsTable holds the schema information for the "gateway_settings" table.
+	GatewaySettingsTable = &schema.Table{
+		Name:       "gateway_settings",
+		Columns:    GatewaySettingsColumns,
+		PrimaryKey: []*schema.Column{GatewaySettingsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "gatewaysetting_key",
+				Unique:  true,
+				Columns: []*schema.Column{GatewaySettingsColumns[1]},
+			},
+		},
+	}
 	// GatewayUsageLogsColumns holds the columns for the "gateway_usage_logs" table.
 	GatewayUsageLogsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "api_key_id", Type: field.TypeInt, Nullable: true},
 		{Name: "api_key_prefix", Type: field.TypeString, Size: 16, Default: ""},
+		{Name: "session_id", Type: field.TypeString, Size: 128, Default: ""},
 		{Name: "request_id", Type: field.TypeString, Size: 128, Default: ""},
 		{Name: "method", Type: field.TypeString, Size: 16},
 		{Name: "path", Type: field.TypeString, Size: 256},
@@ -299,6 +321,10 @@ var (
 		{Name: "request_bytes", Type: field.TypeInt64, Default: 0},
 		{Name: "response_bytes", Type: field.TypeInt64, Default: 0},
 		{Name: "duration_ms", Type: field.TypeInt64, Default: 0},
+		{Name: "upstream_configured_mode", Type: field.TypeString, Size: 32, Default: ""},
+		{Name: "upstream_mode", Type: field.TypeString, Size: 32, Default: ""},
+		{Name: "upstream_fallback", Type: field.TypeBool, Default: false},
+		{Name: "upstream_error_type", Type: field.TypeString, Size: 128, Default: ""},
 		{Name: "error_type", Type: field.TypeString, Size: 128, Default: ""},
 		{Name: "created_at", Type: field.TypeTime},
 	}
@@ -311,27 +337,42 @@ var (
 			{
 				Name:    "gatewayusagelog_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{GatewayUsageLogsColumns[20]},
+				Columns: []*schema.Column{GatewayUsageLogsColumns[25]},
 			},
 			{
 				Name:    "gatewayusagelog_api_key_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{GatewayUsageLogsColumns[1], GatewayUsageLogsColumns[20]},
+				Columns: []*schema.Column{GatewayUsageLogsColumns[1], GatewayUsageLogsColumns[25]},
+			},
+			{
+				Name:    "gatewayusagelog_session_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{GatewayUsageLogsColumns[3], GatewayUsageLogsColumns[25]},
 			},
 			{
 				Name:    "gatewayusagelog_model_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{GatewayUsageLogsColumns[7], GatewayUsageLogsColumns[20]},
+				Columns: []*schema.Column{GatewayUsageLogsColumns[8], GatewayUsageLogsColumns[25]},
 			},
 			{
 				Name:    "gatewayusagelog_endpoint_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{GatewayUsageLogsColumns[6], GatewayUsageLogsColumns[20]},
+				Columns: []*schema.Column{GatewayUsageLogsColumns[7], GatewayUsageLogsColumns[25]},
+			},
+			{
+				Name:    "gatewayusagelog_upstream_mode_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{GatewayUsageLogsColumns[21], GatewayUsageLogsColumns[25]},
+			},
+			{
+				Name:    "gatewayusagelog_upstream_fallback_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{GatewayUsageLogsColumns[22], GatewayUsageLogsColumns[25]},
 			},
 			{
 				Name:    "gatewayusagelog_success_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{GatewayUsageLogsColumns[9], GatewayUsageLogsColumns[20]},
+				Columns: []*schema.Column{GatewayUsageLogsColumns[10], GatewayUsageLogsColumns[25]},
 			},
 		},
 	}
@@ -377,6 +418,7 @@ var (
 		GatewayModelsTable,
 		GatewayModelPricesTable,
 		GatewayPoliciesTable,
+		GatewaySettingsTable,
 		GatewayUsageLogsTable,
 		UsersTable,
 	}

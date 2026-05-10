@@ -19,6 +19,7 @@ import (
 	"server/internal/data/model/ent/gatewaymodel"
 	"server/internal/data/model/ent/gatewaymodelprice"
 	"server/internal/data/model/ent/gatewaypolicy"
+	"server/internal/data/model/ent/gatewaysetting"
 	"server/internal/data/model/ent/gatewayusagelog"
 	"server/internal/data/model/ent/user"
 
@@ -48,6 +49,8 @@ type Client struct {
 	GatewayModelPrice *GatewayModelPriceClient
 	// GatewayPolicy is the client for interacting with the GatewayPolicy builders.
 	GatewayPolicy *GatewayPolicyClient
+	// GatewaySetting is the client for interacting with the GatewaySetting builders.
+	GatewaySetting *GatewaySettingClient
 	// GatewayUsageLog is the client for interacting with the GatewayUsageLog builders.
 	GatewayUsageLog *GatewayUsageLogClient
 	// User is the client for interacting with the User builders.
@@ -71,6 +74,7 @@ func (c *Client) init() {
 	c.GatewayModel = NewGatewayModelClient(c.config)
 	c.GatewayModelPrice = NewGatewayModelPriceClient(c.config)
 	c.GatewayPolicy = NewGatewayPolicyClient(c.config)
+	c.GatewaySetting = NewGatewaySettingClient(c.config)
 	c.GatewayUsageLog = NewGatewayUsageLogClient(c.config)
 	c.User = NewUserClient(c.config)
 }
@@ -173,6 +177,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		GatewayModel:      NewGatewayModelClient(cfg),
 		GatewayModelPrice: NewGatewayModelPriceClient(cfg),
 		GatewayPolicy:     NewGatewayPolicyClient(cfg),
+		GatewaySetting:    NewGatewaySettingClient(cfg),
 		GatewayUsageLog:   NewGatewayUsageLogClient(cfg),
 		User:              NewUserClient(cfg),
 	}, nil
@@ -202,6 +207,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		GatewayModel:      NewGatewayModelClient(cfg),
 		GatewayModelPrice: NewGatewayModelPriceClient(cfg),
 		GatewayPolicy:     NewGatewayPolicyClient(cfg),
+		GatewaySetting:    NewGatewaySettingClient(cfg),
 		GatewayUsageLog:   NewGatewayUsageLogClient(cfg),
 		User:              NewUserClient(cfg),
 	}, nil
@@ -235,7 +241,7 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AdminUser, c.GatewayAPIKey, c.GatewayAlertEvent, c.GatewayAlertRule,
 		c.GatewayAuditLog, c.GatewayModel, c.GatewayModelPrice, c.GatewayPolicy,
-		c.GatewayUsageLog, c.User,
+		c.GatewaySetting, c.GatewayUsageLog, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -247,7 +253,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AdminUser, c.GatewayAPIKey, c.GatewayAlertEvent, c.GatewayAlertRule,
 		c.GatewayAuditLog, c.GatewayModel, c.GatewayModelPrice, c.GatewayPolicy,
-		c.GatewayUsageLog, c.User,
+		c.GatewaySetting, c.GatewayUsageLog, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -272,6 +278,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.GatewayModelPrice.mutate(ctx, m)
 	case *GatewayPolicyMutation:
 		return c.GatewayPolicy.mutate(ctx, m)
+	case *GatewaySettingMutation:
+		return c.GatewaySetting.mutate(ctx, m)
 	case *GatewayUsageLogMutation:
 		return c.GatewayUsageLog.mutate(ctx, m)
 	case *UserMutation:
@@ -1345,6 +1353,139 @@ func (c *GatewayPolicyClient) mutate(ctx context.Context, m *GatewayPolicyMutati
 	}
 }
 
+// GatewaySettingClient is a client for the GatewaySetting schema.
+type GatewaySettingClient struct {
+	config
+}
+
+// NewGatewaySettingClient returns a client for the GatewaySetting from the given config.
+func NewGatewaySettingClient(c config) *GatewaySettingClient {
+	return &GatewaySettingClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `gatewaysetting.Hooks(f(g(h())))`.
+func (c *GatewaySettingClient) Use(hooks ...Hook) {
+	c.hooks.GatewaySetting = append(c.hooks.GatewaySetting, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `gatewaysetting.Intercept(f(g(h())))`.
+func (c *GatewaySettingClient) Intercept(interceptors ...Interceptor) {
+	c.inters.GatewaySetting = append(c.inters.GatewaySetting, interceptors...)
+}
+
+// Create returns a builder for creating a GatewaySetting entity.
+func (c *GatewaySettingClient) Create() *GatewaySettingCreate {
+	mutation := newGatewaySettingMutation(c.config, OpCreate)
+	return &GatewaySettingCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of GatewaySetting entities.
+func (c *GatewaySettingClient) CreateBulk(builders ...*GatewaySettingCreate) *GatewaySettingCreateBulk {
+	return &GatewaySettingCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *GatewaySettingClient) MapCreateBulk(slice any, setFunc func(*GatewaySettingCreate, int)) *GatewaySettingCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &GatewaySettingCreateBulk{err: fmt.Errorf("calling to GatewaySettingClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*GatewaySettingCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &GatewaySettingCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for GatewaySetting.
+func (c *GatewaySettingClient) Update() *GatewaySettingUpdate {
+	mutation := newGatewaySettingMutation(c.config, OpUpdate)
+	return &GatewaySettingUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *GatewaySettingClient) UpdateOne(_m *GatewaySetting) *GatewaySettingUpdateOne {
+	mutation := newGatewaySettingMutation(c.config, OpUpdateOne, withGatewaySetting(_m))
+	return &GatewaySettingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *GatewaySettingClient) UpdateOneID(id int) *GatewaySettingUpdateOne {
+	mutation := newGatewaySettingMutation(c.config, OpUpdateOne, withGatewaySettingID(id))
+	return &GatewaySettingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for GatewaySetting.
+func (c *GatewaySettingClient) Delete() *GatewaySettingDelete {
+	mutation := newGatewaySettingMutation(c.config, OpDelete)
+	return &GatewaySettingDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *GatewaySettingClient) DeleteOne(_m *GatewaySetting) *GatewaySettingDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *GatewaySettingClient) DeleteOneID(id int) *GatewaySettingDeleteOne {
+	builder := c.Delete().Where(gatewaysetting.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &GatewaySettingDeleteOne{builder}
+}
+
+// Query returns a query builder for GatewaySetting.
+func (c *GatewaySettingClient) Query() *GatewaySettingQuery {
+	return &GatewaySettingQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeGatewaySetting},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a GatewaySetting entity by its id.
+func (c *GatewaySettingClient) Get(ctx context.Context, id int) (*GatewaySetting, error) {
+	return c.Query().Where(gatewaysetting.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *GatewaySettingClient) GetX(ctx context.Context, id int) *GatewaySetting {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *GatewaySettingClient) Hooks() []Hook {
+	return c.hooks.GatewaySetting
+}
+
+// Interceptors returns the client interceptors.
+func (c *GatewaySettingClient) Interceptors() []Interceptor {
+	return c.inters.GatewaySetting
+}
+
+func (c *GatewaySettingClient) mutate(ctx context.Context, m *GatewaySettingMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&GatewaySettingCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&GatewaySettingUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&GatewaySettingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&GatewaySettingDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown GatewaySetting mutation op: %q", m.Op())
+	}
+}
+
 // GatewayUsageLogClient is a client for the GatewayUsageLog schema.
 type GatewayUsageLogClient struct {
 	config
@@ -1615,12 +1756,12 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 type (
 	hooks struct {
 		AdminUser, GatewayAPIKey, GatewayAlertEvent, GatewayAlertRule, GatewayAuditLog,
-		GatewayModel, GatewayModelPrice, GatewayPolicy, GatewayUsageLog,
-		User []ent.Hook
+		GatewayModel, GatewayModelPrice, GatewayPolicy, GatewaySetting,
+		GatewayUsageLog, User []ent.Hook
 	}
 	inters struct {
 		AdminUser, GatewayAPIKey, GatewayAlertEvent, GatewayAlertRule, GatewayAuditLog,
-		GatewayModel, GatewayModelPrice, GatewayPolicy, GatewayUsageLog,
-		User []ent.Interceptor
+		GatewayModel, GatewayModelPrice, GatewayPolicy, GatewaySetting,
+		GatewayUsageLog, User []ent.Interceptor
 	}
 )

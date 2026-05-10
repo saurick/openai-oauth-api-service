@@ -48,6 +48,20 @@ func (_c *GatewayUsageLogCreate) SetNillableAPIKeyPrefix(v *string) *GatewayUsag
 	return _c
 }
 
+// SetSessionID sets the "session_id" field.
+func (_c *GatewayUsageLogCreate) SetSessionID(v string) *GatewayUsageLogCreate {
+	_c.mutation.SetSessionID(v)
+	return _c
+}
+
+// SetNillableSessionID sets the "session_id" field if the given value is not nil.
+func (_c *GatewayUsageLogCreate) SetNillableSessionID(v *string) *GatewayUsageLogCreate {
+	if v != nil {
+		_c.SetSessionID(*v)
+	}
+	return _c
+}
+
 // SetRequestID sets the "request_id" field.
 func (_c *GatewayUsageLogCreate) SetRequestID(v string) *GatewayUsageLogCreate {
 	_c.mutation.SetRequestID(v)
@@ -256,6 +270,62 @@ func (_c *GatewayUsageLogCreate) SetNillableDurationMs(v *int64) *GatewayUsageLo
 	return _c
 }
 
+// SetUpstreamConfiguredMode sets the "upstream_configured_mode" field.
+func (_c *GatewayUsageLogCreate) SetUpstreamConfiguredMode(v string) *GatewayUsageLogCreate {
+	_c.mutation.SetUpstreamConfiguredMode(v)
+	return _c
+}
+
+// SetNillableUpstreamConfiguredMode sets the "upstream_configured_mode" field if the given value is not nil.
+func (_c *GatewayUsageLogCreate) SetNillableUpstreamConfiguredMode(v *string) *GatewayUsageLogCreate {
+	if v != nil {
+		_c.SetUpstreamConfiguredMode(*v)
+	}
+	return _c
+}
+
+// SetUpstreamMode sets the "upstream_mode" field.
+func (_c *GatewayUsageLogCreate) SetUpstreamMode(v string) *GatewayUsageLogCreate {
+	_c.mutation.SetUpstreamMode(v)
+	return _c
+}
+
+// SetNillableUpstreamMode sets the "upstream_mode" field if the given value is not nil.
+func (_c *GatewayUsageLogCreate) SetNillableUpstreamMode(v *string) *GatewayUsageLogCreate {
+	if v != nil {
+		_c.SetUpstreamMode(*v)
+	}
+	return _c
+}
+
+// SetUpstreamFallback sets the "upstream_fallback" field.
+func (_c *GatewayUsageLogCreate) SetUpstreamFallback(v bool) *GatewayUsageLogCreate {
+	_c.mutation.SetUpstreamFallback(v)
+	return _c
+}
+
+// SetNillableUpstreamFallback sets the "upstream_fallback" field if the given value is not nil.
+func (_c *GatewayUsageLogCreate) SetNillableUpstreamFallback(v *bool) *GatewayUsageLogCreate {
+	if v != nil {
+		_c.SetUpstreamFallback(*v)
+	}
+	return _c
+}
+
+// SetUpstreamErrorType sets the "upstream_error_type" field.
+func (_c *GatewayUsageLogCreate) SetUpstreamErrorType(v string) *GatewayUsageLogCreate {
+	_c.mutation.SetUpstreamErrorType(v)
+	return _c
+}
+
+// SetNillableUpstreamErrorType sets the "upstream_error_type" field if the given value is not nil.
+func (_c *GatewayUsageLogCreate) SetNillableUpstreamErrorType(v *string) *GatewayUsageLogCreate {
+	if v != nil {
+		_c.SetUpstreamErrorType(*v)
+	}
+	return _c
+}
+
 // SetErrorType sets the "error_type" field.
 func (_c *GatewayUsageLogCreate) SetErrorType(v string) *GatewayUsageLogCreate {
 	_c.mutation.SetErrorType(v)
@@ -323,6 +393,10 @@ func (_c *GatewayUsageLogCreate) defaults() {
 		v := gatewayusagelog.DefaultAPIKeyPrefix
 		_c.mutation.SetAPIKeyPrefix(v)
 	}
+	if _, ok := _c.mutation.SessionID(); !ok {
+		v := gatewayusagelog.DefaultSessionID
+		_c.mutation.SetSessionID(v)
+	}
 	if _, ok := _c.mutation.RequestID(); !ok {
 		v := gatewayusagelog.DefaultRequestID
 		_c.mutation.SetRequestID(v)
@@ -379,6 +453,22 @@ func (_c *GatewayUsageLogCreate) defaults() {
 		v := gatewayusagelog.DefaultDurationMs
 		_c.mutation.SetDurationMs(v)
 	}
+	if _, ok := _c.mutation.UpstreamConfiguredMode(); !ok {
+		v := gatewayusagelog.DefaultUpstreamConfiguredMode
+		_c.mutation.SetUpstreamConfiguredMode(v)
+	}
+	if _, ok := _c.mutation.UpstreamMode(); !ok {
+		v := gatewayusagelog.DefaultUpstreamMode
+		_c.mutation.SetUpstreamMode(v)
+	}
+	if _, ok := _c.mutation.UpstreamFallback(); !ok {
+		v := gatewayusagelog.DefaultUpstreamFallback
+		_c.mutation.SetUpstreamFallback(v)
+	}
+	if _, ok := _c.mutation.UpstreamErrorType(); !ok {
+		v := gatewayusagelog.DefaultUpstreamErrorType
+		_c.mutation.SetUpstreamErrorType(v)
+	}
 	if _, ok := _c.mutation.ErrorType(); !ok {
 		v := gatewayusagelog.DefaultErrorType
 		_c.mutation.SetErrorType(v)
@@ -397,6 +487,14 @@ func (_c *GatewayUsageLogCreate) check() error {
 	if v, ok := _c.mutation.APIKeyPrefix(); ok {
 		if err := gatewayusagelog.APIKeyPrefixValidator(v); err != nil {
 			return &ValidationError{Name: "api_key_prefix", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.api_key_prefix": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.SessionID(); !ok {
+		return &ValidationError{Name: "session_id", err: errors.New(`ent: missing required field "GatewayUsageLog.session_id"`)}
+	}
+	if v, ok := _c.mutation.SessionID(); ok {
+		if err := gatewayusagelog.SessionIDValidator(v); err != nil {
+			return &ValidationError{Name: "session_id", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.session_id": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.RequestID(); !ok {
@@ -472,6 +570,33 @@ func (_c *GatewayUsageLogCreate) check() error {
 	if _, ok := _c.mutation.DurationMs(); !ok {
 		return &ValidationError{Name: "duration_ms", err: errors.New(`ent: missing required field "GatewayUsageLog.duration_ms"`)}
 	}
+	if _, ok := _c.mutation.UpstreamConfiguredMode(); !ok {
+		return &ValidationError{Name: "upstream_configured_mode", err: errors.New(`ent: missing required field "GatewayUsageLog.upstream_configured_mode"`)}
+	}
+	if v, ok := _c.mutation.UpstreamConfiguredMode(); ok {
+		if err := gatewayusagelog.UpstreamConfiguredModeValidator(v); err != nil {
+			return &ValidationError{Name: "upstream_configured_mode", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.upstream_configured_mode": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.UpstreamMode(); !ok {
+		return &ValidationError{Name: "upstream_mode", err: errors.New(`ent: missing required field "GatewayUsageLog.upstream_mode"`)}
+	}
+	if v, ok := _c.mutation.UpstreamMode(); ok {
+		if err := gatewayusagelog.UpstreamModeValidator(v); err != nil {
+			return &ValidationError{Name: "upstream_mode", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.upstream_mode": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.UpstreamFallback(); !ok {
+		return &ValidationError{Name: "upstream_fallback", err: errors.New(`ent: missing required field "GatewayUsageLog.upstream_fallback"`)}
+	}
+	if _, ok := _c.mutation.UpstreamErrorType(); !ok {
+		return &ValidationError{Name: "upstream_error_type", err: errors.New(`ent: missing required field "GatewayUsageLog.upstream_error_type"`)}
+	}
+	if v, ok := _c.mutation.UpstreamErrorType(); ok {
+		if err := gatewayusagelog.UpstreamErrorTypeValidator(v); err != nil {
+			return &ValidationError{Name: "upstream_error_type", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.upstream_error_type": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.ErrorType(); !ok {
 		return &ValidationError{Name: "error_type", err: errors.New(`ent: missing required field "GatewayUsageLog.error_type"`)}
 	}
@@ -516,6 +641,10 @@ func (_c *GatewayUsageLogCreate) createSpec() (*GatewayUsageLog, *sqlgraph.Creat
 	if value, ok := _c.mutation.APIKeyPrefix(); ok {
 		_spec.SetField(gatewayusagelog.FieldAPIKeyPrefix, field.TypeString, value)
 		_node.APIKeyPrefix = value
+	}
+	if value, ok := _c.mutation.SessionID(); ok {
+		_spec.SetField(gatewayusagelog.FieldSessionID, field.TypeString, value)
+		_node.SessionID = value
 	}
 	if value, ok := _c.mutation.RequestID(); ok {
 		_spec.SetField(gatewayusagelog.FieldRequestID, field.TypeString, value)
@@ -580,6 +709,22 @@ func (_c *GatewayUsageLogCreate) createSpec() (*GatewayUsageLog, *sqlgraph.Creat
 	if value, ok := _c.mutation.DurationMs(); ok {
 		_spec.SetField(gatewayusagelog.FieldDurationMs, field.TypeInt64, value)
 		_node.DurationMs = value
+	}
+	if value, ok := _c.mutation.UpstreamConfiguredMode(); ok {
+		_spec.SetField(gatewayusagelog.FieldUpstreamConfiguredMode, field.TypeString, value)
+		_node.UpstreamConfiguredMode = value
+	}
+	if value, ok := _c.mutation.UpstreamMode(); ok {
+		_spec.SetField(gatewayusagelog.FieldUpstreamMode, field.TypeString, value)
+		_node.UpstreamMode = value
+	}
+	if value, ok := _c.mutation.UpstreamFallback(); ok {
+		_spec.SetField(gatewayusagelog.FieldUpstreamFallback, field.TypeBool, value)
+		_node.UpstreamFallback = value
+	}
+	if value, ok := _c.mutation.UpstreamErrorType(); ok {
+		_spec.SetField(gatewayusagelog.FieldUpstreamErrorType, field.TypeString, value)
+		_node.UpstreamErrorType = value
 	}
 	if value, ok := _c.mutation.ErrorType(); ok {
 		_spec.SetField(gatewayusagelog.FieldErrorType, field.TypeString, value)

@@ -21,6 +21,8 @@ type GatewayUsageLog struct {
 	APIKeyID *int `json:"api_key_id,omitempty"`
 	// APIKeyPrefix holds the value of the "api_key_prefix" field.
 	APIKeyPrefix string `json:"api_key_prefix,omitempty"`
+	// SessionID holds the value of the "session_id" field.
+	SessionID string `json:"session_id,omitempty"`
 	// RequestID holds the value of the "request_id" field.
 	RequestID string `json:"request_id,omitempty"`
 	// Method holds the value of the "method" field.
@@ -53,6 +55,14 @@ type GatewayUsageLog struct {
 	ResponseBytes int64 `json:"response_bytes,omitempty"`
 	// DurationMs holds the value of the "duration_ms" field.
 	DurationMs int64 `json:"duration_ms,omitempty"`
+	// UpstreamConfiguredMode holds the value of the "upstream_configured_mode" field.
+	UpstreamConfiguredMode string `json:"upstream_configured_mode,omitempty"`
+	// UpstreamMode holds the value of the "upstream_mode" field.
+	UpstreamMode string `json:"upstream_mode,omitempty"`
+	// UpstreamFallback holds the value of the "upstream_fallback" field.
+	UpstreamFallback bool `json:"upstream_fallback,omitempty"`
+	// UpstreamErrorType holds the value of the "upstream_error_type" field.
+	UpstreamErrorType string `json:"upstream_error_type,omitempty"`
 	// ErrorType holds the value of the "error_type" field.
 	ErrorType string `json:"error_type,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -65,11 +75,11 @@ func (*GatewayUsageLog) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case gatewayusagelog.FieldSuccess, gatewayusagelog.FieldStream:
+		case gatewayusagelog.FieldSuccess, gatewayusagelog.FieldStream, gatewayusagelog.FieldUpstreamFallback:
 			values[i] = new(sql.NullBool)
 		case gatewayusagelog.FieldID, gatewayusagelog.FieldAPIKeyID, gatewayusagelog.FieldStatusCode, gatewayusagelog.FieldInputTokens, gatewayusagelog.FieldOutputTokens, gatewayusagelog.FieldTotalTokens, gatewayusagelog.FieldCachedTokens, gatewayusagelog.FieldReasoningTokens, gatewayusagelog.FieldRequestBytes, gatewayusagelog.FieldResponseBytes, gatewayusagelog.FieldDurationMs:
 			values[i] = new(sql.NullInt64)
-		case gatewayusagelog.FieldAPIKeyPrefix, gatewayusagelog.FieldRequestID, gatewayusagelog.FieldMethod, gatewayusagelog.FieldPath, gatewayusagelog.FieldEndpoint, gatewayusagelog.FieldModel, gatewayusagelog.FieldErrorType:
+		case gatewayusagelog.FieldAPIKeyPrefix, gatewayusagelog.FieldSessionID, gatewayusagelog.FieldRequestID, gatewayusagelog.FieldMethod, gatewayusagelog.FieldPath, gatewayusagelog.FieldEndpoint, gatewayusagelog.FieldModel, gatewayusagelog.FieldUpstreamConfiguredMode, gatewayusagelog.FieldUpstreamMode, gatewayusagelog.FieldUpstreamErrorType, gatewayusagelog.FieldErrorType:
 			values[i] = new(sql.NullString)
 		case gatewayusagelog.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -106,6 +116,12 @@ func (_m *GatewayUsageLog) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field api_key_prefix", values[i])
 			} else if value.Valid {
 				_m.APIKeyPrefix = value.String
+			}
+		case gatewayusagelog.FieldSessionID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field session_id", values[i])
+			} else if value.Valid {
+				_m.SessionID = value.String
 			}
 		case gatewayusagelog.FieldRequestID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -203,6 +219,30 @@ func (_m *GatewayUsageLog) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.DurationMs = value.Int64
 			}
+		case gatewayusagelog.FieldUpstreamConfiguredMode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field upstream_configured_mode", values[i])
+			} else if value.Valid {
+				_m.UpstreamConfiguredMode = value.String
+			}
+		case gatewayusagelog.FieldUpstreamMode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field upstream_mode", values[i])
+			} else if value.Valid {
+				_m.UpstreamMode = value.String
+			}
+		case gatewayusagelog.FieldUpstreamFallback:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field upstream_fallback", values[i])
+			} else if value.Valid {
+				_m.UpstreamFallback = value.Bool
+			}
+		case gatewayusagelog.FieldUpstreamErrorType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field upstream_error_type", values[i])
+			} else if value.Valid {
+				_m.UpstreamErrorType = value.String
+			}
 		case gatewayusagelog.FieldErrorType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field error_type", values[i])
@@ -259,6 +299,9 @@ func (_m *GatewayUsageLog) String() string {
 	builder.WriteString("api_key_prefix=")
 	builder.WriteString(_m.APIKeyPrefix)
 	builder.WriteString(", ")
+	builder.WriteString("session_id=")
+	builder.WriteString(_m.SessionID)
+	builder.WriteString(", ")
 	builder.WriteString("request_id=")
 	builder.WriteString(_m.RequestID)
 	builder.WriteString(", ")
@@ -306,6 +349,18 @@ func (_m *GatewayUsageLog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("duration_ms=")
 	builder.WriteString(fmt.Sprintf("%v", _m.DurationMs))
+	builder.WriteString(", ")
+	builder.WriteString("upstream_configured_mode=")
+	builder.WriteString(_m.UpstreamConfiguredMode)
+	builder.WriteString(", ")
+	builder.WriteString("upstream_mode=")
+	builder.WriteString(_m.UpstreamMode)
+	builder.WriteString(", ")
+	builder.WriteString("upstream_fallback=")
+	builder.WriteString(fmt.Sprintf("%v", _m.UpstreamFallback))
+	builder.WriteString(", ")
+	builder.WriteString("upstream_error_type=")
+	builder.WriteString(_m.UpstreamErrorType)
 	builder.WriteString(", ")
 	builder.WriteString("error_type=")
 	builder.WriteString(_m.ErrorType)

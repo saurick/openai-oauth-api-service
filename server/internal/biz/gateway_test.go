@@ -244,6 +244,15 @@ func (r *gatewayPolicyTestRepo) ListUsageBuckets(context.Context, GatewayUsageFi
 func (r *gatewayPolicyTestRepo) ListUsageKeySummaries(context.Context, GatewayUsageFilter, int) ([]*GatewayUsageKeySummary, error) {
 	return nil, nil
 }
+func (r *gatewayPolicyTestRepo) ListUsageSessionSummaries(context.Context, GatewayUsageFilter, int, int) ([]*GatewayUsageSessionSummary, int, error) {
+	return nil, 0, nil
+}
+func (r *gatewayPolicyTestRepo) GetGatewaySetting(context.Context, string) (string, error) {
+	return "", nil
+}
+func (r *gatewayPolicyTestRepo) SetGatewaySetting(context.Context, string, string) error {
+	return nil
+}
 func (r *gatewayPolicyTestRepo) GetPolicyForKeyModel(context.Context, int, string) (*GatewayPolicy, error) {
 	return r.policy, nil
 }

@@ -52,9 +52,12 @@ HTTP 路由：
 - `key_update`
 - `key_delete`
 - `key_set_disabled`
+- `gateway_upstream_get`
+- `gateway_upstream_set`
 - `usage_list`
 - `usage_buckets`
 - `usage_key_summaries`
+- `usage_session_summaries`
 - `model_list`
 - `official_model_price_list`
 - `model_set_enabled`
@@ -85,7 +88,7 @@ HTTP 管理导出：
 - `GET /admin/exports/usage.csv`
 - `GET /admin/exports/usage.json`
 
-导出要求管理员登录态，筛选条件与 `api.usage_list` 保持一致：时间范围、key、模型、endpoint、success。导出会写审计日志。
+导出要求管理员登录态，筛选条件与 `api.usage_list` 保持一致：时间范围、key、模型、endpoint、success、upstream_mode。导出会写审计日志。
 
 ## OpenAI 兼容入口
 
@@ -98,16 +101,21 @@ HTTP 路由：
 鉴权：
 
 - 下游请求必须使用 `Authorization: Bearer ogw_...`
-- 上游请求由服务端通过服务器 Codex CLI 登录态执行，客户端不接触上游凭据
+- 上游请求由服务端通过服务器 Codex 登录态执行，客户端不接触上游凭据
 
 usage 记录：
 
 - 成功和失败请求都会记录 usage log
-- 默认记录 endpoint、model、HTTP 状态、耗时、请求/响应字节数和 token usage
-- 非流式 JSON 和 SSE completed event 都会尝试解析 usage
+- 默认记录 endpoint、model、可选 session_id、HTTP 状态、耗时、请求/响应字节数和 token usage
+- 上游模式可在管理后台「用量日志」页通过 `api.gateway_upstream_get` / `api.gateway_upstream_set` 读取和切换；未保存运行时设置时，默认 `codex_backend`，也可用 `CODEX_UPSTREAM_MODE` 作为启动时默认值。`codex_backend` 会直接请求 Codex backend `/responses`，backend 失败时自动 fallback 到 `codex_cli`；显式切到 `codex_cli` 时只走 CLI。
+- `codex_cli` 模式 token 优先读取 Codex JSON 事件里的 usage，没有事件时才退回字符数估算；`codex_backend` 模式优先读取 Responses SSE `response.completed.usage`
+- usage log 会记录 `upstream_configured_mode`、`upstream_mode`、`upstream_fallback` 和 `upstream_error_type`，用于区分配置模式、实际执行模式和 fallback 情况。
+- OpenAI-compatible 请求体支持 `reasoning_effort`，可选值为 `low`、`medium`、`high`、`xhigh`
+- direct backend 模式会把 `system` / `developer` 消息合并为 `instructions`；若请求没有这类消息，会补一个最小默认 instructions，因为 Codex backend 要求该字段非空
+- OpenAI-compatible 图片输入支持 data URL 形式的 `image_url` / `input_image`；CLI 模式会临时落盘并通过 Codex CLI `--image` 附加到本次请求，direct backend 模式会直接传入 `/responses` 内容；单次最多 4 张、单张最大 16 MiB
 - 默认不保存 prompt、response body 或正文采样
 - `/v1/chat/completions` 和 `/v1/responses` 转发前会检查 key 状态、模型权限、key 级 token 总额度、RPM、TPM、日/月请求配额和日/月 token 配额；超限返回 HTTP `429`
-- token 计量以 OpenAI 响应里的实际 usage 为准，key 级 token 总额度、TPM 和 token 配额允许单次请求短暂越界，下一次请求开始拦截
+- token 配额以本系统落库 usage 为准，key 级 token 总额度、TPM 和 token 配额允许单次请求短暂越界，下一次请求开始拦截
 
 ## 管理员 OAuth 入口
 
@@ -117,7 +125,7 @@ usage 记录：
 - `GET /auth/oauth/start`：发起授权。可传 `frontend_origin` 和 `next`，服务端会把当前前端 origin 和回跳路径写入 signed state。
 - `GET /auth/oauth/callback`：OAuth provider 固定回调后端的地址。服务端完成 code exchange 和 userinfo 查询后，签发本系统管理员 JWT，并通过前端 `/oauth/callback` 的 URL fragment 回传登录态。
 
-本地 Google Console 回调登记 `http://localhost:8400/auth/oauth/callback`，不登记 Vite 端口。生产环境登记后端 HTTPS 域名下的同一路径，并通过 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` allowlist 前端后台 origin。
+本地 Google Console 回调登记 `http://localhost:8400/auth/oauth/callback`，不登记 Vite 端口。生产环境登记后端 HTTPS 域名下的同一路径；当前个人部署为 `https://oauth-api.saurick.me/auth/oauth/callback`，并通过 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` allowlist 前端后台 origin。
 
 ## 鉴权规则
 
@@ -191,26 +199,46 @@ usage 记录：
 - `disabled`
 - `owner_user_id`
 
+### `api.gateway_upstream_get` / `api.gateway_upstream_set`
+
+读取或切换 Codex 上游模式，用于高频 OpenCode 场景在 direct backend 与 CLI 兼容路径之间切换：
+
+- `mode`：当前运行时模式，`codex_backend` 或 `codex_cli`
+- `default_mode`：未保存设置时的默认模式
+- `options[]`：前端开关可展示的模式列表
+
+`api.gateway_upstream_set` 参数为 `mode`。保存后立即影响后续 `/v1/chat/completions` 与 `/v1/responses` 请求；历史 usage 不会改写。
+
 ### `api.usage_list`
 
 返回最近 usage 列表和汇总：
 
 - `items`
 - `total`
+- `items[].upstream_configured_mode`
+- `items[].upstream_mode`
+- `items[].upstream_fallback`
+- `items[].upstream_error_type`
 - `summary.total_requests`
 - `summary.success_requests`
 - `summary.failed_requests`
 - `summary.total_tokens`
+- `summary.backend_requests`
+- `summary.cli_requests`
+- `summary.fallback_requests`
 - `summary.average_duration_ms`
 - `summary.estimated_cost_usd`
 
+筛选条件支持 `upstream_mode=codex_backend|codex_cli`。未传时不按上游模式过滤。
+
 ### `api.usage_buckets`
 
-返回 usage 按天聚合，用于后台趋势图和按天统计表：
+返回 usage 聚合，用于后台趋势图、每日模型汇总和按天统计表：
 
 - `items`
 - `group_by`
 - `items[].bucket_start`
+- `items[].model`
 - `items[].total_requests`
 - `items[].success_requests`
 - `items[].failed_requests`
@@ -219,9 +247,12 @@ usage 记录：
 - `items[].output_tokens`
 - `items[].reasoning_tokens`
 - `items[].total_tokens`
+- `items[].backend_requests`
+- `items[].cli_requests`
+- `items[].fallback_requests`
 - `items[].estimated_cost_usd`
 
-当前只支持 `group_by=day`。费用估算优先读取数据库模型价格覆盖值，未配置时回落到服务端内置 OpenAI Codex 模型价格表；仍无价格时返回 `null`，前端显示“未配置价格”。reasoning tokens 作为输出 tokens 子集展示，不重复计费。
+当前支持 `group_by=day` 和 `group_by=day_model`。`day_model` 会按日期 + 模型拆分聚合，前端可点击详情后用同一天的 `start_time/end_time` 和 `model` 调用 `api.usage_list` 下钻请求明细。费用估算优先读取数据库模型价格覆盖值，未配置时回落到服务端内置 OpenAI Codex 模型价格表；仍无价格时返回 `null`，前端显示“未配置价格”。reasoning tokens 作为输出 tokens 子集展示，不重复计费。
 
 ### `api.usage_key_summaries`
 
@@ -240,10 +271,40 @@ usage 记录：
 - `items[].output_tokens`
 - `items[].reasoning_tokens`
 - `items[].total_tokens`
+- `items[].backend_requests`
+- `items[].cli_requests`
+- `items[].fallback_requests`
 - `items[].average_duration_ms`
 - `items[].estimated_cost_usd`
 
 筛选条件与 `api.usage_list` 保持一致。费用估算优先使用数据库价格覆盖值，再回落到内置官方价格表；窗口内存在未配置价格的模型时，对应 key 的 `estimated_cost_usd` 返回 `null`。
+
+### `api.usage_session_summaries`
+
+返回 usage 按 `session_id` 聚合，用于后台把同一个客户端会话合并展示：
+
+- `items`
+- `total`
+- `items[].session_id`
+- `items[].api_key_id`
+- `items[].api_key_prefix`
+- `items[].total_requests`
+- `items[].success_requests`
+- `items[].failed_requests`
+- `items[].input_tokens`
+- `items[].cached_tokens`
+- `items[].output_tokens`
+- `items[].reasoning_tokens`
+- `items[].total_tokens`
+- `items[].backend_requests`
+- `items[].cli_requests`
+- `items[].fallback_requests`
+- `items[].average_duration_ms`
+- `items[].first_seen_at`
+- `items[].last_seen_at`
+- `items[].estimated_cost_usd`
+
+筛选条件与 `api.usage_list` 保持一致，并支持用 `session_id` 继续下钻请求级明细。`session_id` 来自客户端请求头 `X-Session-ID` / `X-Conversation-ID` / `X-Thread-ID`，或请求 JSON 顶层及 `metadata` 里的 `session_id` / `conversation_id` / `thread_id`。没有会话标识的历史记录不会伪造成会话聚合行。
 
 ### `api.official_model_price_list`
 

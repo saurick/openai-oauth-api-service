@@ -68,6 +68,14 @@ const USAGE_SUCCESS_FILTER_OPTIONS = [
   { label: '成功', value: 'true' },
   { label: '失败', value: 'false' },
 ]
+const CODEX_UPSTREAM_MODE_OPTIONS = [
+  { label: 'Backend 优先', value: 'codex_backend' },
+  { label: '强制 CLI', value: 'codex_cli' },
+]
+const USAGE_UPSTREAM_FILTER_OPTIONS = [
+  { label: '全部上游', value: '' },
+  ...CODEX_UPSTREAM_MODE_OPTIONS,
+]
 const DEFAULT_USAGE_TIME_RANGE = '24h'
 const USAGE_TIME_RANGE_OPTIONS = [
   { label: '24h', value: '24h', seconds: DAY_SECONDS },
@@ -81,8 +89,9 @@ const USAGE_TIME_RANGE_OPTIONS = [
   { label: '5 年', value: '5y', seconds: 5 * 365 * DAY_SECONDS },
 ]
 const USAGE_TAB_OPTIONS = [
-  { key: 'daily', label: '每日汇总' },
+  { key: 'daily', label: '每日模型' },
   { key: 'keys', label: '凭据统计' },
+  { key: 'sessions', label: '会话聚合' },
   { key: 'details', label: '调用明细' },
   { key: 'errors', label: '异常请求' },
 ]
@@ -138,6 +147,7 @@ const INITIAL_USAGE_FILTERS = {
   keyId: '',
   model: '',
   success: '',
+  upstreamMode: '',
   timeRange: DEFAULT_USAGE_TIME_RANGE,
 }
 
@@ -167,7 +177,7 @@ const VIEW_CONFIG = {
     section: '用量统计',
     title: '用量日志',
     description:
-      '统一查看每日汇总、凭据统计、调用明细和异常请求，排查 Token、费用、耗时与错误类型。',
+      '统一查看每日模型、凭据统计、调用明细和异常请求，排查 Token、费用、耗时与错误类型。',
   },
 }
 
@@ -240,6 +250,26 @@ function fmtRate(part, total) {
   if (safeTotal <= 0) return '0%'
   const value = (asInt(part, 0) / safeTotal) * 100
   return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)}%`
+}
+
+function upstreamModeLabel(value) {
+  const item = CODEX_UPSTREAM_MODE_OPTIONS.find(
+    (option) => option.value === value
+  )
+  return item?.label || '未记录'
+}
+
+function renderUpstreamStats(item) {
+  return (
+    <div className="text-xs leading-5">
+      <div>Backend {fmtNumber(item?.backend_requests)}</div>
+      <div className="text-[#9aa39e]">
+        CLI {fmtNumber(item?.cli_requests)}
+        <span className="mx-1 text-[#c0c9c4]">/</span>
+        fallback {fmtNumber(item?.fallback_requests)}
+      </div>
+    </div>
+  )
 }
 
 function createInitialPagination() {
@@ -566,9 +596,15 @@ function mergeKeyTokenStats(keys, statsByWindow) {
   return (Array.isArray(keys) ? keys : []).map((key) => {
     const keyID = asInt(key.id, 0)
     const tokens = {}
+    const upstream = {}
     for (const windowItem of KEY_TOKEN_WINDOWS) {
       const stat = statsByWindow?.[windowItem.key]?.get(keyID)
       tokens[windowItem.key] = asInt(stat?.total_tokens, 0)
+      upstream[windowItem.key] = {
+        backend_requests: asInt(stat?.backend_requests, 0),
+        cli_requests: asInt(stat?.cli_requests, 0),
+        fallback_requests: asInt(stat?.fallback_requests, 0),
+      }
     }
     return {
       disabled: Boolean(key.disabled),
@@ -576,6 +612,7 @@ function mergeKeyTokenStats(keys, statsByWindow) {
       name: key.name || '无备注',
       prefix: key.key_prefix || '-',
       tokens,
+      upstream,
     }
   })
 }
@@ -604,11 +641,28 @@ function StatusBadge({
       : 'bg-zinc-100 text-zinc-600'
   return (
     <span
-      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+      className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${
         active ? 'bg-emerald-50 text-emerald-700' : inactiveClass
       }`}
     >
       {active ? trueText : falseText}
+    </span>
+  )
+}
+
+function HeaderWithHelp({ children, help }) {
+  if (!help) return children
+  return (
+    <span className="admin-th-help-wrap">
+      <span>{children}</span>
+      <button
+        type="button"
+        className="admin-th-help"
+        aria-label={`${children}说明：${help}`}
+        data-tooltip={help}
+      >
+        ?
+      </button>
     </span>
   )
 }
@@ -739,9 +793,25 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const [officialModelPrices, setOfficialModelPrices] = useState([])
   const [usageItems, setUsageItems] = useState([])
   const [usageTotal, setUsageTotal] = useState(0)
+  const [usageSessionItems, setUsageSessionItems] = useState([])
+  const [usageSessionTotal, setUsageSessionTotal] = useState(0)
   const [usageBuckets, setUsageBuckets] = useState([])
+  const [gatewayUpstreamMode, setGatewayUpstreamMode] = useState(
+    'codex_backend'
+  )
+  const [gatewayUpstreamSaving, setGatewayUpstreamSaving] = useState(false)
   const [usageTab, setUsageTab] = useState('daily')
-  const [selectedUsageItem, setSelectedUsageItem] = useState(null)
+  const [selectedUsageBucket, setSelectedUsageBucket] = useState(null)
+  const [selectedUsageBucketItems, setSelectedUsageBucketItems] = useState([])
+  const [selectedUsageBucketTotal, setSelectedUsageBucketTotal] = useState(0)
+  const [usageBucketDetailPagination, setUsageBucketDetailPagination] =
+    useState(createInitialPagination)
+  const [usageBucketDetailLoading, setUsageBucketDetailLoading] =
+    useState(false)
+  const [selectedUsageSession, setSelectedUsageSession] = useState(null)
+  const [selectedUsageSessionItems, setSelectedUsageSessionItems] = useState([])
+  const [usageSessionDetailLoading, setUsageSessionDetailLoading] =
+    useState(false)
   const [newKey, setNewKey] = useState(null)
   const [editingKeyId, setEditingKeyId] = useState(null)
   const [keyModalOpen, setKeyModalOpen] = useState(false)
@@ -853,6 +923,20 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     setUsageBuckets(Array.isArray(res?.data?.items) ? res.data.items : [])
   }
 
+  const setUsageSessionState = (res) => {
+    setUsageSessionItems(Array.isArray(res?.data?.items) ? res.data.items : [])
+    setUsageSessionTotal(asInt(res?.data?.total, 0))
+  }
+
+  const setGatewayUpstreamState = (res) => {
+    const nextMode = res?.data?.mode
+    if (
+      CODEX_UPSTREAM_MODE_OPTIONS.some((option) => option.value === nextMode)
+    ) {
+      setGatewayUpstreamMode(nextMode)
+    }
+  }
+
   const buildUsageWindowParams = (filters, now, seconds) => {
     const timeRange = getUsageTimeRange(filters.timeRange)
     const windowSeconds = seconds || timeRange.seconds
@@ -863,6 +947,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     if (filters.keyId) params.key_id = asInt(filters.keyId, 0)
     if (filters.model) params.model = filters.model
     if (filters.success) params.success = filters.success === 'true'
+    if (filters.upstreamMode) params.upstream_mode = filters.upstreamMode
     return params
   }
 
@@ -971,8 +1056,17 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         return
       }
 
-      const [keysRes, modelsRes, usageRes, bucketsRes, ...keyTokenStatsResults] =
+      const [
+        upstreamRes,
+        keysRes,
+        modelsRes,
+        usageRes,
+        bucketsRes,
+        sessionRes,
+        ...keyTokenStatsResults
+      ] =
         await Promise.all([
+          apiRpc.call('gateway_upstream_get', {}),
           apiRpc.call('key_list', { limit: MAX_TABLE_FETCH_SIZE, offset: 0 }),
           apiRpc.call('model_list', { limit: MAX_TABLE_FETCH_SIZE, offset: 0 }),
           apiRpc.call(
@@ -981,8 +1075,12 @@ export default function AdminApiPage({ view = 'dashboard' }) {
           ),
           apiRpc.call('usage_buckets', {
             ...buildUsageWindowParams(effectiveUsageFilters, now),
-            group_by: 'day',
+            group_by: 'day_model',
           }),
+          apiRpc.call(
+            'usage_session_summaries',
+            buildUsageParams(effectiveUsageFilters, activeUsagePagination, now)
+          ),
           ...KEY_TOKEN_WINDOWS.map((windowItem) =>
             apiRpc.call('usage_key_summaries', {
               ...buildUsageWindowParams(
@@ -995,10 +1093,12 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             })
           ),
         ])
+      setGatewayUpstreamState(upstreamRes)
       setKeyListState(keysRes)
       setModelListState(modelsRes)
       setUsageListState(usageRes)
       setUsageBucketsState(bucketsRes)
+      setUsageSessionState(sessionRes)
       setKeyTokenStatsByWindow(
         Object.fromEntries(
           KEY_TOKEN_WINDOWS.map((windowItem, index) => [
@@ -1011,6 +1111,21 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       setErrMsg(getActionErrorMessage(e, '加载 API 数据'))
     } finally {
       setLoading(false)
+    }
+  }
+
+  const changeGatewayUpstreamMode = async (mode) => {
+    if (mode === gatewayUpstreamMode || gatewayUpstreamSaving) return
+    setErrMsg('')
+    setGatewayUpstreamSaving(true)
+    try {
+      const res = await apiRpc.call('gateway_upstream_set', { mode })
+      setGatewayUpstreamState(res)
+      await loadAll()
+    } catch (e) {
+      setErrMsg(getActionErrorMessage(e, '切换 Codex 上游模式'))
+    } finally {
+      setGatewayUpstreamSaving(false)
     }
   }
 
@@ -1270,24 +1385,129 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     })
   }
 
+  const openUsageSessionDetail = async (sessionItem) => {
+    if (!sessionItem?.session_id) return
+    setSelectedUsageSession(sessionItem)
+    setSelectedUsageSessionItems([])
+    setUsageSessionDetailLoading(true)
+    try {
+      const now = Math.floor(Date.now() / 1000)
+      const effectiveUsageFilters = usageFiltersForTab(
+        appliedUsageFilters,
+        usageTab
+      )
+      const res = await apiRpc.call('usage_list', {
+        ...buildUsageWindowParams(effectiveUsageFilters, now),
+        limit: 100,
+        offset: 0,
+        session_id: sessionItem.session_id,
+      })
+      setSelectedUsageSessionItems(
+        Array.isArray(res?.data?.items) ? res.data.items : []
+      )
+    } catch (e) {
+      setErrMsg(getActionErrorMessage(e, '加载会话详情'))
+    } finally {
+      setUsageSessionDetailLoading(false)
+    }
+  }
+
+  const loadUsageBucketDetail = async (bucketItem, pagination) => {
+    if (!bucketItem?.bucket_start || !bucketItem?.model) return
+    setUsageBucketDetailLoading(true)
+    try {
+      const startTime = asInt(bucketItem.bucket_start, 0)
+      const res = await apiRpc.call('usage_list', {
+        ...buildUsageParams(appliedUsageFilters, pagination, 0),
+        end_time: startTime + DAY_SECONDS,
+        limit: pagination.pageSize,
+        model: bucketItem.model,
+        offset: (pagination.current - 1) * pagination.pageSize,
+        start_time: startTime,
+      })
+      const items = Array.isArray(res?.data?.items) ? res.data.items : []
+      setSelectedUsageBucketItems(items)
+      setSelectedUsageBucketTotal(asInt(res?.data?.total, items.length))
+    } catch (e) {
+      setErrMsg(getActionErrorMessage(e, '加载每日模型详情'))
+    } finally {
+      setUsageBucketDetailLoading(false)
+    }
+  }
+
+  const openUsageBucketDetail = async (bucketItem) => {
+    if (!bucketItem?.bucket_start || !bucketItem?.model) return
+    const nextPagination = createInitialPagination()
+    setSelectedUsageBucket(bucketItem)
+    setSelectedUsageBucketItems([])
+    setSelectedUsageBucketTotal(0)
+    setUsageBucketDetailPagination(nextPagination)
+    await loadUsageBucketDetail(bucketItem, nextPagination)
+  }
+
+  const changeUsageBucketDetailPage = async (nextCurrent) => {
+    if (!selectedUsageBucket) return
+    const totalPages = Math.max(
+      1,
+      Math.ceil(selectedUsageBucketTotal / usageBucketDetailPagination.pageSize)
+    )
+    const nextPagination = {
+      ...usageBucketDetailPagination,
+      current: Math.min(Math.max(nextCurrent, 1), totalPages),
+    }
+    setUsageBucketDetailPagination(nextPagination)
+    await loadUsageBucketDetail(selectedUsageBucket, nextPagination)
+  }
+
   const renderUsageTable = (compact = false) => (
     <div className={tableWrapClass}>
       <div className="overflow-auto">
         <table
-          className={`${tableClass} ${compact ? 'min-w-[820px]' : 'min-w-[1280px]'}`}
+          className={`${tableClass} ${compact ? 'min-w-[820px]' : 'min-w-[1800px]'}`}
         >
           <thead>
             <tr>
               <th className={thClass}>时间</th>
+              {!compact ? <th className={thClass}>请求</th> : null}
               <th className={thClass}>凭据</th>
               <th className={thClass}>接口</th>
               <th className={thClass}>模型</th>
+              {!compact ? <th className={thClass}>上游</th> : null}
               <th className={thClass}>状态</th>
-              <th className={thClass}>Token</th>
-              {!compact ? <th className={thClass}>费用估算</th> : null}
-              {!compact ? <th className={thClass}>耗时</th> : null}
+              <th className={thClass}>
+                <HeaderWithHelp help="总 Token = 输入 Token + 输出 Token；下方同时展示输入 / 输出拆分。">
+                  Token
+                </HeaderWithHelp>
+              </th>
+              {!compact ? (
+                <th className={thClass}>
+                  <HeaderWithHelp help="缓存输入是命中上下文缓存的输入 Token；推理输出是模型内部 reasoning 输出 Token。">
+                    缓存输入 / 推理输出
+                  </HeaderWithHelp>
+                </th>
+              ) : null}
+              {!compact ? (
+                <th className={thClass}>
+                  <HeaderWithHelp help="按当前模型价格口径估算；未配置价格时显示未配置。">
+                    费用估算
+                  </HeaderWithHelp>
+                </th>
+              ) : null}
+              {!compact ? (
+                <th className={thClass}>
+                  <HeaderWithHelp help="网关从收到请求到返回响应的耗时，单位毫秒。">
+                    耗时
+                  </HeaderWithHelp>
+                </th>
+              ) : null}
+              {!compact ? (
+                <th className={thClass}>
+                  <HeaderWithHelp help="请求字节 / 响应字节，用于判断单次调用的数据体大小。">
+                    字节
+                  </HeaderWithHelp>
+                </th>
+              ) : null}
               {!compact ? <th className={thClass}>错误</th> : null}
-              {!compact ? <th className={thClass}>详情</th> : null}
             </tr>
           </thead>
           <tbody className="divide-y divide-[#e7efe9] bg-white">
@@ -1295,13 +1515,40 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               usageItems.map((item) => (
                 <tr key={String(item.id)} className="align-top">
                   <td className={tdClass}>{fmtTs(item.created_at)}</td>
+                  {!compact ? (
+                    <td className={`${tdClass} min-w-[220px]`}>
+                      <div className="font-mono text-xs">
+                        {item.request_id || '-'}
+                      </div>
+                      <div className="mt-1 break-all text-xs text-[#9aa39e]">
+                        Session：{item.session_id || '未传入'}
+                      </div>
+                    </td>
+                  ) : null}
                   <td className={`${tdClass} font-mono text-xs`}>
                     {item.api_key_prefix || '-'}
                   </td>
-                  <td className={tdClass}>{item.endpoint || item.path}</td>
+                  <td className={tdClass}>
+                    {item.endpoint || item.path}
+                    {!compact ? (
+                      <div className="mt-1 text-xs text-[#9aa39e]">
+                        {item.method || '-'}
+                      </div>
+                    ) : null}
+                  </td>
                   <td className={`${tdClass} font-mono text-xs`}>
                     {item.model || '-'}
                   </td>
+                  {!compact ? (
+                    <td className={tdClass}>
+                      <div className="whitespace-nowrap text-xs font-semibold">
+                        {upstreamModeLabel(item.upstream_mode)}
+                      </div>
+                      <div className="mt-1 text-xs text-[#9aa39e]">
+                        {item.upstream_fallback ? 'fallback' : 'direct'}
+                      </div>
+                    </td>
+                  ) : null}
                   <td className={tdClass}>
                     <StatusBadge
                       active={!!item.success}
@@ -1311,12 +1558,25 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     />
                   </td>
                   <td className={tdClass}>
-                    {fmtNumber(item.total_tokens)}
-                    <div className="mt-1 text-xs text-[#9aa39e]">
-                      {fmtNumber(item.input_tokens)} /{' '}
-                      {fmtNumber(item.output_tokens)}
+                    <div className="font-semibold">
+                      总 {fmtNumber(item.total_tokens)}
+                    </div>
+                    <div className="mt-1 text-xs leading-5 text-[#9aa39e]">
+                      输入 {fmtNumber(item.input_tokens)}
+                      <span className="mx-1 text-[#c0c9c4]">/</span>
+                      输出 {fmtNumber(item.output_tokens)}
                     </div>
                   </td>
+                  {!compact ? (
+                    <td className={tdClass}>
+                      <div className="text-xs leading-5">
+                        缓存输入 {fmtNumber(item.cached_tokens)}
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-[#9aa39e]">
+                        推理输出 {fmtNumber(item.reasoning_tokens)}
+                      </div>
+                    </td>
+                  ) : null}
                   {!compact ? (
                     <td className={`${tdClass} whitespace-nowrap`}>
                       {fmtCost(item.estimated_cost_usd)}
@@ -1328,25 +1588,24 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     </td>
                   ) : null}
                   {!compact ? (
-                    <td className={tdClass}>{item.error_type || '-'}</td>
+                    <td className={tdClass}>
+                      <div className="text-xs leading-5">
+                        请求 {fmtNumber(item.request_bytes)}
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-[#9aa39e]">
+                        响应 {fmtNumber(item.response_bytes)}
+                      </div>
+                    </td>
                   ) : null}
                   {!compact ? (
-                    <td className={tdClass}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedUsageItem(item)}
-                        className={tableActionButtonClass}
-                      >
-                        详情
-                      </button>
-                    </td>
+                    <td className={tdClass}>{item.error_type || '-'}</td>
                   ) : null}
                 </tr>
               ))
             ) : (
               <tr>
                 <td
-                  colSpan={compact ? 6 : 10}
+                  colSpan={compact ? 6 : 13}
                   className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                 >
                   {loading ? '加载中...' : '暂无调用记录'}
@@ -1517,6 +1776,11 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                         className={`${tdClass} whitespace-nowrap font-semibold`}
                       >
                         {fmtNumber(item.tokens[windowItem.key])}
+                        <div className="mt-1 text-xs font-normal text-[#9aa39e]">
+                          B {fmtNumber(item.upstream[windowItem.key]?.backend_requests)}
+                          <span className="mx-1 text-[#c0c9c4]">/</span>
+                          CLI {fmtNumber(item.upstream[windowItem.key]?.cli_requests)}
+                        </div>
                       </td>
                     ))}
                   </tr>
@@ -1676,7 +1940,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
           <div className={tableWrapClass}>
             <div className="overflow-auto">
-              <table className={`${tableClass} min-w-[1220px]`}>
+              <table className={`${tableClass} min-w-[1080px]`}>
                 <thead>
                   <tr>
                     <th className={selectionThClass}>选择</th>
@@ -1687,7 +1951,6 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     <th className={thClass}>模型限制</th>
                     <th className={thClass}>Token 日 / 周限制（百万）</th>
                     <th className={thClass}>状态</th>
-                    <th className={thClass}>操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e7efe9] bg-white">
@@ -1760,46 +2023,12 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                             )}
                           </div>
                         </td>
-                        <td className={tdClass}>
+                        <td className={`${tdClass} whitespace-nowrap`}>
                           <StatusBadge
                             active={!item.disabled}
                             trueText="启用"
                             falseText="禁用"
                           />
-                        </td>
-                        <td className={tdClass}>
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => startEditKey(item)}
-                              disabled={loading}
-                              className={tableActionButtonClass}
-                            >
-                              编辑
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setKeyDisabled(item.id, !item.disabled)
-                              }
-                              disabled={loading}
-                              className={
-                                item.disabled
-                                  ? tablePrimaryButtonClass
-                                  : tableDangerButtonClass
-                              }
-                            >
-                              {item.disabled ? '启用' : '禁用'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => deleteKey(item)}
-                              disabled={loading}
-                              className={tableDangerButtonClass}
-                            >
-                              删除
-                            </button>
-                          </div>
                         </td>
                       </tr>
                     )
@@ -1807,7 +2036,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 ) : (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={8}
                       className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                     >
                       {hasActiveKeyFilters
@@ -2128,28 +2357,181 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     )
   }
 
-  const renderUsageDetailModal = () => {
-    if (!selectedUsageItem) return null
+  const renderUsageBucketDetailModal = () => {
+    if (!selectedUsageBucket) return null
 
-    const detailRows = [
-      ['时间', fmtTs(selectedUsageItem.created_at)],
-      ['请求 ID', selectedUsageItem.request_id || '-'],
-      ['凭据', selectedUsageItem.api_key_prefix || '-'],
-      ['接口', selectedUsageItem.endpoint || selectedUsageItem.path || '-'],
-      ['方法', selectedUsageItem.method || '-'],
-      ['模型', selectedUsageItem.model || '-'],
-      ['状态码', `HTTP ${selectedUsageItem.status_code || '-'}`],
-      ['是否成功', selectedUsageItem.success ? '成功' : '失败'],
-      ['输入 Token', fmtNumber(selectedUsageItem.input_tokens)],
-      ['输出 Token', fmtNumber(selectedUsageItem.output_tokens)],
-      ['缓存 Token', fmtNumber(selectedUsageItem.cached_tokens)],
-      ['Reasoning Token', fmtNumber(selectedUsageItem.reasoning_tokens)],
-      ['总 Token', fmtNumber(selectedUsageItem.total_tokens)],
-      ['请求字节', fmtNumber(selectedUsageItem.request_bytes)],
-      ['响应字节', fmtNumber(selectedUsageItem.response_bytes)],
-      ['耗时', `${fmtNumber(selectedUsageItem.duration_ms)} ms`],
-      ['费用估算', fmtCost(selectedUsageItem.estimated_cost_usd)],
-      ['错误类型', selectedUsageItem.error_type || '-'],
+    const totalPages = Math.max(
+      1,
+      Math.ceil(selectedUsageBucketTotal / usageBucketDetailPagination.pageSize)
+    )
+    const currentPage = Math.min(usageBucketDetailPagination.current, totalPages)
+
+    return (
+      <div className="admin-modal-backdrop">
+        <button
+          type="button"
+          className="admin-modal-overlay"
+          aria-label="关闭每日模型详情"
+          onClick={() => setSelectedUsageBucket(null)}
+        />
+        <div
+          className="admin-modal-panel admin-usage-day-model-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="usage-day-model-detail-title"
+        >
+          <div className="admin-modal-header admin-usage-day-model-header">
+            <div>
+              <h2 id="usage-day-model-detail-title" className="admin-modal-title">
+                {selectedUsageBucket.model || '-'}
+              </h2>
+              <p className="admin-modal-description">
+                {fmtDate(selectedUsageBucket.bucket_start)}，上一页 / 下一页只在当天该模型的请求内分页。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedUsageBucket(null)}
+              className="admin-modal-close"
+              aria-label="关闭弹窗"
+            >
+              ×
+            </button>
+          </div>
+          <div className="admin-usage-day-model-body">
+            <div className={tableWrapClass}>
+              <div className="overflow-auto">
+                <table className={`${tableClass} min-w-[1140px]`}>
+                  <thead>
+                    <tr>
+                      <th className={thClass}>时间</th>
+                      <th className={thClass}>上游</th>
+                      <th className={thClass}>输入 Tokens</th>
+                      <th className={thClass}>输出 Tokens</th>
+                      <th className={thClass}>缓存 Tokens</th>
+                      <th className={thClass}>Reasoning Tokens</th>
+                      <th className={thClass}>总 Tokens</th>
+                      <th className={thClass}>价格</th>
+                      <th className={thClass}>成功</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#e7efe9] bg-white">
+                    {selectedUsageBucketItems.length > 0 ? (
+                      selectedUsageBucketItems.map((item) => (
+                        <tr key={String(item.id)} className="align-top">
+                          <td className={`${tdClass} whitespace-nowrap`}>
+                            {fmtTs(item.created_at)}
+                          </td>
+                          <td className={tdClass}>
+                            <div className="whitespace-nowrap text-xs">
+                              {upstreamModeLabel(item.upstream_mode)}
+                            </div>
+                            <div className="mt-1 text-xs text-[#9aa39e]">
+                              {item.upstream_fallback ? 'fallback' : 'direct'}
+                            </div>
+                          </td>
+                          <td className={tdClass}>
+                            {fmtNumber(item.input_tokens)}
+                          </td>
+                          <td className={tdClass}>
+                            {fmtNumber(item.output_tokens)}
+                          </td>
+                          <td className={tdClass}>
+                            {fmtNumber(item.cached_tokens)}
+                          </td>
+                          <td className={tdClass}>
+                            {fmtNumber(item.reasoning_tokens)}
+                          </td>
+                          <td className={`${tdClass} font-semibold`}>
+                            {fmtNumber(item.total_tokens)}
+                          </td>
+                          <td className={`${tdClass} whitespace-nowrap`}>
+                            {fmtCost(item.estimated_cost_usd)}
+                          </td>
+                          <td className={tdClass}>
+                            <StatusBadge
+                              active={!!item.success}
+                              trueText="是"
+                              falseText="否"
+                              falseTone="danger"
+                            />
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={9}
+                          className="px-4 py-10 text-center text-sm text-[#9aa39e]"
+                        >
+                          {usageBucketDetailLoading
+                            ? '加载中...'
+                            : '暂无请求明细'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div className="admin-usage-day-model-footer">
+            <div>
+              第 {currentPage} 共 {totalPages}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="admin-page-button"
+                disabled={usageBucketDetailLoading || currentPage <= 1}
+                onClick={() => changeUsageBucketDetailPage(currentPage - 1)}
+              >
+                上一页
+              </button>
+              <button
+                type="button"
+                className="admin-page-button"
+                disabled={usageBucketDetailLoading || currentPage >= totalPages}
+                onClick={() => changeUsageBucketDetailPage(currentPage + 1)}
+              >
+                下一页
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderUsageSessionDetailModal = () => {
+    if (!selectedUsageSession) return null
+
+    const summaryRows = [
+      ['会话 ID', selectedUsageSession.session_id || '-'],
+      ['凭据', selectedUsageSession.api_key_prefix || '-'],
+      ['首次调用', fmtTs(selectedUsageSession.first_seen_at)],
+      ['最近调用', fmtTs(selectedUsageSession.last_seen_at)],
+      ['请求数', fmtNumber(selectedUsageSession.total_requests)],
+      [
+        '成功 / 失败',
+        `${fmtNumber(selectedUsageSession.success_requests)} / ${fmtNumber(
+          selectedUsageSession.failed_requests
+        )}`,
+      ],
+      [
+        'Backend / CLI',
+        `${fmtNumber(selectedUsageSession.backend_requests)} / ${fmtNumber(
+          selectedUsageSession.cli_requests
+        )}`,
+      ],
+      ['Fallback', fmtNumber(selectedUsageSession.fallback_requests)],
+      ['输入 Token', fmtNumber(selectedUsageSession.input_tokens)],
+      ['输出 Token', fmtNumber(selectedUsageSession.output_tokens)],
+      ['缓存 Token', fmtNumber(selectedUsageSession.cached_tokens)],
+      ['Reasoning Token', fmtNumber(selectedUsageSession.reasoning_tokens)],
+      ['总 Token', fmtNumber(selectedUsageSession.total_tokens)],
+      ['平均耗时', `${fmtNumber(selectedUsageSession.average_duration_ms)} ms`],
+      ['费用估算', fmtCost(selectedUsageSession.estimated_cost_usd)],
     ]
 
     return (
@@ -2157,27 +2539,27 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         <button
           type="button"
           className="admin-modal-overlay"
-          aria-label="关闭调用详情"
-          onClick={() => setSelectedUsageItem(null)}
+          aria-label="关闭会话详情"
+          onClick={() => setSelectedUsageSession(null)}
         />
         <div
-          className="admin-modal-panel admin-usage-detail-modal"
+          className="admin-modal-panel admin-usage-session-modal"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="usage-detail-title"
+          aria-labelledby="usage-session-detail-title"
         >
           <div className="admin-modal-header">
             <div>
-              <h2 id="usage-detail-title" className="admin-modal-title">
-                调用详情
+              <h2 id="usage-session-detail-title" className="admin-modal-title">
+                会话详情
               </h2>
               <p className="admin-modal-description">
-                仅展示 usage、状态和排障字段；请求正文和响应正文不落库。
+                按同一个 session_id 聚合 usage；详情只展开请求级排障字段。
               </p>
             </div>
             <button
               type="button"
-              onClick={() => setSelectedUsageItem(null)}
+              onClick={() => setSelectedUsageSession(null)}
               className="admin-modal-close"
               aria-label="关闭弹窗"
             >
@@ -2185,12 +2567,96 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             </button>
           </div>
           <div className="admin-usage-detail-grid">
-            {detailRows.map(([label, value]) => (
+            {summaryRows.map(([label, value]) => (
               <div key={label} className="admin-usage-detail-item">
                 <div className="admin-usage-detail-label">{label}</div>
                 <div className="admin-usage-detail-value">{value}</div>
               </div>
             ))}
+          </div>
+          <div className="admin-usage-session-calls">
+            <div className="mb-3 text-sm font-semibold text-[#365141]">
+              请求明细
+            </div>
+            <div className={tableWrapClass}>
+              <div className="overflow-auto">
+                <table className={`${tableClass} min-w-[1240px]`}>
+                  <thead>
+                    <tr>
+                      <th className={thClass}>时间</th>
+                      <th className={thClass}>请求 ID</th>
+                      <th className={thClass}>接口</th>
+                      <th className={thClass}>模型</th>
+                      <th className={thClass}>上游</th>
+                      <th className={thClass}>状态</th>
+                      <th className={thClass}>Token</th>
+                      <th className={thClass}>费用估算</th>
+                      <th className={thClass}>耗时</th>
+                      <th className={thClass}>错误</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#e7efe9] bg-white">
+                    {selectedUsageSessionItems.length > 0 ? (
+                      selectedUsageSessionItems.map((item) => (
+                        <tr key={String(item.id)} className="align-top">
+                          <td className={tdClass}>{fmtTs(item.created_at)}</td>
+                          <td className={`${tdClass} font-mono text-xs`}>
+                            {item.request_id || '-'}
+                          </td>
+                          <td className={tdClass}>
+                            {item.endpoint || item.path || '-'}
+                          </td>
+                          <td className={`${tdClass} font-mono text-xs`}>
+                            {item.model || '-'}
+                          </td>
+                          <td className={tdClass}>
+                            <div className="whitespace-nowrap text-xs">
+                              {upstreamModeLabel(item.upstream_mode)}
+                            </div>
+                            <div className="mt-1 text-xs text-[#9aa39e]">
+                              {item.upstream_fallback ? 'fallback' : 'direct'}
+                            </div>
+                          </td>
+                          <td className={tdClass}>
+                            <StatusBadge
+                              active={!!item.success}
+                              trueText={`HTTP ${item.status_code}`}
+                              falseText={`HTTP ${item.status_code}`}
+                              falseTone="danger"
+                            />
+                          </td>
+                          <td className={tdClass}>
+                            {fmtNumber(item.total_tokens)}
+                            <div className="mt-1 text-xs text-[#9aa39e]">
+                              {fmtNumber(item.input_tokens)} /{' '}
+                              {fmtNumber(item.output_tokens)}
+                            </div>
+                          </td>
+                          <td className={`${tdClass} whitespace-nowrap`}>
+                            {fmtCost(item.estimated_cost_usd)}
+                          </td>
+                          <td className={tdClass}>
+                            {fmtNumber(item.duration_ms)} ms
+                          </td>
+                          <td className={tdClass}>{item.error_type || '-'}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={10}
+                          className="px-4 py-8 text-center text-sm text-[#9aa39e]"
+                        >
+                          {usageSessionDetailLoading
+                            ? '加载中...'
+                            : '暂无会话请求明细'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2198,7 +2664,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   }
 
   const renderUsageSummaryCards = () => (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
       <SummaryCard
         label="请求数"
         value={fmtNumber(summary.total_requests)}
@@ -2215,11 +2681,46 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         sub="按当前模型价格口径估算"
       />
       <SummaryCard
+        label="上游分布"
+        value={`${fmtNumber(summary.backend_requests)} / ${fmtNumber(summary.cli_requests)}`}
+        sub={`${fmtNumber(summary.fallback_requests)} 次 fallback`}
+      />
+      <SummaryCard
         label="错误率"
         value={fmtRate(summary.failed_requests, summary.total_requests)}
         sub={`${fmtNumber(summary.average_duration_ms)} ms 平均耗时`}
       />
     </div>
+  )
+
+  const renderUpstreamModeControl = () => (
+    <SurfacePanel variant="admin" className="p-5 sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-[#1f2d25]">
+            Codex 上游模式
+          </h2>
+          <div className="mt-1 text-sm text-[#7b8780]">
+            Backend 优先会直连 Codex backend，失败时自动落到 CLI；强制 CLI 会每次走 codex exec。
+          </div>
+        </div>
+        <div className="admin-view-tabs" role="tablist" aria-label="Codex 上游模式">
+          {CODEX_UPSTREAM_MODE_OPTIONS.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              role="tab"
+              aria-selected={gatewayUpstreamMode === item.value}
+              onClick={() => changeGatewayUpstreamMode(item.value)}
+              disabled={loading || gatewayUpstreamSaving}
+              className="admin-view-tab"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </SurfacePanel>
   )
 
   const renderDailyUsage = () => {
@@ -2229,69 +2730,95 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       <SurfacePanel variant="admin" className="p-5 sm:p-6">
         <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-[#1f2d25]">每日汇总</h2>
+            <h2 className="text-lg font-semibold text-[#1f2d25]">
+              每日模型汇总
+            </h2>
             <div className="mt-1 text-sm text-[#7b8780]">
-              按当前筛选条件聚合每天请求、Token、费用估算、错误率和平均耗时。
+              按日期和模型聚合请求、Token、费用估算和错误率；点击详情后只在当天该模型的请求内分页。
             </div>
           </div>
           <div className="text-sm text-[#7b8780]">
-            {fmtNumber(rows.length)} 天
+            {fmtNumber(rows.length)} 组
           </div>
         </div>
         <div className={tableWrapClass}>
           <div className="overflow-auto">
-            <table className={`${tableClass} min-w-[1180px]`}>
+            <table className={`${tableClass} min-w-[1300px]`}>
               <thead>
                 <tr>
                   <th className={thClass}>日期</th>
+                  <th className={thClass}>模型</th>
                   <th className={thClass}>请求</th>
-                  <th className={thClass}>输入 Token</th>
-                  <th className={thClass}>输出 Token</th>
-                  <th className={thClass}>缓存 Token</th>
-                  <th className={thClass}>总 Token</th>
-                  <th className={thClass}>费用估算</th>
-                  <th className={thClass}>错误率</th>
-                  <th className={thClass}>平均耗时</th>
+                  <th className={thClass}>上游</th>
+                  <th className={thClass}>输入 Tokens</th>
+                  <th className={thClass}>输出 Tokens</th>
+                  <th className={thClass}>总费用</th>
+                  <th className={thClass}>状态</th>
+                  <th className={thClass}>详情</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e7efe9] bg-white">
                 {rows.length > 0 ? (
-                  rows.map((item) => (
-                    <tr key={String(item.bucket_start)}>
-                      <td className={`${tdClass} whitespace-nowrap`}>
-                        {fmtDate(item.bucket_start)}
-                      </td>
-                      <td className={`${tdClass} font-semibold`}>
-                        {fmtNumber(item.total_requests)}
-                        <div className="mt-1 text-xs font-normal text-[#9aa39e]">
-                          {fmtNumber(item.success_requests)} 成功 /{' '}
-                          {fmtNumber(item.failed_requests)} 失败
-                        </div>
-                      </td>
-                      <td className={tdClass}>{fmtNumber(item.input_tokens)}</td>
-                      <td className={tdClass}>{fmtNumber(item.output_tokens)}</td>
-                      <td className={tdClass}>{fmtNumber(item.cached_tokens)}</td>
-                      <td className={`${tdClass} font-semibold`}>
-                        {fmtNumber(item.total_tokens)}
-                      </td>
-                      <td className={`${tdClass} whitespace-nowrap`}>
-                        {fmtCost(item.estimated_cost_usd)}
-                      </td>
-                      <td className={tdClass}>
-                        {fmtRate(item.failed_requests, item.total_requests)}
-                      </td>
-                      <td className={tdClass}>
-                        {fmtNumber(item.average_duration_ms)} ms
-                      </td>
-                    </tr>
-                  ))
+                  rows.map((item) => {
+                    const failedRequests = asInt(item.failed_requests, 0)
+                    const totalRequests = asInt(item.total_requests, 0)
+                    return (
+                      <tr
+                        key={`${item.bucket_start}-${item.model || '-'}`}
+                        className="align-top"
+                      >
+                        <td className={`${tdClass} whitespace-nowrap`}>
+                          {fmtDate(item.bucket_start)}
+                        </td>
+                        <td className={tdClass}>
+                          <span className="admin-model-pill">
+                            {item.model || '-'}
+                          </span>
+                        </td>
+                        <td className={`${tdClass} font-semibold`}>
+                          {fmtNumber(item.total_requests)}
+                          <div className="mt-1 text-xs font-normal text-[#9aa39e]">
+                            {fmtNumber(item.success_requests)} 成功 /{' '}
+                            {fmtNumber(item.failed_requests)} 失败
+                          </div>
+                        </td>
+                        <td className={tdClass}>{renderUpstreamStats(item)}</td>
+                        <td className={tdClass}>{fmtNumber(item.input_tokens)}</td>
+                        <td className={tdClass}>{fmtNumber(item.output_tokens)}</td>
+                        <td className={`${tdClass} whitespace-nowrap font-semibold`}>
+                          {fmtCost(item.estimated_cost_usd)}
+                        </td>
+                        <td className={tdClass}>
+                          <span
+                            className={
+                            failedRequests > 0
+                              ? 'admin-usage-status-danger'
+                              : 'admin-usage-status-ok'
+                          }
+                          >
+                            {failedRequests > 0 ? '!' : '✓'}{' '}
+                            {fmtRate(failedRequests, totalRequests)} 错误
+                          </span>
+                        </td>
+                        <td className={tdClass}>
+                          <button
+                            type="button"
+                            onClick={() => openUsageBucketDetail(item)}
+                            className={tableActionButtonClass}
+                          >
+                            详情
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })
                 ) : (
                   <tr>
                     <td
                       colSpan={9}
                       className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                     >
-                      {loading ? '加载中...' : '暂无每日汇总'}
+                      {loading ? '加载中...' : '暂无每日模型汇总'}
                     </td>
                   </tr>
                 )}
@@ -2303,25 +2830,134 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     )
   }
 
+  const renderSessionUsage = () => (
+    <SurfacePanel variant="admin" className="p-5 sm:p-6">
+      <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-[#1f2d25]">会话聚合</h2>
+          <div className="mt-1 text-sm text-[#7b8780]">
+            按客户端传入的 session_id 聚合同一会话的请求、Token、费用和耗时。
+          </div>
+        </div>
+        <div className="text-sm text-[#7b8780]">
+          {fmtNumber(usageSessionTotal)} 个会话
+        </div>
+      </div>
+      <div className={tableWrapClass}>
+        <div className="overflow-auto">
+          <table className={`${tableClass} min-w-[1360px]`}>
+            <thead>
+              <tr>
+                <th className={thClass}>最近调用</th>
+                <th className={thClass}>会话 ID</th>
+                <th className={thClass}>凭据</th>
+                <th className={thClass}>请求</th>
+                <th className={thClass}>上游</th>
+                <th className={thClass}>Token</th>
+                <th className={thClass}>费用估算</th>
+                <th className={thClass}>平均耗时</th>
+                <th className={thClass}>详情</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#e7efe9] bg-white">
+              {usageSessionItems.length > 0 ? (
+                usageSessionItems.map((item) => (
+                  <tr key={item.session_id} className="align-top">
+                    <td className={`${tdClass} whitespace-nowrap`}>
+                      {fmtTs(item.last_seen_at)}
+                      <div className="mt-1 text-xs text-[#9aa39e]">
+                        首次 {fmtTs(item.first_seen_at)}
+                      </div>
+                    </td>
+                    <td className={`${tdClass} max-w-[280px] font-mono text-xs`}>
+                      <span className="break-all">{item.session_id || '-'}</span>
+                    </td>
+                    <td className={`${tdClass} font-mono text-xs`}>
+                      {item.api_key_prefix || '-'}
+                    </td>
+                    <td className={`${tdClass} font-semibold`}>
+                      {fmtNumber(item.total_requests)}
+                      <div className="mt-1 text-xs font-normal text-[#9aa39e]">
+                        {fmtNumber(item.success_requests)} 成功 /{' '}
+                        {fmtNumber(item.failed_requests)} 失败
+                      </div>
+                    </td>
+                    <td className={tdClass}>{renderUpstreamStats(item)}</td>
+                    <td className={tdClass}>
+                      {fmtNumber(item.total_tokens)}
+                      <div className="mt-1 text-xs text-[#9aa39e]">
+                        {fmtNumber(item.input_tokens)} /{' '}
+                        {fmtNumber(item.output_tokens)}
+                      </div>
+                    </td>
+                    <td className={`${tdClass} whitespace-nowrap`}>
+                      {fmtCost(item.estimated_cost_usd)}
+                    </td>
+                    <td className={tdClass}>
+                      {fmtNumber(item.average_duration_ms)} ms
+                    </td>
+                    <td className={tdClass}>
+                      <button
+                        type="button"
+                        onClick={() => openUsageSessionDetail(item)}
+                        className={tableActionButtonClass}
+                      >
+                        详情
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan={9}
+                    className="px-4 py-10 text-center text-sm text-[#9aa39e]"
+                  >
+                    {loading
+                      ? '加载中...'
+                      : '暂无带 session_id 的会话记录'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <TablePagination
+        total={usageSessionTotal}
+        pagination={usagePagination}
+        onChange={setUsagePagination}
+        disabled={loading}
+      />
+    </SurfacePanel>
+  )
+
   const renderUsage = () => {
     const activeTimeRange = getUsageTimeRange(appliedUsageFilters.timeRange)
     const activePagination = clampPagination(usagePagination, usageTotal)
-    const usageStart =
-      usageTotal > 0
-        ? (activePagination.current - 1) * activePagination.pageSize + 1
-        : 0
-    const usageEnd = Math.min(
-      usageTotal,
-      activePagination.current * activePagination.pageSize
+    const activeSessionPagination = clampPagination(
+      usagePagination,
+      usageSessionTotal
     )
+    const activeTotal =
+      usageTab === 'sessions' ? usageSessionTotal : usageTotal
+    const activePage =
+      usageTab === 'sessions' ? activeSessionPagination : activePagination
+    const usageStart =
+      activeTotal > 0
+        ? (activePage.current - 1) * activePage.pageSize + 1
+        : 0
+    const usageEnd = Math.min(activeTotal, activePage.current * activePage.pageSize)
+    const usageUnit = usageTab === 'sessions' ? '会话' : '请求'
     const detailTitle = usageTab === 'errors' ? '异常请求' : '调用明细'
     const detailDescription =
       usageTab === 'errors'
         ? '仅展示失败请求，用于排查上游错误、限流、鉴权和网关异常。'
-        : '按请求级 usage 真源展示状态、Token、费用估算、耗时和错误类型。'
+        : '按请求级 usage 真源直接展示状态、Token、缓存、Reasoning、字节、费用估算、耗时和错误类型。'
 
     return (
       <div className="space-y-5">
+        {renderUpstreamModeControl()}
         {renderUsageSummaryCards()}
 
         <SurfacePanel variant="admin" className="p-5 sm:p-6">
@@ -2332,7 +2968,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               </h2>
               <div className="mt-1 text-sm text-[#7b8780]">
                 {activeTimeRange.label} 范围内第 {usageStart}-{usageEnd} 条 / 共{' '}
-                {usageTotal} 条请求。
+                {activeTotal} 条{usageUnit}。
               </div>
             </div>
           </div>
@@ -2428,6 +3064,21 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     placeholder="输入状态筛选"
                   />
                 </label>
+                <label className={fieldClass}>
+                  上游模式
+                  <SearchableSelect
+                    value={usageFilters.upstreamMode}
+                    onChange={(nextValue) =>
+                      setUsageFilters((current) => ({
+                        ...current,
+                        upstreamMode: nextValue,
+                      }))
+                    }
+                    ariaLabel="上游模式"
+                    options={USAGE_UPSTREAM_FILTER_OPTIONS}
+                    placeholder="输入上游模式"
+                  />
+                </label>
               </div>
               <div className={primaryActionsClass}>
                 <button
@@ -2486,6 +3137,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               showFilters: true,
             })
           : null}
+        {usageTab === 'sessions' ? renderSessionUsage() : null}
         {usageTab === 'details' || usageTab === 'errors' ? (
           <SurfacePanel variant="admin" className="p-5 sm:p-6">
             <div className="mb-5">
@@ -2542,7 +3194,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         {currentView === 'usage' ? renderUsage() : null}
       </div>
       {currentView === 'keys' ? renderKeyModal() : null}
-      {renderUsageDetailModal()}
+      {renderUsageBucketDetailModal()}
+      {renderUsageSessionDetailModal()}
     </AdminFrame>
   )
 }

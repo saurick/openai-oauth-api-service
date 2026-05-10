@@ -28,6 +28,8 @@ type Tx struct {
 	GatewayModelPrice *GatewayModelPriceClient
 	// GatewayPolicy is the client for interacting with the GatewayPolicy builders.
 	GatewayPolicy *GatewayPolicyClient
+	// GatewaySetting is the client for interacting with the GatewaySetting builders.
+	GatewaySetting *GatewaySettingClient
 	// GatewayUsageLog is the client for interacting with the GatewayUsageLog builders.
 	GatewayUsageLog *GatewayUsageLogClient
 	// User is the client for interacting with the User builders.
@@ -171,6 +173,7 @@ func (tx *Tx) init() {
 	tx.GatewayModel = NewGatewayModelClient(tx.config)
 	tx.GatewayModelPrice = NewGatewayModelPriceClient(tx.config)
 	tx.GatewayPolicy = NewGatewayPolicyClient(tx.config)
+	tx.GatewaySetting = NewGatewaySettingClient(tx.config)
 	tx.GatewayUsageLog = NewGatewayUsageLogClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 }
