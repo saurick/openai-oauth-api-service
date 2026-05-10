@@ -32,9 +32,9 @@ const scenarios = [
     viewport: { width: 1440, height: 900 },
     expectPath: '/admin-login',
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectRole(page, 'button', '登录')
-      await expectText(page, 'OpenAI OAuth API Service')
+      await expectText(page, 'Saurick API Console')
     },
   },
   {
@@ -43,9 +43,9 @@ const scenarios = [
     viewport: { width: 390, height: 844 },
     expectPath: '/admin-login',
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectRole(page, 'button', '登录')
-      await expectText(page, 'OpenAI OAuth API Service')
+      await expectText(page, 'Saurick API Console')
     },
   },
   {
@@ -54,9 +54,9 @@ const scenarios = [
     viewport: { width: 1280, height: 800 },
     expectPath: '/admin-login',
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectRole(page, 'button', '登录')
-      await expectText(page, 'OpenAI OAuth API Service')
+      await expectText(page, 'Saurick API Console')
       await assertThemeToggle(page, 'login-desktop', '.admin-login-shell')
     },
   },
@@ -66,7 +66,7 @@ const scenarios = [
     viewport: { width: 390, height: 844 },
     expectPath: '/admin-login',
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectRole(page, 'button', '登录')
     },
   },
@@ -76,7 +76,7 @@ const scenarios = [
     viewport: { width: 1280, height: 800 },
     expectPath: '/admin-login',
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectRole(page, 'button', '登录')
     },
   },
@@ -85,9 +85,9 @@ const scenarios = [
     path: '/admin-login',
     viewport: { width: 390, height: 844 },
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectRole(page, 'button', '登录')
-      await expectText(page, 'OpenAI OAuth API Service')
+      await expectText(page, 'Saurick API Console')
     },
   },
   {
@@ -95,9 +95,9 @@ const scenarios = [
     path: '/admin-login',
     viewport: { width: 1440, height: 900 },
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectRole(page, 'button', '登录')
-      await expectText(page, 'OpenAI OAuth API Service')
+      await expectText(page, 'Saurick API Console')
     },
   },
   {
@@ -106,7 +106,7 @@ const scenarios = [
     viewport: { width: 1280, height: 800 },
     expectPath: '/admin-login',
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectRole(page, 'button', '登录')
     },
   },
@@ -116,7 +116,7 @@ const scenarios = [
     viewport: { width: 390, height: 844 },
     expectPath: '/admin-login',
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectRole(page, 'button', '登录')
     },
   },
@@ -128,9 +128,9 @@ const scenarios = [
     adminAuth: true,
     mockApiRpc: true,
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectText(page, '用量日志')
-      await expectText(page, '每日汇总')
+      await expectText(page, '每日模型')
       await assertAdminChrome(page, 'admin-analytics-redirect')
       await assertUsageTableVisuals(page, 'admin-analytics-redirect')
     },
@@ -142,9 +142,9 @@ const scenarios = [
     adminAuth: true,
     mockApiRpc: true,
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectText(page, '用量日志')
-      await expectText(page, '每日汇总')
+      await expectText(page, '每日模型')
       await expectText(page, '时间范围')
       await expectText(page, '24h 范围内第')
       await expectNoText(page, '返回控制台')
@@ -159,9 +159,9 @@ const scenarios = [
     adminAuth: true,
     mockApiRpc: true,
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectText(page, '用量日志')
-      await expectText(page, '每日汇总')
+      await expectText(page, '每日模型')
       await expectText(page, '时间范围')
       await expectText(page, '24h 范围内第')
       await expectNoText(page, '返回控制台')
@@ -226,7 +226,7 @@ const scenarios = [
     adminAuth: true,
     mockApiRpc: true,
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectText(page, '业务看板')
       await expectText(page, '30 天趋势')
       await expectText(page, '最近调用')
@@ -242,7 +242,7 @@ const scenarios = [
     adminAuth: true,
     mockApiRpc: true,
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectText(page, '业务看板')
       await expectText(page, '30 天趋势')
       await expectText(page, '最近调用')
@@ -258,7 +258,7 @@ const scenarios = [
     adminAuth: true,
     mockApiRpc: true,
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectText(page, '业务看板')
       await expectNoText(page, '功能路线')
       await assertAdminChrome(page, 'admin-guide-redirect')
@@ -273,7 +273,7 @@ const scenarios = [
     adminAuth: true,
     mockApiRpc: true,
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectText(page, '业务看板')
       await expectNoText(page, '账号目录')
       await assertAdminChrome(page, 'admin-accounts-redirect')
@@ -288,7 +288,7 @@ const scenarios = [
     adminAuth: true,
     mockApiRpc: true,
     verify: async (page) => {
-      await expectText(page, 'OAuth API 管理后台')
+      await expectText(page, 'API 管理后台')
       await expectText(page, '业务看板')
       await expectNoText(page, '授权登录')
       await assertAdminChrome(page, 'admin-oauth-redirect')
@@ -970,7 +970,7 @@ async function assertUsageTableVisuals(page, scenarioName) {
     )
 
     return {
-      hasDailySummary: document.body.innerText.includes('每日汇总'),
+      hasDailySummary: document.body.innerText.includes('每日模型汇总'),
       hasDetailButton: document.body.innerText.includes('详情'),
       hasPagination: document.body.innerText.includes('共 12 条'),
       hasSidebarUsageNav: document.body.innerText.includes('用量日志'),
@@ -980,9 +980,8 @@ async function assertUsageTableVisuals(page, scenarioName) {
       hasTimeRangeFilter: Boolean(
         main?.querySelector('[role="combobox"][aria-label="时间范围"]')
       ),
-      hasUsageTabs: ['每日汇总', '凭据统计', '调用明细', '异常请求'].every((text) =>
-        tabTexts.includes(text)
-      ),
+      hasUsageTabs: ['每日模型', '凭据统计', '会话聚合', '调用明细', '异常请求']
+        .every((text) => tabTexts.includes(text)),
       hasUsageWindowSummary: document.body.innerText.includes('24h 范围内第'),
       mainHeight: mainRect?.height || 0,
       tableHeight: tableRect?.height || 0,
@@ -993,7 +992,7 @@ async function assertUsageTableVisuals(page, scenarioName) {
   assert(metrics.hasSidebarUsageNav, `${scenarioName} 缺少后台侧栏 usage 入口`)
   assert(metrics.hasTimeRangeFilter, `${scenarioName} 缺少 usage 时间范围筛选`)
   assert(metrics.hasUsageTabs, `${scenarioName} 缺少 usage 分段视图`)
-  assert(metrics.hasDailySummary, `${scenarioName} 缺少每日汇总默认视图`)
+  assert(metrics.hasDailySummary, `${scenarioName} 缺少每日模型默认视图`)
   assert(
     metrics.hasUsageWindowSummary,
     `${scenarioName} usage 摘要未显示当前时间窗口`
@@ -1006,24 +1005,71 @@ async function assertUsageTableVisuals(page, scenarioName) {
   assert(metrics.tableHeight > 0, `${scenarioName} usage 表格高度异常`)
   assert(metrics.tableWidth > 0, `${scenarioName} usage 表格宽度异常`)
   assertUsageAggregationRequests(page, scenarioName)
+  await assertUsageDailyModelDetail(page, scenarioName)
   await assertUsageKeyStatsTab(page, scenarioName)
+  await assertUsageSessionTab(page, scenarioName)
   await assertUsageDetailsTab(page, scenarioName)
   await assertUsageTimeRangeRequest(page, scenarioName)
   await assertUsagePaginationRequest(page, scenarioName)
   await assertUsageErrorsTab(page, scenarioName)
-  await assertUsageDetailModal(page, scenarioName)
 }
 
 function assertUsageAggregationRequests(page, scenarioName) {
   const calls = page.__styleL1ApiRpcCalls || []
   assert(
-    calls.some((call) => call.method === 'usage_buckets'),
+    calls.some(
+      (call) =>
+        call.method === 'usage_buckets' && call.params?.group_by === 'day_model'
+    ),
     `${scenarioName} 未请求每日 usage 聚合: ${JSON.stringify(calls)}`
+  )
+  assert(
+    calls.some((call) => call.method === 'usage_session_summaries'),
+    `${scenarioName} 未请求会话 usage 聚合: ${JSON.stringify(calls)}`
   )
   assert(
     calls.filter((call) => call.method === 'usage_key_summaries').length >= 8,
     `${scenarioName} 未请求完整凭据 token 窗口: ${JSON.stringify(calls)}`
   )
+}
+
+async function assertUsageDailyModelDetail(page, scenarioName) {
+  await expectText(page, '每日模型汇总')
+  await expectText(page, 'gpt-5.4')
+  await page.getByRole('button', { name: '详情', exact: true }).first().click()
+  await expectText(page, '输入 Tokens')
+  await expectText(page, 'Reasoning Tokens')
+  await expectText(page, '下一页')
+  const metrics = await page.evaluate(() => {
+    const modal = document.querySelector('.admin-usage-day-model-modal')
+    const rect = modal?.getBoundingClientRect()
+    const table = modal?.querySelector('table')
+    const tableRect = table?.getBoundingClientRect()
+    const scroller = modal?.querySelector('.overflow-auto')
+    const scrollerRect = scroller?.getBoundingClientRect()
+    return {
+      hasModelTitle: document.body.innerText.includes('gpt-5.4'),
+      hasSuccessColumn: document.body.innerText.includes('成功'),
+      height: rect?.height || 0,
+      scrollerInside:
+        Boolean(rect && scrollerRect) &&
+        scrollerRect.left >= rect.left &&
+        scrollerRect.right <= rect.right + 1,
+      tableHasScrollableWidth:
+        Boolean(scroller && tableRect) && scroller.scrollWidth >= scroller.clientWidth,
+      width: rect?.width || 0,
+    }
+  })
+  assert(metrics.hasModelTitle, `${scenarioName} 每日模型详情缺少模型标题`)
+  assert(metrics.hasSuccessColumn, `${scenarioName} 每日模型详情缺少成功列`)
+  assert(
+    metrics.width > 300 &&
+      metrics.height > 320 &&
+      metrics.scrollerInside &&
+      metrics.tableHasScrollableWidth,
+    `${scenarioName} 每日模型详情弹窗盒模型异常: ${JSON.stringify(metrics)}`
+  )
+  await page.getByRole('button', { name: '关闭弹窗' }).click()
 }
 
 async function assertUsageKeyStatsTab(page, scenarioName) {
@@ -1045,16 +1091,59 @@ async function assertUsageKeyStatsTab(page, scenarioName) {
   assert(metrics.hasStatsRows, `${scenarioName} 凭据统计缺少统计行`)
 }
 
+async function assertUsageSessionTab(page, scenarioName) {
+  await page.getByRole('tab', { name: '会话聚合', exact: true }).click()
+  await expectText(page, '会话聚合')
+  await expectText(page, 'session-style-l1')
+  await page.getByRole('button', { name: '详情', exact: true }).first().click()
+  await expectText(page, '会话详情')
+  await expectText(page, '请求明细')
+  await expectText(page, 'req_style_l1_prod_1')
+  const metrics = await page.evaluate(() => {
+    const modal = document.querySelector('.admin-usage-session-modal')
+    const rect = modal?.getBoundingClientRect()
+    return {
+      hasSessionID: document.body.innerText.includes('session-style-l1'),
+      hasCalls: document.body.innerText.includes('req_style_l1_prod_1'),
+      height: rect?.height || 0,
+      width: rect?.width || 0,
+    }
+  })
+  assert(metrics.hasSessionID, `${scenarioName} 会话详情缺少 session_id`)
+  assert(metrics.hasCalls, `${scenarioName} 会话详情缺少请求明细`)
+  assert(
+    metrics.width > 300 && metrics.height > 260,
+    `${scenarioName} 会话详情弹窗尺寸异常: ${JSON.stringify(metrics)}`
+  )
+  await page.getByRole('button', { name: '关闭弹窗' }).click()
+}
+
 async function assertUsageDetailsTab(page, scenarioName) {
   await page.getByRole('tab', { name: '调用明细', exact: true }).click()
   await expectText(page, '调用明细')
   await expectText(page, '费用估算')
-  await expectText(page, '详情')
+  await expectText(page, '请求')
+  await expectText(page, 'Session：session-style-l1')
+  await expectText(page, '缓存输入 / 推理输出')
+  await expectText(page, '缓存输入')
+  await expectText(page, '推理输出')
+  await expectText(page, '字节')
   const metrics = await page.evaluate(() => ({
+    hasDetailButton: Boolean(
+      document.querySelector('main table button')?.textContent?.includes('详情')
+    ),
+    hasHeaderTooltips:
+      document.querySelectorAll('main table .admin-th-help[data-tooltip]').length >= 4,
     hasPagination: document.body.innerText.includes('共 12 条'),
+    hasRequestID: document.body.innerText.includes('req_style_l1_prod_1'),
+    hasSessionID: document.body.innerText.includes('session-style-l1'),
     hasTable: Boolean(document.querySelector('main table')),
   }))
+  assert(!metrics.hasDetailButton, `${scenarioName} 调用明细不应再有详情按钮`)
+  assert(metrics.hasHeaderTooltips, `${scenarioName} 调用明细缺少表头说明 tooltip`)
   assert(metrics.hasPagination, `${scenarioName} 调用明细缺少分页器`)
+  assert(metrics.hasRequestID, `${scenarioName} 调用明细缺少 request_id`)
+  assert(metrics.hasSessionID, `${scenarioName} 调用明细缺少 session_id`)
   assert(metrics.hasTable, `${scenarioName} 调用明细缺少表格`)
 }
 
@@ -1081,28 +1170,6 @@ async function assertUsageErrorsTab(page, scenarioName) {
       calls.slice(startIndex)
     )}`
   )
-}
-
-async function assertUsageDetailModal(page, scenarioName) {
-  await page.getByRole('tab', { name: '调用明细', exact: true }).click()
-  await page.getByRole('button', { name: '详情', exact: true }).first().click()
-  await expectText(page, '调用详情')
-  await expectText(page, '请求正文和响应正文不落库')
-  const metrics = await page.evaluate(() => {
-    const modal = document.querySelector('.admin-usage-detail-modal')
-    const rect = modal?.getBoundingClientRect()
-    return {
-      hasRequestID: document.body.innerText.includes('请求 ID'),
-      height: rect?.height || 0,
-      width: rect?.width || 0,
-    }
-  })
-  assert(metrics.hasRequestID, `${scenarioName} 调用详情缺少 request_id 字段`)
-  assert(
-    metrics.width > 300 && metrics.height > 200,
-    `${scenarioName} 调用详情弹窗尺寸异常: ${JSON.stringify(metrics)}`
-  )
-  await page.getByRole('button', { name: '关闭弹窗' }).click()
 }
 
 async function assertUsageTimeRangeRequest(page, scenarioName) {
@@ -1193,6 +1260,9 @@ async function assertKeyTableVisuals(page, scenarioName) {
       hasRemarkHeader: document.body.innerText.includes('备注'),
       hasCreatedAtHeader: document.body.innerText.includes('创建时间'),
       hasUpdatedAtHeader: document.body.innerText.includes('更新时间'),
+      hasOperationHeader: Array.from(table?.querySelectorAll('thead th') || []).some(
+        (node) => node.textContent.trim() === '操作'
+      ),
       createdAtCells: Array.from(main?.querySelectorAll('table tbody tr') || [])
         .map((row) => row.children[2]?.textContent.trim() || '')
         .filter(Boolean),
@@ -1238,6 +1308,22 @@ async function assertKeyTableVisuals(page, scenarioName) {
           width: rect.width,
         }
       }),
+      statusCells: Array.from(table?.querySelectorAll('tbody tr') || []).map(
+        (row) => {
+          const cell = row.children[7]
+          const badge = cell?.querySelector('span')
+          const cellRect = cell?.getBoundingClientRect()
+          const badgeRect = badge?.getBoundingClientRect()
+          const badgeStyle = badge ? window.getComputedStyle(badge) : null
+          return {
+            badgeHeight: badgeRect?.height || 0,
+            badgeText: badge?.textContent.trim() || '',
+            cellHeight: cellRect?.height || 0,
+            hasButton: Boolean(cell?.querySelector('button')),
+            whiteSpace: badgeStyle?.whiteSpace || '',
+          }
+        }
+      ),
     }
   })
 
@@ -1246,6 +1332,10 @@ async function assertKeyTableVisuals(page, scenarioName) {
   assert(metrics.hasRemarkHeader, `${scenarioName} 缺少备注列表列`)
   assert(metrics.hasCreatedAtHeader, `${scenarioName} 缺少创建时间列`)
   assert(metrics.hasUpdatedAtHeader, `${scenarioName} 缺少更新时间列`)
+  assert(
+    !metrics.hasOperationHeader,
+    `${scenarioName} API 凭据表格不应再展示行内操作列`
+  )
   assert(
     metrics.createdAtCells.length === 8 &&
       metrics.createdAtCells.every((value) => value !== '-' && /\d/.test(value)),
@@ -1297,6 +1387,26 @@ async function assertKeyTableVisuals(page, scenarioName) {
       checkbox.minHeight,
       '0px',
       `${scenarioName} 第 ${index + 1} 个选择框仍被 input min-height 撑开`
+    )
+  }
+  assert.equal(
+    metrics.statusCells.length,
+    8,
+    `${scenarioName} key 表格状态列数量异常`
+  )
+  for (const [index, statusCell] of metrics.statusCells.entries()) {
+    assert(
+      ['启用', '禁用'].includes(statusCell.badgeText),
+      `${scenarioName} 第 ${index + 1} 个状态文案异常: ${JSON.stringify(statusCell)}`
+    )
+    assert.equal(
+      statusCell.whiteSpace,
+      'nowrap',
+      `${scenarioName} 第 ${index + 1} 个状态文案仍可能换行: ${JSON.stringify(statusCell)}`
+    )
+    assert(
+      !statusCell.hasButton,
+      `${scenarioName} 第 ${index + 1} 个状态列不应保留行内操作按钮: ${JSON.stringify(statusCell)}`
     )
   }
 
@@ -1873,46 +1983,54 @@ function getApiMockData(method, params = {}) {
   }
 
   if (method === 'usage_list') {
+    const model = params.model || 'gpt-5.3-codex'
     return {
       items: [
         {
           api_key_prefix: 'sk-api-prod',
+          cached_tokens: model === 'gpt-5.4' ? 272640 : 1200,
           created_at: 1778000000,
           duration_ms: 813,
           endpoint: '/v1/responses',
           error_type: '',
           estimated_cost_usd: 0.1212,
           id: 1,
-          input_tokens: 1900,
-          model: 'gpt-5.3-codex',
-          output_tokens: 2310,
+          input_tokens: model === 'gpt-5.4' ? 272889 : 1900,
+          model,
+          output_tokens: model === 'gpt-5.4' ? 50 : 2310,
+          reasoning_tokens: model === 'gpt-5.4' ? 0 : 320,
           request_bytes: 4096,
           request_id: 'req_style_l1_prod_1',
           response_bytes: 8192,
+          session_id: 'session-style-l1',
           status_code: 200,
           success: true,
           total_tokens: 4210,
         },
         {
           api_key_prefix: 'sk-api-prod',
+          cached_tokens: model === 'gpt-5.4' ? 272512 : 40800,
           created_at: 1777999000,
           duration_ms: 1240,
           endpoint: '/v1/chat/completions',
           error_type: '',
           estimated_cost_usd: 0.7421,
           id: 2,
-          input_tokens: 60000,
-          model: 'gpt-5.3-codex',
-          output_tokens: 1200,
+          input_tokens: model === 'gpt-5.4' ? 272660 : 60000,
+          model,
+          output_tokens: model === 'gpt-5.4' ? 179 : 1200,
+          reasoning_tokens: 0,
           request_bytes: 65536,
           request_id: 'req_style_l1_prod_2',
           response_bytes: 12000,
+          session_id: 'session-style-l1',
           status_code: 200,
           success: true,
           total_tokens: 61200,
         },
         {
           api_key_prefix: 'sk-api-stage',
+          cached_tokens: 0,
           created_at: 1777998000,
           duration_ms: 330,
           endpoint: '/v1/responses',
@@ -1920,11 +2038,13 @@ function getApiMockData(method, params = {}) {
           estimated_cost_usd: null,
           id: 3,
           input_tokens: 1000,
-          model: 'gpt-5.3-codex',
+          model: params.success === false ? 'gpt-5.2' : model,
           output_tokens: 80,
+          reasoning_tokens: 0,
           request_bytes: 2048,
           request_id: 'req_style_l1_stage_1',
           response_bytes: 512,
+          session_id: 'session-style-l1-error',
           status_code: 502,
           success: false,
           total_tokens: 1080,
@@ -1968,6 +2088,48 @@ function getApiMockData(method, params = {}) {
           total_tokens: 1080,
         },
       ],
+    }
+  }
+
+  if (method === 'usage_session_summaries') {
+    return {
+      items: [
+        {
+          api_key_id: 1,
+          api_key_prefix: 'sk-api-prod',
+          average_duration_ms: 1026,
+          cached_tokens: 42000,
+          estimated_cost_usd: 0.86,
+          failed_requests: 0,
+          first_seen_at: 1777999000,
+          input_tokens: 61900,
+          last_seen_at: 1778000000,
+          output_tokens: 3510,
+          reasoning_tokens: 320,
+          session_id: 'session-style-l1',
+          success_requests: 2,
+          total_requests: 2,
+          total_tokens: 65410,
+        },
+        {
+          api_key_id: 2,
+          api_key_prefix: 'sk-api-stage',
+          average_duration_ms: 330,
+          cached_tokens: 0,
+          estimated_cost_usd: null,
+          failed_requests: 1,
+          first_seen_at: 1777998000,
+          input_tokens: 1000,
+          last_seen_at: 1777998000,
+          output_tokens: 80,
+          reasoning_tokens: 0,
+          session_id: 'session-style-l1-error',
+          success_requests: 0,
+          total_requests: 1,
+          total_tokens: 1080,
+        },
+      ],
+      total: 2,
     }
   }
 
@@ -2038,6 +2200,7 @@ function createMockUsageBuckets() {
     const cachedTokens = Math.round(inputTokens * 0.72)
     const outputTokens = calls * (220 + index * 16)
     const reasoningTokens = calls * (40 + index * 3)
+    const model = index % 5 === 0 ? 'gpt-5.4-mini' : 'gpt-5.4'
 
     return {
       bucket_start: Math.floor(d.getTime() / 1000),
@@ -2046,6 +2209,7 @@ function createMockUsageBuckets() {
       estimated_cost_usd: Number((calls * (0.018 + index * 0.001)).toFixed(4)),
       failed_requests: index % 4 === 0 ? 2 : 0,
       input_tokens: inputTokens,
+      model,
       output_tokens: outputTokens,
       reasoning_tokens: reasoningTokens,
       success_requests: calls - (index % 4 === 0 ? 2 : 0),

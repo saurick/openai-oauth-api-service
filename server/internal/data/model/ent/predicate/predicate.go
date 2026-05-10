@@ -30,6 +30,9 @@ type GatewayModelPrice func(*sql.Selector)
 // GatewayPolicy is the predicate function for gatewaypolicy builders.
 type GatewayPolicy func(*sql.Selector)
 
+// GatewaySetting is the predicate function for gatewaysetting builders.
+type GatewaySetting func(*sql.Selector)
+
 // GatewayUsageLog is the predicate function for gatewayusagelog builders.
 type GatewayUsageLog func(*sql.Selector)
 

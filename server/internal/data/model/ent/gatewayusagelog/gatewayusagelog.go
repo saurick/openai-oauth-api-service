@@ -17,6 +17,8 @@ const (
 	FieldAPIKeyID = "api_key_id"
 	// FieldAPIKeyPrefix holds the string denoting the api_key_prefix field in the database.
 	FieldAPIKeyPrefix = "api_key_prefix"
+	// FieldSessionID holds the string denoting the session_id field in the database.
+	FieldSessionID = "session_id"
 	// FieldRequestID holds the string denoting the request_id field in the database.
 	FieldRequestID = "request_id"
 	// FieldMethod holds the string denoting the method field in the database.
@@ -49,6 +51,14 @@ const (
 	FieldResponseBytes = "response_bytes"
 	// FieldDurationMs holds the string denoting the duration_ms field in the database.
 	FieldDurationMs = "duration_ms"
+	// FieldUpstreamConfiguredMode holds the string denoting the upstream_configured_mode field in the database.
+	FieldUpstreamConfiguredMode = "upstream_configured_mode"
+	// FieldUpstreamMode holds the string denoting the upstream_mode field in the database.
+	FieldUpstreamMode = "upstream_mode"
+	// FieldUpstreamFallback holds the string denoting the upstream_fallback field in the database.
+	FieldUpstreamFallback = "upstream_fallback"
+	// FieldUpstreamErrorType holds the string denoting the upstream_error_type field in the database.
+	FieldUpstreamErrorType = "upstream_error_type"
 	// FieldErrorType holds the string denoting the error_type field in the database.
 	FieldErrorType = "error_type"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -62,6 +72,7 @@ var Columns = []string{
 	FieldID,
 	FieldAPIKeyID,
 	FieldAPIKeyPrefix,
+	FieldSessionID,
 	FieldRequestID,
 	FieldMethod,
 	FieldPath,
@@ -78,6 +89,10 @@ var Columns = []string{
 	FieldRequestBytes,
 	FieldResponseBytes,
 	FieldDurationMs,
+	FieldUpstreamConfiguredMode,
+	FieldUpstreamMode,
+	FieldUpstreamFallback,
+	FieldUpstreamErrorType,
 	FieldErrorType,
 	FieldCreatedAt,
 }
@@ -97,6 +112,10 @@ var (
 	DefaultAPIKeyPrefix string
 	// APIKeyPrefixValidator is a validator for the "api_key_prefix" field. It is called by the builders before save.
 	APIKeyPrefixValidator func(string) error
+	// DefaultSessionID holds the default value on creation for the "session_id" field.
+	DefaultSessionID string
+	// SessionIDValidator is a validator for the "session_id" field. It is called by the builders before save.
+	SessionIDValidator func(string) error
 	// DefaultRequestID holds the default value on creation for the "request_id" field.
 	DefaultRequestID string
 	// RequestIDValidator is a validator for the "request_id" field. It is called by the builders before save.
@@ -135,6 +154,20 @@ var (
 	DefaultResponseBytes int64
 	// DefaultDurationMs holds the default value on creation for the "duration_ms" field.
 	DefaultDurationMs int64
+	// DefaultUpstreamConfiguredMode holds the default value on creation for the "upstream_configured_mode" field.
+	DefaultUpstreamConfiguredMode string
+	// UpstreamConfiguredModeValidator is a validator for the "upstream_configured_mode" field. It is called by the builders before save.
+	UpstreamConfiguredModeValidator func(string) error
+	// DefaultUpstreamMode holds the default value on creation for the "upstream_mode" field.
+	DefaultUpstreamMode string
+	// UpstreamModeValidator is a validator for the "upstream_mode" field. It is called by the builders before save.
+	UpstreamModeValidator func(string) error
+	// DefaultUpstreamFallback holds the default value on creation for the "upstream_fallback" field.
+	DefaultUpstreamFallback bool
+	// DefaultUpstreamErrorType holds the default value on creation for the "upstream_error_type" field.
+	DefaultUpstreamErrorType string
+	// UpstreamErrorTypeValidator is a validator for the "upstream_error_type" field. It is called by the builders before save.
+	UpstreamErrorTypeValidator func(string) error
 	// DefaultErrorType holds the default value on creation for the "error_type" field.
 	DefaultErrorType string
 	// ErrorTypeValidator is a validator for the "error_type" field. It is called by the builders before save.
@@ -159,6 +192,11 @@ func ByAPIKeyID(opts ...sql.OrderTermOption) OrderOption {
 // ByAPIKeyPrefix orders the results by the api_key_prefix field.
 func ByAPIKeyPrefix(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAPIKeyPrefix, opts...).ToFunc()
+}
+
+// BySessionID orders the results by the session_id field.
+func BySessionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSessionID, opts...).ToFunc()
 }
 
 // ByRequestID orders the results by the request_id field.
@@ -239,6 +277,26 @@ func ByResponseBytes(opts ...sql.OrderTermOption) OrderOption {
 // ByDurationMs orders the results by the duration_ms field.
 func ByDurationMs(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDurationMs, opts...).ToFunc()
+}
+
+// ByUpstreamConfiguredMode orders the results by the upstream_configured_mode field.
+func ByUpstreamConfiguredMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpstreamConfiguredMode, opts...).ToFunc()
+}
+
+// ByUpstreamMode orders the results by the upstream_mode field.
+func ByUpstreamMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpstreamMode, opts...).ToFunc()
+}
+
+// ByUpstreamFallback orders the results by the upstream_fallback field.
+func ByUpstreamFallback(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpstreamFallback, opts...).ToFunc()
+}
+
+// ByUpstreamErrorType orders the results by the upstream_error_type field.
+func ByUpstreamErrorType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpstreamErrorType, opts...).ToFunc()
 }
 
 // ByErrorType orders the results by the error_type field.

@@ -17,7 +17,7 @@ import 'normalize.css/normalize.css'
 
 const App = () => {
   const navigate = useNavigate()
-  const appTitle = import.meta.env.VITE_APP_TITLE || 'OpenAI OAuth API Service'
+  const appTitle = import.meta.env.VITE_APP_TITLE || 'Saurick API Console'
 
   useEffect(() => {
     return authBus.onUnauthorized(({ from, message, loginPath }) => {

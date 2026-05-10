@@ -1,6 +1,6 @@
 # OpenAI OAuth API Service
 
-OpenAI OAuth API Service 是一个长期维护的 OpenAI 兼容 API 转发与 token/usage 统计管理项目。系统通过后台账号登录管理 API 凭据，向下游签发独立 API key，并通过服务器 Codex CLI 登录态统一执行上游调用，记录 usage、状态码、延迟、字节数和 token 用量。
+OpenAI OAuth API Service 是一个长期维护的 OpenAI 兼容 API 转发与 token/usage 统计管理项目。系统通过后台账号登录管理 API 凭据，向下游签发独立 API key，并通过服务器 Codex 登录态统一执行上游调用，记录 usage、状态码、延迟、字节数和 token 用量。
 
 ## 边界
 
@@ -9,7 +9,7 @@ OpenAI OAuth API Service 是一个长期维护的 OpenAI 兼容 API 转发与 to
 | 支持 | 管理员账号登录、本系统 JWT 签发与后台权限控制 |
 | 支持 | 下游 API key 签发、吊销、配额、usage 监控 |
 | 支持 | OpenAI 兼容 API 转发，例如 `/v1/responses`、`/v1/chat/completions` |
-| 支持 | Codex CLI 统一上游出口、结构化日志、健康检查、Compose 部署 |
+| 支持 | Codex backend / Codex CLI 上游出口、结构化日志、健康检查、Compose 部署 |
 
 ## 技术栈
 
@@ -85,18 +85,23 @@ TRACE_ENDPOINT=
 OAUTH_API_OAUTH_PROVIDER=google
 OAUTH_API_OAUTH_CLIENT_ID=...
 OAUTH_API_OAUTH_CLIENT_SECRET=...
-OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS=https://your-admin.example.com
+OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS=https://oauth-api.saurick.me
 ```
 
 本地 Google OAuth Client 只需要登记后端固定回调 `http://localhost:8400/auth/oauth/callback`。前端当前端口会通过 signed state 自动回跳，例如 `http://localhost:5176/oauth/callback`；生产环境继续登记线上 HTTPS 后端回调，并用 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` 明确允许前端后台域名。
 
-API 转发统一使用服务器 Codex CLI 登录态，部署时配置 Codex 登录态挂载和 CLI 参数：
+API 转发统一使用服务器 Codex 登录态，默认走 direct Codex backend，并在 backend 失败时自动用 Codex CLI 兜底；管理后台「用量日志」页可以运行时切换 `codex_backend` / `codex_cli`，`CODEX_UPSTREAM_MODE` 只作为未保存后台设置时的启动默认值：
 
 ```bash
 CODEX_HOST_HOME=/root/.codex
 CODEX_CONTAINER_HOME=/root/.codex
+CODEX_UPSTREAM_MODE=codex_backend
 CODEX_CLI_BIN=codex
 CODEX_CLI_TIMEOUT_SECONDS=600
+CODEX_BACKEND_BASE_URL=https://chatgpt.com/backend-api/codex
+CODEX_BACKEND_TIMEOUT_SECONDS=600
+# 启动默认值改为旧路径；后台保存过模式后，以后台设置为准：
+# CODEX_UPSTREAM_MODE=codex_cli
 ```
 
 管理后台入口：
@@ -121,7 +126,15 @@ export OPENAI_BASE_URL=http://localhost:8400/v1
 export OPENAI_API_KEY=ogw_xxx
 ```
 
-生产环境把 `OPENAI_BASE_URL` 换成部署域名下的 `/v1`。这里的 `ogw_` key 是本系统下游 key；上游调用由服务端通过服务器 Codex CLI 登录态统一执行。
+兼容请求可通过 `reasoning_effort` 传递推理强度，当前支持 `low`、`medium`、`high`、`xhigh`。图片输入支持 OpenAI-compatible 的 data URL 形式 `image_url` / `input_image`；CLI 模式会转为 `codex exec --image` 附件，direct backend 模式会直接随 `/responses` 请求发送。
+
+生产环境把 `OPENAI_BASE_URL` 换成部署域名下的 `/v1`，当前个人部署为：
+
+```bash
+export OPENAI_BASE_URL=https://oauth-api.saurick.me/v1
+```
+
+这里的 `ogw_` key 是本系统下游 key；上游调用由服务端通过服务器 Codex 登录态统一执行。
 
 ## 常用质量命令
 

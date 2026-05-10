@@ -1,7 +1,9 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +11,7 @@ import (
 	stdhttp "net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,6 +29,8 @@ import (
 
 const (
 	maxGatewayRequestBytes   = 32 << 20
+	maxGatewayImages         = 4
+	maxGatewayImageBytes     = 16 << 20
 	defaultCodexCLITimeout   = 600 * time.Second
 	gatewayUsageWriteTimeout = 5 * time.Second
 )
@@ -41,6 +46,25 @@ type openAIUsageMetrics struct {
 	TotalTokens     int64
 	CachedTokens    int64
 	ReasoningTokens int64
+}
+
+type codexUpstreamCallResult struct {
+	Content           string
+	Metrics           openAIUsageMetrics
+	ActualMode        string
+	Fallback          bool
+	UpstreamErrorType string
+}
+
+type codexCLIPrompt struct {
+	Text       string
+	ImageFiles []string
+	cleanup    func()
+}
+
+type gatewayImageSource struct {
+	Raw       string
+	MediaType string
 }
 
 func registerOpenAIGatewayRoutes(
@@ -140,6 +164,7 @@ func (h *openAIGatewayHandler) handleModels(w stdhttp.ResponseWriter, r *stdhttp
 	h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
 		APIKeyID:      key.ID,
 		APIKeyPrefix:  key.KeyPrefix,
+		SessionID:     sessionIDFromHeaders(r),
 		RequestID:     requestID,
 		Method:        r.Method,
 		Path:          r.URL.Path,
@@ -164,14 +189,38 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		return
 	}
 
-	requestModel, stream := parseRequestModelAndStream(body)
+	requestModel, stream, reasoningEffort, parseErr := parseRequestModelStreamAndReasoningEffort(body)
+	sessionID := sessionIDFromGatewayRequest(r, body)
 	endpoint := gatewayEndpointFromPath(r.URL.Path)
+	if parseErr != nil {
+		status := stdhttp.StatusBadRequest
+		h.writeGatewayError(w, status, parseErr, "gateway_reasoning_effort_invalid")
+		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+			APIKeyID:     key.ID,
+			APIKeyPrefix: key.KeyPrefix,
+			SessionID:    sessionID,
+			RequestID:    requestID,
+			Method:       r.Method,
+			Path:         r.URL.Path,
+			Endpoint:     endpoint,
+			Model:        requestModel,
+			StatusCode:   status,
+			Success:      false,
+			Stream:       stream,
+			RequestBytes: int64(len(body)),
+			DurationMS:   time.Since(start).Milliseconds(),
+			ErrorType:    "gateway_reasoning_effort_invalid",
+			CreatedAt:    time.Now(),
+		})
+		return
+	}
 	if err := h.gatewayUC.ValidateModelAccess(r.Context(), key, requestModel); err != nil {
 		status := stdhttp.StatusForbidden
 		h.writeGatewayError(w, status, err, gatewayErrorType(err))
 		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
 			APIKeyID:     key.ID,
 			APIKeyPrefix: key.KeyPrefix,
+			SessionID:    sessionID,
 			RequestID:    requestID,
 			Method:       r.Method,
 			Path:         r.URL.Path,
@@ -195,6 +244,7 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 			h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
 				APIKeyID:     key.ID,
 				APIKeyPrefix: key.KeyPrefix,
+				SessionID:    sessionID,
 				RequestID:    requestID,
 				Method:       r.Method,
 				Path:         r.URL.Path,
@@ -229,6 +279,7 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 			h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
 				APIKeyID:     key.ID,
 				APIKeyPrefix: key.KeyPrefix,
+				SessionID:    sessionID,
 				RequestID:    requestID,
 				Method:       r.Method,
 				Path:         r.URL.Path,
@@ -259,7 +310,7 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		}
 	}
 
-	h.handleCodexCLIProxy(w, r, key, requestID, endpoint, requestModel, stream, body, start)
+	h.handleCodexCLIProxy(w, r, key, requestID, sessionID, endpoint, requestModel, reasoningEffort, stream, body, start)
 }
 
 func (h *openAIGatewayHandler) gatewayRateLimitEnabled() bool {
@@ -274,34 +325,47 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 	r *stdhttp.Request,
 	key *biz.GatewayAPIKey,
 	requestID string,
+	sessionID string,
 	endpoint string,
 	requestModel string,
+	reasoningEffort string,
 	stream bool,
 	body []byte,
 	start time.Time,
 ) {
-	content, metrics, err := h.runCodexCLI(r.Context(), r.URL.Path, body, requestModel)
+	upstreamMode := h.configuredCodexUpstreamMode(r.Context())
+	result, err := h.runCodexUpstream(r.Context(), upstreamMode, r.URL.Path, body, requestModel, reasoningEffort)
 	if err != nil {
 		status := stdhttp.StatusBadGateway
-		h.writeGatewayError(w, status, err, "codex_cli_upstream_failed")
+		errorType := "codex_cli_upstream_failed"
+		if upstreamMode == codexUpstreamModeBackend {
+			errorType = "codex_backend_upstream_failed"
+		}
+		h.writeGatewayError(w, status, err, errorType)
 		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
-			APIKeyID:     key.ID,
-			APIKeyPrefix: key.KeyPrefix,
-			RequestID:    requestID,
-			Method:       r.Method,
-			Path:         r.URL.Path,
-			Endpoint:     endpoint,
-			Model:        requestModel,
-			StatusCode:   status,
-			Success:      false,
-			Stream:       stream,
-			RequestBytes: int64(len(body)),
-			DurationMS:   time.Since(start).Milliseconds(),
-			ErrorType:    "codex_cli_upstream_failed",
-			CreatedAt:    time.Now(),
+			APIKeyID:               key.ID,
+			APIKeyPrefix:           key.KeyPrefix,
+			SessionID:              sessionID,
+			RequestID:              requestID,
+			Method:                 r.Method,
+			Path:                   r.URL.Path,
+			Endpoint:               endpoint,
+			Model:                  requestModel,
+			StatusCode:             status,
+			Success:                false,
+			Stream:                 stream,
+			RequestBytes:           int64(len(body)),
+			DurationMS:             time.Since(start).Milliseconds(),
+			UpstreamConfiguredMode: upstreamMode,
+			UpstreamMode:           upstreamMode,
+			UpstreamErrorType:      errorType,
+			ErrorType:              errorType,
+			CreatedAt:              time.Now(),
 		})
 		return
 	}
+	content := result.Content
+	metrics := result.Metrics
 	if metrics.Model == "" {
 		metrics.Model = requestModel
 	}
@@ -309,23 +373,28 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 	if stream {
 		responseBytes := h.writeCodexCLIChatStream(w, metrics.Model, content, metrics)
 		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
-			APIKeyID:      key.ID,
-			APIKeyPrefix:  key.KeyPrefix,
-			RequestID:     requestID,
-			Method:        r.Method,
-			Path:          r.URL.Path,
-			Endpoint:      endpoint,
-			Model:         metrics.Model,
-			StatusCode:    stdhttp.StatusOK,
-			Success:       true,
-			Stream:        true,
-			InputTokens:   metrics.InputTokens,
-			OutputTokens:  metrics.OutputTokens,
-			TotalTokens:   metrics.TotalTokens,
-			RequestBytes:  int64(len(body)),
-			ResponseBytes: responseBytes,
-			DurationMS:    time.Since(start).Milliseconds(),
-			CreatedAt:     time.Now(),
+			APIKeyID:               key.ID,
+			APIKeyPrefix:           key.KeyPrefix,
+			SessionID:              sessionID,
+			RequestID:              requestID,
+			Method:                 r.Method,
+			Path:                   r.URL.Path,
+			Endpoint:               endpoint,
+			Model:                  metrics.Model,
+			StatusCode:             stdhttp.StatusOK,
+			Success:                true,
+			Stream:                 true,
+			InputTokens:            metrics.InputTokens,
+			OutputTokens:           metrics.OutputTokens,
+			TotalTokens:            metrics.TotalTokens,
+			RequestBytes:           int64(len(body)),
+			ResponseBytes:          responseBytes,
+			DurationMS:             time.Since(start).Milliseconds(),
+			UpstreamConfiguredMode: upstreamMode,
+			UpstreamMode:           result.ActualMode,
+			UpstreamFallback:       result.Fallback,
+			UpstreamErrorType:      result.UpstreamErrorType,
+			CreatedAt:              time.Now(),
 		})
 		return
 	}
@@ -346,32 +415,93 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 	w.WriteHeader(stdhttp.StatusOK)
 	_, _ = w.Write(responseBody)
 	h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
-		APIKeyID:      key.ID,
-		APIKeyPrefix:  key.KeyPrefix,
-		RequestID:     requestID,
-		Method:        r.Method,
-		Path:          r.URL.Path,
-		Endpoint:      endpoint,
-		Model:         metrics.Model,
-		StatusCode:    stdhttp.StatusOK,
-		Success:       true,
-		Stream:        false,
-		InputTokens:   metrics.InputTokens,
-		OutputTokens:  metrics.OutputTokens,
-		TotalTokens:   metrics.TotalTokens,
-		RequestBytes:  int64(len(body)),
-		ResponseBytes: int64(len(responseBody)),
-		DurationMS:    time.Since(start).Milliseconds(),
-		CreatedAt:     time.Now(),
+		APIKeyID:               key.ID,
+		APIKeyPrefix:           key.KeyPrefix,
+		SessionID:              sessionID,
+		RequestID:              requestID,
+		Method:                 r.Method,
+		Path:                   r.URL.Path,
+		Endpoint:               endpoint,
+		Model:                  metrics.Model,
+		StatusCode:             stdhttp.StatusOK,
+		Success:                true,
+		Stream:                 false,
+		InputTokens:            metrics.InputTokens,
+		OutputTokens:           metrics.OutputTokens,
+		TotalTokens:            metrics.TotalTokens,
+		RequestBytes:           int64(len(body)),
+		ResponseBytes:          int64(len(responseBody)),
+		DurationMS:             time.Since(start).Milliseconds(),
+		UpstreamConfiguredMode: upstreamMode,
+		UpstreamMode:           result.ActualMode,
+		UpstreamFallback:       result.Fallback,
+		UpstreamErrorType:      result.UpstreamErrorType,
+		CreatedAt:              time.Now(),
 	})
 }
 
-func (h *openAIGatewayHandler) runCodexCLI(ctx context.Context, path string, body []byte, requestModel string) (string, openAIUsageMetrics, error) {
-	prompt, err := promptFromGatewayRequest(path, body)
+func (h *openAIGatewayHandler) configuredCodexUpstreamMode(ctx context.Context) string {
+	if h.gatewayUC == nil {
+		return codexUpstreamMode()
+	}
+	mode, err := h.gatewayUC.GetCodexUpstreamMode(ctx)
+	if err != nil {
+		h.log.WithContext(ctx).Warnf("get codex upstream mode failed: %v", err)
+		return codexUpstreamMode()
+	}
+	if mode == "" {
+		return codexUpstreamMode()
+	}
+	return mode
+}
+
+func (h *openAIGatewayHandler) runCodexUpstream(ctx context.Context, upstreamMode string, path string, body []byte, requestModel string, reasoningEffort string) (codexUpstreamCallResult, error) {
+	upstreamMode = biz.NormalizeGatewayUpstreamMode(upstreamMode)
+	if upstreamMode == "" {
+		upstreamMode = codexUpstreamMode()
+	}
+	switch upstreamMode {
+	case codexUpstreamModeBackend:
+		content, metrics, err := h.runCodexBackend(ctx, path, body, requestModel, reasoningEffort)
+		if err == nil {
+			return codexUpstreamCallResult{
+				Content:    content,
+				Metrics:    metrics,
+				ActualMode: codexUpstreamModeBackend,
+			}, nil
+		}
+		fallbackContent, fallbackMetrics, fallbackErr := h.runCodexCLI(ctx, path, body, requestModel, reasoningEffort)
+		if fallbackErr == nil {
+			return codexUpstreamCallResult{
+				Content:           fallbackContent,
+				Metrics:           fallbackMetrics,
+				ActualMode:        codexUpstreamModeCLI,
+				Fallback:          true,
+				UpstreamErrorType: "codex_backend_upstream_failed",
+			}, nil
+		}
+		return codexUpstreamCallResult{}, fmt.Errorf("codex backend upstream failed: %v; codex cli fallback failed: %w", err, fallbackErr)
+	default:
+		content, metrics, err := h.runCodexCLI(ctx, path, body, requestModel, reasoningEffort)
+		if err != nil {
+			return codexUpstreamCallResult{}, err
+		}
+		return codexUpstreamCallResult{
+			Content:    content,
+			Metrics:    metrics,
+			ActualMode: codexUpstreamModeCLI,
+		}, nil
+	}
+}
+
+func (h *openAIGatewayHandler) runCodexCLI(ctx context.Context, path string, body []byte, requestModel string, reasoningEffort string) (string, openAIUsageMetrics, error) {
+	prompt, err := codexCLIPromptFromGatewayRequest(path, body)
 	if err != nil {
 		return "", openAIUsageMetrics{}, err
 	}
-	if strings.TrimSpace(prompt) == "" {
+	defer prompt.close()
+
+	if strings.TrimSpace(prompt.Text) == "" {
 		return "", openAIUsageMetrics{}, fmt.Errorf("codex cli upstream prompt is empty")
 	}
 
@@ -387,7 +517,10 @@ func (h *openAIGatewayHandler) runCodexCLI(ctx context.Context, path string, bod
 	}
 
 	timeout := codexCLITimeout()
-	cmdCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	bin := strings.TrimSpace(os.Getenv("CODEX_CLI_BIN"))
@@ -400,12 +533,19 @@ func (h *openAIGatewayHandler) runCodexCLI(ctx context.Context, path string, bod
 		"--ephemeral",
 		"--ignore-user-config",
 		"--ignore-rules",
+		"--json",
 		"-s", "read-only",
 		"-m", model,
-		"-",
 	}
+	for _, file := range prompt.ImageFiles {
+		args = append(args, "--image", file)
+	}
+	if reasoningEffort != "" {
+		args = append(args, "-c", fmt.Sprintf("model_reasoning_effort=%q", reasoningEffort))
+	}
+	args = append(args, "-")
 	cmd := exec.CommandContext(cmdCtx, bin, args...)
-	cmd.Stdin = strings.NewReader(prompt)
+	cmd.Stdin = strings.NewReader(prompt.Text)
 	cmd.Env = os.Environ()
 	if home := strings.TrimSpace(os.Getenv("CODEX_HOME")); home != "" {
 		cmd.Env = append(cmd.Env, "CODEX_HOME="+home)
@@ -421,28 +561,66 @@ func (h *openAIGatewayHandler) runCodexCLI(ctx context.Context, path string, bod
 		return "", openAIUsageMetrics{}, fmt.Errorf("codex cli upstream failed: %w: %s", err, summarizeCommandOutput(output))
 	}
 
-	content := extractCodexCLIAnswer(output)
+	content, metrics, parsedJSON := parseCodexCLIJSONOutput(output)
+	if !parsedJSON {
+		content = extractCodexCLIAnswer(output)
+	}
+	if strings.TrimSpace(content) == "" {
+		content = extractCodexCLIAnswer(output)
+	}
 	if strings.TrimSpace(content) == "" {
 		return "", openAIUsageMetrics{}, fmt.Errorf("codex cli upstream returned empty answer")
 	}
-	metrics := estimateCodexCLIUsage(model, prompt, content)
+	if metrics.TotalTokens <= 0 {
+		metrics = estimateCodexCLIUsage(model, prompt.Text, content)
+	}
+	if metrics.Model == "" {
+		metrics.Model = model
+	}
 	return content, metrics, nil
 }
 
 func promptFromGatewayRequest(path string, body []byte) (string, error) {
-	var payload map[string]any
-	if err := json.Unmarshal(body, &payload); err != nil {
+	prompt, err := codexCLIPromptFromGatewayRequest(path, body)
+	if err != nil {
 		return "", err
 	}
-	if path == "/v1/responses" {
-		return promptFromResponsesPayload(payload), nil
-	}
-	return promptFromChatCompletionsPayload(payload), nil
+	defer prompt.close()
+	return prompt.Text, nil
 }
 
-func promptFromChatCompletionsPayload(payload map[string]any) string {
+func codexCLIPromptFromGatewayRequest(path string, body []byte) (*codexCLIPrompt, error) {
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+	var text string
+	var images []gatewayImageSource
+	if path == "/v1/responses" {
+		text, images = promptFromResponsesPayload(payload)
+	} else {
+		text, images = promptFromChatCompletionsPayload(payload)
+	}
+	imageFiles, cleanup, err := materializeGatewayImages(images)
+	if err != nil {
+		return nil, err
+	}
+	return &codexCLIPrompt{
+		Text:       text,
+		ImageFiles: imageFiles,
+		cleanup:    cleanup,
+	}, nil
+}
+
+func (p *codexCLIPrompt) close() {
+	if p != nil && p.cleanup != nil {
+		p.cleanup()
+	}
+}
+
+func promptFromChatCompletionsPayload(payload map[string]any) (string, []gatewayImageSource) {
 	messages, _ := payload["messages"].([]any)
-	parts := make([]string, 0, len(messages))
+	parts := make([]gatewayMessageContent, 0, len(messages))
 	for _, item := range messages {
 		message, _ := item.(map[string]any)
 		if message == nil {
@@ -452,23 +630,24 @@ func promptFromChatCompletionsPayload(payload map[string]any) string {
 		if role != "user" && role != "assistant" {
 			continue
 		}
-		content := contentTextValue(message["content"])
-		if strings.TrimSpace(content) == "" {
+		content := contentValue(message["content"])
+		if strings.TrimSpace(content.Text) == "" && len(content.Images) == 0 {
 			continue
 		}
-		parts = append(parts, role+":\n"+content)
+		content.Role = role
+		parts = append(parts, content)
 	}
-	parts = lastStringItems(parts, 8)
-	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+	parts = lastGatewayMessageItems(parts, 8)
+	return gatewayMessagePromptAndImages(parts)
 }
 
-func promptFromResponsesPayload(payload map[string]any) string {
+func promptFromResponsesPayload(payload map[string]any) (string, []gatewayImageSource) {
 	input := payload["input"]
 	switch v := input.(type) {
 	case string:
-		return strings.TrimSpace(v)
+		return strings.TrimSpace(v), nil
 	case []any:
-		parts := make([]string, 0, len(v))
+		parts := make([]gatewayMessageContent, 0, len(v))
 		for _, item := range v {
 			message, _ := item.(map[string]any)
 			if message == nil {
@@ -478,32 +657,61 @@ func promptFromResponsesPayload(payload map[string]any) string {
 			if role != "user" && role != "assistant" {
 				continue
 			}
-			content := contentTextValue(message["content"])
-			if strings.TrimSpace(content) == "" {
+			content := contentValue(message["content"])
+			if strings.TrimSpace(content.Text) == "" && len(content.Images) == 0 {
 				continue
 			}
-			parts = append(parts, role+":\n"+content)
+			content.Role = role
+			parts = append(parts, content)
 		}
-		parts = lastStringItems(parts, 8)
-		return strings.TrimSpace(strings.Join(parts, "\n\n"))
+		parts = lastGatewayMessageItems(parts, 8)
+		return gatewayMessagePromptAndImages(parts)
 	default:
-		return strings.TrimSpace(contentTextValue(input))
+		content := contentValue(input)
+		return strings.TrimSpace(content.Text), content.Images
 	}
 }
 
-func lastStringItems(items []string, limit int) []string {
+type gatewayMessageContent struct {
+	Role   string
+	Text   string
+	Images []gatewayImageSource
+}
+
+func lastGatewayMessageItems(items []gatewayMessageContent, limit int) []gatewayMessageContent {
 	if limit <= 0 || len(items) <= limit {
 		return items
 	}
 	return items[len(items)-limit:]
 }
 
+func gatewayMessagePromptAndImages(items []gatewayMessageContent) (string, []gatewayImageSource) {
+	textParts := make([]string, 0, len(items))
+	images := make([]gatewayImageSource, 0)
+	for _, item := range items {
+		text := strings.TrimSpace(item.Text)
+		if text == "" && len(item.Images) > 0 {
+			text = "[image attached]"
+		}
+		if text != "" {
+			textParts = append(textParts, item.Role+":\n"+text)
+		}
+		images = append(images, item.Images...)
+	}
+	return strings.TrimSpace(strings.Join(textParts, "\n\n")), images
+}
+
 func contentTextValue(value any) string {
+	return contentValue(value).Text
+}
+
+func contentValue(value any) gatewayMessageContent {
 	switch v := value.(type) {
 	case string:
-		return v
+		return gatewayMessageContent{Text: v}
 	case []any:
 		parts := make([]string, 0, len(v))
+		images := make([]gatewayImageSource, 0)
 		for _, item := range v {
 			switch typed := item.(type) {
 			case string:
@@ -511,18 +719,155 @@ func contentTextValue(value any) string {
 					parts = append(parts, typed)
 				}
 			case map[string]any:
-				if text := stringValue(typed["text"]); strings.TrimSpace(text) != "" {
+				if text := contentPartText(typed); strings.TrimSpace(text) != "" {
 					parts = append(parts, text)
-					continue
 				}
-				if text := stringValue(typed["input_text"]); strings.TrimSpace(text) != "" {
-					parts = append(parts, text)
+				if source, ok := imageSourceFromContentPart(typed); ok {
+					images = append(images, source)
 				}
 			}
 		}
-		return strings.Join(parts, "\n")
+		return gatewayMessageContent{Text: strings.Join(parts, "\n"), Images: images}
 	case map[string]any:
-		return stringValue(v["text"])
+		content := gatewayMessageContent{Text: contentPartText(v)}
+		if source, ok := imageSourceFromContentPart(v); ok {
+			content.Images = append(content.Images, source)
+		}
+		return content
+	default:
+		return gatewayMessageContent{}
+	}
+}
+
+func contentPartText(part map[string]any) string {
+	if part == nil {
+		return ""
+	}
+	if text := stringValue(part["text"]); text != "" {
+		return text
+	}
+	return stringValue(part["input_text"])
+}
+
+func imageSourceFromContentPart(part map[string]any) (gatewayImageSource, bool) {
+	if part == nil {
+		return gatewayImageSource{}, false
+	}
+	typ := strings.TrimSpace(stringValue(part["type"]))
+	switch typ {
+	case "image_url":
+		if raw := imageURLValue(part["image_url"]); raw != "" {
+			return gatewayImageSource{Raw: raw}, true
+		}
+	case "input_image":
+		if raw := imageURLValue(part["image_url"]); raw != "" {
+			return gatewayImageSource{Raw: raw}, true
+		}
+		if raw := imageURLValue(part["image"]); raw != "" {
+			return gatewayImageSource{Raw: raw, MediaType: stringValue(part["media_type"])}, true
+		}
+	case "image":
+		if raw := imageURLValue(part["image"]); raw != "" {
+			return gatewayImageSource{Raw: raw, MediaType: stringValue(part["media_type"])}, true
+		}
+	}
+	if raw := imageURLValue(part["image_url"]); raw != "" {
+		return gatewayImageSource{Raw: raw}, true
+	}
+	return gatewayImageSource{}, false
+}
+
+func imageURLValue(value any) string {
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case map[string]any:
+		return stringValue(v["url"])
+	default:
+		return ""
+	}
+}
+
+func materializeGatewayImages(sources []gatewayImageSource) ([]string, func(), error) {
+	if len(sources) == 0 {
+		return nil, nil, nil
+	}
+	if len(sources) > maxGatewayImages {
+		return nil, nil, fmt.Errorf("too many image inputs: max %d", maxGatewayImages)
+	}
+
+	dir, err := os.MkdirTemp("", "oauth-api-codex-images-*")
+	if err != nil {
+		return nil, nil, err
+	}
+	cleanup := func() {
+		_ = os.RemoveAll(dir)
+	}
+
+	files := make([]string, 0, len(sources))
+	for i, source := range sources {
+		data, ext, err := decodeGatewayImageSource(source)
+		if err != nil {
+			cleanup()
+			return nil, nil, err
+		}
+		if len(data) == 0 {
+			cleanup()
+			return nil, nil, fmt.Errorf("image input is empty")
+		}
+		if len(data) > maxGatewayImageBytes {
+			cleanup()
+			return nil, nil, fmt.Errorf("image input too large: max %d bytes", maxGatewayImageBytes)
+		}
+		if ext == "" {
+			ext = ".png"
+		}
+		file := filepath.Join(dir, fmt.Sprintf("image-%d%s", i+1, ext))
+		if err := os.WriteFile(file, data, 0o600); err != nil {
+			cleanup()
+			return nil, nil, err
+		}
+		files = append(files, file)
+	}
+	return files, cleanup, nil
+}
+
+func decodeGatewayImageSource(source gatewayImageSource) ([]byte, string, error) {
+	raw := strings.TrimSpace(source.Raw)
+	if raw == "" {
+		return nil, "", fmt.Errorf("image input is empty")
+	}
+	if !strings.HasPrefix(raw, "data:") {
+		return nil, "", fmt.Errorf("unsupported image input: only data URLs are supported by Codex CLI upstream")
+	}
+	header, payload, ok := strings.Cut(raw, ",")
+	if !ok {
+		return nil, "", fmt.Errorf("invalid image data URL")
+	}
+	mediaType := source.MediaType
+	if strings.HasPrefix(header, "data:") {
+		mediaType = strings.TrimPrefix(strings.Split(header, ";")[0], "data:")
+	}
+	if !strings.Contains(header, ";base64") {
+		return nil, "", fmt.Errorf("invalid image data URL: base64 payload is required")
+	}
+	data, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, "", fmt.Errorf("invalid image data URL: %w", err)
+	}
+	return data, imageExtensionForMediaType(mediaType), nil
+}
+
+func imageExtensionForMediaType(mediaType string) string {
+	switch strings.ToLower(strings.TrimSpace(mediaType)) {
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
 	default:
 		return ""
 	}
@@ -555,6 +900,147 @@ func extractCodexCLIAnswer(output []byte) string {
 		}
 	}
 	return ""
+}
+
+func parseCodexCLIJSONOutput(output []byte) (string, openAIUsageMetrics, bool) {
+	content := ""
+	metrics := openAIUsageMetrics{}
+	parsed := false
+
+	for _, rawLine := range bytes.Split(output, []byte("\n")) {
+		rawLine = bytes.TrimSpace(rawLine)
+		if len(rawLine) == 0 || !json.Valid(rawLine) {
+			continue
+		}
+		var record map[string]any
+		if err := json.Unmarshal(rawLine, &record); err != nil {
+			continue
+		}
+		parsed = true
+
+		switch record["type"] {
+		case "turn.completed":
+			if usageMetrics := codexUsageMetricsFromMap(mapValue(record["usage"])); usageMetrics.TotalTokens > 0 {
+				metrics = usageMetrics
+			}
+			continue
+		case "item.completed":
+			item := mapValue(record["item"])
+			if item == nil {
+				continue
+			}
+			switch item["type"] {
+			case "agent_message":
+				if message := stringValue(item["text"]); message != "" {
+					content = message
+				}
+			case "message":
+				if item["role"] == "assistant" {
+					if text := outputTextFromCodexContent(item["content"]); text != "" {
+						content = text
+					}
+				}
+			}
+			continue
+		}
+
+		payload := mapValue(record["payload"])
+		if payload == nil {
+			continue
+		}
+
+		if record["type"] == "event_msg" {
+			switch payload["type"] {
+			case "token_count":
+				info := mapValue(payload["info"])
+				lastUsage := mapValue(info["last_token_usage"])
+				if usageMetrics := codexUsageMetricsFromMap(lastUsage); usageMetrics.TotalTokens > 0 {
+					metrics = usageMetrics
+				}
+			case "agent_message":
+				if message := stringValue(payload["message"]); message != "" {
+					if stringValue(payload["phase"]) == "final_answer" || content == "" {
+						content = message
+					}
+				}
+			}
+			continue
+		}
+
+		if record["type"] == "response_item" &&
+			payload["type"] == "message" &&
+			payload["role"] == "assistant" {
+			if text := outputTextFromCodexContent(payload["content"]); text != "" {
+				if stringValue(payload["phase"]) == "final_answer" || content == "" {
+					content = text
+				}
+			}
+		}
+	}
+
+	return strings.TrimSpace(content), metrics, parsed
+}
+
+func outputTextFromCodexContent(value any) string {
+	items, ok := value.([]any)
+	if !ok {
+		return ""
+	}
+	parts := make([]string, 0, len(items))
+	for _, item := range items {
+		m := mapValue(item)
+		if m == nil || m["type"] != "output_text" {
+			continue
+		}
+		if text := stringValue(m["text"]); text != "" {
+			parts = append(parts, text)
+		}
+	}
+	return strings.TrimSpace(strings.Join(parts, "\n"))
+}
+
+func codexUsageMetricsFromMap(usage map[string]any) openAIUsageMetrics {
+	if usage == nil {
+		return openAIUsageMetrics{}
+	}
+	metrics := openAIUsageMetrics{
+		InputTokens:     int64Value(usage["input_tokens"]),
+		OutputTokens:    int64Value(usage["output_tokens"]),
+		TotalTokens:     int64Value(usage["total_tokens"]),
+		CachedTokens:    int64Value(usage["cached_input_tokens"]),
+		ReasoningTokens: int64Value(usage["reasoning_output_tokens"]),
+	}
+	if metrics.CachedTokens <= 0 {
+		metrics.CachedTokens = int64Value(mapValue(usage["input_tokens_details"])["cached_tokens"])
+	}
+	if metrics.ReasoningTokens <= 0 {
+		metrics.ReasoningTokens = int64Value(mapValue(usage["output_tokens_details"])["reasoning_tokens"])
+	}
+	if metrics.TotalTokens <= 0 && (metrics.InputTokens > 0 || metrics.OutputTokens > 0) {
+		metrics.TotalTokens = metrics.InputTokens + metrics.OutputTokens
+	}
+	return metrics
+}
+
+func mapValue(value any) map[string]any {
+	item, _ := value.(map[string]any)
+	return item
+}
+
+func int64Value(value any) int64 {
+	switch v := value.(type) {
+	case float64:
+		return int64(v)
+	case int64:
+		return v
+	case int:
+		return int64(v)
+	case string:
+		n, _ := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+		return n
+	default:
+		return 0
+	}
 }
 
 func summarizeCommandOutput(output []byte) string {
@@ -705,6 +1191,12 @@ func chatUsagePayload(metrics openAIUsageMetrics) map[string]any {
 		"prompt_tokens":     metrics.InputTokens,
 		"completion_tokens": metrics.OutputTokens,
 		"total_tokens":      metrics.TotalTokens,
+		"prompt_tokens_details": map[string]any{
+			"cached_tokens": metrics.CachedTokens,
+		},
+		"completion_tokens_details": map[string]any{
+			"reasoning_tokens": metrics.ReasoningTokens,
+		},
 	}
 }
 
@@ -713,6 +1205,12 @@ func responsesUsagePayload(metrics openAIUsageMetrics) map[string]any {
 		"input_tokens":  metrics.InputTokens,
 		"output_tokens": metrics.OutputTokens,
 		"total_tokens":  metrics.TotalTokens,
+		"input_tokens_details": map[string]any{
+			"cached_tokens": metrics.CachedTokens,
+		},
+		"output_tokens_details": map[string]any{
+			"reasoning_tokens": metrics.ReasoningTokens,
+		},
 	}
 }
 
@@ -791,14 +1289,82 @@ func gatewayErrorType(err error) string {
 	}
 }
 
-func parseRequestModelAndStream(body []byte) (string, bool) {
+func parseRequestModelStreamAndReasoningEffort(body []byte) (string, bool, string, error) {
 	var payload map[string]any
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return "", false
+		return "", false, "", nil
 	}
 	model, _ := payload["model"].(string)
 	stream, _ := payload["stream"].(bool)
-	return strings.TrimSpace(model), stream
+	reasoningEffort, err := reasoningEffortFromPayload(payload)
+	return strings.TrimSpace(model), stream, reasoningEffort, err
+}
+
+func reasoningEffortFromPayload(payload map[string]any) (string, error) {
+	raw := stringValue(payload["reasoning_effort"])
+	if raw == "" {
+		raw = stringValue(payload["reasoningEffort"])
+	}
+	if raw == "" {
+		raw = stringValue(mapValue(payload["reasoning"])["effort"])
+	}
+	if raw == "" {
+		return "", nil
+	}
+
+	effort := strings.ToLower(strings.TrimSpace(raw))
+	switch effort {
+	case "low", "medium", "high", "xhigh":
+		return effort, nil
+	default:
+		return "", fmt.Errorf("unsupported reasoning_effort: %s", raw)
+	}
+}
+
+func sessionIDFromGatewayRequest(r *stdhttp.Request, body []byte) string {
+	if sessionID := sessionIDFromHeaders(r); sessionID != "" {
+		return sessionID
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return ""
+	}
+	for _, key := range []string{"session_id", "conversation_id", "thread_id"} {
+		if sessionID := normalizeGatewaySessionID(stringValue(payload[key])); sessionID != "" {
+			return sessionID
+		}
+	}
+	metadata := mapValue(payload["metadata"])
+	for _, key := range []string{"session_id", "conversation_id", "thread_id"} {
+		if sessionID := normalizeGatewaySessionID(stringValue(metadata[key])); sessionID != "" {
+			return sessionID
+		}
+	}
+	return ""
+}
+
+func sessionIDFromHeaders(r *stdhttp.Request) string {
+	if r == nil {
+		return ""
+	}
+	for _, key := range []string{"X-Session-ID", "X-Conversation-ID", "X-Thread-ID"} {
+		if sessionID := normalizeGatewaySessionID(r.Header.Get(key)); sessionID != "" {
+			return sessionID
+		}
+	}
+	return ""
+}
+
+func normalizeGatewaySessionID(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if len(value) > 128 {
+		return value[:128]
+	}
+	return value
 }
 
 func gatewayEndpointFromPath(path string) string {

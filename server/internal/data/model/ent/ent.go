@@ -15,6 +15,7 @@ import (
 	"server/internal/data/model/ent/gatewaymodel"
 	"server/internal/data/model/ent/gatewaymodelprice"
 	"server/internal/data/model/ent/gatewaypolicy"
+	"server/internal/data/model/ent/gatewaysetting"
 	"server/internal/data/model/ent/gatewayusagelog"
 	"server/internal/data/model/ent/user"
 	"sync"
@@ -90,6 +91,7 @@ func checkColumn(t, c string) error {
 			gatewaymodel.Table:      gatewaymodel.ValidColumn,
 			gatewaymodelprice.Table: gatewaymodelprice.ValidColumn,
 			gatewaypolicy.Table:     gatewaypolicy.ValidColumn,
+			gatewaysetting.Table:    gatewaysetting.ValidColumn,
 			gatewayusagelog.Table:   gatewayusagelog.ValidColumn,
 			user.Table:              user.ValidColumn,
 		})

@@ -117,12 +117,13 @@ func (h *adminExportHandler) requireAdminAndBuildFilter(ctx context.Context, w s
 	}
 
 	filter := biz.GatewayUsageFilter{
-		Limit:     200,
-		KeyID:     queryInt(r, "key_id"),
-		Model:     strings.TrimSpace(r.URL.Query().Get("model")),
-		Endpoint:  strings.TrimSpace(r.URL.Query().Get("endpoint")),
-		StartTime: queryUnixTime(r, "start_time", time.Now().Add(-24*time.Hour)),
-		EndTime:   queryUnixTime(r, "end_time", time.Now()),
+		Limit:        200,
+		KeyID:        queryInt(r, "key_id"),
+		Model:        strings.TrimSpace(r.URL.Query().Get("model")),
+		Endpoint:     strings.TrimSpace(r.URL.Query().Get("endpoint")),
+		UpstreamMode: strings.TrimSpace(r.URL.Query().Get("upstream_mode")),
+		StartTime:    queryUnixTime(r, "start_time", time.Now().Add(-24*time.Hour)),
+		EndTime:      queryUnixTime(r, "end_time", time.Now()),
 	}
 	if raw := strings.TrimSpace(r.URL.Query().Get("success")); raw != "" {
 		filter.SuccessSet = true
@@ -203,23 +204,27 @@ func mapUsageExportRow(item *biz.GatewayUsageLog) map[string]any {
 		return map[string]any{}
 	}
 	row := map[string]any{
-		"api_key_id":       item.APIKeyID,
-		"api_key_prefix":   item.APIKeyPrefix,
-		"cached_tokens":    item.CachedTokens,
-		"created_at":       item.CreatedAt.Format(time.RFC3339),
-		"duration_ms":      item.DurationMS,
-		"endpoint":         item.Endpoint,
-		"error_type":       item.ErrorType,
-		"id":               item.ID,
-		"input_tokens":     item.InputTokens,
-		"model":            item.Model,
-		"output_tokens":    item.OutputTokens,
-		"path":             item.Path,
-		"reasoning_tokens": item.ReasoningTokens,
-		"request_id":       item.RequestID,
-		"status_code":      item.StatusCode,
-		"success":          item.Success,
-		"total_tokens":     item.TotalTokens,
+		"api_key_id":               item.APIKeyID,
+		"api_key_prefix":           item.APIKeyPrefix,
+		"cached_tokens":            item.CachedTokens,
+		"created_at":               item.CreatedAt.Format(time.RFC3339),
+		"duration_ms":              item.DurationMS,
+		"endpoint":                 item.Endpoint,
+		"error_type":               item.ErrorType,
+		"id":                       item.ID,
+		"input_tokens":             item.InputTokens,
+		"model":                    item.Model,
+		"output_tokens":            item.OutputTokens,
+		"path":                     item.Path,
+		"reasoning_tokens":         item.ReasoningTokens,
+		"request_id":               item.RequestID,
+		"status_code":              item.StatusCode,
+		"success":                  item.Success,
+		"total_tokens":             item.TotalTokens,
+		"upstream_configured_mode": item.UpstreamConfiguredMode,
+		"upstream_error_type":      item.UpstreamErrorType,
+		"upstream_fallback":        item.UpstreamFallback,
+		"upstream_mode":            item.UpstreamMode,
 	}
 	if item.EstimatedCostUSD != nil {
 		row["estimated_cost_usd"] = *item.EstimatedCostUSD

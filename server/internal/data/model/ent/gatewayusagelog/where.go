@@ -64,6 +64,11 @@ func APIKeyPrefix(v string) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldEQ(FieldAPIKeyPrefix, v))
 }
 
+// SessionID applies equality check predicate on the "session_id" field. It's identical to SessionIDEQ.
+func SessionID(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldSessionID, v))
+}
+
 // RequestID applies equality check predicate on the "request_id" field. It's identical to RequestIDEQ.
 func RequestID(v string) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldEQ(FieldRequestID, v))
@@ -142,6 +147,26 @@ func ResponseBytes(v int64) predicate.GatewayUsageLog {
 // DurationMs applies equality check predicate on the "duration_ms" field. It's identical to DurationMsEQ.
 func DurationMs(v int64) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldEQ(FieldDurationMs, v))
+}
+
+// UpstreamConfiguredMode applies equality check predicate on the "upstream_configured_mode" field. It's identical to UpstreamConfiguredModeEQ.
+func UpstreamConfiguredMode(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldUpstreamConfiguredMode, v))
+}
+
+// UpstreamMode applies equality check predicate on the "upstream_mode" field. It's identical to UpstreamModeEQ.
+func UpstreamMode(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldUpstreamMode, v))
+}
+
+// UpstreamFallback applies equality check predicate on the "upstream_fallback" field. It's identical to UpstreamFallbackEQ.
+func UpstreamFallback(v bool) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldUpstreamFallback, v))
+}
+
+// UpstreamErrorType applies equality check predicate on the "upstream_error_type" field. It's identical to UpstreamErrorTypeEQ.
+func UpstreamErrorType(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldUpstreamErrorType, v))
 }
 
 // ErrorType applies equality check predicate on the "error_type" field. It's identical to ErrorTypeEQ.
@@ -267,6 +292,71 @@ func APIKeyPrefixEqualFold(v string) predicate.GatewayUsageLog {
 // APIKeyPrefixContainsFold applies the ContainsFold predicate on the "api_key_prefix" field.
 func APIKeyPrefixContainsFold(v string) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldContainsFold(FieldAPIKeyPrefix, v))
+}
+
+// SessionIDEQ applies the EQ predicate on the "session_id" field.
+func SessionIDEQ(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldSessionID, v))
+}
+
+// SessionIDNEQ applies the NEQ predicate on the "session_id" field.
+func SessionIDNEQ(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNEQ(FieldSessionID, v))
+}
+
+// SessionIDIn applies the In predicate on the "session_id" field.
+func SessionIDIn(vs ...string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldIn(FieldSessionID, vs...))
+}
+
+// SessionIDNotIn applies the NotIn predicate on the "session_id" field.
+func SessionIDNotIn(vs ...string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNotIn(FieldSessionID, vs...))
+}
+
+// SessionIDGT applies the GT predicate on the "session_id" field.
+func SessionIDGT(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldGT(FieldSessionID, v))
+}
+
+// SessionIDGTE applies the GTE predicate on the "session_id" field.
+func SessionIDGTE(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldGTE(FieldSessionID, v))
+}
+
+// SessionIDLT applies the LT predicate on the "session_id" field.
+func SessionIDLT(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldLT(FieldSessionID, v))
+}
+
+// SessionIDLTE applies the LTE predicate on the "session_id" field.
+func SessionIDLTE(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldLTE(FieldSessionID, v))
+}
+
+// SessionIDContains applies the Contains predicate on the "session_id" field.
+func SessionIDContains(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldContains(FieldSessionID, v))
+}
+
+// SessionIDHasPrefix applies the HasPrefix predicate on the "session_id" field.
+func SessionIDHasPrefix(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldHasPrefix(FieldSessionID, v))
+}
+
+// SessionIDHasSuffix applies the HasSuffix predicate on the "session_id" field.
+func SessionIDHasSuffix(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldHasSuffix(FieldSessionID, v))
+}
+
+// SessionIDEqualFold applies the EqualFold predicate on the "session_id" field.
+func SessionIDEqualFold(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEqualFold(FieldSessionID, v))
+}
+
+// SessionIDContainsFold applies the ContainsFold predicate on the "session_id" field.
+func SessionIDContainsFold(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldContainsFold(FieldSessionID, v))
 }
 
 // RequestIDEQ applies the EQ predicate on the "request_id" field.
@@ -972,6 +1062,211 @@ func DurationMsLT(v int64) predicate.GatewayUsageLog {
 // DurationMsLTE applies the LTE predicate on the "duration_ms" field.
 func DurationMsLTE(v int64) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldLTE(FieldDurationMs, v))
+}
+
+// UpstreamConfiguredModeEQ applies the EQ predicate on the "upstream_configured_mode" field.
+func UpstreamConfiguredModeEQ(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldUpstreamConfiguredMode, v))
+}
+
+// UpstreamConfiguredModeNEQ applies the NEQ predicate on the "upstream_configured_mode" field.
+func UpstreamConfiguredModeNEQ(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNEQ(FieldUpstreamConfiguredMode, v))
+}
+
+// UpstreamConfiguredModeIn applies the In predicate on the "upstream_configured_mode" field.
+func UpstreamConfiguredModeIn(vs ...string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldIn(FieldUpstreamConfiguredMode, vs...))
+}
+
+// UpstreamConfiguredModeNotIn applies the NotIn predicate on the "upstream_configured_mode" field.
+func UpstreamConfiguredModeNotIn(vs ...string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNotIn(FieldUpstreamConfiguredMode, vs...))
+}
+
+// UpstreamConfiguredModeGT applies the GT predicate on the "upstream_configured_mode" field.
+func UpstreamConfiguredModeGT(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldGT(FieldUpstreamConfiguredMode, v))
+}
+
+// UpstreamConfiguredModeGTE applies the GTE predicate on the "upstream_configured_mode" field.
+func UpstreamConfiguredModeGTE(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldGTE(FieldUpstreamConfiguredMode, v))
+}
+
+// UpstreamConfiguredModeLT applies the LT predicate on the "upstream_configured_mode" field.
+func UpstreamConfiguredModeLT(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldLT(FieldUpstreamConfiguredMode, v))
+}
+
+// UpstreamConfiguredModeLTE applies the LTE predicate on the "upstream_configured_mode" field.
+func UpstreamConfiguredModeLTE(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldLTE(FieldUpstreamConfiguredMode, v))
+}
+
+// UpstreamConfiguredModeContains applies the Contains predicate on the "upstream_configured_mode" field.
+func UpstreamConfiguredModeContains(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldContains(FieldUpstreamConfiguredMode, v))
+}
+
+// UpstreamConfiguredModeHasPrefix applies the HasPrefix predicate on the "upstream_configured_mode" field.
+func UpstreamConfiguredModeHasPrefix(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldHasPrefix(FieldUpstreamConfiguredMode, v))
+}
+
+// UpstreamConfiguredModeHasSuffix applies the HasSuffix predicate on the "upstream_configured_mode" field.
+func UpstreamConfiguredModeHasSuffix(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldHasSuffix(FieldUpstreamConfiguredMode, v))
+}
+
+// UpstreamConfiguredModeEqualFold applies the EqualFold predicate on the "upstream_configured_mode" field.
+func UpstreamConfiguredModeEqualFold(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEqualFold(FieldUpstreamConfiguredMode, v))
+}
+
+// UpstreamConfiguredModeContainsFold applies the ContainsFold predicate on the "upstream_configured_mode" field.
+func UpstreamConfiguredModeContainsFold(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldContainsFold(FieldUpstreamConfiguredMode, v))
+}
+
+// UpstreamModeEQ applies the EQ predicate on the "upstream_mode" field.
+func UpstreamModeEQ(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldUpstreamMode, v))
+}
+
+// UpstreamModeNEQ applies the NEQ predicate on the "upstream_mode" field.
+func UpstreamModeNEQ(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNEQ(FieldUpstreamMode, v))
+}
+
+// UpstreamModeIn applies the In predicate on the "upstream_mode" field.
+func UpstreamModeIn(vs ...string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldIn(FieldUpstreamMode, vs...))
+}
+
+// UpstreamModeNotIn applies the NotIn predicate on the "upstream_mode" field.
+func UpstreamModeNotIn(vs ...string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNotIn(FieldUpstreamMode, vs...))
+}
+
+// UpstreamModeGT applies the GT predicate on the "upstream_mode" field.
+func UpstreamModeGT(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldGT(FieldUpstreamMode, v))
+}
+
+// UpstreamModeGTE applies the GTE predicate on the "upstream_mode" field.
+func UpstreamModeGTE(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldGTE(FieldUpstreamMode, v))
+}
+
+// UpstreamModeLT applies the LT predicate on the "upstream_mode" field.
+func UpstreamModeLT(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldLT(FieldUpstreamMode, v))
+}
+
+// UpstreamModeLTE applies the LTE predicate on the "upstream_mode" field.
+func UpstreamModeLTE(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldLTE(FieldUpstreamMode, v))
+}
+
+// UpstreamModeContains applies the Contains predicate on the "upstream_mode" field.
+func UpstreamModeContains(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldContains(FieldUpstreamMode, v))
+}
+
+// UpstreamModeHasPrefix applies the HasPrefix predicate on the "upstream_mode" field.
+func UpstreamModeHasPrefix(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldHasPrefix(FieldUpstreamMode, v))
+}
+
+// UpstreamModeHasSuffix applies the HasSuffix predicate on the "upstream_mode" field.
+func UpstreamModeHasSuffix(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldHasSuffix(FieldUpstreamMode, v))
+}
+
+// UpstreamModeEqualFold applies the EqualFold predicate on the "upstream_mode" field.
+func UpstreamModeEqualFold(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEqualFold(FieldUpstreamMode, v))
+}
+
+// UpstreamModeContainsFold applies the ContainsFold predicate on the "upstream_mode" field.
+func UpstreamModeContainsFold(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldContainsFold(FieldUpstreamMode, v))
+}
+
+// UpstreamFallbackEQ applies the EQ predicate on the "upstream_fallback" field.
+func UpstreamFallbackEQ(v bool) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldUpstreamFallback, v))
+}
+
+// UpstreamFallbackNEQ applies the NEQ predicate on the "upstream_fallback" field.
+func UpstreamFallbackNEQ(v bool) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNEQ(FieldUpstreamFallback, v))
+}
+
+// UpstreamErrorTypeEQ applies the EQ predicate on the "upstream_error_type" field.
+func UpstreamErrorTypeEQ(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldUpstreamErrorType, v))
+}
+
+// UpstreamErrorTypeNEQ applies the NEQ predicate on the "upstream_error_type" field.
+func UpstreamErrorTypeNEQ(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNEQ(FieldUpstreamErrorType, v))
+}
+
+// UpstreamErrorTypeIn applies the In predicate on the "upstream_error_type" field.
+func UpstreamErrorTypeIn(vs ...string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldIn(FieldUpstreamErrorType, vs...))
+}
+
+// UpstreamErrorTypeNotIn applies the NotIn predicate on the "upstream_error_type" field.
+func UpstreamErrorTypeNotIn(vs ...string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNotIn(FieldUpstreamErrorType, vs...))
+}
+
+// UpstreamErrorTypeGT applies the GT predicate on the "upstream_error_type" field.
+func UpstreamErrorTypeGT(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldGT(FieldUpstreamErrorType, v))
+}
+
+// UpstreamErrorTypeGTE applies the GTE predicate on the "upstream_error_type" field.
+func UpstreamErrorTypeGTE(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldGTE(FieldUpstreamErrorType, v))
+}
+
+// UpstreamErrorTypeLT applies the LT predicate on the "upstream_error_type" field.
+func UpstreamErrorTypeLT(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldLT(FieldUpstreamErrorType, v))
+}
+
+// UpstreamErrorTypeLTE applies the LTE predicate on the "upstream_error_type" field.
+func UpstreamErrorTypeLTE(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldLTE(FieldUpstreamErrorType, v))
+}
+
+// UpstreamErrorTypeContains applies the Contains predicate on the "upstream_error_type" field.
+func UpstreamErrorTypeContains(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldContains(FieldUpstreamErrorType, v))
+}
+
+// UpstreamErrorTypeHasPrefix applies the HasPrefix predicate on the "upstream_error_type" field.
+func UpstreamErrorTypeHasPrefix(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldHasPrefix(FieldUpstreamErrorType, v))
+}
+
+// UpstreamErrorTypeHasSuffix applies the HasSuffix predicate on the "upstream_error_type" field.
+func UpstreamErrorTypeHasSuffix(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldHasSuffix(FieldUpstreamErrorType, v))
+}
+
+// UpstreamErrorTypeEqualFold applies the EqualFold predicate on the "upstream_error_type" field.
+func UpstreamErrorTypeEqualFold(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEqualFold(FieldUpstreamErrorType, v))
+}
+
+// UpstreamErrorTypeContainsFold applies the ContainsFold predicate on the "upstream_error_type" field.
+func UpstreamErrorTypeContainsFold(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldContainsFold(FieldUpstreamErrorType, v))
 }
 
 // ErrorTypeEQ applies the EQ predicate on the "error_type" field.

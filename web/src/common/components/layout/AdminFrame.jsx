@@ -34,7 +34,7 @@ function BrandMark() {
         <span className="text-[#d6a23a]">S</span>
       </div>
       <div className="mt-[-2px] text-[9px] font-bold uppercase tracking-[0.06em] text-[#173b59]">
-        OpenAI OAuth API Service
+        Saurick API Console
       </div>
     </div>
   )
@@ -126,7 +126,7 @@ export default function AdminFrame({
           <header className="sticky top-0 z-20 border-b border-[#dce8df] bg-white/95 backdrop-blur">
             <div className="flex min-h-[86px] flex-col gap-3 px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
               <div className="text-sm font-semibold text-[#1f2d25]">
-                OAuth API 管理后台
+                API 管理后台
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {actions}

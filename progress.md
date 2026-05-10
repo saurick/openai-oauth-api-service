@@ -2,7 +2,105 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-10 Codex 上游模式开关与统计
+- 完成：新增 `gateway_settings` 运行时设置表，后台 `api.gateway_upstream_get` / `api.gateway_upstream_set` 可在 `codex_backend` 与 `codex_cli` 间切换；默认仍为 `codex_backend`，未保存后台设置时才读取 `CODEX_UPSTREAM_MODE` 作为启动默认值。
+- 完成：usage log 新增 `upstream_configured_mode`、`upstream_mode`、`upstream_fallback`、`upstream_error_type`；后台 summary、每日模型、凭据统计、会话聚合、请求明细和导出均补充 Backend / CLI / fallback 统计或字段，并支持 `upstream_mode` 筛选。
+- 完成：后台「用量日志」页新增 Codex 上游模式开关；统计卡片、筛选栏、每日模型表、凭据窗口统计、会话表、每日模型详情和会话详情均展示上游模式口径。
+- 验证通过：`cd server && make data` 生成 migration 与 Ent 代码；`cd server && make print_db_url && make migrate_apply` 已应用本地开发库到 `20260510141225`；`cd server && go test ./...`、`cd web && pnpm test`、`cd web && pnpm style:l1`、`cd web && pnpm build` 均通过。
+- 本地真实请求对比：经后台开关分别调用 `/v1/chat/completions`，Backend 单轮 `input=25/output=17/total=42/2.45s`，Backend 带历史消息 `input=40/output=5/total=45/1.72s`；CLI 单轮 `input=23593/output=5/total=23598/9.35s`，CLI 带历史消息 `input=23604/output=5/total=23609/7.31s`。四条 usage 均正确记录 configured/actual/fallback 字段，测试后已切回 `codex_backend`。
+- 前端回归：Browser 插件在 `http://127.0.0.1:5176/admin-usage` 验证登录、开关切到 CLI 再切回 Backend、桌面与 390px 移动视口页面非空、无框架错误覆盖；控制台仅有既有 React Router v7 future flag warning。
+- 阻塞/风险：本轮只验证本地开发库与本机 Codex 登录态；线上服务器仍需确认能访问 ChatGPT Codex backend，否则即使后台切换为 backend 也会 fallback 或失败。
+
+## 2026-05-10 线上域名切换到 oauth-api.saurick.me
+- 完成：新购 `saurick.me` 已在 Cloudflare 生效，`oauth-api.saurick.me` 公网解析到 Cloudflare 代理地址；域名状态无 `serverHold`。
+- 完成：为 `oauth-api.saurick.me` 配置 Nginx HTTP-01 challenge，通过 Let's Encrypt 签发并安装正式证书，有效期到 `2026-08-08 13:59:44 GMT`；Nginx 443 主入口已切到 `oauth-api.saurick.me` 并反代 `127.0.0.1:8400`。
+- 完成：旧源站入口 `oauth-api.saurick.space` 与 `openai.saurick.space` 已在 Nginx 配置为 308 跳转到 `https://oauth-api.saurick.me$request_uri`；由于 `saurick.space` 仍是 `serverHold`，这些旧域名公网解析本身仍不可用。
+- 完成：线上 Compose `.env` 的 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` 已改为 `https://oauth-api.saurick.me` 并重建 `app-server`；本机 OpenCode `oauth-api-service` provider 已改为 `https://oauth-api.saurick.me/v1`，配置备份为 `~/.config/opencode/opencode.json.bak-20260510225902-saurick-me`。
+- 文档：同步更新 `README.md`、`server/docs/api.md`、`server/docs/config.md`、`server/deploy/compose/prod/README.md` 中的当前个人部署域名。
+- 验证通过：`https://oauth-api.saurick.me/admin-login` 返回 `HTTP 200` 且标题为 `Saurick API Console`；`http://oauth-api.saurick.me/admin-login` 返回 301 到 HTTPS；使用本地下游 key 请求 `https://oauth-api.saurick.me/v1/models` 返回模型列表；`opencode models oauth-api-service` 返回 `gpt-5.4/gpt-5.5`；Google Safe Browsing status 对 `oauth-api.saurick.me` 返回 `6` / no available data，未命中 unsafe。
+- 阻塞/风险：本轮只切换域名和运行配置，未重建应用镜像。旧 `saurick.space` 仍被注册局 hold，无法作为公网跳转入口依赖；后续如需释放旧域名或彻底删除旧证书/配置，需要等 `serverHold` 解除或确认不再使用。
+
+## 2026-05-10 线上域名切换到 oauth-api.saurick.space
+- 完成：前端公网可见标题、登录页品牌、后台壳子和 HTML meta 从显眼 `OpenAI OAuth API Service` 收口为 `Saurick API Console` / `API 管理后台`，降低被识别为 OpenAI 官方登录页的风险；生产示例域名同步改为 `https://oauth-api.saurick.space/v1`。
+- 完成：补齐既有后端改动缺失的 Ent 生成物与 Atlas migration，新增 `gateway_settings` 表和 upstream mode 统计字段迁移；线上通过 Atlas 容器执行到 `20260510141225`。
+- 完成：本地构建镜像 `oauth-api-service-server:20260510T221315-ffa4cbb6-local`，上传到 `8.218.4.199` 后 `docker load` 并切换 Compose `APP_IMAGE`；当前 `app-server` 已运行该镜像，`/healthz` 返回 `ok`，`/readyz` 返回 `ready`。
+- 完成：Cloudflare DNS 中已设置 `A oauth-api.saurick.space -> 8.218.4.199` 且 `proxied=true`；Nginx 已新增 `oauth-api.saurick.space` 反代到 `127.0.0.1:8400`，旧 `openai.saurick.space` 在源站 Nginx 返回 308 到新域名。本机 OpenCode 线上 provider 已改为 `https://oauth-api.saurick.space/v1`。
+- 验证通过：`cd web && pnpm lint && pnpm css && pnpm test && pnpm build && pnpm style:l1`（`style:l1` 第一次 `admin-keys-mobile` 行选择恢复态偶发失败，复跑 21 场景通过）；`cd server && go test ./internal/server ./internal/biz ./internal/data`；`git diff --check`；源站直连 `https://oauth-api.saurick.space/admin-login --resolve ... -k` 返回新标题，`/v1/models` 使用下游 key 返回模型列表。
+- 运维清理：发布前记录 `/` 使用率 51%、Docker build cache 约 971.8MB；发布后删除本轮上传 tar 包，执行 `docker builder prune -f` 和 dangling `docker image prune -f`，`/` 使用率 50%、build cache 降至 186.4MB。因公网 DNS 尚不可用，保留未运行旧镜像作为回滚余地，未执行 `docker image prune -a -f`。
+- 阻塞/风险：`whois saurick.space` 当前仍显示 `serverHold`，公共 DNS 对 `saurick.space` / `oauth-api.saurick.space` 返回 `NXDOMAIN`；Cloudflare 记录已存在但注册局未解析，Let's Encrypt DNS-01 也因此无法签发公网证书。当前 Nginx 新域名源站证书为临时自签，仅用于源站就绪；必须先在阿里云/注册商解除 `serverHold`，再重新签发正式证书并做公网 HTTPS 回归。
+
+## 2026-05-10 OpenCode direct Codex backend adapter
+- 完成：新增 `CODEX_UPSTREAM_MODE`，默认切为 `codex_backend`，需要强制旧路径时可设为 `codex_cli`；direct backend 模式由 app-server 进程直接请求 `https://chatgpt.com/backend-api/codex/responses`，避免每次请求启动 `codex exec` 子进程和注入 Codex CLI agent 上下文。
+- 完成：默认 backend 模式增加 Codex CLI fallback，backend 请求失败时自动尝试 `codex exec`；显式 `CODEX_UPSTREAM_MODE=codex_cli` 时只走 CLI。
+- 完成：direct backend 模式读取 Codex `auth.json` 的 access token / account_id，请求时带 `Authorization: Bearer ...` 与 `ChatGPT-Account-Id`；access token 过期或上游返回 401 时使用 refresh token 调 `https://auth.openai.com/oauth/token` 刷新，并写回 `auth.json`。
+- 完成：OpenAI-compatible `/v1/chat/completions` 与 `/v1/responses` 会被转换为 Codex backend Responses 请求；支持 `reasoning_effort` 和 data URL 图片输入，Responses SSE 的 `response.output_text.delta` / `response.completed.usage` 会回填为当前兼容响应和 usage 记录。
+- 修复：Codex backend 要求 `instructions` 非空；direct backend adapter 现在优先使用请求里的 `system` / `developer` 消息，缺失时补最小默认 instructions，避免单轮无 system 请求先 400 再落到 CLI。
+- 文档：同步更新 `README.md`、`server/docs/api.md`、`server/docs/config.md`、Compose `.env.example`、`compose.yml` 与部署 README，说明 `codex_cli` / `codex_backend` 的适用边界、配置项和回退方式。
+- 验证通过：`cd server && go test ./internal/server ./internal/biz ./internal/data`、`git diff --check -- ...`、`cd server && make dev_build`；新增 mock backend 测试覆盖默认 backend 模式、backend 失败 CLI fallback、请求头、Responses 请求体、SSE 文本和 usage 解析，以及 access token 过期后的 refresh 与 `auth.json` 写回。
+- 本地 token 对比：同一 `/v1/chat/completions`、`gpt-5.5`、`reasoning_effort=low`，backend 单轮 `prompt_tokens=25/total=42/2.82s`，backend 带历史续会话 `prompt_tokens=40/total=57/1.90s`；强制 CLI 单轮 `prompt_tokens=23593/total=23598/5.97s`，强制 CLI 带历史续会话 `prompt_tokens=23604/total=23609/8.01s`。
+- 阻塞/风险：本轮尚未部署线上镜像；若 ChatGPT Codex backend 协议变化，默认会先 fallback 到 CLI，仍可显式 `CODEX_UPSTREAM_MODE=codex_cli` 固定旧路径。本机已用 detached `screen` 启动默认 backend 模式 dev 服务，session 名为 `oauth-api-dev`。
+
+## 2026-05-10 每日模型汇总详情
+- 完成：用量日志默认视图从单纯按天汇总调整为「每日模型汇总」；后端 `api.usage_buckets` 新增 `group_by=day_model`，按日期 + 模型聚合请求数、输入 / 输出 / 缓存 / reasoning tokens、费用估算和错误率。
+- 完成：每日模型汇总的「详情」按钮新增弹窗下钻，按当天 + 模型复用 `api.usage_list` 拉取请求级明细，展示时间、输入 / 输出 / 缓存 / reasoning tokens、总 tokens、费用和成功状态，并提供上一页 / 下一页分页。
+- 阻塞/风险：本地已构建镜像 `oauth-api-service-server:20260510T003654-ffa4cbb6-usage-detail` 并上传到 `8.218.4.199:/data/openai-oauth-api-service/`；远端执行 `docker load -i oauth-api-service-server-20260510T003654-ffa4cbb6-usage-detail.tar.gz` 后服务器用户态服务无响应，SSH 卡在 banner、`/healthz` 超时，已断开本地 SSH 部署会话。线上是否完成镜像导入未知，Compose `.env` 更新与 `app-server` 重启尚未确认。
+- 阻塞/风险：2026-05-10 继续部署时复查，ICMP、22 和 8400 TCP 端口可达，但 SSH 60 秒仍卡在 banner exchange，`/healthz` 继续超时；本机未发现可用 `aliyun` CLI 配置，无法从当前终端恢复服务器。继续发布前需要先通过云控制台重启或恢复 8.218.4.199，再检查 Docker 镜像导入和 Compose 状态。
+- 完成：服务器扩容恢复后，确认新镜像已加载，已将 `/data/openai-oauth-api-service/compose/.env` 的 `APP_IMAGE` 切换到 `oauth-api-service-server:20260510T003654-ffa4cbb6-usage-detail` 并重建 `app-server`；`/healthz` 返回 200，线上 `api.usage_buckets group_by=day_model` 与按日期 + 模型调用 `api.usage_list` 验证通过，Playwright 线上回归通过登录、每日模型表格、详情弹窗打开和下一页分页。
+- 阻塞/风险：2026-05-10 继续部署最新工作区代码时，本地构建镜像 `oauth-api-service-server:20260510T122824-ffa4cbb6-latest` 成功并上传到 `8.218.4.199:/data/openai-oauth-api-service/`；远端 `docker load` 成功，Compose `.env` 已切到该镜像，`docker compose up -d app-server` 已打印 `app-server Started`，但随后服务器用户态再次无响应，SSH 卡在 banner、`/healthz` 超时。当前需通过云控制台重启或恢复 8.218.4.199 后，再确认新镜像是否正常运行。
+- 完成：补齐「调用明细」行详情弹窗的上一页 / 下一页导航；当前页内按相邻请求切换，到页边界时按当前筛选条件拉取上一页 / 下一页 usage 数据再切换，避免只有「每日模型」详情有分页而「调用明细」详情无分页的交互不一致。已更新 `style:l1` 断言覆盖调用详情弹窗分页按钮和下一条切换。
+- 完成：将「调用明细」行详情明确为单次请求排障面板，并新增 `Session ID` 字段；空值显示“未传入”，用于解释为什么某些请求不会出现在「会话聚合」。已更新 `style:l1` 断言覆盖说明文案和 Session ID 展示。
+- 完成：根据最新交互口径移除「调用明细」表格的详情按钮和单条详情弹窗；请求 ID、Session、缓存 / Reasoning Token、请求 / 响应字节等排障字段直接展示在明细表格中。已更新 `style:l1` 断言调用明细不再出现详情按钮，并覆盖新增表格字段。
+- 完成：优化调用明细表格的组合数字展示，Token 列改为“总 / 输入 / 输出”带标签，缓存 / Reasoning 与请求 / 响应字节也增加中文标签，避免只显示 `23,570 / 5` 这类难以理解的裸数字。
+- 完成：给调用明细中容易混淆的统计表头增加问号 hover/focus 说明，覆盖 Token、缓存输入 / 推理输出、费用估算、耗时和字节；同时把缓存 / Reasoning 文案统一为缓存输入 / 推理输出。
+- 阻塞/风险：每日模型详情仍不展示请求 / 响应正文，费用字段沿用现有模型价格估算；若模型没有价格配置，主表和详情继续显示“未配置价格”。
+
 ## 2026-05-10 00:30
 - 完成：补充 `AGENTS.md` 的多项目低配 Docker 宿主机发布后清理约束，明确发布完成、健康检查和必要回归通过后，只清理未被任何容器使用的旧镜像与构建缓存，优先使用 `docker image prune -a -f` 与 `docker builder prune -f`，并禁止清理 volume、数据库目录、compose `.env`、上传目录或运行中容器依赖镜像；同步给 `legacy-python-mvp/AGENTS.md` 加入轻量版同类约束。更新前因 `progress.md` 超过归档阈值，已归档旧流水。
 - 下一步：如后续继续完善发布脚本，可把该约束落为脚本级 post-deploy cleanup，并在执行前后输出磁盘与容器状态。
 - 阻塞/风险：本轮只更新协作与部署约束文档，未修改运行代码、Compose 配置或线上服务；旧镜像清理仍需在发布脚本中显式实现。
+
+## 2026-05-10 API 凭据表格操作列精简
+- 完成：`/admin-keys` API 凭据表删除行内“操作”列，编辑、启用 / 禁用、删除继续收口到表格上方“当前操作”区域；状态 badge 统一加 `whitespace-nowrap`，避免窄列下“启用 / 禁用”拆行。
+- 验证补充：`style:l1` 的 API 凭据页断言新增“无行内操作列”“状态列无按钮”“状态 badge computed white-space 为 nowrap”，覆盖桌面和移动端 mock 数据。
+- 阻塞/风险：本轮只调整 API 凭据表展示与前端回归断言，不修改后端 key 创建、编辑、启停、删除接口和数据库真源；行选择、双击编辑和顶部“当前操作”仍沿用原有交互。
+
+## 2026-05-10 本地 OpenCode 转发验证
+- 完成：本机 OpenCode 配置新增 `oauth-api-service-local` provider，指向 `http://localhost:8400/v1`，复用本地开发库中启用的 `ogw_` 下游 key；原线上 `oauth-api-service` provider 保持不变，配置备份为 `~/.config/opencode/opencode.json.bak-20260510131820-local-provider`。
+- 修复：后端 Codex CLI JSON 解析兼容当前 `item.completed` / `turn.completed` 事件格式，避免把 usage 事件 JSON 误当成 OpenAI 兼容响应正文；旧的 `event_msg` / `response_item` 格式继续保留。
+- 验证通过：`cd server && go test ./internal/server`；本地 `/v1/chat/completions` 返回 `HTTP 200` 且正文 `OK`；`opencode models oauth-api-service-local` 返回 `gpt-5.4/gpt-5.5`；`opencode run --pure -m oauth-api-service-local/gpt-5.5 --variant high --format json "只回复 OK"` 返回 `OK`。
+- 阻塞/风险：本地后端需要带 `server/.env` 中的 `DB_URL` 作为 `POSTGRES_DSN` 启动；直接运行二进制只读默认 `config.yaml` 会连到占位库并认证失败。当前本地测试服务以前台会话方式运行在 `:8400`。
+
+## 2026-05-10 OpenCode reasoning effort 支持
+- 完成：本地 `oauth-api-service-local` provider 的 `gpt-5.5/gpt-5.4` 已声明 `low`、`medium`、`high`、`xhigh` variants；OpenCode UI 可显示并切换对应 effort。
+- 完成：后端 OpenAI-compatible 请求体新增 `reasoning_effort` 支持，兼容 `reasoningEffort` 和 `reasoning.effort` 输入，只允许 `low/medium/high/xhigh`，并映射为 Codex CLI `model_reasoning_effort`。
+- 文档：同步更新 `README.md` 与 `server/docs/api.md`，说明兼容入口的 `reasoning_effort` 取值和上游映射。
+- 验证通过：`cd server && go test ./internal/server`、`git diff --check -- README.md server/docs/api.md server/internal/server/openai_gateway_handler.go server/internal/server/openai_gateway_handler_test.go progress.md`；本地重建 `server-dev` 后，`opencode run --pure -m oauth-api-service-local/gpt-5.5 --variant low/medium/high/xhigh --format json "只回复 OK"` 均返回 `OK`，usage 最近 4 条均为 `chat.completions 200 success=true`；非法 `reasoning_effort=extreme` 返回 `HTTP 400 gateway_reasoning_effort_invalid`。
+- 阻塞/风险：线上 `oauth-api-service` provider 的 variants 已先从本机 OpenCode 配置撤回，避免默认线上继续因 effort 下拉触发失败；配置备份为 `~/.config/opencode/opencode.json.bak-20260510142213-disable-online-effort`。线上当前不带 effort 直连也返回 `HTTP 502 codex_cli_upstream_failed`，根因是服务器容器内 Codex CLI 调用 `https://chatgpt.com/backend-api/codex/responses` 被 Cloudflare 拦截，不是本地 provider effort 解析本身。线上要恢复后才能重新开放线上 provider effort。
+
+## 2026-05-10 OpenCode 图片输入排查
+- 发现：本地 OpenCode 自定义 provider 的模型未声明 `modalities.input=["text","image"]`，OpenCode 会认为模型不支持图片输入；服务端 `contentTextValue` 也只抽取文本，未把 `image_url` / `input_image` 转给 Codex CLI，因此即使客户端发图也会在网关层丢失。
+- 修复：后端 OpenAI-compatible 请求体支持 data URL 形式图片输入，单次最多 4 张、单张最大 16 MiB，临时落盘后通过 `codex exec --image` 附加到本次请求，请求结束清理临时文件；本机 `oauth-api-service-local` 的 `gpt-5.5/gpt-5.4` 已补 `modalities`，配置备份为 `~/.config/opencode/opencode.json.bak-20260510193130-before-modalities`。
+- 文档：同步更新 `README.md` 与 `server/docs/api.md`，说明图片输入支持范围和 data URL 限制。
+- 验证通过：`cd server && go test ./internal/server`，新增 fake Codex CLI 测试确认图片文件会作为 `--image` 传入且请求结束后清理；`opencode debug config` 确认本地 provider 两个模型均声明 text/image 输入。当前运行中的 `:8400` 本地服务仍是旧二进制，需要重建 / 重启后图片链路才会实际生效。
+- 阻塞/风险：当前只支持请求体内 data URL 图片，不支持让服务端主动拉取远程 `http(s)` 图片 URL，避免把网关变成任意 URL 抓取入口；线上 provider 尚未部署本轮改动。
+
+## 2026-05-10 OpenCode 三 provider 部署回归
+- 完成：本地构建镜像 `oauth-api-service-server:20260510T151520-ffa4cbb6-local`，上传到 `8.218.4.199` 后通过 `docker load` 切换 `/data/openai-oauth-api-service/compose/.env` 的 `APP_IMAGE` 并重建 `app-server`；远端 `/healthz` 返回 `ok`，`/readyz` 返回 `ready`，当前运行镜像为 `oauth-api-service-server:20260510T151520-ffa4cbb6-local`。
+- 完成：本机 OpenCode 三个 provider `oauth-api-service`、`oauth-api-service-local`、`api-ndev-me` 均已配置 `gpt-5.5/gpt-5.4` 的 `low/medium/high/xhigh` variants；`opencode models` 三组均能列出目标模型。
+- 验证通过：`/v1/models` 三组 URL 均返回 `HTTP 200`；`oauth-api-service-local` 和 `api-ndev-me` 直连 `reasoning_effort=high` 返回 `OK`，对应 `opencode run --pure -m <provider>/gpt-5.5 --variant high --format json "只回复 OK"` 也返回 `OK`。
+- 阻塞/风险：线上 `oauth-api-service` 域名和直连 `8.218.4.199:8400` 的真实 chat 仍返回 `HTTP 502`；直连后端错误码为 `codex_cli_upstream_failed`，错误内容显示服务器容器内 Codex CLI 访问 `https://chatgpt.com/backend-api/codex/responses` 被 Cloudflare 拦截。不带 `reasoning_effort` 也同样 502，因此当前剩余问题是线上服务器到 ChatGPT Codex 上游的网络 / 风控链路，不是本轮 `reasoning_effort` 参数解析。因线上 chat 回归未通过，本轮只删除上传 tar 包，未执行远端旧镜像 prune，以保留回滚余地。
+
+## 2026-05-10 线上 Codex 上游故障排查
+- 发现：`8.218.4.199` 宿主机直接访问 `https://chatgpt.com/` 返回 Cloudflare `HTTP 403`，`/v1/chat/completions` 直连后端错误也指向 `https://chatgpt.com/backend-api/codex/responses` 被 Cloudflare 阻断；这是线上 provider 502 的主因。
+- 修复：`runCodexCLI` 改为继承请求 `context` 创建 Codex CLI 子进程，避免客户端断开、OpenCode 超时或重试后，服务端子进程仍继续跑到 `CODEX_CLI_TIMEOUT_SECONDS=600` 才退出，放大低配服务器资源占用。
+- 验证通过：新增假 Codex CLI 取消测试；`cd server && go test ./internal/server ./internal/biz ./internal/data` 通过。本地已构建待部署镜像 `oauth-api-service-server:20260510T153810-ffa4cbb6-local` / `oauth-api-service-server:deploy-cancel-20260510`。
+- 阻塞/风险：排查过程中线上机器再次进入用户态无响应，`healthz`、`readyz` 和 SSH banner 均持续超时；当前无法上传并部署取消修复。若机器不自行恢复，需要先通过云控制台重启或恢复 `8.218.4.199`，再部署新镜像并配置可用的上游出口 / 代理。
+- 完成：服务器续费恢复后，已先部署取消修复镜像 `oauth-api-service-server:20260510T153810-ffa4cbb6-local`，随后发现 Codex CLI 超时后容器内出现 `[codex]` 僵尸进程；进一步将运行镜像加入 `tini` 作为 PID 1，并部署 `oauth-api-service-server:20260510T163723-ffa4cbb6-local`。
+- 验证通过：远端当前 `app-server` 命令为 `/sbin/tini -- /app/server -conf /app/configs`，`/healthz` 返回 `ok`，`/readyz` 返回 `ready`；线上 `/v1/models` 返回 `HTTP 200`；OpenCode 线上 provider `opencode models oauth-api-service` 能列出 `gpt-5.4/gpt-5.5`。短超时 chat 与 OpenCode 超时后，容器内无残留 `codex/node` 进程，服务健康保持正常。
+- 阻塞/风险：`8.218.4.199` 宿主机访问 `https://chatgpt.com/` 仍返回 Cloudflare `HTTP 403`，线上 `oauth-api-service` 真实 chat 仍失败：直连 `8.218.4.199:8400` 返回 `HTTP 502 codex_cli_upstream_failed` / `codex cli upstream timed out after 10m0s`，`opencode run --pure -m oauth-api-service/gpt-5.5 --variant high --format json "只回复 OK"` 在 60 秒外层超时。当前线上服务已不再被失败请求拖住，但要让线上 provider 真正可用，仍需配置可访问 ChatGPT Codex backend 的服务器出口 / 代理。因真实 chat 未通过，本轮只删除上传 tar 包，未执行远端旧镜像 prune，以保留回滚余地。
+- 完成：确认宿主机 `codex` 能通是因为交互 shell 从 `/root/.zshrc` / `/root/.bashrc` 注入了 mihomo 代理环境；app-server 容器此前没有代理环境，且宿主机 mihomo 只监听 `127.0.0.1:7890`，容器无法访问。
+- 修复：备份远端 mihomo、root shell 和 compose 配置后，将 mihomo `allow-lan` 改为 `true`、`bind-address` 改为 app-server Docker bridge 网关 `172.19.0.1`，并同步把 root shell 与 app-server compose `.env` 的 `HTTP_PROXY` / `HTTPS_PROXY` / `WS_PROXY` / `WSS_PROXY` / `ALL_PROXY` 及小写变量设置为 `http://172.19.0.1:7890`，`NODE_USE_ENV_PROXY=1`；未启用 TUN，未切换代理节点。
+- 文档：同步更新 `server/deploy/compose/prod/compose.yml`、`.env.example`、`server/docs/config.md` 和 `server/deploy/compose/prod/README.md`，明确 Codex CLI 可选代理环境和 mihomo / Clash 推荐接法。
+- 验证通过：容器内同款 `codex exec --skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules --json -s read-only -m gpt-5.5 -c model_reasoning_effort="high" -` 返回 `OK`；直连 `http://8.218.4.199:8400/v1/chat/completions` 与域名 `https://openai.saurick.space/v1/chat/completions` 带 `reasoning_effort=high` 均返回 `HTTP 200 content=OK`；本机 `opencode run --pure -m oauth-api-service/gpt-5.5 --variant high --format json "只回复 OK"` 返回 `OK`；远端 `/healthz`、`/readyz` 保持正常，容器内无残留 `codex/node` 进程。
+- 优化：OpenAI-compatible usage 响应新增 `prompt_tokens_details.cached_tokens`、`completion_tokens_details.reasoning_tokens` 以及 Responses 对应 details 字段，避免客户端只看到总 input tokens 而误判缓存未命中；已部署镜像 `oauth-api-service-server:20260510T194246-ffa4cbb6-local`。
+- 验证通过：`cd server && go test ./internal/server ./internal/biz ./internal/data`；线上重复请求返回 `HTTP 200`，usage 示例为 `prompt_tokens=13761`、`prompt_tokens_details.cached_tokens=13696`，另一次为 `cached_tokens=7552`；域名 chat 耗时约 `6.8s-10.3s`。本轮已删除上传 tar 包，未清理旧镜像以保留回滚余地。

@@ -14,6 +14,7 @@ import (
 	"server/internal/data/model/ent/gatewaymodel"
 	"server/internal/data/model/ent/gatewaymodelprice"
 	"server/internal/data/model/ent/gatewaypolicy"
+	"server/internal/data/model/ent/gatewaysetting"
 	"server/internal/data/model/ent/gatewayusagelog"
 	"server/internal/data/model/ent/predicate"
 	"server/internal/data/model/ent/user"
@@ -41,6 +42,7 @@ const (
 	TypeGatewayModel      = "GatewayModel"
 	TypeGatewayModelPrice = "GatewayModelPrice"
 	TypeGatewayPolicy     = "GatewayPolicy"
+	TypeGatewaySetting    = "GatewaySetting"
 	TypeGatewayUsageLog   = "GatewayUsageLog"
 	TypeUser              = "User"
 )
@@ -7279,46 +7281,539 @@ func (m *GatewayPolicyMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown GatewayPolicy edge %s", name)
 }
 
+// GatewaySettingMutation represents an operation that mutates the GatewaySetting nodes in the graph.
+type GatewaySettingMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	key           *string
+	value         *string
+	created_at    *time.Time
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*GatewaySetting, error)
+	predicates    []predicate.GatewaySetting
+}
+
+var _ ent.Mutation = (*GatewaySettingMutation)(nil)
+
+// gatewaysettingOption allows management of the mutation configuration using functional options.
+type gatewaysettingOption func(*GatewaySettingMutation)
+
+// newGatewaySettingMutation creates new mutation for the GatewaySetting entity.
+func newGatewaySettingMutation(c config, op Op, opts ...gatewaysettingOption) *GatewaySettingMutation {
+	m := &GatewaySettingMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeGatewaySetting,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withGatewaySettingID sets the ID field of the mutation.
+func withGatewaySettingID(id int) gatewaysettingOption {
+	return func(m *GatewaySettingMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *GatewaySetting
+		)
+		m.oldValue = func(ctx context.Context) (*GatewaySetting, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().GatewaySetting.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withGatewaySetting sets the old GatewaySetting of the mutation.
+func withGatewaySetting(node *GatewaySetting) gatewaysettingOption {
+	return func(m *GatewaySettingMutation) {
+		m.oldValue = func(context.Context) (*GatewaySetting, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m GatewaySettingMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m GatewaySettingMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *GatewaySettingMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *GatewaySettingMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().GatewaySetting.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetKey sets the "key" field.
+func (m *GatewaySettingMutation) SetKey(s string) {
+	m.key = &s
+}
+
+// Key returns the value of the "key" field in the mutation.
+func (m *GatewaySettingMutation) Key() (r string, exists bool) {
+	v := m.key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKey returns the old "key" field's value of the GatewaySetting entity.
+// If the GatewaySetting object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewaySettingMutation) OldKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKey: %w", err)
+	}
+	return oldValue.Key, nil
+}
+
+// ResetKey resets all changes to the "key" field.
+func (m *GatewaySettingMutation) ResetKey() {
+	m.key = nil
+}
+
+// SetValue sets the "value" field.
+func (m *GatewaySettingMutation) SetValue(s string) {
+	m.value = &s
+}
+
+// Value returns the value of the "value" field in the mutation.
+func (m *GatewaySettingMutation) Value() (r string, exists bool) {
+	v := m.value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldValue returns the old "value" field's value of the GatewaySetting entity.
+// If the GatewaySetting object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewaySettingMutation) OldValue(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldValue is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldValue requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldValue: %w", err)
+	}
+	return oldValue.Value, nil
+}
+
+// ResetValue resets all changes to the "value" field.
+func (m *GatewaySettingMutation) ResetValue() {
+	m.value = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *GatewaySettingMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *GatewaySettingMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the GatewaySetting entity.
+// If the GatewaySetting object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewaySettingMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *GatewaySettingMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *GatewaySettingMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *GatewaySettingMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the GatewaySetting entity.
+// If the GatewaySetting object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewaySettingMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *GatewaySettingMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the GatewaySettingMutation builder.
+func (m *GatewaySettingMutation) Where(ps ...predicate.GatewaySetting) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the GatewaySettingMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *GatewaySettingMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.GatewaySetting, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *GatewaySettingMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *GatewaySettingMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (GatewaySetting).
+func (m *GatewaySettingMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *GatewaySettingMutation) Fields() []string {
+	fields := make([]string, 0, 4)
+	if m.key != nil {
+		fields = append(fields, gatewaysetting.FieldKey)
+	}
+	if m.value != nil {
+		fields = append(fields, gatewaysetting.FieldValue)
+	}
+	if m.created_at != nil {
+		fields = append(fields, gatewaysetting.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, gatewaysetting.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *GatewaySettingMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case gatewaysetting.FieldKey:
+		return m.Key()
+	case gatewaysetting.FieldValue:
+		return m.Value()
+	case gatewaysetting.FieldCreatedAt:
+		return m.CreatedAt()
+	case gatewaysetting.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *GatewaySettingMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case gatewaysetting.FieldKey:
+		return m.OldKey(ctx)
+	case gatewaysetting.FieldValue:
+		return m.OldValue(ctx)
+	case gatewaysetting.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case gatewaysetting.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown GatewaySetting field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *GatewaySettingMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case gatewaysetting.FieldKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKey(v)
+		return nil
+	case gatewaysetting.FieldValue:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetValue(v)
+		return nil
+	case gatewaysetting.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case gatewaysetting.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown GatewaySetting field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *GatewaySettingMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *GatewaySettingMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *GatewaySettingMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown GatewaySetting numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *GatewaySettingMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *GatewaySettingMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *GatewaySettingMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown GatewaySetting nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *GatewaySettingMutation) ResetField(name string) error {
+	switch name {
+	case gatewaysetting.FieldKey:
+		m.ResetKey()
+		return nil
+	case gatewaysetting.FieldValue:
+		m.ResetValue()
+		return nil
+	case gatewaysetting.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case gatewaysetting.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown GatewaySetting field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *GatewaySettingMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *GatewaySettingMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *GatewaySettingMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *GatewaySettingMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *GatewaySettingMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *GatewaySettingMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *GatewaySettingMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown GatewaySetting unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *GatewaySettingMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown GatewaySetting edge %s", name)
+}
+
 // GatewayUsageLogMutation represents an operation that mutates the GatewayUsageLog nodes in the graph.
 type GatewayUsageLogMutation struct {
 	config
-	op                  Op
-	typ                 string
-	id                  *int
-	api_key_id          *int
-	addapi_key_id       *int
-	api_key_prefix      *string
-	request_id          *string
-	method              *string
-	_path               *string
-	endpoint            *string
-	model               *string
-	status_code         *int
-	addstatus_code      *int
-	success             *bool
-	stream              *bool
-	input_tokens        *int64
-	addinput_tokens     *int64
-	output_tokens       *int64
-	addoutput_tokens    *int64
-	total_tokens        *int64
-	addtotal_tokens     *int64
-	cached_tokens       *int64
-	addcached_tokens    *int64
-	reasoning_tokens    *int64
-	addreasoning_tokens *int64
-	request_bytes       *int64
-	addrequest_bytes    *int64
-	response_bytes      *int64
-	addresponse_bytes   *int64
-	duration_ms         *int64
-	addduration_ms      *int64
-	error_type          *string
-	created_at          *time.Time
-	clearedFields       map[string]struct{}
-	done                bool
-	oldValue            func(context.Context) (*GatewayUsageLog, error)
-	predicates          []predicate.GatewayUsageLog
+	op                       Op
+	typ                      string
+	id                       *int
+	api_key_id               *int
+	addapi_key_id            *int
+	api_key_prefix           *string
+	session_id               *string
+	request_id               *string
+	method                   *string
+	_path                    *string
+	endpoint                 *string
+	model                    *string
+	status_code              *int
+	addstatus_code           *int
+	success                  *bool
+	stream                   *bool
+	input_tokens             *int64
+	addinput_tokens          *int64
+	output_tokens            *int64
+	addoutput_tokens         *int64
+	total_tokens             *int64
+	addtotal_tokens          *int64
+	cached_tokens            *int64
+	addcached_tokens         *int64
+	reasoning_tokens         *int64
+	addreasoning_tokens      *int64
+	request_bytes            *int64
+	addrequest_bytes         *int64
+	response_bytes           *int64
+	addresponse_bytes        *int64
+	duration_ms              *int64
+	addduration_ms           *int64
+	upstream_configured_mode *string
+	upstream_mode            *string
+	upstream_fallback        *bool
+	upstream_error_type      *string
+	error_type               *string
+	created_at               *time.Time
+	clearedFields            map[string]struct{}
+	done                     bool
+	oldValue                 func(context.Context) (*GatewayUsageLog, error)
+	predicates               []predicate.GatewayUsageLog
 }
 
 var _ ent.Mutation = (*GatewayUsageLogMutation)(nil)
@@ -7523,6 +8018,42 @@ func (m *GatewayUsageLogMutation) OldAPIKeyPrefix(ctx context.Context) (v string
 // ResetAPIKeyPrefix resets all changes to the "api_key_prefix" field.
 func (m *GatewayUsageLogMutation) ResetAPIKeyPrefix() {
 	m.api_key_prefix = nil
+}
+
+// SetSessionID sets the "session_id" field.
+func (m *GatewayUsageLogMutation) SetSessionID(s string) {
+	m.session_id = &s
+}
+
+// SessionID returns the value of the "session_id" field in the mutation.
+func (m *GatewayUsageLogMutation) SessionID() (r string, exists bool) {
+	v := m.session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionID returns the old "session_id" field's value of the GatewayUsageLog entity.
+// If the GatewayUsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayUsageLogMutation) OldSessionID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionID: %w", err)
+	}
+	return oldValue.SessionID, nil
+}
+
+// ResetSessionID resets all changes to the "session_id" field.
+func (m *GatewayUsageLogMutation) ResetSessionID() {
+	m.session_id = nil
 }
 
 // SetRequestID sets the "request_id" field.
@@ -8281,6 +8812,150 @@ func (m *GatewayUsageLogMutation) ResetDurationMs() {
 	m.addduration_ms = nil
 }
 
+// SetUpstreamConfiguredMode sets the "upstream_configured_mode" field.
+func (m *GatewayUsageLogMutation) SetUpstreamConfiguredMode(s string) {
+	m.upstream_configured_mode = &s
+}
+
+// UpstreamConfiguredMode returns the value of the "upstream_configured_mode" field in the mutation.
+func (m *GatewayUsageLogMutation) UpstreamConfiguredMode() (r string, exists bool) {
+	v := m.upstream_configured_mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamConfiguredMode returns the old "upstream_configured_mode" field's value of the GatewayUsageLog entity.
+// If the GatewayUsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayUsageLogMutation) OldUpstreamConfiguredMode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamConfiguredMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamConfiguredMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamConfiguredMode: %w", err)
+	}
+	return oldValue.UpstreamConfiguredMode, nil
+}
+
+// ResetUpstreamConfiguredMode resets all changes to the "upstream_configured_mode" field.
+func (m *GatewayUsageLogMutation) ResetUpstreamConfiguredMode() {
+	m.upstream_configured_mode = nil
+}
+
+// SetUpstreamMode sets the "upstream_mode" field.
+func (m *GatewayUsageLogMutation) SetUpstreamMode(s string) {
+	m.upstream_mode = &s
+}
+
+// UpstreamMode returns the value of the "upstream_mode" field in the mutation.
+func (m *GatewayUsageLogMutation) UpstreamMode() (r string, exists bool) {
+	v := m.upstream_mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamMode returns the old "upstream_mode" field's value of the GatewayUsageLog entity.
+// If the GatewayUsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayUsageLogMutation) OldUpstreamMode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamMode: %w", err)
+	}
+	return oldValue.UpstreamMode, nil
+}
+
+// ResetUpstreamMode resets all changes to the "upstream_mode" field.
+func (m *GatewayUsageLogMutation) ResetUpstreamMode() {
+	m.upstream_mode = nil
+}
+
+// SetUpstreamFallback sets the "upstream_fallback" field.
+func (m *GatewayUsageLogMutation) SetUpstreamFallback(b bool) {
+	m.upstream_fallback = &b
+}
+
+// UpstreamFallback returns the value of the "upstream_fallback" field in the mutation.
+func (m *GatewayUsageLogMutation) UpstreamFallback() (r bool, exists bool) {
+	v := m.upstream_fallback
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamFallback returns the old "upstream_fallback" field's value of the GatewayUsageLog entity.
+// If the GatewayUsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayUsageLogMutation) OldUpstreamFallback(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamFallback is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamFallback requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamFallback: %w", err)
+	}
+	return oldValue.UpstreamFallback, nil
+}
+
+// ResetUpstreamFallback resets all changes to the "upstream_fallback" field.
+func (m *GatewayUsageLogMutation) ResetUpstreamFallback() {
+	m.upstream_fallback = nil
+}
+
+// SetUpstreamErrorType sets the "upstream_error_type" field.
+func (m *GatewayUsageLogMutation) SetUpstreamErrorType(s string) {
+	m.upstream_error_type = &s
+}
+
+// UpstreamErrorType returns the value of the "upstream_error_type" field in the mutation.
+func (m *GatewayUsageLogMutation) UpstreamErrorType() (r string, exists bool) {
+	v := m.upstream_error_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamErrorType returns the old "upstream_error_type" field's value of the GatewayUsageLog entity.
+// If the GatewayUsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayUsageLogMutation) OldUpstreamErrorType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamErrorType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamErrorType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamErrorType: %w", err)
+	}
+	return oldValue.UpstreamErrorType, nil
+}
+
+// ResetUpstreamErrorType resets all changes to the "upstream_error_type" field.
+func (m *GatewayUsageLogMutation) ResetUpstreamErrorType() {
+	m.upstream_error_type = nil
+}
+
 // SetErrorType sets the "error_type" field.
 func (m *GatewayUsageLogMutation) SetErrorType(s string) {
 	m.error_type = &s
@@ -8387,12 +9062,15 @@ func (m *GatewayUsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GatewayUsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 25)
 	if m.api_key_id != nil {
 		fields = append(fields, gatewayusagelog.FieldAPIKeyID)
 	}
 	if m.api_key_prefix != nil {
 		fields = append(fields, gatewayusagelog.FieldAPIKeyPrefix)
+	}
+	if m.session_id != nil {
+		fields = append(fields, gatewayusagelog.FieldSessionID)
 	}
 	if m.request_id != nil {
 		fields = append(fields, gatewayusagelog.FieldRequestID)
@@ -8442,6 +9120,18 @@ func (m *GatewayUsageLogMutation) Fields() []string {
 	if m.duration_ms != nil {
 		fields = append(fields, gatewayusagelog.FieldDurationMs)
 	}
+	if m.upstream_configured_mode != nil {
+		fields = append(fields, gatewayusagelog.FieldUpstreamConfiguredMode)
+	}
+	if m.upstream_mode != nil {
+		fields = append(fields, gatewayusagelog.FieldUpstreamMode)
+	}
+	if m.upstream_fallback != nil {
+		fields = append(fields, gatewayusagelog.FieldUpstreamFallback)
+	}
+	if m.upstream_error_type != nil {
+		fields = append(fields, gatewayusagelog.FieldUpstreamErrorType)
+	}
 	if m.error_type != nil {
 		fields = append(fields, gatewayusagelog.FieldErrorType)
 	}
@@ -8460,6 +9150,8 @@ func (m *GatewayUsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.APIKeyID()
 	case gatewayusagelog.FieldAPIKeyPrefix:
 		return m.APIKeyPrefix()
+	case gatewayusagelog.FieldSessionID:
+		return m.SessionID()
 	case gatewayusagelog.FieldRequestID:
 		return m.RequestID()
 	case gatewayusagelog.FieldMethod:
@@ -8492,6 +9184,14 @@ func (m *GatewayUsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.ResponseBytes()
 	case gatewayusagelog.FieldDurationMs:
 		return m.DurationMs()
+	case gatewayusagelog.FieldUpstreamConfiguredMode:
+		return m.UpstreamConfiguredMode()
+	case gatewayusagelog.FieldUpstreamMode:
+		return m.UpstreamMode()
+	case gatewayusagelog.FieldUpstreamFallback:
+		return m.UpstreamFallback()
+	case gatewayusagelog.FieldUpstreamErrorType:
+		return m.UpstreamErrorType()
 	case gatewayusagelog.FieldErrorType:
 		return m.ErrorType()
 	case gatewayusagelog.FieldCreatedAt:
@@ -8509,6 +9209,8 @@ func (m *GatewayUsageLogMutation) OldField(ctx context.Context, name string) (en
 		return m.OldAPIKeyID(ctx)
 	case gatewayusagelog.FieldAPIKeyPrefix:
 		return m.OldAPIKeyPrefix(ctx)
+	case gatewayusagelog.FieldSessionID:
+		return m.OldSessionID(ctx)
 	case gatewayusagelog.FieldRequestID:
 		return m.OldRequestID(ctx)
 	case gatewayusagelog.FieldMethod:
@@ -8541,6 +9243,14 @@ func (m *GatewayUsageLogMutation) OldField(ctx context.Context, name string) (en
 		return m.OldResponseBytes(ctx)
 	case gatewayusagelog.FieldDurationMs:
 		return m.OldDurationMs(ctx)
+	case gatewayusagelog.FieldUpstreamConfiguredMode:
+		return m.OldUpstreamConfiguredMode(ctx)
+	case gatewayusagelog.FieldUpstreamMode:
+		return m.OldUpstreamMode(ctx)
+	case gatewayusagelog.FieldUpstreamFallback:
+		return m.OldUpstreamFallback(ctx)
+	case gatewayusagelog.FieldUpstreamErrorType:
+		return m.OldUpstreamErrorType(ctx)
 	case gatewayusagelog.FieldErrorType:
 		return m.OldErrorType(ctx)
 	case gatewayusagelog.FieldCreatedAt:
@@ -8567,6 +9277,13 @@ func (m *GatewayUsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAPIKeyPrefix(v)
+		return nil
+	case gatewayusagelog.FieldSessionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionID(v)
 		return nil
 	case gatewayusagelog.FieldRequestID:
 		v, ok := value.(string)
@@ -8679,6 +9396,34 @@ func (m *GatewayUsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDurationMs(v)
+		return nil
+	case gatewayusagelog.FieldUpstreamConfiguredMode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamConfiguredMode(v)
+		return nil
+	case gatewayusagelog.FieldUpstreamMode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamMode(v)
+		return nil
+	case gatewayusagelog.FieldUpstreamFallback:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamFallback(v)
+		return nil
+	case gatewayusagelog.FieldUpstreamErrorType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamErrorType(v)
 		return nil
 	case gatewayusagelog.FieldErrorType:
 		v, ok := value.(string)
@@ -8881,6 +9626,9 @@ func (m *GatewayUsageLogMutation) ResetField(name string) error {
 	case gatewayusagelog.FieldAPIKeyPrefix:
 		m.ResetAPIKeyPrefix()
 		return nil
+	case gatewayusagelog.FieldSessionID:
+		m.ResetSessionID()
+		return nil
 	case gatewayusagelog.FieldRequestID:
 		m.ResetRequestID()
 		return nil
@@ -8928,6 +9676,18 @@ func (m *GatewayUsageLogMutation) ResetField(name string) error {
 		return nil
 	case gatewayusagelog.FieldDurationMs:
 		m.ResetDurationMs()
+		return nil
+	case gatewayusagelog.FieldUpstreamConfiguredMode:
+		m.ResetUpstreamConfiguredMode()
+		return nil
+	case gatewayusagelog.FieldUpstreamMode:
+		m.ResetUpstreamMode()
+		return nil
+	case gatewayusagelog.FieldUpstreamFallback:
+		m.ResetUpstreamFallback()
+		return nil
+	case gatewayusagelog.FieldUpstreamErrorType:
+		m.ResetUpstreamErrorType()
 		return nil
 	case gatewayusagelog.FieldErrorType:
 		m.ResetErrorType()

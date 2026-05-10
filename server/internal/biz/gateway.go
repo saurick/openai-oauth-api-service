@@ -17,16 +17,23 @@ import (
 
 const GatewayAPIKeyPrefix = "ogw_"
 
+const (
+	GatewayUpstreamModeCodexBackend = "codex_backend"
+	GatewayUpstreamModeCodexCLI     = "codex_cli"
+	GatewaySettingCodexUpstreamMode = "codex_upstream_mode"
+)
+
 var (
-	ErrGatewayAPIKeyNotFound    = errors.New("gateway api key not found")
-	ErrGatewayAPIKeyDisabled    = errors.New("gateway api key disabled")
-	ErrGatewayModelDisabled     = errors.New("gateway model disabled")
-	ErrGatewayModelNotAllowed   = errors.New("gateway model not allowed")
-	ErrGatewayModelCatalogFixed = errors.New("gateway model catalog fixed")
-	ErrGatewayRateLimited       = errors.New("gateway rate limited")
-	ErrGatewayQuotaExceeded     = errors.New("gateway quota exceeded")
-	ErrGatewayPolicyInvalid     = errors.New("gateway policy invalid")
-	ErrGatewayExportRange       = errors.New("gateway export range too large")
+	ErrGatewayAPIKeyNotFound      = errors.New("gateway api key not found")
+	ErrGatewayAPIKeyDisabled      = errors.New("gateway api key disabled")
+	ErrGatewayModelDisabled       = errors.New("gateway model disabled")
+	ErrGatewayModelNotAllowed     = errors.New("gateway model not allowed")
+	ErrGatewayModelCatalogFixed   = errors.New("gateway model catalog fixed")
+	ErrGatewayRateLimited         = errors.New("gateway rate limited")
+	ErrGatewayQuotaExceeded       = errors.New("gateway quota exceeded")
+	ErrGatewayPolicyInvalid       = errors.New("gateway policy invalid")
+	ErrGatewayExportRange         = errors.New("gateway export range too large")
+	ErrGatewayUpstreamModeInvalid = errors.New("gateway upstream mode invalid")
 )
 
 type GatewayAPIKey struct {
@@ -65,41 +72,48 @@ type GatewayModel struct {
 }
 
 type GatewayUsageLog struct {
-	ID               int
-	APIKeyID         int
-	APIKeyPrefix     string
-	RequestID        string
-	Method           string
-	Path             string
-	Endpoint         string
-	Model            string
-	StatusCode       int
-	Success          bool
-	Stream           bool
-	InputTokens      int64
-	OutputTokens     int64
-	TotalTokens      int64
-	CachedTokens     int64
-	ReasoningTokens  int64
-	RequestBytes     int64
-	ResponseBytes    int64
-	DurationMS       int64
-	ErrorType        string
-	CreatedAt        time.Time
-	EstimatedCostUSD *float64
+	ID                     int
+	APIKeyID               int
+	APIKeyPrefix           string
+	SessionID              string
+	RequestID              string
+	Method                 string
+	Path                   string
+	Endpoint               string
+	Model                  string
+	StatusCode             int
+	Success                bool
+	Stream                 bool
+	InputTokens            int64
+	OutputTokens           int64
+	TotalTokens            int64
+	CachedTokens           int64
+	ReasoningTokens        int64
+	RequestBytes           int64
+	ResponseBytes          int64
+	DurationMS             int64
+	UpstreamConfiguredMode string
+	UpstreamMode           string
+	UpstreamFallback       bool
+	UpstreamErrorType      string
+	ErrorType              string
+	CreatedAt              time.Time
+	EstimatedCostUSD       *float64
 }
 
 type GatewayUsageFilter struct {
-	Limit       int
-	Offset      int
-	KeyID       int
-	OwnerUserID int
-	Model       string
-	Endpoint    string
-	SuccessSet  bool
-	Success     bool
-	StartTime   time.Time
-	EndTime     time.Time
+	Limit        int
+	Offset       int
+	KeyID        int
+	OwnerUserID  int
+	SessionID    string
+	Model        string
+	Endpoint     string
+	UpstreamMode string
+	SuccessSet   bool
+	Success      bool
+	StartTime    time.Time
+	EndTime      time.Time
 }
 
 type GatewayUsageSummary struct {
@@ -114,11 +128,15 @@ type GatewayUsageSummary struct {
 	TotalBytesIn      int64
 	TotalBytesOut     int64
 	AverageDurationMS int64
+	BackendRequests   int64
+	CLIRequests       int64
+	FallbackRequests  int64
 	EstimatedCostUSD  *float64
 }
 
 type GatewayUsageBucket struct {
 	BucketStart       time.Time
+	Model             string
 	TotalRequests     int64
 	SuccessRequests   int64
 	FailedRequests    int64
@@ -130,6 +148,9 @@ type GatewayUsageBucket struct {
 	TotalBytesIn      int64
 	TotalBytesOut     int64
 	AverageDurationMS int64
+	BackendRequests   int64
+	CLIRequests       int64
+	FallbackRequests  int64
 	EstimatedCostUSD  *float64
 }
 
@@ -147,6 +168,30 @@ type GatewayUsageKeySummary struct {
 	CachedTokens      int64
 	ReasoningTokens   int64
 	AverageDurationMS int64
+	BackendRequests   int64
+	CLIRequests       int64
+	FallbackRequests  int64
+	EstimatedCostUSD  *float64
+}
+
+type GatewayUsageSessionSummary struct {
+	SessionID         string
+	APIKeyID          int
+	APIKeyPrefix      string
+	TotalRequests     int64
+	SuccessRequests   int64
+	FailedRequests    int64
+	TotalTokens       int64
+	InputTokens       int64
+	OutputTokens      int64
+	CachedTokens      int64
+	ReasoningTokens   int64
+	AverageDurationMS int64
+	BackendRequests   int64
+	CLIRequests       int64
+	FallbackRequests  int64
+	FirstSeenAt       time.Time
+	LastSeenAt        time.Time
 	EstimatedCostUSD  *float64
 }
 
@@ -256,6 +301,9 @@ type GatewayRepo interface {
 	SummarizeUsage(ctx context.Context, filter GatewayUsageFilter) (*GatewayUsageSummary, error)
 	ListUsageBuckets(ctx context.Context, filter GatewayUsageFilter, groupBy string) ([]*GatewayUsageBucket, error)
 	ListUsageKeySummaries(ctx context.Context, filter GatewayUsageFilter, limit int) ([]*GatewayUsageKeySummary, error)
+	ListUsageSessionSummaries(ctx context.Context, filter GatewayUsageFilter, limit, offset int) ([]*GatewayUsageSessionSummary, int, error)
+	GetGatewaySetting(ctx context.Context, key string) (string, error)
+	SetGatewaySetting(ctx context.Context, key, value string) error
 
 	GetPolicyForKeyModel(ctx context.Context, apiKeyID int, modelID string) (*GatewayPolicy, error)
 	ListPolicies(ctx context.Context, apiKeyID int) ([]*GatewayPolicy, error)
@@ -336,6 +384,21 @@ func NormalizeGatewayBearer(auth string) string {
 		return strings.TrimSpace(auth[7:])
 	}
 	return auth
+}
+
+func DefaultGatewayUpstreamMode() string {
+	return GatewayUpstreamModeCodexBackend
+}
+
+func NormalizeGatewayUpstreamMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case GatewayUpstreamModeCodexCLI:
+		return GatewayUpstreamModeCodexCLI
+	case GatewayUpstreamModeCodexBackend:
+		return GatewayUpstreamModeCodexBackend
+	default:
+		return ""
+	}
 }
 
 func (uc *GatewayUsecase) CreateAPIKey(ctx context.Context, input CreateGatewayAPIKeyInput) (*CreatedGatewayAPIKey, error) {
@@ -596,6 +659,8 @@ func (uc *GatewayUsecase) CreateUsageLog(ctx context.Context, item *GatewayUsage
 	if item == nil {
 		return ErrBadParam
 	}
+	item.UpstreamConfiguredMode = NormalizeGatewayUpstreamMode(item.UpstreamConfiguredMode)
+	item.UpstreamMode = NormalizeGatewayUpstreamMode(item.UpstreamMode)
 	if err := uc.repo.CreateUsageLog(ctx, item); err != nil {
 		return err
 	}
@@ -603,37 +668,69 @@ func (uc *GatewayUsecase) CreateUsageLog(ctx context.Context, item *GatewayUsage
 	return nil
 }
 
+func normalizeUsageFilter(filter GatewayUsageFilter) GatewayUsageFilter {
+	filter.SessionID = strings.TrimSpace(filter.SessionID)
+	filter.Model = strings.TrimSpace(filter.Model)
+	filter.Endpoint = strings.TrimSpace(filter.Endpoint)
+	filter.UpstreamMode = NormalizeGatewayUpstreamMode(filter.UpstreamMode)
+	return filter
+}
+
 func (uc *GatewayUsecase) ListUsageLogs(ctx context.Context, filter GatewayUsageFilter) ([]*GatewayUsageLog, int, error) {
 	filter.Limit = normalizeLimit(filter.Limit)
 	filter.Offset = normalizeOffset(filter.Offset)
-	filter.Model = strings.TrimSpace(filter.Model)
-	filter.Endpoint = strings.TrimSpace(filter.Endpoint)
+	filter = normalizeUsageFilter(filter)
 	return uc.repo.ListUsageLogs(ctx, filter)
 }
 
 func (uc *GatewayUsecase) SummarizeUsage(ctx context.Context, filter GatewayUsageFilter) (*GatewayUsageSummary, error) {
-	filter.Model = strings.TrimSpace(filter.Model)
-	filter.Endpoint = strings.TrimSpace(filter.Endpoint)
+	filter = normalizeUsageFilter(filter)
 	return uc.repo.SummarizeUsage(ctx, filter)
 }
 
 func (uc *GatewayUsecase) ListUsageBuckets(ctx context.Context, filter GatewayUsageFilter, groupBy string) ([]*GatewayUsageBucket, error) {
-	filter.Model = strings.TrimSpace(filter.Model)
-	filter.Endpoint = strings.TrimSpace(filter.Endpoint)
+	filter = normalizeUsageFilter(filter)
 	groupBy = strings.TrimSpace(strings.ToLower(groupBy))
 	if groupBy == "" {
 		groupBy = "day"
 	}
-	if groupBy != "day" {
+	if groupBy != "day" && groupBy != "day_model" {
 		return nil, ErrBadParam
 	}
 	return uc.repo.ListUsageBuckets(ctx, filter, groupBy)
 }
 
 func (uc *GatewayUsecase) ListUsageKeySummaries(ctx context.Context, filter GatewayUsageFilter, limit int) ([]*GatewayUsageKeySummary, error) {
-	filter.Model = strings.TrimSpace(filter.Model)
-	filter.Endpoint = strings.TrimSpace(filter.Endpoint)
+	filter = normalizeUsageFilter(filter)
 	return uc.repo.ListUsageKeySummaries(ctx, filter, normalizeLimit(limit))
+}
+
+func (uc *GatewayUsecase) ListUsageSessionSummaries(ctx context.Context, filter GatewayUsageFilter, limit, offset int) ([]*GatewayUsageSessionSummary, int, error) {
+	filter = normalizeUsageFilter(filter)
+	return uc.repo.ListUsageSessionSummaries(ctx, filter, normalizeLimit(limit), normalizeOffset(offset))
+}
+
+func (uc *GatewayUsecase) GetCodexUpstreamMode(ctx context.Context) (string, error) {
+	value, err := uc.repo.GetGatewaySetting(ctx, GatewaySettingCodexUpstreamMode)
+	if err != nil {
+		return "", err
+	}
+	mode := NormalizeGatewayUpstreamMode(value)
+	if mode == "" {
+		return DefaultGatewayUpstreamMode(), nil
+	}
+	return mode, nil
+}
+
+func (uc *GatewayUsecase) SetCodexUpstreamMode(ctx context.Context, mode string) (string, error) {
+	normalized := NormalizeGatewayUpstreamMode(mode)
+	if normalized == "" {
+		return "", ErrGatewayUpstreamModeInvalid
+	}
+	if err := uc.repo.SetGatewaySetting(ctx, GatewaySettingCodexUpstreamMode, normalized); err != nil {
+		return "", err
+	}
+	return normalized, nil
 }
 
 func (uc *GatewayUsecase) ListPolicies(ctx context.Context, apiKeyID int) ([]*GatewayPolicy, error) {

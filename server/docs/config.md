@@ -80,16 +80,29 @@
 - 这组字段决定用户 token 签名和默认管理员初始化逻辑。
 - 初始化新项目后必须替换模板里的 JWT 密钥；当前个人部署的默认管理员账号保持 `admin/adminadmin`。不要在部署流程中擅自生成或替换管理员密码，如需改密应由维护者明确指定后再调整 `OAUTH_API_ADMIN_PASSWORD`。
 
-## Codex CLI 上游环境变量
+## Codex 上游环境变量
 
-服务端只保留 Codex CLI 作为 `/v1` 上游：
+服务端 `/v1` 上游默认通过 `CODEX_UPSTREAM_MODE` 指定启动初始模式；管理员在后台「用量日志」页保存过上游模式后，后续请求以数据库中的运行时设置为准，无需重启服务：
 
 - `CODEX_HOST_HOME`：宿主机 Codex 登录态目录，Compose 默认挂载到容器。
 - `CODEX_CONTAINER_HOME`：容器内 `CODEX_HOME`，默认 `/root/.codex`。
+- `CODEX_UPSTREAM_MODE`：启动默认上游模式，默认 `codex_backend`；需要初始强制旧路径时设为 `codex_cli`。
 - `CODEX_CLI_BIN`：Codex CLI 可执行文件，默认 `codex`。
 - `CODEX_CLI_TIMEOUT_SECONDS`：单次 Codex CLI upstream 超时，默认 `600` 秒。
+- `CODEX_BACKEND_BASE_URL`：direct backend 基础地址，默认 `https://chatgpt.com/backend-api/codex`。
+- `CODEX_BACKEND_TIMEOUT_SECONDS`：direct backend 单次请求超时，默认 `600` 秒。
+- `CODEX_BACKEND_USER_AGENT`：direct backend 请求 `User-Agent`，默认 `codex-cli`。
+- `CODEX_AUTH_FILE`：可选，显式指定 Codex `auth.json`；默认读取 `CODEX_HOME/auth.json`。
+- `CODEX_REFRESH_TOKEN_URL_OVERRIDE`：可选，覆盖 ChatGPT OAuth refresh token 端点，默认 `https://auth.openai.com/oauth/token`。
+- `HTTP_PROXY` / `HTTPS_PROXY` / `WS_PROXY` / `WSS_PROXY` / `ALL_PROXY` 及对应小写变量：可选 Codex CLI 出站代理。
+- `NO_PROXY` / `no_proxy`：可选代理排除列表，至少应包含 `localhost,127.0.0.1,::1,postgres,openai-oauth-api-service-postgres`。
+- `NODE_USE_ENV_PROXY`：Node.js 代理环境开关；Codex CLI 需要跟随上述代理变量时设置为 `1`。
 
-该模式适合多台客户端统一走本服务出口：客户端只保存 `ogw_...` 下游 key，服务端统一使用服务器 Codex 登录态，并继续记录 usage。服务端会为每次 `/v1/chat/completions` 或 `/v1/responses` 启动一次 Codex CLI，并串行执行 Codex CLI upstream，避免多个 CLI 进程同时争用 Codex 登录态和本地状态。低配服务器应提高 `APP_MEM_LIMIT`，客户端 provider timeout 建议不低于 600 秒。
+`codex_backend` 模式复用同一个 app-server 进程直接请求 `https://chatgpt.com/backend-api/codex/responses`，从 `auth.json` 读取 access token，并在 access token 过期或上游返回 401 时用 refresh token 刷新后写回 `auth.json`；该模式适合高频 OpenCode 调用。默认策略是先走 `codex_backend`，backend 请求失败时自动 fallback 到 `codex_cli`。`codex_cli` 模式会为每次 `/v1/chat/completions` 或 `/v1/responses` 启动一次 Codex CLI，并串行执行上游请求，稳定但首包和单次延迟较高。usage 记录会同时保存配置模式、实际执行模式和 fallback 状态，后台统计表可按上游模式筛选并展示两种模式的请求数。
+
+两种模式下客户端都只保存 `ogw_...` 下游 key，服务端统一使用服务器 Codex 登录态，并继续记录 usage。direct backend 模式不会启动 `codex exec`，因此也不会注入 Codex CLI 自身的大量 agent 上下文；token usage 更接近客户端实际请求体。
+
+如果宿主机通过 mihomo / Clash 提供代理，优先让代理只监听 Docker bridge 网关地址，并在 Compose `.env` 中显式注入代理环境变量。例如 app-server 所在网络网关为 `172.19.0.1` 时，可使用 `http://172.19.0.1:7890`。不要为了 app-server 默认启用全局 TUN，除非已经确认整机路由、Docker bridge 和回滚方式都可控。
 
 ## 可选管理员 OAuth 环境变量
 
@@ -104,7 +117,7 @@
 - `OAUTH_API_OAUTH_SCOPES`：默认 `openid email profile`。
 - `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS`：生产前端后台 origin allowlist，多个值用逗号或空格分隔。
 
-OAuth provider 的回调地址固定登记后端 `/auth/oauth/callback`，例如本地 `http://localhost:8400/auth/oauth/callback`。前端当前 origin 通过 signed state 动态回跳，`localhost / 127.0.0.1 / ::1` 自动允许任意本地端口；生产前端域名必须显式写入 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS`。授权邮箱必须匹配现有管理员用户名，或已绑定在 `admin_users.oauth_provider/oauth_subject`，服务端不会自动创建管理员。
+OAuth provider 的回调地址固定登记后端 `/auth/oauth/callback`，例如本地 `http://localhost:8400/auth/oauth/callback`；当前个人部署为 `https://oauth-api.saurick.me/auth/oauth/callback`。前端当前 origin 通过 signed state 动态回跳，`localhost / 127.0.0.1 / ::1` 自动允许任意本地端口；生产前端域名必须显式写入 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS`。授权邮箱必须匹配现有管理员用户名，或已绑定在 `admin_users.oauth_provider/oauth_subject`，服务端不会自动创建管理员。
 
 ## `data.api`
 

@@ -16,6 +16,7 @@ import (
 	"server/internal/data/model/ent/gatewaymodel"
 	"server/internal/data/model/ent/gatewaymodelprice"
 	"server/internal/data/model/ent/gatewaypolicy"
+	"server/internal/data/model/ent/gatewaysetting"
 	"server/internal/data/model/ent/gatewayusagelog"
 	"server/internal/data/model/ent/predicate"
 
@@ -183,6 +184,46 @@ func (r *gatewayRepo) TouchAPIKeyUsed(ctx context.Context, id int, usedAt time.T
 		Exec(ctx)
 }
 
+func (r *gatewayRepo) GetGatewaySetting(ctx context.Context, key string) (string, error) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return "", biz.ErrBadParam
+	}
+	item, err := r.data.postgres.GatewaySetting.Query().
+		Where(gatewaysetting.KeyEQ(key)).
+		Only(ctx)
+	if ent.IsNotFound(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return item.Value, nil
+}
+
+func (r *gatewayRepo) SetGatewaySetting(ctx context.Context, key, value string) error {
+	key = strings.TrimSpace(key)
+	value = strings.TrimSpace(value)
+	if key == "" {
+		return biz.ErrBadParam
+	}
+	updated, err := r.data.postgres.GatewaySetting.Update().
+		Where(gatewaysetting.KeyEQ(key)).
+		SetValue(value).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	if updated > 0 {
+		return nil
+	}
+	return r.data.postgres.GatewaySetting.Create().
+		SetKey(key).
+		SetValue(value).
+		Exec(ctx)
+}
+
 func (r *gatewayRepo) CreateUsageLog(ctx context.Context, item *biz.GatewayUsageLog) error {
 	if item == nil {
 		return biz.ErrBadParam
@@ -190,6 +231,7 @@ func (r *gatewayRepo) CreateUsageLog(ctx context.Context, item *biz.GatewayUsage
 
 	create := r.data.postgres.GatewayUsageLog.Create().
 		SetAPIKeyPrefix(item.APIKeyPrefix).
+		SetSessionID(item.SessionID).
 		SetRequestID(item.RequestID).
 		SetMethod(item.Method).
 		SetPath(item.Path).
@@ -206,6 +248,10 @@ func (r *gatewayRepo) CreateUsageLog(ctx context.Context, item *biz.GatewayUsage
 		SetRequestBytes(item.RequestBytes).
 		SetResponseBytes(item.ResponseBytes).
 		SetDurationMs(item.DurationMS).
+		SetUpstreamConfiguredMode(item.UpstreamConfiguredMode).
+		SetUpstreamMode(item.UpstreamMode).
+		SetUpstreamFallback(item.UpstreamFallback).
+		SetUpstreamErrorType(item.UpstreamErrorType).
 		SetErrorType(item.ErrorType)
 	if item.APIKeyID > 0 {
 		create.SetAPIKeyID(item.APIKeyID)
@@ -271,6 +317,9 @@ COALESCE(SUM(cached_tokens), 0),
 COALESCE(SUM(reasoning_tokens), 0),
 COALESCE(SUM(request_bytes), 0),
 COALESCE(SUM(response_bytes), 0),
+COALESCE(SUM(CASE WHEN upstream_mode = 'codex_backend' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN upstream_mode = 'codex_cli' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN upstream_fallback THEN 1 ELSE 0 END), 0),
 COALESCE(AVG(duration_ms)::bigint, 0)
 FROM gateway_usage_logs` + where
 
@@ -286,6 +335,9 @@ FROM gateway_usage_logs` + where
 		&out.ReasoningTokens,
 		&out.TotalBytesIn,
 		&out.TotalBytesOut,
+		&out.BackendRequests,
+		&out.CLIRequests,
+		&out.FallbackRequests,
 		&out.AverageDurationMS,
 	); err != nil {
 		return nil, err
@@ -295,13 +347,22 @@ FROM gateway_usage_logs` + where
 }
 
 func (r *gatewayRepo) ListUsageBuckets(ctx context.Context, filter biz.GatewayUsageFilter, groupBy string) ([]*biz.GatewayUsageBucket, error) {
-	if groupBy != "day" {
+	if groupBy != "day" && groupBy != "day_model" {
 		return nil, biz.ErrBadParam
 	}
 
 	where, args := buildUsageWhereClause(filter)
+	modelSelect := "'' AS model,"
+	modelGroup := ""
+	modelOrder := ""
+	if groupBy == "day_model" {
+		modelSelect = "COALESCE(NULLIF(model, ''), '-') AS model,"
+		modelGroup = ", model"
+		modelOrder = ", model ASC"
+	}
 	query := `SELECT
 DATE_TRUNC('day', created_at) AS bucket_start,
+` + modelSelect + `
 COUNT(*),
 COALESCE(SUM(CASE WHEN success THEN 1 ELSE 0 END), 0),
 COALESCE(SUM(CASE WHEN success THEN 0 ELSE 1 END), 0),
@@ -312,10 +373,13 @@ COALESCE(SUM(cached_tokens), 0),
 COALESCE(SUM(reasoning_tokens), 0),
 COALESCE(SUM(request_bytes), 0),
 COALESCE(SUM(response_bytes), 0),
+COALESCE(SUM(CASE WHEN upstream_mode = 'codex_backend' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN upstream_mode = 'codex_cli' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN upstream_fallback THEN 1 ELSE 0 END), 0),
 COALESCE(AVG(duration_ms)::bigint, 0)
 FROM gateway_usage_logs` + where + `
-GROUP BY bucket_start
-ORDER BY bucket_start ASC`
+GROUP BY bucket_start` + modelGroup + `
+ORDER BY bucket_start ASC` + modelOrder
 
 	rows, err := r.data.sqldb.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -332,6 +396,7 @@ ORDER BY bucket_start ASC`
 		var item biz.GatewayUsageBucket
 		if err := rows.Scan(
 			&item.BucketStart,
+			&item.Model,
 			&item.TotalRequests,
 			&item.SuccessRequests,
 			&item.FailedRequests,
@@ -342,20 +407,42 @@ ORDER BY bucket_start ASC`
 			&item.ReasoningTokens,
 			&item.TotalBytesIn,
 			&item.TotalBytesOut,
+			&item.BackendRequests,
+			&item.CLIRequests,
+			&item.FallbackRequests,
 			&item.AverageDurationMS,
 		); err != nil {
 			return nil, err
 		}
-		costFilter := filter
-		costFilter.StartTime = item.BucketStart
-		costFilter.EndTime = item.BucketStart.Add(24 * time.Hour)
-		item.EstimatedCostUSD = r.estimateUsageCost(ctx, costFilter)
+		if groupBy == "day_model" {
+			item.EstimatedCostUSD = r.estimateUsageBucketCost(ctx, &item)
+		} else {
+			costFilter := filter
+			costFilter.StartTime = item.BucketStart
+			costFilter.EndTime = item.BucketStart.Add(24 * time.Hour)
+			item.EstimatedCostUSD = r.estimateUsageCost(ctx, costFilter)
+		}
 		out = append(out, &item)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+func (r *gatewayRepo) estimateUsageBucketCost(ctx context.Context, item *biz.GatewayUsageBucket) *float64 {
+	if item == nil || item.Model == "" || item.Model == "-" {
+		return nil
+	}
+	prices, err := r.listModelPriceMap(ctx)
+	if err != nil {
+		return nil
+	}
+	price := prices[item.Model]
+	if price == nil {
+		return nil
+	}
+	return estimateCostForTokens(item.InputTokens, item.CachedTokens, item.OutputTokens, price)
 }
 
 func (r *gatewayRepo) ListUsageKeySummaries(ctx context.Context, filter biz.GatewayUsageFilter, limit int) ([]*biz.GatewayUsageKeySummary, error) {
@@ -374,6 +461,9 @@ COALESCE(SUM(l.input_tokens), 0),
 COALESCE(SUM(l.output_tokens), 0),
 COALESCE(SUM(l.cached_tokens), 0),
 COALESCE(SUM(l.reasoning_tokens), 0),
+COALESCE(SUM(CASE WHEN l.upstream_mode = 'codex_backend' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN l.upstream_mode = 'codex_cli' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN l.upstream_fallback THEN 1 ELSE 0 END), 0),
 COALESCE(AVG(l.duration_ms)::bigint, 0)
 FROM gateway_usage_logs l
 LEFT JOIN gateway_api_keys k ON k.id = l.api_key_id` + where + `
@@ -407,6 +497,9 @@ LIMIT $` + fmt.Sprint(len(args))
 			&item.OutputTokens,
 			&item.CachedTokens,
 			&item.ReasoningTokens,
+			&item.BackendRequests,
+			&item.CLIRequests,
+			&item.FallbackRequests,
 			&item.AverageDurationMS,
 		); err != nil {
 			return nil, err
@@ -418,6 +511,94 @@ LIMIT $` + fmt.Sprint(len(args))
 	}
 	r.attachUsageKeySummaryCosts(ctx, filter, out)
 	return out, nil
+}
+
+func (r *gatewayRepo) ListUsageSessionSummaries(ctx context.Context, filter biz.GatewayUsageFilter, limit, offset int) ([]*biz.GatewayUsageSessionSummary, int, error) {
+	where, args := buildUsageWhereClause(filter)
+	sessionCondition := "session_id <> ''"
+	if where == "" {
+		where = " WHERE " + sessionCondition
+	} else {
+		where += " AND " + sessionCondition
+	}
+
+	countQuery := `SELECT COUNT(*) FROM (
+SELECT session_id FROM gateway_usage_logs` + where + `
+GROUP BY session_id
+) s`
+	var total int
+	if err := r.data.sqldb.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	queryArgs := append([]any{}, args...)
+	queryArgs = append(queryArgs, limit, offset)
+	limitPlaceholder := len(queryArgs) - 1
+	offsetPlaceholder := len(queryArgs)
+	query := `SELECT
+session_id,
+COALESCE(MAX(api_key_id), 0),
+COALESCE(MAX(NULLIF(api_key_prefix, '')), ''),
+COUNT(*),
+COALESCE(SUM(CASE WHEN success THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN success THEN 0 ELSE 1 END), 0),
+COALESCE(SUM(total_tokens), 0),
+COALESCE(SUM(input_tokens), 0),
+COALESCE(SUM(output_tokens), 0),
+COALESCE(SUM(cached_tokens), 0),
+COALESCE(SUM(reasoning_tokens), 0),
+COALESCE(SUM(CASE WHEN upstream_mode = 'codex_backend' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN upstream_mode = 'codex_cli' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN upstream_fallback THEN 1 ELSE 0 END), 0),
+COALESCE(AVG(duration_ms)::bigint, 0),
+MIN(created_at),
+MAX(created_at)
+FROM gateway_usage_logs` + where + `
+GROUP BY session_id
+ORDER BY MAX(created_at) DESC
+LIMIT $` + fmt.Sprint(limitPlaceholder) + ` OFFSET $` + fmt.Sprint(offsetPlaceholder)
+
+	rows, err := r.data.sqldb.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			r.log.WithContext(ctx).Warnf("close usage session summary rows failed err=%v", closeErr)
+		}
+	}()
+
+	out := make([]*biz.GatewayUsageSessionSummary, 0)
+	for rows.Next() {
+		var item biz.GatewayUsageSessionSummary
+		if err := rows.Scan(
+			&item.SessionID,
+			&item.APIKeyID,
+			&item.APIKeyPrefix,
+			&item.TotalRequests,
+			&item.SuccessRequests,
+			&item.FailedRequests,
+			&item.TotalTokens,
+			&item.InputTokens,
+			&item.OutputTokens,
+			&item.CachedTokens,
+			&item.ReasoningTokens,
+			&item.BackendRequests,
+			&item.CLIRequests,
+			&item.FallbackRequests,
+			&item.AverageDurationMS,
+			&item.FirstSeenAt,
+			&item.LastSeenAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		out = append(out, &item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	r.attachUsageSessionSummaryCosts(ctx, filter, out)
+	return out, total, nil
 }
 
 func (r *gatewayRepo) GetPolicyForKeyModel(ctx context.Context, apiKeyID int, modelID string) (*biz.GatewayPolicy, error) {
@@ -915,11 +1096,17 @@ func (r *gatewayRepo) applyUsageFilter(ctx context.Context, q *ent.GatewayUsageL
 			}
 		}
 	}
+	if filter.SessionID != "" {
+		q = q.Where(gatewayusagelog.SessionIDEQ(filter.SessionID))
+	}
 	if filter.Model != "" {
 		q = q.Where(gatewayusagelog.ModelEQ(filter.Model))
 	}
 	if filter.Endpoint != "" {
 		q = q.Where(gatewayusagelog.EndpointEQ(filter.Endpoint))
+	}
+	if filter.UpstreamMode != "" {
+		q = q.Where(gatewayusagelog.UpstreamModeEQ(filter.UpstreamMode))
 	}
 	if filter.SuccessSet {
 		q = q.Where(gatewayusagelog.SuccessEQ(filter.Success))
@@ -955,11 +1142,17 @@ func buildUsageWhereClauseWithPrefix(filter biz.GatewayUsageFilter, columnPrefix
 	if filter.OwnerUserID > 0 {
 		add(col("api_key_id")+" IN (SELECT id FROM gateway_api_keys WHERE owner_user_id = $%d)", filter.OwnerUserID)
 	}
+	if filter.SessionID != "" {
+		add(col("session_id")+" = $%d", filter.SessionID)
+	}
 	if filter.Model != "" {
 		add(col("model")+" = $%d", filter.Model)
 	}
 	if filter.Endpoint != "" {
 		add(col("endpoint")+" = $%d", filter.Endpoint)
+	}
+	if filter.UpstreamMode != "" {
+		add(col("upstream_mode")+" = $%d", filter.UpstreamMode)
 	}
 	if filter.SuccessSet {
 		add(col("success")+" = $%d", filter.Success)
@@ -1093,6 +1286,75 @@ GROUP BY COALESCE(l.api_key_id, 0), l.model`
 			continue
 		}
 		cost := totals[item.APIKeyID]
+		item.EstimatedCostUSD = &cost
+	}
+}
+
+func (r *gatewayRepo) attachUsageSessionSummaryCosts(ctx context.Context, filter biz.GatewayUsageFilter, list []*biz.GatewayUsageSessionSummary) {
+	if len(list) == 0 {
+		return
+	}
+	prices, err := r.listModelPriceMap(ctx)
+	if err != nil || len(prices) == 0 {
+		return
+	}
+	where, args := buildUsageWhereClause(filter)
+	if where == "" {
+		where = " WHERE session_id <> ''"
+	} else {
+		where += " AND session_id <> ''"
+	}
+	query := `SELECT
+session_id,
+model,
+COALESCE(SUM(input_tokens), 0),
+COALESCE(SUM(cached_tokens), 0),
+COALESCE(SUM(output_tokens), 0)
+FROM gateway_usage_logs` + where + `
+GROUP BY session_id, model`
+	rows, err := r.data.sqldb.QueryContext(ctx, query, args...)
+	if err != nil {
+		return
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			r.log.WithContext(ctx).Warnf("close usage session summary cost rows failed err=%v", closeErr)
+		}
+	}()
+
+	totals := make(map[string]float64, len(list))
+	seen := make(map[string]bool, len(list))
+	missingPrice := make(map[string]bool, len(list))
+	for rows.Next() {
+		var sessionID, model string
+		var inputTokens, cachedTokens, outputTokens int64
+		if err := rows.Scan(&sessionID, &model, &inputTokens, &cachedTokens, &outputTokens); err != nil {
+			return
+		}
+		seen[sessionID] = true
+		if inputTokens <= 0 && cachedTokens <= 0 && outputTokens <= 0 {
+			continue
+		}
+		price, ok := prices[model]
+		if !ok || price == nil {
+			missingPrice[sessionID] = true
+			continue
+		}
+		cost := estimateCostForTokens(inputTokens, cachedTokens, outputTokens, price)
+		if cost == nil {
+			missingPrice[sessionID] = true
+			continue
+		}
+		totals[sessionID] += *cost
+	}
+	if err := rows.Err(); err != nil {
+		return
+	}
+	for _, item := range list {
+		if item == nil || !seen[item.SessionID] || missingPrice[item.SessionID] {
+			continue
+		}
+		cost := totals[item.SessionID]
 		item.EstimatedCostUSD = &cost
 	}
 }
@@ -1285,27 +1547,32 @@ func mapGatewayUsageLog(item *ent.GatewayUsageLog) *biz.GatewayUsageLog {
 		apiKeyID = *item.APIKeyID
 	}
 	return &biz.GatewayUsageLog{
-		ID:              item.ID,
-		APIKeyID:        apiKeyID,
-		APIKeyPrefix:    item.APIKeyPrefix,
-		RequestID:       item.RequestID,
-		Method:          item.Method,
-		Path:            item.Path,
-		Endpoint:        item.Endpoint,
-		Model:           item.Model,
-		StatusCode:      item.StatusCode,
-		Success:         item.Success,
-		Stream:          item.Stream,
-		InputTokens:     item.InputTokens,
-		OutputTokens:    item.OutputTokens,
-		TotalTokens:     item.TotalTokens,
-		CachedTokens:    item.CachedTokens,
-		ReasoningTokens: item.ReasoningTokens,
-		RequestBytes:    item.RequestBytes,
-		ResponseBytes:   item.ResponseBytes,
-		DurationMS:      item.DurationMs,
-		ErrorType:       item.ErrorType,
-		CreatedAt:       item.CreatedAt,
+		ID:                     item.ID,
+		APIKeyID:               apiKeyID,
+		APIKeyPrefix:           item.APIKeyPrefix,
+		SessionID:              item.SessionID,
+		RequestID:              item.RequestID,
+		Method:                 item.Method,
+		Path:                   item.Path,
+		Endpoint:               item.Endpoint,
+		Model:                  item.Model,
+		StatusCode:             item.StatusCode,
+		Success:                item.Success,
+		Stream:                 item.Stream,
+		InputTokens:            item.InputTokens,
+		OutputTokens:           item.OutputTokens,
+		TotalTokens:            item.TotalTokens,
+		CachedTokens:           item.CachedTokens,
+		ReasoningTokens:        item.ReasoningTokens,
+		RequestBytes:           item.RequestBytes,
+		ResponseBytes:          item.ResponseBytes,
+		DurationMS:             item.DurationMs,
+		UpstreamConfiguredMode: item.UpstreamConfiguredMode,
+		UpstreamMode:           item.UpstreamMode,
+		UpstreamFallback:       item.UpstreamFallback,
+		UpstreamErrorType:      item.UpstreamErrorType,
+		ErrorType:              item.ErrorType,
+		CreatedAt:              item.CreatedAt,
 	}
 }
 

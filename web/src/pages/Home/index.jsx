@@ -52,7 +52,7 @@ export default function HomePage() {
             <div className="space-y-8">
               <div className="space-y-4">
                 <div className="inline-flex rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.24em] text-cyan-100">
-                  OpenAI OAuth API Service
+                  Saurick API Console
                 </div>
                 <div className="max-w-2xl space-y-3">
                   <h1 className="text-3xl font-semibold tracking-tight text-slate-50 sm:text-4xl lg:text-5xl">

@@ -20,6 +20,9 @@ func (GatewayUsageLog) Fields() []ent.Field {
 		field.String("api_key_prefix").
 			Default("").
 			MaxLen(16),
+		field.String("session_id").
+			Default("").
+			MaxLen(128),
 		field.String("request_id").
 			Default("").
 			MaxLen(128),
@@ -57,6 +60,17 @@ func (GatewayUsageLog) Fields() []ent.Field {
 			Default(0),
 		field.Int64("duration_ms").
 			Default(0),
+		field.String("upstream_configured_mode").
+			Default("").
+			MaxLen(32),
+		field.String("upstream_mode").
+			Default("").
+			MaxLen(32),
+		field.Bool("upstream_fallback").
+			Default(false),
+		field.String("upstream_error_type").
+			Default("").
+			MaxLen(128),
 		field.String("error_type").
 			Default("").
 			MaxLen(128),
@@ -70,8 +84,11 @@ func (GatewayUsageLog) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("created_at"),
 		index.Fields("api_key_id", "created_at"),
+		index.Fields("session_id", "created_at"),
 		index.Fields("model", "created_at"),
 		index.Fields("endpoint", "created_at"),
+		index.Fields("upstream_mode", "created_at"),
+		index.Fields("upstream_fallback", "created_at"),
 		index.Fields("success", "created_at"),
 	}
 }
