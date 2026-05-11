@@ -212,6 +212,36 @@ func TestGatewayUsecaseRejectsNonCodexModels(t *testing.T) {
 	}
 }
 
+func TestGatewayUsecaseCodexUpstreamStrategyPersistsModeAndFallback(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+	ctx := context.Background()
+
+	strategy, mode, fallbackEnabled, err := uc.SetCodexUpstreamStrategy(ctx, GatewayUpstreamStrategyBackendWithFallback)
+	if err != nil {
+		t.Fatalf("SetCodexUpstreamStrategy() error = %v", err)
+	}
+	if strategy != GatewayUpstreamStrategyBackendWithFallback || mode != GatewayUpstreamModeCodexBackend || !fallbackEnabled {
+		t.Fatalf("unexpected fallback strategy: strategy=%q mode=%q fallback=%v", strategy, mode, fallbackEnabled)
+	}
+
+	strategy, mode, fallbackEnabled, err = uc.GetCodexUpstreamStrategy(ctx)
+	if err != nil {
+		t.Fatalf("GetCodexUpstreamStrategy() error = %v", err)
+	}
+	if strategy != GatewayUpstreamStrategyBackendWithFallback || mode != GatewayUpstreamModeCodexBackend || !fallbackEnabled {
+		t.Fatalf("persisted fallback strategy mismatch: strategy=%q mode=%q fallback=%v", strategy, mode, fallbackEnabled)
+	}
+
+	strategy, mode, fallbackEnabled, err = uc.SetCodexUpstreamStrategy(ctx, GatewayUpstreamStrategyCodexCLI)
+	if err != nil {
+		t.Fatalf("SetCodexUpstreamStrategy(codex_cli) error = %v", err)
+	}
+	if strategy != GatewayUpstreamStrategyCodexCLI || mode != GatewayUpstreamModeCodexCLI || fallbackEnabled {
+		t.Fatalf("unexpected cli strategy: strategy=%q mode=%q fallback=%v", strategy, mode, fallbackEnabled)
+	}
+}
+
 type testWriter struct{}
 
 func (testWriter) Write(p []byte) (int, error) { return len(p), nil }
@@ -219,6 +249,7 @@ func (testWriter) Write(p []byte) (int, error) { return len(p), nil }
 type gatewayPolicyTestRepo struct {
 	policy         *GatewayPolicy
 	summaryByStart map[time.Time]*GatewayUsageSummary
+	settings       map[string]string
 	createdInput   CreateGatewayAPIKeyInput
 	deletedIDs     []int
 }
@@ -272,10 +303,17 @@ func (r *gatewayPolicyTestRepo) ListUsageKeySummaries(context.Context, GatewayUs
 func (r *gatewayPolicyTestRepo) ListUsageSessionSummaries(context.Context, GatewayUsageFilter, int, int) ([]*GatewayUsageSessionSummary, int, error) {
 	return nil, 0, nil
 }
-func (r *gatewayPolicyTestRepo) GetGatewaySetting(context.Context, string) (string, error) {
-	return "", nil
+func (r *gatewayPolicyTestRepo) GetGatewaySetting(_ context.Context, key string) (string, error) {
+	if r.settings == nil {
+		return "", nil
+	}
+	return r.settings[key], nil
 }
-func (r *gatewayPolicyTestRepo) SetGatewaySetting(context.Context, string, string) error {
+func (r *gatewayPolicyTestRepo) SetGatewaySetting(_ context.Context, key string, value string) error {
+	if r.settings == nil {
+		r.settings = map[string]string{}
+	}
+	r.settings[key] = value
 	return nil
 }
 func (r *gatewayPolicyTestRepo) GetPolicyForKeyModel(context.Context, int, string) (*GatewayPolicy, error) {

@@ -52,6 +52,7 @@ type openAIUsageMetrics struct {
 
 type codexUpstreamCallResult struct {
 	Content           string
+	ToolCalls         []gatewayToolCall
 	Metrics           openAIUsageMetrics
 	ActualMode        string
 	Fallback          bool
@@ -73,6 +74,13 @@ type gatewayFileSource struct {
 	Raw       string
 	MediaType string
 	Filename  string
+}
+
+type gatewayToolCall struct {
+	ID        string
+	CallID    string
+	Name      string
+	Arguments string
 }
 
 func registerOpenAIGatewayRoutes(
@@ -146,21 +154,66 @@ func (h *openAIGatewayHandler) handleModels(w stdhttp.ResponseWriter, r *stdhttp
 		h.writeGatewayError(w, status, err, errorType)
 	} else {
 		items := make([]map[string]any, 0, len(models))
+		codexModels := make([]map[string]any, 0, len(models))
 		for _, item := range models {
 			created := item.CreatedUnix
 			if created == 0 {
 				created = item.CreatedAt.Unix()
 			}
-			items = append(items, map[string]any{
+			modelItem := map[string]any{
 				"id":       item.ModelID,
 				"object":   "model",
 				"created":  created,
 				"owned_by": item.OwnedBy,
+			}
+			items = append(items, modelItem)
+			codexModels = append(codexModels, map[string]any{
+				"slug":                       item.ModelID,
+				"id":                         item.ModelID,
+				"name":                       item.ModelID,
+				"display_name":               item.ModelID,
+				"description":                item.ModelID,
+				"object":                     "model",
+				"created":                    created,
+				"owned_by":                   item.OwnedBy,
+				"default_reasoning_level":    "medium",
+				"supported_reasoning_levels": codexModelReasoningLevels(),
+				"shell_type":                 "shell_command",
+				"visibility":                 "list",
+				"supported_in_api":           true,
+				"priority":                   0,
+				"additional_speed_tiers":     []string{"fast"},
+				"service_tiers": []map[string]any{
+					{"id": "priority", "name": "Fast", "description": "Increased throughput"},
+				},
+				"availability_nux":                 map[string]any{"message": ""},
+				"upgrade":                          nil,
+				"supports_reasoning_summaries":     true,
+				"default_reasoning_summary":        "none",
+				"support_verbosity":                true,
+				"default_verbosity":                "low",
+				"apply_patch_tool_type":            "freeform",
+				"web_search_tool_type":             "text_and_image",
+				"truncation_policy":                map[string]any{"mode": "tokens", "limit": 10000},
+				"supports_parallel_tool_calls":     true,
+				"supports_image_detail_original":   true,
+				"context_window":                   272000,
+				"max_context_window":               272000,
+				"effective_context_window_percent": 95,
+				"experimental_supported_tools":     []string{},
+				"input_modalities":                 []string{"text", "image"},
+				"supports_search_tool":             true,
+				"base_instructions":                "",
+				"model_messages": map[string]any{
+					"instructions_template":  "",
+					"instructions_variables": map[string]string{},
+				},
 			})
 		}
 		payload := map[string]any{
 			"object": "list",
 			"data":   items,
+			"models": codexModels,
 		}
 		body, _ := json.Marshal(payload)
 		responseBytes = int64(len(body))
@@ -184,6 +237,15 @@ func (h *openAIGatewayHandler) handleModels(w stdhttp.ResponseWriter, r *stdhttp
 		ErrorType:     errorType,
 		CreatedAt:     time.Now(),
 	})
+}
+
+func codexModelReasoningLevels() []map[string]string {
+	return []map[string]string{
+		{"effort": "low", "description": "Fast responses with lighter reasoning"},
+		{"effort": "medium", "description": "Balances speed and reasoning depth"},
+		{"effort": "high", "description": "Greater reasoning depth for complex problems"},
+		{"effort": "xhigh", "description": "Extra high reasoning depth for complex problems"},
+	}
 }
 
 func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.Request, key *biz.GatewayAPIKey, requestID string, start time.Time) {
@@ -378,13 +440,19 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 		return
 	}
 	content := result.Content
+	toolCalls := result.ToolCalls
 	metrics := result.Metrics
 	if metrics.Model == "" {
 		metrics.Model = requestModel
 	}
 
 	if stream {
-		responseBytes := h.writeCodexCLIChatStream(w, metrics.Model, content, metrics)
+		var responseBytes int64
+		if r.URL.Path == "/v1/responses" {
+			responseBytes = h.writeCodexCLIResponsesStream(w, metrics.Model, content, toolCalls, metrics)
+		} else {
+			responseBytes = h.writeCodexCLIChatStream(w, metrics.Model, content, toolCalls, metrics)
+		}
 		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
 			APIKeyID:               key.ID,
 			APIKeyPrefix:           key.KeyPrefix,
@@ -418,9 +486,9 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 	var responseBody []byte
 	var marshalErr error
 	if r.URL.Path == "/v1/responses" {
-		responseBody, marshalErr = json.Marshal(buildCodexCLIResponsesPayload(metrics.Model, content, metrics))
+		responseBody, marshalErr = json.Marshal(buildCodexCLIResponsesPayload(metrics.Model, content, toolCalls, metrics))
 	} else {
-		responseBody, marshalErr = json.Marshal(buildCodexCLIChatPayload(metrics.Model, content, metrics))
+		responseBody, marshalErr = json.Marshal(buildCodexCLIChatPayload(metrics.Model, content, toolCalls, metrics))
 	}
 	if marshalErr != nil {
 		h.writeGatewayError(w, stdhttp.StatusInternalServerError, marshalErr, "codex_cli_response_encode_failed")
@@ -481,13 +549,23 @@ func (h *openAIGatewayHandler) runCodexUpstream(ctx context.Context, upstreamMod
 	}
 	switch upstreamMode {
 	case codexUpstreamModeBackend:
-		content, metrics, err := h.runCodexBackend(ctx, path, body, requestModel, reasoningEffort)
+		content, toolCalls, metrics, err := h.runCodexBackend(ctx, path, body, requestModel, reasoningEffort)
 		if err == nil {
 			return codexUpstreamCallResult{
 				Content:    content,
+				ToolCalls:  toolCalls,
 				Metrics:    metrics,
 				ActualMode: codexUpstreamModeBackend,
 			}, nil
+		}
+		if h.log != nil {
+			h.log.WithContext(ctx).Warnf("codex backend upstream failed before fallback: %v", err)
+		}
+		if !h.configuredCodexUpstreamFallbackEnabled(ctx) {
+			return codexUpstreamCallResult{}, fmt.Errorf("codex backend upstream failed: %w", err)
+		}
+		if gatewayRequestRequiresCodexBackend(path, body) {
+			return codexUpstreamCallResult{}, fmt.Errorf("codex backend upstream failed: %v; request uses backend-only features and cannot fallback to codex_cli", err)
 		}
 		fallbackContent, fallbackMetrics, fallbackErr := h.runCodexCLI(ctx, path, body, requestModel, reasoningEffort)
 		if fallbackErr == nil {
@@ -510,6 +588,111 @@ func (h *openAIGatewayHandler) runCodexUpstream(ctx context.Context, upstreamMod
 			Metrics:    metrics,
 			ActualMode: codexUpstreamModeCLI,
 		}, nil
+	}
+}
+
+func (h *openAIGatewayHandler) configuredCodexUpstreamFallbackEnabled(ctx context.Context) bool {
+	if h.gatewayUC == nil {
+		return codexUpstreamFallbackEnabled()
+	}
+	enabled, err := h.gatewayUC.GetCodexUpstreamFallbackEnabled(ctx)
+	if err != nil {
+		if h.log != nil {
+			h.log.WithContext(ctx).Warnf("get codex upstream fallback setting failed: %v", err)
+		}
+		return codexUpstreamFallbackEnabled()
+	}
+	return enabled
+}
+
+func codexUpstreamFallbackEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("CODEX_UPSTREAM_FALLBACK_ENABLED"))) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func gatewayRequestRequiresCodexBackend(path string, body []byte) bool {
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return false
+	}
+	if len(gatewayToolsFromPayload(payload)) > 0 || gatewayToolChoiceRequiresBackend(payload["tool_choice"]) {
+		return true
+	}
+	if path == "/v1/responses" {
+		return responsesPayloadRequiresCodexBackend(payload["input"])
+	}
+	return chatPayloadRequiresCodexBackend(payload["messages"])
+}
+
+func gatewayToolChoiceRequiresBackend(value any) bool {
+	if value == nil {
+		return false
+	}
+	if choice := strings.ToLower(strings.TrimSpace(stringValue(value))); choice != "" {
+		return choice != "auto" && choice != "none"
+	}
+	return mapValue(value) != nil
+}
+
+func chatPayloadRequiresCodexBackend(value any) bool {
+	messages, _ := value.([]any)
+	for _, item := range messages {
+		message := mapValue(item)
+		if message == nil {
+			continue
+		}
+		role := strings.TrimSpace(stringValue(message["role"]))
+		content := contentValue(message["content"])
+		if len(content.Files) > 0 {
+			return true
+		}
+		if role == "tool" {
+			return true
+		}
+		if role == "assistant" && lenValue(message["tool_calls"]) > 0 {
+			return true
+		}
+		if role == "assistant" && mapValue(message["function_call"]) != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func responsesPayloadRequiresCodexBackend(value any) bool {
+	switch v := value.(type) {
+	case []any:
+		for _, item := range v {
+			message := mapValue(item)
+			if message == nil {
+				continue
+			}
+			switch stringValue(message["type"]) {
+			case "function_call", "function_call_output":
+				return true
+			}
+			if content := contentValue(message["content"]); len(content.Files) > 0 {
+				return true
+			}
+		}
+		return false
+	default:
+		return len(contentValue(value).Files) > 0
+	}
+}
+
+func lenValue(value any) int {
+	switch v := value.(type) {
+	case []any:
+		return len(v)
+	case []map[string]any:
+		return len(v)
+	default:
+		return 0
 	}
 }
 
@@ -1266,8 +1449,20 @@ func estimateTokenCount(text string) int64 {
 	return tokens
 }
 
-func buildCodexCLIChatPayload(model string, content string, metrics openAIUsageMetrics) map[string]any {
+func buildCodexCLIChatPayload(model string, content string, toolCalls []gatewayToolCall, metrics openAIUsageMetrics) map[string]any {
 	now := time.Now().Unix()
+	message := map[string]any{
+		"role":    "assistant",
+		"content": content,
+	}
+	finishReason := "stop"
+	if len(toolCalls) > 0 {
+		if strings.TrimSpace(content) == "" {
+			message["content"] = nil
+		}
+		message["tool_calls"] = chatToolCallsPayload(toolCalls)
+		finishReason = "tool_calls"
+	}
 	return map[string]any{
 		"id":      fmt.Sprintf("chatcmpl-codex-%d", now),
 		"object":  "chat.completion",
@@ -1275,19 +1470,16 @@ func buildCodexCLIChatPayload(model string, content string, metrics openAIUsageM
 		"model":   model,
 		"choices": []map[string]any{
 			{
-				"index": 0,
-				"message": map[string]any{
-					"role":    "assistant",
-					"content": content,
-				},
-				"finish_reason": "stop",
+				"index":         0,
+				"message":       message,
+				"finish_reason": finishReason,
 			},
 		},
 		"usage": chatUsagePayload(metrics),
 	}
 }
 
-func buildCodexCLIResponsesPayload(model string, content string, metrics openAIUsageMetrics) map[string]any {
+func buildCodexCLIResponsesPayload(model string, content string, toolCalls []gatewayToolCall, metrics openAIUsageMetrics) map[string]any {
 	now := time.Now().Unix()
 	return map[string]any{
 		"id":                  fmt.Sprintf("resp_codex_%d", now),
@@ -1297,25 +1489,12 @@ func buildCodexCLIResponsesPayload(model string, content string, metrics openAIU
 		"status":              "completed",
 		"output_text":         content,
 		"parallel_tool_calls": false,
-		"output": []map[string]any{
-			{
-				"id":     fmt.Sprintf("msg_codex_%d", now),
-				"type":   "message",
-				"role":   "assistant",
-				"status": "completed",
-				"content": []map[string]any{
-					{
-						"type": "output_text",
-						"text": content,
-					},
-				},
-			},
-		},
-		"usage": responsesUsagePayload(metrics),
+		"output":              responsesOutputPayload(content, toolCalls, now),
+		"usage":               responsesUsagePayload(metrics),
 	}
 }
 
-func (h *openAIGatewayHandler) writeCodexCLIChatStream(w stdhttp.ResponseWriter, model string, content string, metrics openAIUsageMetrics) int64 {
+func (h *openAIGatewayHandler) writeCodexCLIChatStream(w stdhttp.ResponseWriter, model string, content string, toolCalls []gatewayToolCall, metrics openAIUsageMetrics) int64 {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -1324,6 +1503,19 @@ func (h *openAIGatewayHandler) writeCodexCLIChatStream(w stdhttp.ResponseWriter,
 
 	id := fmt.Sprintf("chatcmpl-codex-%d", time.Now().Unix())
 	created := time.Now().Unix()
+	delta := map[string]any{
+		"role": "assistant",
+	}
+	if strings.TrimSpace(content) != "" || len(toolCalls) == 0 {
+		delta["content"] = content
+	}
+	if len(toolCalls) > 0 {
+		delta["tool_calls"] = chatToolCallDeltasPayload(toolCalls)
+	}
+	finishReason := "stop"
+	if len(toolCalls) > 0 {
+		finishReason = "tool_calls"
+	}
 	chunks := []map[string]any{
 		{
 			"id":      id,
@@ -1332,11 +1524,8 @@ func (h *openAIGatewayHandler) writeCodexCLIChatStream(w stdhttp.ResponseWriter,
 			"model":   model,
 			"choices": []map[string]any{
 				{
-					"index": 0,
-					"delta": map[string]any{
-						"role":    "assistant",
-						"content": content,
-					},
+					"index":         0,
+					"delta":         delta,
 					"finish_reason": nil,
 				},
 			},
@@ -1350,7 +1539,7 @@ func (h *openAIGatewayHandler) writeCodexCLIChatStream(w stdhttp.ResponseWriter,
 				{
 					"index":         0,
 					"delta":         map[string]any{},
-					"finish_reason": "stop",
+					"finish_reason": finishReason,
 				},
 			},
 			"usage": chatUsagePayload(metrics),
@@ -1374,6 +1563,213 @@ func (h *openAIGatewayHandler) writeCodexCLIChatStream(w stdhttp.ResponseWriter,
 		flusher.Flush()
 	}
 	return responseBytes
+}
+
+func (h *openAIGatewayHandler) writeCodexCLIResponsesStream(w stdhttp.ResponseWriter, model string, content string, toolCalls []gatewayToolCall, metrics openAIUsageMetrics) int64 {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(stdhttp.StatusOK)
+	flusher, _ := w.(stdhttp.Flusher)
+
+	now := time.Now().Unix()
+	responseID := fmt.Sprintf("resp_codex_%d", now)
+	output := responsesOutputPayload(content, toolCalls, now)
+	responseBytes := int64(0)
+
+	responseBytes += writeGatewaySSE(w, flusher, map[string]any{
+		"type": "response.created",
+		"response": map[string]any{
+			"id":                  responseID,
+			"object":              "response",
+			"created_at":          now,
+			"model":               model,
+			"status":              "in_progress",
+			"output":              []any{},
+			"output_text":         "",
+			"parallel_tool_calls": false,
+		},
+	})
+
+	if strings.TrimSpace(content) != "" {
+		messageID := fmt.Sprintf("msg_codex_%d", now)
+		messageItem := responsesMessagePayload(messageID, content, "in_progress")
+		responseBytes += writeGatewaySSE(w, flusher, map[string]any{
+			"type":         "response.output_item.added",
+			"output_index": 0,
+			"item":         messageItem,
+		})
+		responseBytes += writeGatewaySSE(w, flusher, map[string]any{
+			"type":          "response.content_part.added",
+			"item_id":       messageID,
+			"output_index":  0,
+			"content_index": 0,
+			"part": map[string]any{
+				"type": "output_text",
+				"text": "",
+			},
+		})
+		responseBytes += writeGatewaySSE(w, flusher, map[string]any{
+			"type":          "response.output_text.delta",
+			"item_id":       messageID,
+			"output_index":  0,
+			"content_index": 0,
+			"delta":         content,
+		})
+		responseBytes += writeGatewaySSE(w, flusher, map[string]any{
+			"type":          "response.output_text.done",
+			"item_id":       messageID,
+			"output_index":  0,
+			"content_index": 0,
+			"text":          content,
+		})
+		responseBytes += writeGatewaySSE(w, flusher, map[string]any{
+			"type":          "response.content_part.done",
+			"item_id":       messageID,
+			"output_index":  0,
+			"content_index": 0,
+			"part": map[string]any{
+				"type": "output_text",
+				"text": content,
+			},
+		})
+		responseBytes += writeGatewaySSE(w, flusher, map[string]any{
+			"type":         "response.output_item.done",
+			"output_index": 0,
+			"item":         responsesMessagePayload(messageID, content, "completed"),
+		})
+	}
+	toolCallOffset := 0
+	if strings.TrimSpace(content) != "" {
+		toolCallOffset = 1
+	}
+	for i, toolCall := range toolCalls {
+		responseBytes += writeGatewaySSE(w, flusher, map[string]any{
+			"type":         "response.output_item.done",
+			"output_index": toolCallOffset + i,
+			"item":         responsesFunctionCallPayload(toolCall, i, now),
+		})
+	}
+
+	responseBytes += writeGatewaySSE(w, flusher, map[string]any{
+		"type": "response.completed",
+		"response": map[string]any{
+			"id":                  responseID,
+			"object":              "response",
+			"created_at":          now,
+			"model":               model,
+			"status":              "completed",
+			"output_text":         content,
+			"parallel_tool_calls": false,
+			"output":              output,
+			"usage":               responsesUsagePayload(metrics),
+		},
+	})
+	responseBytes += writeGatewaySSEData(w, flusher, "[DONE]")
+	return responseBytes
+}
+
+func writeGatewaySSE(w stdhttp.ResponseWriter, flusher stdhttp.Flusher, payload map[string]any) int64 {
+	body, _ := json.Marshal(payload)
+	return writeGatewaySSEData(w, flusher, string(body))
+}
+
+func writeGatewaySSEData(w stdhttp.ResponseWriter, flusher stdhttp.Flusher, data string) int64 {
+	line := append([]byte("data: "), []byte(data)...)
+	line = append(line, '\n', '\n')
+	n, _ := w.Write(line)
+	if flusher != nil {
+		flusher.Flush()
+	}
+	return int64(n)
+}
+
+func responsesOutputPayload(content string, toolCalls []gatewayToolCall, now int64) []map[string]any {
+	output := make([]map[string]any, 0, 1+len(toolCalls))
+	if strings.TrimSpace(content) != "" {
+		output = append(output, responsesMessagePayload(fmt.Sprintf("msg_codex_%d", now), content, "completed"))
+	}
+	for i, toolCall := range toolCalls {
+		output = append(output, responsesFunctionCallPayload(toolCall, i, now))
+	}
+	return output
+}
+
+func responsesMessagePayload(id string, content string, status string) map[string]any {
+	return map[string]any{
+		"id":     id,
+		"type":   "message",
+		"role":   "assistant",
+		"status": status,
+		"content": []map[string]any{
+			{
+				"type": "output_text",
+				"text": content,
+			},
+		},
+	}
+}
+
+func chatToolCallsPayload(toolCalls []gatewayToolCall) []map[string]any {
+	items := make([]map[string]any, 0, len(toolCalls))
+	for i, toolCall := range toolCalls {
+		id := gatewayToolCallID(toolCall, i)
+		items = append(items, map[string]any{
+			"id":   id,
+			"type": "function",
+			"function": map[string]any{
+				"name":      toolCall.Name,
+				"arguments": toolCall.Arguments,
+			},
+		})
+	}
+	return items
+}
+
+func chatToolCallDeltasPayload(toolCalls []gatewayToolCall) []map[string]any {
+	items := make([]map[string]any, 0, len(toolCalls))
+	for i, toolCall := range toolCalls {
+		id := gatewayToolCallID(toolCall, i)
+		items = append(items, map[string]any{
+			"index": i,
+			"id":    id,
+			"type":  "function",
+			"function": map[string]any{
+				"name":      toolCall.Name,
+				"arguments": toolCall.Arguments,
+			},
+		})
+	}
+	return items
+}
+
+func responsesFunctionCallPayload(toolCall gatewayToolCall, index int, now int64) map[string]any {
+	id := strings.TrimSpace(toolCall.ID)
+	if id == "" {
+		id = fmt.Sprintf("fc_codex_%d_%d", now, index)
+	}
+	callID := strings.TrimSpace(toolCall.CallID)
+	if callID == "" {
+		callID = gatewayToolCallID(toolCall, index)
+	}
+	return map[string]any{
+		"id":        id,
+		"type":      "function_call",
+		"call_id":   callID,
+		"name":      toolCall.Name,
+		"arguments": toolCall.Arguments,
+		"status":    "completed",
+	}
+}
+
+func gatewayToolCallID(toolCall gatewayToolCall, index int) string {
+	if id := strings.TrimSpace(toolCall.CallID); id != "" {
+		return id
+	}
+	if id := strings.TrimSpace(toolCall.ID); id != "" {
+		return id
+	}
+	return fmt.Sprintf("call_codex_%d", index)
 }
 
 func chatUsagePayload(metrics openAIUsageMetrics) map[string]any {

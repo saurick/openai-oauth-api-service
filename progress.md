@@ -2,6 +2,35 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-11 上游策略三态与无兜底部署
+- 完成：后台 `/admin-upstream` 从旧「上游模式」改为「上游策略」，前端展示三种策略：Backend 直连、Backend + CLI 兜底、强制 CLI；当前线上已持久化为 `backend_only`，即 `mode=codex_backend`、`fallback_enabled=false`。
+- 完成：`api.gateway_upstream_get` / `api.gateway_upstream_set` 返回并接受 `strategy`，同时保留旧 `mode + fallback_enabled` 入参兼容；服务端运行时读取同一套设置，避免 UI 只改文案但实际 fallback 口径不变。
+- 完成：JSON-RPC 业务日志和 Kratos HTTP middleware `args` 均对 password、token、plain_key 等敏感参数脱敏，避免后台登录校验时把认证信息写入容器日志。
+- 部署：本地构建最终镜像 `oauth-api-service-server:20260511T201505-d530adb7-local`，上传到远端 `/data/openai-oauth-api-service/releases/20260511T201505-d530adb7-local/`；远端仅执行 `docker load`、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d app-server`，未在服务器构建。
+- 验证通过：`cd server && go test -count=1 ./api/jsonrpc/v1 ./internal/server ./internal/biz ./internal/data`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx src/pages/AdminDashboard/index.jsx src/common/components/layout/AdminFrame.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4325 NODE_USE_ENV_PROXY=0 pnpm style:l1`。
+- 线上验证：`/healthz` 返回 `ok`、`/readyz` 返回 `ready`；`gateway_upstream_get` 返回 `strategy=backend_only`、`mode=codex_backend`、`fallback_enabled=false`、`options=3`；Playwright 真实打开线上 `/admin-upstream`，确认侧栏 / 面包屑 / 标题为「上游策略」，三项 tab 均存在且 Backend 直连已选中，不再显示旧「Backend 优先」。
+- 清理：部署后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未被容器使用的旧 `oauth-api-service-server` 镜像，回收 `1.043GB`；根分区从清理前 `49%` 回到 `44%`，未执行 volume prune。
+- 阻塞/风险：本轮没有 schema 变更，不需要 migration；远端 release tar 包仍保留用于短期追溯。日志脱敏不重写历史容器日志，已存在的旧日志记录仍按容器日志保留策略自然滚动。
+
+## 2026-05-11 Codex function_call call_* id 502 修复
+- 发现：线上近 2 小时 `502` 实际来自服务端将 Codex backend 上游 `400` 映射为 `codex_backend_upstream_failed`；上游错误为 `Invalid 'input[4].id': 'call_...'. Expected an ID that begins with 'fc'.`，说明 OpenAI/Codex 客户端工具历史中的 `tool_call.id=call_*` 被错误当作 Responses `function_call.id` 原样转发。
+- 修复：direct backend adapter 对 Responses `function_call` item id 增加 `fc*` 前缀约束；空 id、非法 id、以及合法字符但非 `fc*` 的 `call_*` id 都统一按 `call_id` 生成 `fc_*`，同时保留原始 `call_id` 语义，避免工具结果关联丢失。
+- 部署：本地构建镜像 `oauth-api-service-server:20260511T195435-d530adb-fc-id`，上传到远端 `/data/openai-oauth-api-service/releases/20260511T195435-d530adb-fc-id/`；远端仅执行 `docker load`、备份并更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d app-server`，未在服务器构建。
+- 验证通过：`cd server && go test ./internal/server ./internal/biz ./internal/data`、`git diff --check -- server/internal/server/codex_backend_adapter.go server/internal/server/openai_gateway_handler_test.go progress.md`；线上 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`。
+- 验证通过：公网真实 `/v1/chat/completions` 请求包含 `tool_calls.id=call_7DrSS117GxOq1ztYHVJCjrjZ` 和 tool result 历史，返回 `HTTP 200`、`finish_reason=stop`，确认不再出现 `Expected an ID that begins with 'fc'`。
+- 清理：部署后执行 `docker image prune -a -f` 与 `docker builder prune -f`，仅删除未被容器使用的旧镜像 `20260511T194715-d530adb7-local`，回收 `347.6MB`；根分区从清理前 `45%` 回到 `43%`，当前运行镜像和数据库 volume 保持正常。
+- 阻塞/风险：本轮只修复 direct backend 工具历史 id 映射，不改变 fallback 策略；带工具调用、工具历史或文件输入的请求仍不会 fallback 到 CLI。远端 release tar 包仍保留用于短期追溯。
+
+## 2026-05-11 Windows Codex function_call 空 id 修复
+- 发现：Windows Codex 自定义 provider 发消息时，服务端日志持续出现 `codex backend upstream failed`，上游 400 原因为 `Invalid 'input[7].id': ''`；健康检查正常，说明不是 key、域名或服务进程不可用，而是 Responses 历史中的 `function_call.id` 空字符串被原样转发。
+- 修复：direct backend adapter 在转换 `function_call` 历史时统一校验 item `id`，空值或非法字符会按 `call_id` 生成合法 `fc_*` id，避免触发 Codex backend 的 `input[n].id` 严格校验。
+- 修复：`/v1/models` 的 Codex CLI 兼容 `models[]` 补齐 reasoning levels、shell type、context window、输入模态、availability nux 和 model messages 等模型元数据，减少自定义 provider 启动时的模型刷新解析报错。
+- 部署：本地构建并部署最终镜像 `oauth-api-service-server:20260511T194715-d530adb7-local`；远端仅执行 `docker load`、更新 Compose `.env` 的 `APP_IMAGE` 和 `docker compose up -d app-server`，未在服务器构建。
+- 验证通过：`cd server && go test ./internal/server ./internal/biz ./internal/data`；公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；Windows `codex exec --skip-git-repo-check --ephemeral --ignore-rules --json -s read-only -m gpt-5.5 -c model_provider="saurick-oauth" "只回复 OK"` 返回 `item.completed`，文本为 `OK`，且不再输出模型刷新解析 warning。
+- 验证通过：远端日志窗口内未再出现 `input[n].id`、`failed to decode models response` 或 `codex backend upstream failed`。
+- 清理：部署后执行 `docker image prune -a -f` 与 `docker builder prune -f`，未执行 volume prune；根分区从清理前 `45%` 回到 `43%`，当前运行容器和镜像 `20260511T194715-d530adb7-local` 保持正常。
+- 阻塞/风险：本轮没有 schema 变更，不需要 migration；远端 release tar 包仍保留用于短期回滚，后续可按发布归档策略清理旧 release 包。
+
 ## 2026-05-11 后台分页 trade-erp 风格
 - 完成：后台共享 `TablePagination` 改为 trade-erp 风格，展示“共 N 条”、圆形数字页码、左右箭头和 `8 条/页` 下拉；支持直接点击数字页码，保留原分页状态、每页条数和后端 `limit/offset` 逻辑。
 - 完成：分页样式收口到 `web/src/tailwind.css`，使用后台主题变量，浅色和暗色下当前页均为绿色描边圆形，移动端保持紧凑换行且不把每个按钮拉成整行。
@@ -217,3 +246,48 @@
 - 验证通过：容器内同款 `codex exec --skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules --json -s read-only -m gpt-5.5 -c model_reasoning_effort="high" -` 返回 `OK`；直连 `http://8.218.4.199:8400/v1/chat/completions` 与域名 `https://openai.saurick.space/v1/chat/completions` 带 `reasoning_effort=high` 均返回 `HTTP 200 content=OK`；本机 `opencode run --pure -m oauth-api-service/gpt-5.5 --variant high --format json "只回复 OK"` 返回 `OK`；远端 `/healthz`、`/readyz` 保持正常，容器内无残留 `codex/node` 进程。
 - 优化：OpenAI-compatible usage 响应新增 `prompt_tokens_details.cached_tokens`、`completion_tokens_details.reasoning_tokens` 以及 Responses 对应 details 字段，避免客户端只看到总 input tokens 而误判缓存未命中；已部署镜像 `oauth-api-service-server:20260510T194246-ffa4cbb6-local`。
 - 验证通过：`cd server && go test ./internal/server ./internal/biz ./internal/data`；线上重复请求返回 `HTTP 200`，usage 示例为 `prompt_tokens=13761`、`prompt_tokens_details.cached_tokens=13696`，另一次为 `cached_tokens=7552`；域名 chat 耗时约 `6.8s-10.3s`。本轮已删除上传 tar 包，未清理旧镜像以保留回滚余地。
+
+## 2026-05-11 OpenCode API key 工具调用排查
+- 发现：本机 SSH 到 `sauri@100.72.19.6` 超时；更正目标为 `sauri@192.168.0.44` 后可登录 Windows PowerShell 7，`cmd.exe` / `powershell.exe` / `pwsh.exe` 均在 PATH，但 `opencode` 不在该用户 PATH，全局 npm 仅安装 `@openai/codex@0.125.0` 和 `yarn`。
+- 修复：OpenAI-compatible direct backend adapter 不再固定 `tools: []`，改为透传 `tools` / `tool_choice` / `parallel_tool_calls`，并转换 Chat Completions 与 Responses 的 `tool_calls`、`function_call`、`function_call_output` 历史；Codex backend 返回 function call 时会映射回 Chat Completions `tool_calls` 或 Responses `function_call`，让 OpenCode API key 模式能继续触发本机 shell / 文件 / 截图工具。
+- 修复：Windows `sauri` 用户已通过 npm 全局安装 OpenCode，`opencode` 入口为 `C:\Users\sauri\AppData\Roaming\npm\opencode.ps1`，版本 `1.14.48`；`cmd.exe`、`pwsh.exe` 和 `powershell.exe` 基础 shell 探针均通过。
+- 部署：本地构建 `oauth-api-service-server:20260511T150703-d530adb7-local`，上传到远端 `/data/openai-oauth-api-service/releases/`，远端仅执行 `docker load` 和 `docker compose up -d app-server`，未在服务器构建。
+- 文档：同步更新 `README.md` 与 `server/docs/api.md`，说明工具调用只在 direct backend 模式支持，Codex CLI fallback 仍只返回纯文本。
+- 验证通过：`cd server && go test ./internal/server ./internal/biz ./internal/data`；新增测试覆盖工具定义透传、tool result 历史转换、Codex backend SSE function call 解析和兼容响应回填；远端源站和域名 `/healthz`、`/readyz` 均返回正常；Windows OpenCode 使用 `oauth-api-service/gpt-5.5` 成功触发本地 `bash` 工具，执行 `Write-Output OPENCODE_SHELL_OK` 并返回 `exit=0`。
+- 下一步：如需原生截图能力，需要确认 Windows OpenCode 是否加载了截图插件或自定义工具；当前 stock OpenCode 日志只注册了 `bash/read/glob/grep/task/webfetch/todowrite/skill/apply_patch` 等工具，没有名为 `screenshot` 的独立工具。
+- 运维清理：发布后记录远端 `/` 使用率 40%、Docker images 4.71GB；执行 `docker image prune -a -f` 和 `docker builder prune -f`，仅删除未被容器使用的旧 `oauth-api-service-server:20260511T115416-d530adb7` 镜像，回收 347.5MB；清理后 `/` 使用率 38%，所有运行中容器和当前镜像保持正常。
+- 阻塞/风险：工具调用依赖 Codex direct backend 协议继续兼容 Responses function_call 事件；若上游协议变化，仍会按既有策略 fallback 到 CLI，但 fallback 不具备工具调用能力。远端上传的本轮镜像 tar 包尚未清理。
+
+## 2026-05-11 Windows Codex 自定义 key 发消息排查
+- 发现：Windows `~/.codex/config.toml` 已配置 `model_provider = "saurick-oauth"`、`base_url = "https://oauth-api.saurick.me/v1"`、`wire_api = "responses"` 和 `experimental_bearer_token`；当前 SSH 环境变量里 `OPENAI_API_KEY` / `OPENAI_BASE_URL` 为空，但 Codex 自定义 provider 走的是 config token，不依赖这些环境变量。
+- 发现：`codex exec` 失败主因是服务端 `/v1/responses` 在 `stream=true` 时返回了 Chat Completions SSE chunk，Codex CLI 等不到 Responses SSE 的 `response.completed`，报 `stream closed before response.completed`。
+- 修复：`/v1/responses stream=true` 改为输出 Responses SSE 事件序列，补齐 `response.output_item.added`、`response.content_part.added`、`response.output_text.delta`、`response.output_text.done`、`response.content_part.done`、`response.output_item.done` 和 `response.completed`；`/v1/models` 额外返回 Codex CLI 读取的 `models[].slug`、`display_name` 等兼容字段，同时保留 OpenAI 标准 `data` 字段。
+- 部署：本地构建并依次部署 `oauth-api-service-server:20260511T151900-d530adb7-local`、`20260511T152500-d530adb7-local` 和最终 `20260511T152900-d530adb7-local`；远端仅执行 `docker load` 与 `docker compose up -d app-server`，未在服务器构建。
+- 验证通过：`cd server && go test ./internal/server ./internal/biz ./internal/data`；线上 `/healthz` 与 `/readyz` 正常；Windows 执行 `codex exec --skip-git-repo-check --ephemeral --ignore-rules --json -s read-only -m gpt-5.5 -c model_provider="saurick-oauth" "只回复 OK"` 已返回 `item.completed`，文本为 `OK`。
+- 运维清理：发布后记录远端 `/` 使用率 45%、Docker images 6.116GB；执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未被容器使用的本轮中间镜像 `20260511T150703/151900/152500-*`，回收 1.043GB；清理后 `/` 使用率 39%，当前运行镜像 `20260511T152900-d530adb7-local` 与所有容器保持正常。
+- 阻塞/风险：Codex 模型刷新仍会提示 `models[].supported_reasoning_levels` 等官方模型元数据字段缺失，但不影响发消息主链路；如需消除 warning，可继续按 `models_cache.json` 的字段结构补齐完整模型目录。远端上传的本轮镜像 tar 包尚未清理。
+
+## 2026-05-11 工具请求禁用 CLI fallback
+- 发现：OpenCode / Codex 这类客户端的工具请求依赖 direct `codex_backend` 返回 `tool_calls` 后由客户端本机执行；若 backend 失败后自动 fallback 到 `codex_cli`，服务端会启动 `codex exec`，读取系统信息或文件时可能命中服务器容器的 `bwrap` / user namespace 限制。
+- 修复：`codex_backend` 失败时先检查请求是否包含 `tools`、强制 `tool_choice`、assistant `tool_calls`、tool result、Responses `function_call(_output)` 或文件输入；这些 backend-only 请求直接返回 backend 上游错误，不再降级到服务端 CLI。
+- 文档：同步更新 `README.md`、`server/docs/api.md`、`server/docs/config.md` 和 Compose 生产 README，明确只有 CLI 能忠实处理的纯文本/图片请求才允许 fallback，工具和文件请求不 fallback。
+- 验证通过：新增测试覆盖带工具请求在 backend 失败时不会调用 fake Codex CLI fallback，避免再次出现服务端 `bwrap` 沙箱错误被当成客户端工具结果。
+- 阻塞/风险：如果 direct Codex backend 本身不可用，OpenCode 工具请求会返回 502，而不是降级出一个不完整的纯文本回答；需要通过 usage 的 `upstream_mode/upstream_fallback/upstream_error_type` 或服务日志继续排查 backend 连接问题。
+
+## 2026-05-11 Backend fallback 降低与线上部署
+- 发现：线上近 6 小时 usage 中有 `42` 次 `codex_backend -> codex_cli` fallback、`103` 次 backend 直接成功和 `7` 次 backend 502；容器内用同一份 `auth.json` 直接请求 Codex backend 的纯文本、工具声明和工具结果回合均返回 `HTTP 200`，说明代理、登录态和基础工具格式不是全局失效，fallback 更像上游瞬时失败或特定请求触发的 backend error。
+- 修复：direct backend 增加有限重试，默认 `CODEX_BACKEND_RETRY_ATTEMPTS=2`，仅对 HTTP `429` / `5xx`、上游 `response.failed` / `response.incomplete` 和连接类错误生效；backend 失败准备 fallback 前会写 warning 日志，后续能看到真实 backend 错误内容。
+- 部署：本地构建镜像 `oauth-api-service-server:20260511T191924-d530adb7-local`，上传到 `/data/openai-oauth-api-service/releases/20260511T191924-d530adb7-local/`；远端只执行 `docker load`、备份并更新 compose / `.env`、`docker compose up -d app-server`，未在服务器构建。
+- 验证通过：远端当前运行镜像为 `oauth-api-service-server:20260511T191924-d530adb7-local`，`CODEX_UPSTREAM_MODE=codex_backend`、`CODEX_BACKEND_RETRY_ATTEMPTS=2`；容器内和公网 `/healthz`、`/readyz` 均正常。
+- 验证通过：公网真实工具请求两轮 `/v1/chat/completions` 均返回 `HTTP 200` 和 `tool_calls`；usage 记录 `id=407/408` 均为 `upstream_mode=codex_backend`、`upstream_fallback=false`、`status_code=200`，确认没有再降级到服务端 CLI。
+- 清理：部署前 `/` 使用率 40%、Docker images 4.007GB；执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未被容器使用的旧镜像 `20260511T152900-d530adb7-local`，回收 347.6MB；清理后 `/` 仍为 40%，当前运行容器与当前镜像保持正常，未执行 volume prune。
+- 阻塞/风险：本轮没有 schema 变更，不需要 migration；旧 release tar 包仍保留用于短期回滚。截图中暴露过的 `ogw_0OkfLIrV...` key 建议后台轮换，避免继续被第三方复用。
+
+## 2026-05-11 默认关闭 CLI fallback
+- 调整：新增 `CODEX_UPSTREAM_FALLBACK_ENABLED`，默认 `false`；`codex_backend` 失败时默认直接返回上游错误，不再自动降级到 `codex_cli`。确需临时救急时可设为 `true`，但工具调用、工具历史和文件输入仍始终不 fallback。
+- 目的：避免隐藏 backend 退化，避免纯文本 fallback 掩盖上游问题，并防止服务端 `codex exec` 在低配服务器上引入额外延迟、token 放大和沙箱语义差异。
+- 文档：同步更新 `README.md`、`server/docs/api.md`、`server/docs/config.md`、Compose `.env.example`、`compose.yml` 与生产 Compose README。
+- 部署：本地构建镜像 `oauth-api-service-server:20260511T194408-d530adb7-local`，上传到 `/data/openai-oauth-api-service/releases/20260511T194408-d530adb7-local/`；远端备份并更新 `.env` / `compose.yml`，设置 `CODEX_UPSTREAM_FALLBACK_ENABLED=false` 后重启 `app-server`，未在服务器构建。
+- 验证通过：`cd server && go test -count=1 ./internal/server ./internal/biz ./internal/data`、`git diff --check`；新增测试覆盖默认不 fallback、显式打开开关才允许纯文本 fallback，以及工具请求不 fallback。
+- 验证通过：远端当前运行镜像为 `oauth-api-service-server:20260511T194408-d530adb7-local`，环境变量包含 `CODEX_UPSTREAM_MODE=codex_backend`、`CODEX_UPSTREAM_FALLBACK_ENABLED=false`；容器内和公网 `/healthz`、`/readyz` 均正常。
+- 验证通过：公网真实工具请求返回 `HTTP 200` 和 `tool_calls`；usage 最新记录 `id=512` 为 `upstream_mode=codex_backend`、`upstream_fallback=false`、`status_code=200`。

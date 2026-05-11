@@ -48,21 +48,27 @@ func (d *JsonrpcData) handleGateway(
 		}), nil
 
 	case "gateway_upstream_get":
-		mode, err := d.gatewayUC.GetCodexUpstreamMode(ctx)
+		strategy, mode, fallbackEnabled, err := d.gatewayUC.GetCodexUpstreamStrategy(ctx)
 		if err != nil {
 			return id, d.mapGatewayError(ctx, err), nil
 		}
-		return id, okResult("获取 Codex 上游模式成功", mapGatewayUpstreamModeForRPC(mode)), nil
+		return id, okResult("获取 Codex 上游策略成功", mapGatewayUpstreamModeForRPC(strategy, mode, fallbackEnabled)), nil
 
 	case "gateway_upstream_set":
-		mode, err := d.gatewayUC.SetCodexUpstreamMode(ctx, getString(pm, "mode"))
+		strategyInput := getString(pm, "strategy")
+		if strategyInput == "" {
+			strategyInput = gatewayUpstreamStrategyFromLegacyParams(getString(pm, "mode"), getBool(pm, "fallback_enabled", false))
+		}
+		strategy, mode, fallbackEnabled, err := d.gatewayUC.SetCodexUpstreamStrategy(ctx, strategyInput)
 		if err != nil {
 			return id, d.mapGatewayError(ctx, err), nil
 		}
 		d.auditGateway(ctx, "api.gateway_upstream_set", "gateway_setting", biz.GatewaySettingCodexUpstreamMode, map[string]any{
-			"mode": mode,
+			"strategy":         strategy,
+			"mode":             mode,
+			"fallback_enabled": fallbackEnabled,
 		})
-		return id, okResult("切换 Codex 上游模式成功", mapGatewayUpstreamModeForRPC(mode)), nil
+		return id, okResult("切换 Codex 上游策略成功", mapGatewayUpstreamModeForRPC(strategy, mode, fallbackEnabled)), nil
 
 	case "key_list":
 		limit := getInt(pm, "limit", 30)
@@ -485,7 +491,7 @@ func (d *JsonrpcData) mapGatewayError(ctx context.Context, err error) *v1.Jsonrp
 	case errors.Is(err, biz.ErrGatewayExportRange):
 		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "导出时间范围过大"}
 	case errors.Is(err, biz.ErrGatewayUpstreamModeInvalid):
-		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "Codex 上游模式参数错误"}
+		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "Codex 上游策略参数错误"}
 	default:
 		return &v1.JsonrpcResult{Code: errcode.APIOperationFailed.Code, Message: errcode.APIOperationFailed.Message}
 	}
@@ -790,22 +796,50 @@ func mapGatewayUsageForRPC(item *biz.GatewayUsageLog) map[string]any {
 	return data
 }
 
-func mapGatewayUpstreamModeForRPC(mode string) map[string]any {
+func gatewayUpstreamStrategyFromLegacyParams(mode string, fallbackEnabled bool) string {
+	mode = biz.NormalizeGatewayUpstreamMode(mode)
+	if mode == biz.GatewayUpstreamModeCodexCLI {
+		return biz.GatewayUpstreamStrategyCodexCLI
+	}
+	if fallbackEnabled {
+		return biz.GatewayUpstreamStrategyBackendWithFallback
+	}
+	return biz.GatewayUpstreamStrategyBackendOnly
+}
+
+func mapGatewayUpstreamModeForRPC(strategy string, mode string, fallbackEnabled bool) map[string]any {
 	mode = biz.NormalizeGatewayUpstreamMode(mode)
 	if mode == "" {
 		mode = biz.DefaultGatewayUpstreamMode()
 	}
+	strategy = biz.NormalizeGatewayUpstreamStrategy(strategy)
+	if strategy == "" {
+		strategy = biz.GatewayUpstreamStrategy(mode, fallbackEnabled)
+	}
 	return map[string]any{
-		"mode":         mode,
-		"default_mode": biz.DefaultGatewayUpstreamMode(),
+		"strategy":         strategy,
+		"mode":             mode,
+		"fallback_enabled": fallbackEnabled,
+		"default_strategy": biz.GatewayUpstreamStrategyBackendOnly,
+		"default_mode":     biz.DefaultGatewayUpstreamMode(),
 		"options": []any{
 			map[string]any{
-				"label": "Backend 优先",
-				"value": biz.GatewayUpstreamModeCodexBackend,
+				"label":       "Backend 直连",
+				"value":       biz.GatewayUpstreamStrategyBackendOnly,
+				"mode":        biz.GatewayUpstreamModeCodexBackend,
+				"description": "只走 Codex backend，失败直接返回错误。",
 			},
 			map[string]any{
-				"label": "强制 CLI",
-				"value": biz.GatewayUpstreamModeCodexCLI,
+				"label":       "Backend + CLI 兜底",
+				"value":       biz.GatewayUpstreamStrategyBackendWithFallback,
+				"mode":        biz.GatewayUpstreamModeCodexBackend,
+				"description": "Backend 失败后仅纯文本 / 图片请求可临时降级到 CLI。",
+			},
+			map[string]any{
+				"label":       "强制 CLI",
+				"value":       biz.GatewayUpstreamStrategyCodexCLI,
+				"mode":        biz.GatewayUpstreamModeCodexCLI,
+				"description": "每次请求都走服务端 codex exec。",
 			},
 		},
 	}
