@@ -2,6 +2,21 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-11 凭据限额与统计回显线上部署
+- 完成：提交并推送 `83b01be6`（完善凭据限额与统计回显），本地构建镜像 `oauth-api-service-server:20260511T112203-83b01be6`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260511T112203-83b01be6/`；远端只执行 `docker load`、Atlas migration、更新 Compose `.env` 的 `APP_IMAGE` 和 `docker compose up -d app-server`，未在服务器构建。
+- 完成：线上 Atlas migration 从 `20260510141225` 升级到 `20260511024741`，为 `gateway_api_keys` 增加日 / 周输入 Token、输出 Token、非缓存输入 Token 限额列，旧数据默认 `0` 表示不限。
+- 验证通过：远端当前运行镜像为 `oauth-api-service-server:20260511T112203-83b01be6`；容器内 `GIT_SHA=83b01be67e9269bbf5e403a9fdb947d021aa0aaa`、HTTP timeout `650s`、gRPC timeout `10s`；`/healthz` 返回 `ok`，`/readyz` 返回 `ready`，公网 `https://oauth-api.saurick.me/admin-login` 返回 `HTTP 200`。
+- 验证通过：`admin_login` 与后台 `key_list` 返回 `code=0`，线上 `key_list` 已包含新增细分限额字段；Atlas 状态为 `OK`、当前版本 `20260511024741`、待执行迁移 `0`。
+- 清理：部署后执行 `docker image prune -a -f` 与 `docker builder prune -f`，未执行 volume prune；根分区从清理前 `39%` 回到 `37%`，当前运行容器和数据库 volume 保持不变。
+- 阻塞/风险：本轮保留 release 镜像包和 Compose 备份用于短期回滚；如果后续继续频繁发布，需定期清理旧 release tar 包，不能删除数据库目录或运行中容器依赖镜像。
+
+## 2026-05-11 OpenCode 默认 provider 图片能力修复
+- 完成：排查当前本机 OpenCode 配置后确认默认 `oauth-api-service/gpt-5.5`、`oauth-api-service/gpt-5.4` 未声明 `modalities.input=["text","image"]`，OpenCode 因此在客户端阶段判定模型不支持图片并拒绝读取附件；服务端图片转发能力不是本次根因。
+- 完成：已备份 `~/.config/opencode/opencode.json` 到 `~/.config/opencode/opencode.json.bak-20260511112356-before-image-modalities`，并给默认线上 provider 的两个模型补齐 text/image 输入与 text 输出能力声明；未修改 baseURL、API key、reasoning variants 或服务端代码。
+- 验证通过：`opencode run --pure -m oauth-api-service/gpt-5.5 --variant low --file /tmp/opencode-vision-smoke.png --format json '只回复：image-ok'` 返回 `image-ok`；红色 1x1 PNG 视觉回归返回 `red`，确认图片附件已进入模型链路。
+- 下一步：暂无。
+- 阻塞/风险：`api-ndev-me` provider 当前仍未声明图片能力，因其不是本仓库默认服务入口且未确认该上游是否支持图片，本轮不擅自修改。
+
 ## 2026-05-11 API 凭据暗色 hover 修复
 - 完成：API 凭据表格选中行 hover 从浅色硬编码改为主题变量，暗夜模式下选中行 hover 保持深色背景和可读文字；表头、普通行 hover 和选中行背景继续复用后台主题变量。
 - 完成：`style:l1` 增加暗夜主题下“选中行 + hover”的背景亮度、文字对比和盒模型断言，覆盖截图中浅色残留问题。
