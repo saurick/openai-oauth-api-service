@@ -126,7 +126,7 @@ export OPENAI_BASE_URL=http://localhost:8400/v1
 export OPENAI_API_KEY=ogw_xxx
 ```
 
-兼容请求可通过 `reasoning_effort` 传递推理强度，当前支持 `low`、`medium`、`high`、`xhigh`。图片输入支持 OpenAI-compatible 的 data URL 形式 `image_url` / `input_image`；CLI 模式会转为 `codex exec --image` 附件，direct backend 模式会直接随 `/responses` 请求发送。
+兼容请求可通过 `reasoning_effort` 传递推理强度，当前支持 `low`、`medium`、`high`、`xhigh`；服务端会把该值作为请求级 usage 快照记录，并分别转为 direct backend 的 `reasoning.effort` 或 Codex CLI 的 `model_reasoning_effort`。图片输入支持 OpenAI-compatible 的 data URL 形式 `image_url` / `input_image`；PDF 输入支持 `input_file` / `file` 的 `application/pdf` data URL 或带 `mimeType=application/pdf` 的 base64 文件数据。图片在 CLI 模式会转为 `codex exec --image` 附件，PDF 仅支持 direct backend 模式；文本类附件由客户端读取成文本后按普通 `text` 输入转发。
 
 生产环境把 `OPENAI_BASE_URL` 换成部署域名下的 `/v1`，当前个人部署为：
 

@@ -56,7 +56,7 @@ func (h *adminExportHandler) handleUsageCSV(ctx context.Context, w stdhttp.Respo
 	w.Header().Set("Content-Disposition", `attachment; filename="gateway-usage.csv"`)
 	writer := csv.NewWriter(w)
 	_ = writer.Write([]string{
-		"created_at", "api_key_id", "api_key_prefix", "api_key_name", "endpoint", "model", "status_code", "success",
+		"created_at", "api_key_id", "api_key_prefix", "api_key_name", "endpoint", "model", "reasoning_effort", "status_code", "success",
 		"input_tokens", "billable_input_tokens", "cached_input_tokens", "cached_tokens", "output_tokens", "reasoning_tokens", "total_tokens",
 		"estimated_cost_usd", "duration_ms", "error_type",
 	})
@@ -72,6 +72,7 @@ func (h *adminExportHandler) handleUsageCSV(ctx context.Context, w stdhttp.Respo
 			item.APIKeyName,
 			item.Endpoint,
 			item.Model,
+			item.ReasoningEffort,
 			strconv.Itoa(item.StatusCode),
 			strconv.FormatBool(item.Success),
 			strconv.FormatInt(item.InputTokens, 10),
@@ -120,13 +121,14 @@ func (h *adminExportHandler) requireAdminAndBuildFilter(ctx context.Context, w s
 	}
 
 	filter := biz.GatewayUsageFilter{
-		Limit:        200,
-		KeyID:        queryInt(r, "key_id"),
-		Model:        strings.TrimSpace(r.URL.Query().Get("model")),
-		Endpoint:     strings.TrimSpace(r.URL.Query().Get("endpoint")),
-		UpstreamMode: strings.TrimSpace(r.URL.Query().Get("upstream_mode")),
-		StartTime:    queryUnixTime(r, "start_time", time.Now().Add(-24*time.Hour)),
-		EndTime:      queryUnixTime(r, "end_time", time.Now()),
+		Limit:           200,
+		KeyID:           queryInt(r, "key_id"),
+		Model:           strings.TrimSpace(r.URL.Query().Get("model")),
+		ReasoningEffort: strings.TrimSpace(r.URL.Query().Get("reasoning_effort")),
+		Endpoint:        strings.TrimSpace(r.URL.Query().Get("endpoint")),
+		UpstreamMode:    strings.TrimSpace(r.URL.Query().Get("upstream_mode")),
+		StartTime:       queryUnixTime(r, "start_time", time.Now().Add(-24*time.Hour)),
+		EndTime:         queryUnixTime(r, "end_time", time.Now()),
 	}
 	if raw := strings.TrimSpace(r.URL.Query().Get("success")); raw != "" {
 		filter.SuccessSet = true
@@ -168,13 +170,14 @@ func (h *adminExportHandler) auditExport(ctx context.Context, format string, cou
 		TargetType: "gateway_usage",
 		TargetID:   format,
 		Metadata: map[string]any{
-			"format":     format,
-			"count":      count,
-			"key_id":     filter.KeyID,
-			"model":      filter.Model,
-			"endpoint":   filter.Endpoint,
-			"start_time": filter.StartTime.Unix(),
-			"end_time":   filter.EndTime.Unix(),
+			"format":           format,
+			"count":            count,
+			"key_id":           filter.KeyID,
+			"model":            filter.Model,
+			"reasoning_effort": filter.ReasoningEffort,
+			"endpoint":         filter.Endpoint,
+			"start_time":       filter.StartTime.Unix(),
+			"end_time":         filter.EndTime.Unix(),
 		},
 	}
 	if claims != nil {
@@ -220,6 +223,7 @@ func mapUsageExportRow(item *biz.GatewayUsageLog) map[string]any {
 		"id":                       item.ID,
 		"input_tokens":             item.InputTokens,
 		"model":                    item.Model,
+		"reasoning_effort":         item.ReasoningEffort,
 		"output_tokens":            item.OutputTokens,
 		"path":                     item.Path,
 		"reasoning_tokens":         item.ReasoningTokens,

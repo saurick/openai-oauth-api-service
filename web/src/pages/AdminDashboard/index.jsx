@@ -35,6 +35,12 @@ const CODEX_UPSTREAM_MODE_OPTIONS = [
   { label: 'Backend 优先', value: 'codex_backend' },
   { label: '强制 CLI', value: 'codex_cli' },
 ]
+const CODEX_REASONING_EFFORT_OPTIONS = [
+  { label: 'Low', value: 'low' },
+  { label: 'Medium', value: 'medium' },
+  { label: 'High', value: 'high' },
+  { label: 'XHigh', value: 'xhigh' },
+]
 
 const tableWrapClass = 'overflow-hidden rounded-lg border border-[#dde8df]'
 const tableClass = 'min-w-full text-left text-sm text-[#1f2d25]'
@@ -102,6 +108,13 @@ function fmtRate(part, total) {
 
 function upstreamModeLabel(value) {
   const item = CODEX_UPSTREAM_MODE_OPTIONS.find(
+    (option) => option.value === value
+  )
+  return item?.label || '未记录'
+}
+
+function reasoningEffortLabel(value) {
+  const item = CODEX_REASONING_EFFORT_OPTIONS.find(
     (option) => option.value === value
   )
   return item?.label || '未记录'
@@ -604,7 +617,7 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
 
       <div className={tableWrapClass}>
         <div className="overflow-auto">
-          <table className={`${tableClass} min-w-[1880px]`}>
+          <table className={`${tableClass} min-w-[1980px]`}>
             <thead>
               <tr>
                 <th className={thClass}>时间</th>
@@ -612,6 +625,7 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
                 <th className={thClass}>凭据</th>
                 <th className={thClass}>接口</th>
                 <th className={thClass}>模型</th>
+                <th className={thClass}>Effort</th>
                 <th className={thClass}>上游</th>
                 <th className={thClass}>状态</th>
                 <th className={thClass}>
@@ -667,6 +681,9 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
                     <td className={`${tdClass} font-mono text-xs`}>
                       {item.model || '-'}
                     </td>
+                    <td className={`${tdClass} whitespace-nowrap text-xs`}>
+                      {reasoningEffortLabel(item.reasoning_effort)}
+                    </td>
                     <td className={tdClass}>
                       <div className="whitespace-nowrap text-xs font-semibold">
                         {upstreamModeLabel(item.upstream_mode)}
@@ -720,7 +737,7 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
               ) : (
                 <tr>
                   <td
-                    colSpan={13}
+                    colSpan={14}
                     className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                   >
                     {loading ? '加载中...' : '暂无调用记录'}

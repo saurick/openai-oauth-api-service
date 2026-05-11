@@ -249,6 +249,7 @@ func (r *gatewayRepo) CreateUsageLog(ctx context.Context, item *biz.GatewayUsage
 		SetPath(item.Path).
 		SetEndpoint(item.Endpoint).
 		SetModel(item.Model).
+		SetReasoningEffort(item.ReasoningEffort).
 		SetStatusCode(item.StatusCode).
 		SetSuccess(item.Success).
 		SetStream(item.Stream).
@@ -1154,6 +1155,9 @@ func (r *gatewayRepo) applyUsageFilter(ctx context.Context, q *ent.GatewayUsageL
 	if filter.Model != "" {
 		q = q.Where(gatewayusagelog.ModelEQ(filter.Model))
 	}
+	if filter.ReasoningEffort != "" {
+		q = q.Where(gatewayusagelog.ReasoningEffortEQ(filter.ReasoningEffort))
+	}
 	if filter.Endpoint != "" {
 		q = q.Where(gatewayusagelog.EndpointEQ(filter.Endpoint))
 	}
@@ -1199,6 +1203,9 @@ func buildUsageWhereClauseWithPrefix(filter biz.GatewayUsageFilter, columnPrefix
 	}
 	if filter.Model != "" {
 		add(col("model")+" = $%d", filter.Model)
+	}
+	if filter.ReasoningEffort != "" {
+		add(col("reasoning_effort")+" = $%d", filter.ReasoningEffort)
 	}
 	if filter.Endpoint != "" {
 		add(col("endpoint")+" = $%d", filter.Endpoint)
@@ -1614,6 +1621,7 @@ func mapGatewayUsageLog(item *ent.GatewayUsageLog) *biz.GatewayUsageLog {
 		Path:                   item.Path,
 		Endpoint:               item.Endpoint,
 		Model:                  item.Model,
+		ReasoningEffort:        item.ReasoningEffort,
 		StatusCode:             item.StatusCode,
 		Success:                item.Success,
 		Stream:                 item.Stream,

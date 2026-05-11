@@ -116,6 +116,20 @@ func (_c *GatewayUsageLogCreate) SetNillableModel(v *string) *GatewayUsageLogCre
 	return _c
 }
 
+// SetReasoningEffort sets the "reasoning_effort" field.
+func (_c *GatewayUsageLogCreate) SetReasoningEffort(v string) *GatewayUsageLogCreate {
+	_c.mutation.SetReasoningEffort(v)
+	return _c
+}
+
+// SetNillableReasoningEffort sets the "reasoning_effort" field if the given value is not nil.
+func (_c *GatewayUsageLogCreate) SetNillableReasoningEffort(v *string) *GatewayUsageLogCreate {
+	if v != nil {
+		_c.SetReasoningEffort(*v)
+	}
+	return _c
+}
+
 // SetStatusCode sets the "status_code" field.
 func (_c *GatewayUsageLogCreate) SetStatusCode(v int) *GatewayUsageLogCreate {
 	_c.mutation.SetStatusCode(v)
@@ -409,6 +423,10 @@ func (_c *GatewayUsageLogCreate) defaults() {
 		v := gatewayusagelog.DefaultModel
 		_c.mutation.SetModel(v)
 	}
+	if _, ok := _c.mutation.ReasoningEffort(); !ok {
+		v := gatewayusagelog.DefaultReasoningEffort
+		_c.mutation.SetReasoningEffort(v)
+	}
 	if _, ok := _c.mutation.StatusCode(); !ok {
 		v := gatewayusagelog.DefaultStatusCode
 		_c.mutation.SetStatusCode(v)
@@ -535,6 +553,14 @@ func (_c *GatewayUsageLogCreate) check() error {
 	if v, ok := _c.mutation.Model(); ok {
 		if err := gatewayusagelog.ModelValidator(v); err != nil {
 			return &ValidationError{Name: "model", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.model": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ReasoningEffort(); !ok {
+		return &ValidationError{Name: "reasoning_effort", err: errors.New(`ent: missing required field "GatewayUsageLog.reasoning_effort"`)}
+	}
+	if v, ok := _c.mutation.ReasoningEffort(); ok {
+		if err := gatewayusagelog.ReasoningEffortValidator(v); err != nil {
+			return &ValidationError{Name: "reasoning_effort", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.reasoning_effort": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.StatusCode(); !ok {
@@ -665,6 +691,10 @@ func (_c *GatewayUsageLogCreate) createSpec() (*GatewayUsageLog, *sqlgraph.Creat
 	if value, ok := _c.mutation.Model(); ok {
 		_spec.SetField(gatewayusagelog.FieldModel, field.TypeString, value)
 		_node.Model = value
+	}
+	if value, ok := _c.mutation.ReasoningEffort(); ok {
+		_spec.SetField(gatewayusagelog.FieldReasoningEffort, field.TypeString, value)
+		_node.ReasoningEffort = value
 	}
 	if value, ok := _c.mutation.StatusCode(); ok {
 		_spec.SetField(gatewayusagelog.FieldStatusCode, field.TypeInt, value)

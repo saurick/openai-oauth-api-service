@@ -2,6 +2,26 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-11 后台分页 trade-erp 风格
+- 完成：后台共享 `TablePagination` 改为 trade-erp 风格，展示“共 N 条”、圆形数字页码、左右箭头和 `8 条/页` 下拉；支持直接点击数字页码，保留原分页状态、每页条数和后端 `limit/offset` 逻辑。
+- 完成：分页样式收口到 `web/src/tailwind.css`，使用后台主题变量，浅色和暗色下当前页均为绿色描边圆形，移动端保持紧凑换行且不把每个按钮拉成整行。
+- 验证通过：`cd web && pnpm exec eslint --fix --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4324 NODE_USE_ENV_PROXY=0 pnpm style:l1`。
+- 验证补充：内置 Browser 登录真实本地 `/admin-usage` 并切到「调用明细」，确认分页 DOM 为 `共 47 条`、页码 `1 2 3 … 6`、`8 条/页`，点击下一页后当前页变为 `2`、上一页可用；Playwright 额外覆盖浅色 / 暗色 / 移动端截图、直接点击数字页码、页容量切换到 `10 条/页`、无横向溢出。
+- 阻塞/风险：内置 Browser 截图和下拉输入接口本轮出现超时，截图留证使用本地 Playwright 输出到 `/tmp/openai-oauth-pagination-*.png`；本轮只改共享分页控件和样式，不改 usage 数据真源、筛选字段或导出逻辑。
+
+## 2026-05-11 Usage Reasoning Effort 统计
+- 完成：usage log 新增请求级 `reasoning_effort` 快照字段和 Atlas migration `20260511033926`；OpenAI-compatible 入参的 `reasoning_effort` / `reasoningEffort` / `reasoning.effort` 统一归一化为 `low`、`medium`、`high`、`xhigh` 后落库，历史旧数据保持空值。
+- 完成：`api.usage_list`、管理端 usage CSV/JSON 导出、后台最近调用、调用明细、每日模型下钻和会话请求明细均展示 `reasoning_effort`；用量日志新增 Effort 筛选并透传到后端查询。
+- 完成：补充后端测试覆盖 direct backend 对所有 effort 输出 OpenAI Responses `reasoning.effort`，Codex CLI 对所有 effort 输出 `model_reasoning_effort`，并验证 backend 真实 HTTP 请求体包含对应 effort。
+- 下一步：默认聚合仍保持日期 / 模型主维度，不把每日模型表强拆成 `date + model + effort`；后续如需成本归因再新增独立 `day_model_effort` 聚合。
+- 阻塞/风险：旧 usage 没有历史请求体，不能可靠回填 effort；本轮不根据 reasoning tokens 反推，避免污染统计口径。
+
+## 2026-05-11 OpenCode 新会话标题修复
+- 完成：排查 OpenCode 1.14.33 本地实现后确认标题生成走隐藏 `title` agent，并通过 `small_model` 解析为 `provider/model`；当前配置写成 `oauth-api-service/gpt-5.4/high`，会被解析成模型 ID `gpt-5.4/high`，本地 provider 不存在该模型，标题任务在发出网关请求前失败。
+- 完成：已备份 `~/.config/opencode/opencode.json` 到 `~/.config/opencode/opencode.json.bak-20260511114022-before-small-model-titlefix`，并将 `small_model` 改为 `oauth-api-service/gpt-5.4`；主聊天 `model` 仍保持 `oauth-api-service/gpt-5.5/high`，不改变默认 agent variant。
+- 验证通过：`opencode debug config` 显示 `small_model=oauth-api-service/gpt-5.4` 且 provider 存在 `gpt-5.4`；新建 `opencode run --pure` 会话时日志已出现 `agent=title small=true modelID=gpt-5.4`，线上 usage 同步出现 `gpt-5.4 200` 标题请求。
+- 阻塞/风险：`opencode run --pure` 进程会在主回复完成后退出，标题异步任务虽已发出请求但未必有时间写回本地 session；桌面常驻应用需要重启以重新加载配置，之后新建会话应触发并写回标题。历史已创建的 `New session` 不会自动回填。
+
 ## 2026-05-11 凭据限额与统计回显线上部署
 - 完成：提交并推送 `83b01be6`（完善凭据限额与统计回显），本地构建镜像 `oauth-api-service-server:20260511T112203-83b01be6`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260511T112203-83b01be6/`；远端只执行 `docker load`、Atlas migration、更新 Compose `.env` 的 `APP_IMAGE` 和 `docker compose up -d app-server`，未在服务器构建。
 - 完成：线上 Atlas migration 从 `20260510141225` 升级到 `20260511024741`，为 `gateway_api_keys` 增加日 / 周输入 Token、输出 Token、非缓存输入 Token 限额列，旧数据默认 `0` 表示不限。
@@ -9,6 +29,18 @@
 - 验证通过：`admin_login` 与后台 `key_list` 返回 `code=0`，线上 `key_list` 已包含新增细分限额字段；Atlas 状态为 `OK`、当前版本 `20260511024741`、待执行迁移 `0`。
 - 清理：部署后执行 `docker image prune -a -f` 与 `docker builder prune -f`，未执行 volume prune；根分区从清理前 `39%` 回到 `37%`，当前运行容器和数据库 volume 保持不变。
 - 阻塞/风险：本轮保留 release 镜像包和 Compose 备份用于短期回滚；如果后续继续频繁发布，需定期清理旧 release tar 包，不能删除数据库目录或运行中容器依赖镜像。
+
+## 2026-05-11 OpenCode PDF 附件支持
+- 完成：服务端 OpenAI-compatible 请求解析新增 PDF 文件部件支持，兼容 `input_file` / `file`、`file_data` data URL，以及带 `mimeType=application/pdf` 的 raw base64；direct `codex_backend` 转为 Codex backend `input_file`，单次最多 4 个 PDF、单个最大 16 MiB。
+- 完成：`codex_cli` 路径仍只支持图片 `--image`，遇到 PDF 会明确返回“仅 codex_backend 支持文件输入”，避免 fallback 后丢失 PDF 内容却伪装成功；图片 data URL 也在 direct backend 路径补充大小与格式校验。
+- 完成：本机 OpenCode `oauth-api-service` 与 `oauth-api-service-local` 的 `gpt-5.5/gpt-5.4` 已将 `modalities.input` 扩为 `text/image/pdf`，配置备份为 `~/.config/opencode/opencode.json.bak-20260511113631-before-pdf-modalities`。
+- 完成：补跑 Ent 生成并生成 migration `20260511033926_migrate.sql`，补齐既有 `gateway_usage_logs.reasoning_effort` schema 改动缺失的 Ent 生成代码；线上已通过本地 Atlas + SSH 隧道从 `20260511024741` 迁移到 `20260511033926`。
+- 完成：本地构建镜像 `oauth-api-service-server:20260511T113835-dc1649c0-pdf-attachments`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260511T113835-dc1649c0-pdf-attachments/`；远端只执行 `docker load`、Atlas migration、更新 Compose `.env` 和 `docker compose up -d app-server`，未在服务器构建。
+- 文档：同步更新 `README.md` 与 `server/docs/api.md`，说明 PDF 支持范围、CLI 限制和 Office 文件暂不声明为原生模态。
+- 验证通过：`cd server && go test ./...`；线上 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`，当前运行镜像为 `oauth-api-service-server:20260511T113835-dc1649c0-pdf-attachments`；`opencode models oauth-api-service` 正常列出 `gpt-5.4/gpt-5.5`。
+- 验证通过：默认线上 OpenCode provider 附加 PDF 回归返回 PDF 内固定文本 `PDF-CHECK-7429`；附加 txt 回归返回 `TXT-CHECK-1842`。
+- 清理：部署后执行 `docker image prune -a -f` 与 `docker builder prune -f`，未执行 volume prune；根分区从清理前 `39%` 回到 `37%`，当前运行容器和数据库 volume 保持不变。
+- 下一步：如需支持 `doc` / `docx` / `xls` / `xlsx`，需要先增加服务端转换链路并确认 OpenCode 客户端如何发送这类附件；本轮不通过配置伪造原生 Office 模态。
 
 ## 2026-05-11 OpenCode 默认 provider 图片能力修复
 - 完成：排查当前本机 OpenCode 配置后确认默认 `oauth-api-service/gpt-5.5`、`oauth-api-service/gpt-5.4` 未声明 `modalities.input=["text","image"]`，OpenCode 因此在客户端阶段判定模型不支持图片并拒绝读取附件；服务端图片转发能力不是本次根因。

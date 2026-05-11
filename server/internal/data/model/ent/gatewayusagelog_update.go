@@ -152,6 +152,20 @@ func (_u *GatewayUsageLogUpdate) SetNillableModel(v *string) *GatewayUsageLogUpd
 	return _u
 }
 
+// SetReasoningEffort sets the "reasoning_effort" field.
+func (_u *GatewayUsageLogUpdate) SetReasoningEffort(v string) *GatewayUsageLogUpdate {
+	_u.mutation.SetReasoningEffort(v)
+	return _u
+}
+
+// SetNillableReasoningEffort sets the "reasoning_effort" field if the given value is not nil.
+func (_u *GatewayUsageLogUpdate) SetNillableReasoningEffort(v *string) *GatewayUsageLogUpdate {
+	if v != nil {
+		_u.SetReasoningEffort(*v)
+	}
+	return _u
+}
+
 // SetStatusCode sets the "status_code" field.
 func (_u *GatewayUsageLogUpdate) SetStatusCode(v int) *GatewayUsageLogUpdate {
 	_u.mutation.ResetStatusCode()
@@ -508,6 +522,11 @@ func (_u *GatewayUsageLogUpdate) check() error {
 			return &ValidationError{Name: "model", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.model": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ReasoningEffort(); ok {
+		if err := gatewayusagelog.ReasoningEffortValidator(v); err != nil {
+			return &ValidationError{Name: "reasoning_effort", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.reasoning_effort": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.UpstreamConfiguredMode(); ok {
 		if err := gatewayusagelog.UpstreamConfiguredModeValidator(v); err != nil {
 			return &ValidationError{Name: "upstream_configured_mode", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.upstream_configured_mode": %w`, err)}
@@ -572,6 +591,9 @@ func (_u *GatewayUsageLogUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.Model(); ok {
 		_spec.SetField(gatewayusagelog.FieldModel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ReasoningEffort(); ok {
+		_spec.SetField(gatewayusagelog.FieldReasoningEffort, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.StatusCode(); ok {
 		_spec.SetField(gatewayusagelog.FieldStatusCode, field.TypeInt, value)
@@ -789,6 +811,20 @@ func (_u *GatewayUsageLogUpdateOne) SetModel(v string) *GatewayUsageLogUpdateOne
 func (_u *GatewayUsageLogUpdateOne) SetNillableModel(v *string) *GatewayUsageLogUpdateOne {
 	if v != nil {
 		_u.SetModel(*v)
+	}
+	return _u
+}
+
+// SetReasoningEffort sets the "reasoning_effort" field.
+func (_u *GatewayUsageLogUpdateOne) SetReasoningEffort(v string) *GatewayUsageLogUpdateOne {
+	_u.mutation.SetReasoningEffort(v)
+	return _u
+}
+
+// SetNillableReasoningEffort sets the "reasoning_effort" field if the given value is not nil.
+func (_u *GatewayUsageLogUpdateOne) SetNillableReasoningEffort(v *string) *GatewayUsageLogUpdateOne {
+	if v != nil {
+		_u.SetReasoningEffort(*v)
 	}
 	return _u
 }
@@ -1162,6 +1198,11 @@ func (_u *GatewayUsageLogUpdateOne) check() error {
 			return &ValidationError{Name: "model", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.model": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ReasoningEffort(); ok {
+		if err := gatewayusagelog.ReasoningEffortValidator(v); err != nil {
+			return &ValidationError{Name: "reasoning_effort", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.reasoning_effort": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.UpstreamConfiguredMode(); ok {
 		if err := gatewayusagelog.UpstreamConfiguredModeValidator(v); err != nil {
 			return &ValidationError{Name: "upstream_configured_mode", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.upstream_configured_mode": %w`, err)}
@@ -1243,6 +1284,9 @@ func (_u *GatewayUsageLogUpdateOne) sqlSave(ctx context.Context) (_node *Gateway
 	}
 	if value, ok := _u.mutation.Model(); ok {
 		_spec.SetField(gatewayusagelog.FieldModel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ReasoningEffort(); ok {
+		_spec.SetField(gatewayusagelog.FieldReasoningEffort, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.StatusCode(); ok {
 		_spec.SetField(gatewayusagelog.FieldStatusCode, field.TypeInt, value)

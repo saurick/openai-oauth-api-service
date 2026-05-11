@@ -1871,6 +1871,70 @@ async function assertTablePagination(
   await page.keyboard.press('Escape')
   await pageSizeInput.fill('8')
   await pageSizeInput.press('Enter')
+  const paginationMetrics = await firstPagination.evaluate((node) => {
+    const current = node.querySelector('.admin-page-button-current')
+    const pageSize = node.querySelector('.admin-table-page-size-input')
+    const prev = node.querySelector('[aria-label="上一页"]')
+    const next = node.querySelector('[aria-label="下一页"]')
+    const currentStyle = current ? window.getComputedStyle(current) : null
+    const pageSizeStyle = pageSize ? window.getComputedStyle(pageSize) : null
+    const currentRect = current?.getBoundingClientRect()
+    const pageSizeRect = pageSize?.getBoundingClientRect()
+    const nodeRect = node.getBoundingClientRect()
+    return {
+      text: node.innerText,
+      hasCurrent: Boolean(current),
+      hasPrev: Boolean(prev),
+      hasNext: Boolean(next),
+      currentLabel: current?.textContent?.trim() || '',
+      currentBorderRadius: currentStyle?.borderRadius || '',
+      currentBorderColor: currentStyle?.borderColor || '',
+      currentBackground: currentStyle?.backgroundColor || '',
+      pageSizeValue: pageSize?.value || '',
+      pageSizeBorderRadius: pageSizeStyle?.borderRadius || '',
+      currentWidth: Math.round(currentRect?.width || 0),
+      currentHeight: Math.round(currentRect?.height || 0),
+      pageSizeWidth: Math.round(pageSizeRect?.width || 0),
+      pageSizeHeight: Math.round(pageSizeRect?.height || 0),
+      overflowsX: node.scrollWidth > Math.ceil(node.clientWidth),
+      overflowsY: node.scrollHeight > Math.ceil(node.clientHeight),
+      isVisible: nodeRect.width > 0 && nodeRect.height > 0,
+    }
+  })
+  assert(
+    paginationMetrics.isVisible &&
+      paginationMetrics.hasPrev &&
+      paginationMetrics.hasNext &&
+      paginationMetrics.hasCurrent,
+    `${scenarioName} 分页缺少 trade-erp 风格箭头或当前页: ${JSON.stringify(
+      paginationMetrics
+    )}`
+  )
+  assert.equal(
+    paginationMetrics.pageSizeValue,
+    '8 条/页',
+    `${scenarioName} 分页每页条数未使用 trade-erp 文案: ${JSON.stringify(
+      paginationMetrics
+    )}`
+  )
+  assert(
+    paginationMetrics.currentLabel === '1' &&
+      paginationMetrics.currentWidth >= 40 &&
+      paginationMetrics.currentHeight >= 40 &&
+      paginationMetrics.currentBorderRadius.includes('50%') &&
+      !paginationMetrics.overflowsX &&
+      !paginationMetrics.overflowsY,
+    `${scenarioName} 分页数字页码盒模型异常: ${JSON.stringify(
+      paginationMetrics
+    )}`
+  )
+  assert(
+    !paginationMetrics.text.includes('第 1 /') &&
+      !paginationMetrics.text.includes('1-8'),
+    `${scenarioName} 分页仍残留旧范围/页数摘要: ${JSON.stringify(
+      paginationMetrics
+    )}`
+  )
   assert(
     await page.getByText(previousText).first().isVisible(),
     `${scenarioName} 分页第一页缺少 ${previousText}`
@@ -2377,6 +2441,7 @@ function getApiMockData(method, params = {}, state = {}) {
 
   if (method === 'usage_list') {
     const model = params.model || 'gpt-5.3-codex'
+    const effort = params.reasoning_effort || 'high'
     return {
       items: [
         {
@@ -2392,6 +2457,7 @@ function getApiMockData(method, params = {}, state = {}) {
           input_tokens: model === 'gpt-5.4' ? 272889 : 1900,
           model,
           output_tokens: model === 'gpt-5.4' ? 50 : 2310,
+          reasoning_effort: effort,
           reasoning_tokens: model === 'gpt-5.4' ? 0 : 320,
           request_bytes: 4096,
           request_id: 'req_style_l1_prod_1',
@@ -2418,6 +2484,7 @@ function getApiMockData(method, params = {}, state = {}) {
           input_tokens: model === 'gpt-5.4' ? 272660 : 60000,
           model,
           output_tokens: model === 'gpt-5.4' ? 179 : 1200,
+          reasoning_effort: params.reasoning_effort || 'low',
           reasoning_tokens: 0,
           request_bytes: 65536,
           request_id: 'req_style_l1_prod_2',
@@ -2444,6 +2511,7 @@ function getApiMockData(method, params = {}, state = {}) {
           input_tokens: 1000,
           model: params.success === false ? 'gpt-5.2' : model,
           output_tokens: 80,
+          reasoning_effort: params.reasoning_effort || 'xhigh',
           reasoning_tokens: 0,
           request_bytes: 2048,
           request_id: 'req_style_l1_stage_1',
@@ -2595,6 +2663,7 @@ function getApiMockData(method, params = {}, state = {}) {
           estimated_cost_usd: 0.12,
           id: 11,
           model: 'gpt-5.3-codex',
+          reasoning_effort: 'medium',
           status_code: 200,
           total_tokens: 1600,
         },

@@ -31,6 +31,8 @@ const (
 	maxGatewayRequestBytes   = 32 << 20
 	maxGatewayImages         = 4
 	maxGatewayImageBytes     = 16 << 20
+	maxGatewayFiles          = 4
+	maxGatewayFileBytes      = 16 << 20
 	defaultCodexCLITimeout   = 600 * time.Second
 	gatewayUsageWriteTimeout = 5 * time.Second
 )
@@ -65,6 +67,12 @@ type codexCLIPrompt struct {
 type gatewayImageSource struct {
 	Raw       string
 	MediaType string
+}
+
+type gatewayFileSource struct {
+	Raw       string
+	MediaType string
+	Filename  string
 }
 
 func registerOpenAIGatewayRoutes(
@@ -196,21 +204,22 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		status := stdhttp.StatusBadRequest
 		h.writeGatewayError(w, status, parseErr, "gateway_reasoning_effort_invalid")
 		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
-			APIKeyID:     key.ID,
-			APIKeyPrefix: key.KeyPrefix,
-			SessionID:    sessionID,
-			RequestID:    requestID,
-			Method:       r.Method,
-			Path:         r.URL.Path,
-			Endpoint:     endpoint,
-			Model:        requestModel,
-			StatusCode:   status,
-			Success:      false,
-			Stream:       stream,
-			RequestBytes: int64(len(body)),
-			DurationMS:   time.Since(start).Milliseconds(),
-			ErrorType:    "gateway_reasoning_effort_invalid",
-			CreatedAt:    time.Now(),
+			APIKeyID:        key.ID,
+			APIKeyPrefix:    key.KeyPrefix,
+			SessionID:       sessionID,
+			RequestID:       requestID,
+			Method:          r.Method,
+			Path:            r.URL.Path,
+			Endpoint:        endpoint,
+			Model:           requestModel,
+			ReasoningEffort: reasoningEffort,
+			StatusCode:      status,
+			Success:         false,
+			Stream:          stream,
+			RequestBytes:    int64(len(body)),
+			DurationMS:      time.Since(start).Milliseconds(),
+			ErrorType:       "gateway_reasoning_effort_invalid",
+			CreatedAt:       time.Now(),
 		})
 		return
 	}
@@ -218,21 +227,22 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		status := stdhttp.StatusForbidden
 		h.writeGatewayError(w, status, err, gatewayErrorType(err))
 		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
-			APIKeyID:     key.ID,
-			APIKeyPrefix: key.KeyPrefix,
-			SessionID:    sessionID,
-			RequestID:    requestID,
-			Method:       r.Method,
-			Path:         r.URL.Path,
-			Endpoint:     endpoint,
-			Model:        requestModel,
-			StatusCode:   status,
-			Success:      false,
-			Stream:       stream,
-			RequestBytes: int64(len(body)),
-			DurationMS:   time.Since(start).Milliseconds(),
-			ErrorType:    gatewayErrorType(err),
-			CreatedAt:    time.Now(),
+			APIKeyID:        key.ID,
+			APIKeyPrefix:    key.KeyPrefix,
+			SessionID:       sessionID,
+			RequestID:       requestID,
+			Method:          r.Method,
+			Path:            r.URL.Path,
+			Endpoint:        endpoint,
+			Model:           requestModel,
+			ReasoningEffort: reasoningEffort,
+			StatusCode:      status,
+			Success:         false,
+			Stream:          stream,
+			RequestBytes:    int64(len(body)),
+			DurationMS:      time.Since(start).Milliseconds(),
+			ErrorType:       gatewayErrorType(err),
+			CreatedAt:       time.Now(),
 		})
 		return
 	}
@@ -242,21 +252,22 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 			status := stdhttp.StatusTooManyRequests
 			h.writeGatewayError(w, status, err, gatewayErrorType(err))
 			h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
-				APIKeyID:     key.ID,
-				APIKeyPrefix: key.KeyPrefix,
-				SessionID:    sessionID,
-				RequestID:    requestID,
-				Method:       r.Method,
-				Path:         r.URL.Path,
-				Endpoint:     endpoint,
-				Model:        requestModel,
-				StatusCode:   status,
-				Success:      false,
-				Stream:       stream,
-				RequestBytes: int64(len(body)),
-				DurationMS:   time.Since(start).Milliseconds(),
-				ErrorType:    gatewayErrorType(err),
-				CreatedAt:    time.Now(),
+				APIKeyID:        key.ID,
+				APIKeyPrefix:    key.KeyPrefix,
+				SessionID:       sessionID,
+				RequestID:       requestID,
+				Method:          r.Method,
+				Path:            r.URL.Path,
+				Endpoint:        endpoint,
+				Model:           requestModel,
+				ReasoningEffort: reasoningEffort,
+				StatusCode:      status,
+				Success:         false,
+				Stream:          stream,
+				RequestBytes:    int64(len(body)),
+				DurationMS:      time.Since(start).Milliseconds(),
+				ErrorType:       gatewayErrorType(err),
+				CreatedAt:       time.Now(),
 			})
 			h.gatewayUC.CreateAuditLog(r.Context(), biz.GatewayAuditLog{
 				ActorID:    key.ID,
@@ -277,21 +288,22 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 			status := stdhttp.StatusTooManyRequests
 			h.writeGatewayError(w, status, err, gatewayErrorType(err))
 			h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
-				APIKeyID:     key.ID,
-				APIKeyPrefix: key.KeyPrefix,
-				SessionID:    sessionID,
-				RequestID:    requestID,
-				Method:       r.Method,
-				Path:         r.URL.Path,
-				Endpoint:     endpoint,
-				Model:        requestModel,
-				StatusCode:   status,
-				Success:      false,
-				Stream:       stream,
-				RequestBytes: int64(len(body)),
-				DurationMS:   time.Since(start).Milliseconds(),
-				ErrorType:    gatewayErrorType(err),
-				CreatedAt:    time.Now(),
+				APIKeyID:        key.ID,
+				APIKeyPrefix:    key.KeyPrefix,
+				SessionID:       sessionID,
+				RequestID:       requestID,
+				Method:          r.Method,
+				Path:            r.URL.Path,
+				Endpoint:        endpoint,
+				Model:           requestModel,
+				ReasoningEffort: reasoningEffort,
+				StatusCode:      status,
+				Success:         false,
+				Stream:          stream,
+				RequestBytes:    int64(len(body)),
+				DurationMS:      time.Since(start).Milliseconds(),
+				ErrorType:       gatewayErrorType(err),
+				CreatedAt:       time.Now(),
 			})
 			h.gatewayUC.CreateAuditLog(r.Context(), biz.GatewayAuditLog{
 				ActorID:    key.ID,
@@ -351,6 +363,7 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 			Path:                   r.URL.Path,
 			Endpoint:               endpoint,
 			Model:                  requestModel,
+			ReasoningEffort:        reasoningEffort,
 			StatusCode:             status,
 			Success:                false,
 			Stream:                 stream,
@@ -381,6 +394,7 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 			Path:                   r.URL.Path,
 			Endpoint:               endpoint,
 			Model:                  metrics.Model,
+			ReasoningEffort:        reasoningEffort,
 			StatusCode:             stdhttp.StatusOK,
 			Success:                true,
 			Stream:                 true,
@@ -425,6 +439,7 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 		Path:                   r.URL.Path,
 		Endpoint:               endpoint,
 		Model:                  metrics.Model,
+		ReasoningEffort:        reasoningEffort,
 		StatusCode:             stdhttp.StatusOK,
 		Success:                true,
 		Stream:                 false,
@@ -600,10 +615,14 @@ func codexCLIPromptFromGatewayRequest(path string, body []byte) (*codexCLIPrompt
 	}
 	var text string
 	var images []gatewayImageSource
+	var files []gatewayFileSource
 	if path == "/v1/responses" {
-		text, images = promptFromResponsesPayload(payload)
+		text, images, files = promptFromResponsesPayload(payload)
 	} else {
-		text, images = promptFromChatCompletionsPayload(payload)
+		text, images, files = promptFromChatCompletionsPayload(payload)
+	}
+	if len(files) > 0 {
+		return nil, fmt.Errorf("file inputs are only supported by codex_backend upstream")
 	}
 	imageFiles, cleanup, err := materializeGatewayImages(images)
 	if err != nil {
@@ -622,7 +641,7 @@ func (p *codexCLIPrompt) close() {
 	}
 }
 
-func promptFromChatCompletionsPayload(payload map[string]any) (string, []gatewayImageSource) {
+func promptFromChatCompletionsPayload(payload map[string]any) (string, []gatewayImageSource, []gatewayFileSource) {
 	messages, _ := payload["messages"].([]any)
 	parts := make([]gatewayMessageContent, 0, len(messages))
 	for _, item := range messages {
@@ -635,21 +654,21 @@ func promptFromChatCompletionsPayload(payload map[string]any) (string, []gateway
 			continue
 		}
 		content := contentValue(message["content"])
-		if strings.TrimSpace(content.Text) == "" && len(content.Images) == 0 {
+		if content.empty() {
 			continue
 		}
 		content.Role = role
 		parts = append(parts, content)
 	}
 	parts = lastGatewayMessageItems(parts, 8)
-	return gatewayMessagePromptAndImages(parts)
+	return gatewayMessagePromptAndAttachments(parts)
 }
 
-func promptFromResponsesPayload(payload map[string]any) (string, []gatewayImageSource) {
+func promptFromResponsesPayload(payload map[string]any) (string, []gatewayImageSource, []gatewayFileSource) {
 	input := payload["input"]
 	switch v := input.(type) {
 	case string:
-		return strings.TrimSpace(v), nil
+		return strings.TrimSpace(v), nil, nil
 	case []any:
 		parts := make([]gatewayMessageContent, 0, len(v))
 		for _, item := range v {
@@ -662,17 +681,17 @@ func promptFromResponsesPayload(payload map[string]any) (string, []gatewayImageS
 				continue
 			}
 			content := contentValue(message["content"])
-			if strings.TrimSpace(content.Text) == "" && len(content.Images) == 0 {
+			if content.empty() {
 				continue
 			}
 			content.Role = role
 			parts = append(parts, content)
 		}
 		parts = lastGatewayMessageItems(parts, 8)
-		return gatewayMessagePromptAndImages(parts)
+		return gatewayMessagePromptAndAttachments(parts)
 	default:
 		content := contentValue(input)
-		return strings.TrimSpace(content.Text), content.Images
+		return strings.TrimSpace(content.Text), content.Images, content.Files
 	}
 }
 
@@ -680,6 +699,11 @@ type gatewayMessageContent struct {
 	Role   string
 	Text   string
 	Images []gatewayImageSource
+	Files  []gatewayFileSource
+}
+
+func (c gatewayMessageContent) empty() bool {
+	return strings.TrimSpace(c.Text) == "" && len(c.Images) == 0 && len(c.Files) == 0
 }
 
 func lastGatewayMessageItems(items []gatewayMessageContent, limit int) []gatewayMessageContent {
@@ -689,20 +713,29 @@ func lastGatewayMessageItems(items []gatewayMessageContent, limit int) []gateway
 	return items[len(items)-limit:]
 }
 
-func gatewayMessagePromptAndImages(items []gatewayMessageContent) (string, []gatewayImageSource) {
+func gatewayMessagePromptAndAttachments(items []gatewayMessageContent) (string, []gatewayImageSource, []gatewayFileSource) {
 	textParts := make([]string, 0, len(items))
 	images := make([]gatewayImageSource, 0)
+	files := make([]gatewayFileSource, 0)
 	for _, item := range items {
 		text := strings.TrimSpace(item.Text)
-		if text == "" && len(item.Images) > 0 {
-			text = "[image attached]"
+		if text == "" {
+			switch {
+			case len(item.Images) > 0 && len(item.Files) > 0:
+				text = "[attachments included]"
+			case len(item.Images) > 0:
+				text = "[image attached]"
+			case len(item.Files) > 0:
+				text = "[file attached]"
+			}
 		}
 		if text != "" {
 			textParts = append(textParts, item.Role+":\n"+text)
 		}
 		images = append(images, item.Images...)
+		files = append(files, item.Files...)
 	}
-	return strings.TrimSpace(strings.Join(textParts, "\n\n")), images
+	return strings.TrimSpace(strings.Join(textParts, "\n\n")), images, files
 }
 
 func contentTextValue(value any) string {
@@ -716,6 +749,7 @@ func contentValue(value any) gatewayMessageContent {
 	case []any:
 		parts := make([]string, 0, len(v))
 		images := make([]gatewayImageSource, 0)
+		files := make([]gatewayFileSource, 0)
 		for _, item := range v {
 			switch typed := item.(type) {
 			case string:
@@ -729,13 +763,19 @@ func contentValue(value any) gatewayMessageContent {
 				if source, ok := imageSourceFromContentPart(typed); ok {
 					images = append(images, source)
 				}
+				if source, ok := fileSourceFromContentPart(typed); ok {
+					files = append(files, source)
+				}
 			}
 		}
-		return gatewayMessageContent{Text: strings.Join(parts, "\n"), Images: images}
+		return gatewayMessageContent{Text: strings.Join(parts, "\n"), Images: images, Files: files}
 	case map[string]any:
 		content := gatewayMessageContent{Text: contentPartText(v)}
 		if source, ok := imageSourceFromContentPart(v); ok {
 			content.Images = append(content.Images, source)
+		}
+		if source, ok := fileSourceFromContentPart(v); ok {
+			content.Files = append(content.Files, source)
 		}
 		return content
 	default:
@@ -790,6 +830,52 @@ func imageURLValue(value any) string {
 	default:
 		return ""
 	}
+}
+
+func fileSourceFromContentPart(part map[string]any) (gatewayFileSource, bool) {
+	if part == nil {
+		return gatewayFileSource{}, false
+	}
+	typ := strings.TrimSpace(stringValue(part["type"]))
+	switch typ {
+	case "input_file":
+		if source, ok := fileSourceFromValue(part); ok {
+			return source, true
+		}
+		if file, ok := part["file"].(map[string]any); ok {
+			return fileSourceFromValue(file)
+		}
+	case "file":
+		if file, ok := part["file"].(map[string]any); ok {
+			return fileSourceFromValue(file)
+		}
+		return fileSourceFromValue(part)
+	}
+	return gatewayFileSource{}, false
+}
+
+func fileSourceFromValue(value map[string]any) (gatewayFileSource, bool) {
+	if value == nil {
+		return gatewayFileSource{}, false
+	}
+	source := gatewayFileSource{
+		Raw:       firstStringValue(value, "file_data", "data", "url"),
+		MediaType: firstStringValue(value, "media_type", "mime_type", "mediaType", "mimeType"),
+		Filename:  firstStringValue(value, "filename", "file_name", "fileName", "name"),
+	}
+	if source.Raw == "" {
+		return gatewayFileSource{}, false
+	}
+	return source, true
+}
+
+func firstStringValue(value map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if text := stringValue(value[key]); text != "" {
+			return text
+		}
+	}
+	return ""
 }
 
 func materializeGatewayImages(sources []gatewayImageSource) ([]string, func(), error) {
@@ -862,6 +948,20 @@ func decodeGatewayImageSource(source gatewayImageSource) ([]byte, string, error)
 	return data, imageExtensionForMediaType(mediaType), nil
 }
 
+func validateGatewayImageSource(source gatewayImageSource) error {
+	data, _, err := decodeGatewayImageSource(source)
+	if err != nil {
+		return err
+	}
+	if len(data) == 0 {
+		return fmt.Errorf("image input is empty")
+	}
+	if len(data) > maxGatewayImageBytes {
+		return fmt.Errorf("image input too large: max %d bytes", maxGatewayImageBytes)
+	}
+	return nil
+}
+
 func imageExtensionForMediaType(mediaType string) string {
 	switch strings.ToLower(strings.TrimSpace(mediaType)) {
 	case "image/jpeg", "image/jpg":
@@ -875,6 +975,92 @@ func imageExtensionForMediaType(mediaType string) string {
 	default:
 		return ""
 	}
+}
+
+func normalizeGatewayPDFSources(sources []gatewayFileSource) ([]gatewayFileSource, error) {
+	if len(sources) == 0 {
+		return nil, nil
+	}
+	if len(sources) > maxGatewayFiles {
+		return nil, fmt.Errorf("too many file inputs: max %d", maxGatewayFiles)
+	}
+	files := make([]gatewayFileSource, 0, len(sources))
+	for _, source := range sources {
+		file, err := normalizeGatewayPDFSource(source)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, file)
+	}
+	return files, nil
+}
+
+func normalizeGatewayPDFSource(source gatewayFileSource) (gatewayFileSource, error) {
+	raw := strings.TrimSpace(source.Raw)
+	if raw == "" {
+		return gatewayFileSource{}, fmt.Errorf("file input is empty")
+	}
+	mediaType := strings.TrimSpace(source.MediaType)
+	if strings.HasPrefix(raw, "data:") {
+		data, parsedMediaType, err := decodeGatewayDataURL(raw, mediaType, "file")
+		if err != nil {
+			return gatewayFileSource{}, err
+		}
+		if !isPDFMediaType(parsedMediaType) {
+			return gatewayFileSource{}, fmt.Errorf("unsupported file input: only application/pdf data URLs are supported")
+		}
+		if len(data) == 0 {
+			return gatewayFileSource{}, fmt.Errorf("file input is empty")
+		}
+		if len(data) > maxGatewayFileBytes {
+			return gatewayFileSource{}, fmt.Errorf("file input too large: max %d bytes", maxGatewayFileBytes)
+		}
+		source.Raw = raw
+		source.MediaType = "application/pdf"
+		return source, nil
+	}
+	if !isPDFMediaType(mediaType) {
+		return gatewayFileSource{}, fmt.Errorf("unsupported file input: only application/pdf data URLs are supported")
+	}
+	data, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		return gatewayFileSource{}, fmt.Errorf("invalid file data: %w", err)
+	}
+	if len(data) == 0 {
+		return gatewayFileSource{}, fmt.Errorf("file input is empty")
+	}
+	if len(data) > maxGatewayFileBytes {
+		return gatewayFileSource{}, fmt.Errorf("file input too large: max %d bytes", maxGatewayFileBytes)
+	}
+	source.Raw = "data:application/pdf;base64," + raw
+	source.MediaType = "application/pdf"
+	return source, nil
+}
+
+func decodeGatewayDataURL(raw string, fallbackMediaType string, label string) ([]byte, string, error) {
+	if !strings.HasPrefix(raw, "data:") {
+		return nil, "", fmt.Errorf("unsupported %s input: only data URLs are supported", label)
+	}
+	header, payload, ok := strings.Cut(raw, ",")
+	if !ok {
+		return nil, "", fmt.Errorf("invalid %s data URL", label)
+	}
+	mediaType := fallbackMediaType
+	if strings.HasPrefix(header, "data:") {
+		mediaType = strings.TrimPrefix(strings.Split(header, ";")[0], "data:")
+	}
+	if !strings.Contains(header, ";base64") {
+		return nil, "", fmt.Errorf("invalid %s data URL: base64 payload is required", label)
+	}
+	data, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, "", fmt.Errorf("invalid %s data URL: %w", label, err)
+	}
+	return data, mediaType, nil
+}
+
+func isPDFMediaType(mediaType string) bool {
+	return strings.EqualFold(strings.TrimSpace(mediaType), "application/pdf")
 }
 
 func codexCLITimeout() time.Duration {

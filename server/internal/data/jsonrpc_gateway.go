@@ -581,15 +581,16 @@ func gatewayUsageFilterFromParams(pm map[string]any) biz.GatewayUsageFilter {
 		end = time.Unix(endRaw, 0)
 	}
 	return biz.GatewayUsageFilter{
-		Limit:        getInt(pm, "limit", 30),
-		Offset:       getInt(pm, "offset", 0),
-		KeyID:        getInt(pm, "key_id", 0),
-		SessionID:    getString(pm, "session_id"),
-		Model:        getString(pm, "model"),
-		Endpoint:     getString(pm, "endpoint"),
-		UpstreamMode: getString(pm, "upstream_mode"),
-		StartTime:    start,
-		EndTime:      end,
+		Limit:           getInt(pm, "limit", 30),
+		Offset:          getInt(pm, "offset", 0),
+		KeyID:           getInt(pm, "key_id", 0),
+		SessionID:       getString(pm, "session_id"),
+		Model:           getString(pm, "model"),
+		ReasoningEffort: getString(pm, "reasoning_effort"),
+		Endpoint:        getString(pm, "endpoint"),
+		UpstreamMode:    getString(pm, "upstream_mode"),
+		StartTime:       start,
+		EndTime:         end,
 		SuccessSet: func() bool {
 			_, ok := pm["success"]
 			return ok
@@ -760,6 +761,7 @@ func mapGatewayUsageForRPC(item *biz.GatewayUsageLog) map[string]any {
 		"path":                     item.Path,
 		"endpoint":                 item.Endpoint,
 		"model":                    item.Model,
+		"reasoning_effort":         item.ReasoningEffort,
 		"status_code":              item.StatusCode,
 		"success":                  item.Success,
 		"stream":                   item.Stream,

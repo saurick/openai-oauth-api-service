@@ -33,6 +33,8 @@ type GatewayUsageLog struct {
 	Endpoint string `json:"endpoint,omitempty"`
 	// Model holds the value of the "model" field.
 	Model string `json:"model,omitempty"`
+	// ReasoningEffort holds the value of the "reasoning_effort" field.
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 	// StatusCode holds the value of the "status_code" field.
 	StatusCode int `json:"status_code,omitempty"`
 	// Success holds the value of the "success" field.
@@ -79,7 +81,7 @@ func (*GatewayUsageLog) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case gatewayusagelog.FieldID, gatewayusagelog.FieldAPIKeyID, gatewayusagelog.FieldStatusCode, gatewayusagelog.FieldInputTokens, gatewayusagelog.FieldOutputTokens, gatewayusagelog.FieldTotalTokens, gatewayusagelog.FieldCachedTokens, gatewayusagelog.FieldReasoningTokens, gatewayusagelog.FieldRequestBytes, gatewayusagelog.FieldResponseBytes, gatewayusagelog.FieldDurationMs:
 			values[i] = new(sql.NullInt64)
-		case gatewayusagelog.FieldAPIKeyPrefix, gatewayusagelog.FieldSessionID, gatewayusagelog.FieldRequestID, gatewayusagelog.FieldMethod, gatewayusagelog.FieldPath, gatewayusagelog.FieldEndpoint, gatewayusagelog.FieldModel, gatewayusagelog.FieldUpstreamConfiguredMode, gatewayusagelog.FieldUpstreamMode, gatewayusagelog.FieldUpstreamErrorType, gatewayusagelog.FieldErrorType:
+		case gatewayusagelog.FieldAPIKeyPrefix, gatewayusagelog.FieldSessionID, gatewayusagelog.FieldRequestID, gatewayusagelog.FieldMethod, gatewayusagelog.FieldPath, gatewayusagelog.FieldEndpoint, gatewayusagelog.FieldModel, gatewayusagelog.FieldReasoningEffort, gatewayusagelog.FieldUpstreamConfiguredMode, gatewayusagelog.FieldUpstreamMode, gatewayusagelog.FieldUpstreamErrorType, gatewayusagelog.FieldErrorType:
 			values[i] = new(sql.NullString)
 		case gatewayusagelog.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -152,6 +154,12 @@ func (_m *GatewayUsageLog) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field model", values[i])
 			} else if value.Valid {
 				_m.Model = value.String
+			}
+		case gatewayusagelog.FieldReasoningEffort:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field reasoning_effort", values[i])
+			} else if value.Valid {
+				_m.ReasoningEffort = value.String
 			}
 		case gatewayusagelog.FieldStatusCode:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -316,6 +324,9 @@ func (_m *GatewayUsageLog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("model=")
 	builder.WriteString(_m.Model)
+	builder.WriteString(", ")
+	builder.WriteString("reasoning_effort=")
+	builder.WriteString(_m.ReasoningEffort)
 	builder.WriteString(", ")
 	builder.WriteString("status_code=")
 	builder.WriteString(fmt.Sprintf("%v", _m.StatusCode))
