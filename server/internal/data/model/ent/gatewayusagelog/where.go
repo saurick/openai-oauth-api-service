@@ -94,6 +94,11 @@ func Model(v string) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldEQ(FieldModel, v))
 }
 
+// ReasoningEffort applies equality check predicate on the "reasoning_effort" field. It's identical to ReasoningEffortEQ.
+func ReasoningEffort(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldReasoningEffort, v))
+}
+
 // StatusCode applies equality check predicate on the "status_code" field. It's identical to StatusCodeEQ.
 func StatusCode(v int) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldEQ(FieldStatusCode, v))
@@ -682,6 +687,71 @@ func ModelEqualFold(v string) predicate.GatewayUsageLog {
 // ModelContainsFold applies the ContainsFold predicate on the "model" field.
 func ModelContainsFold(v string) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldContainsFold(FieldModel, v))
+}
+
+// ReasoningEffortEQ applies the EQ predicate on the "reasoning_effort" field.
+func ReasoningEffortEQ(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldReasoningEffort, v))
+}
+
+// ReasoningEffortNEQ applies the NEQ predicate on the "reasoning_effort" field.
+func ReasoningEffortNEQ(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNEQ(FieldReasoningEffort, v))
+}
+
+// ReasoningEffortIn applies the In predicate on the "reasoning_effort" field.
+func ReasoningEffortIn(vs ...string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldIn(FieldReasoningEffort, vs...))
+}
+
+// ReasoningEffortNotIn applies the NotIn predicate on the "reasoning_effort" field.
+func ReasoningEffortNotIn(vs ...string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNotIn(FieldReasoningEffort, vs...))
+}
+
+// ReasoningEffortGT applies the GT predicate on the "reasoning_effort" field.
+func ReasoningEffortGT(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldGT(FieldReasoningEffort, v))
+}
+
+// ReasoningEffortGTE applies the GTE predicate on the "reasoning_effort" field.
+func ReasoningEffortGTE(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldGTE(FieldReasoningEffort, v))
+}
+
+// ReasoningEffortLT applies the LT predicate on the "reasoning_effort" field.
+func ReasoningEffortLT(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldLT(FieldReasoningEffort, v))
+}
+
+// ReasoningEffortLTE applies the LTE predicate on the "reasoning_effort" field.
+func ReasoningEffortLTE(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldLTE(FieldReasoningEffort, v))
+}
+
+// ReasoningEffortContains applies the Contains predicate on the "reasoning_effort" field.
+func ReasoningEffortContains(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldContains(FieldReasoningEffort, v))
+}
+
+// ReasoningEffortHasPrefix applies the HasPrefix predicate on the "reasoning_effort" field.
+func ReasoningEffortHasPrefix(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldHasPrefix(FieldReasoningEffort, v))
+}
+
+// ReasoningEffortHasSuffix applies the HasSuffix predicate on the "reasoning_effort" field.
+func ReasoningEffortHasSuffix(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldHasSuffix(FieldReasoningEffort, v))
+}
+
+// ReasoningEffortEqualFold applies the EqualFold predicate on the "reasoning_effort" field.
+func ReasoningEffortEqualFold(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEqualFold(FieldReasoningEffort, v))
+}
+
+// ReasoningEffortContainsFold applies the ContainsFold predicate on the "reasoning_effort" field.
+func ReasoningEffortContainsFold(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldContainsFold(FieldReasoningEffort, v))
 }
 
 // StatusCodeEQ applies the EQ predicate on the "status_code" field.

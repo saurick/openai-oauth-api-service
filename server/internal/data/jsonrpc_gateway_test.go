@@ -139,15 +139,16 @@ func TestMapGatewayUsageKeySummaryForRPCIsStructCompatible(t *testing.T) {
 
 func TestMapGatewayUsageForRPCIncludesKeyName(t *testing.T) {
 	item := &biz.GatewayUsageLog{
-		ID:           10,
-		APIKeyID:     3,
-		APIKeyPrefix: "ogw_test",
-		APIKeyName:   "production",
-		CreatedAt:    time.Unix(1778000000, 0),
-		InputTokens:  100,
-		CachedTokens: 40,
-		OutputTokens: 20,
-		TotalTokens:  120,
+		ID:              10,
+		APIKeyID:        3,
+		APIKeyPrefix:    "ogw_test",
+		APIKeyName:      "production",
+		ReasoningEffort: "high",
+		CreatedAt:       time.Unix(1778000000, 0),
+		InputTokens:     100,
+		CachedTokens:    40,
+		OutputTokens:    20,
+		TotalTokens:     120,
 	}
 
 	data := mapGatewayUsageForRPC(item)
@@ -159,7 +160,8 @@ func TestMapGatewayUsageForRPCIncludesKeyName(t *testing.T) {
 	got := s.AsMap()
 	if got["api_key_id"] != float64(3) ||
 		got["api_key_prefix"] != "ogw_test" ||
-		got["api_key_name"] != "production" {
+		got["api_key_name"] != "production" ||
+		got["reasoning_effort"] != "high" {
 		t.Fatalf("unexpected key fields: %#v", got)
 	}
 }

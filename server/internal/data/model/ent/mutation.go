@@ -8306,6 +8306,7 @@ type GatewayUsageLogMutation struct {
 	_path                    *string
 	endpoint                 *string
 	model                    *string
+	reasoning_effort         *string
 	status_code              *int
 	addstatus_code           *int
 	success                  *bool
@@ -8756,6 +8757,42 @@ func (m *GatewayUsageLogMutation) OldModel(ctx context.Context) (v string, err e
 // ResetModel resets all changes to the "model" field.
 func (m *GatewayUsageLogMutation) ResetModel() {
 	m.model = nil
+}
+
+// SetReasoningEffort sets the "reasoning_effort" field.
+func (m *GatewayUsageLogMutation) SetReasoningEffort(s string) {
+	m.reasoning_effort = &s
+}
+
+// ReasoningEffort returns the value of the "reasoning_effort" field in the mutation.
+func (m *GatewayUsageLogMutation) ReasoningEffort() (r string, exists bool) {
+	v := m.reasoning_effort
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReasoningEffort returns the old "reasoning_effort" field's value of the GatewayUsageLog entity.
+// If the GatewayUsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayUsageLogMutation) OldReasoningEffort(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReasoningEffort is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReasoningEffort requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReasoningEffort: %w", err)
+	}
+	return oldValue.ReasoningEffort, nil
+}
+
+// ResetReasoningEffort resets all changes to the "reasoning_effort" field.
+func (m *GatewayUsageLogMutation) ResetReasoningEffort() {
+	m.reasoning_effort = nil
 }
 
 // SetStatusCode sets the "status_code" field.
@@ -9584,7 +9621,7 @@ func (m *GatewayUsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GatewayUsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
 	if m.api_key_id != nil {
 		fields = append(fields, gatewayusagelog.FieldAPIKeyID)
 	}
@@ -9608,6 +9645,9 @@ func (m *GatewayUsageLogMutation) Fields() []string {
 	}
 	if m.model != nil {
 		fields = append(fields, gatewayusagelog.FieldModel)
+	}
+	if m.reasoning_effort != nil {
+		fields = append(fields, gatewayusagelog.FieldReasoningEffort)
 	}
 	if m.status_code != nil {
 		fields = append(fields, gatewayusagelog.FieldStatusCode)
@@ -9684,6 +9724,8 @@ func (m *GatewayUsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.Endpoint()
 	case gatewayusagelog.FieldModel:
 		return m.Model()
+	case gatewayusagelog.FieldReasoningEffort:
+		return m.ReasoningEffort()
 	case gatewayusagelog.FieldStatusCode:
 		return m.StatusCode()
 	case gatewayusagelog.FieldSuccess:
@@ -9743,6 +9785,8 @@ func (m *GatewayUsageLogMutation) OldField(ctx context.Context, name string) (en
 		return m.OldEndpoint(ctx)
 	case gatewayusagelog.FieldModel:
 		return m.OldModel(ctx)
+	case gatewayusagelog.FieldReasoningEffort:
+		return m.OldReasoningEffort(ctx)
 	case gatewayusagelog.FieldStatusCode:
 		return m.OldStatusCode(ctx)
 	case gatewayusagelog.FieldSuccess:
@@ -9841,6 +9885,13 @@ func (m *GatewayUsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetModel(v)
+		return nil
+	case gatewayusagelog.FieldReasoningEffort:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReasoningEffort(v)
 		return nil
 	case gatewayusagelog.FieldStatusCode:
 		v, ok := value.(int)
@@ -10165,6 +10216,9 @@ func (m *GatewayUsageLogMutation) ResetField(name string) error {
 		return nil
 	case gatewayusagelog.FieldModel:
 		m.ResetModel()
+		return nil
+	case gatewayusagelog.FieldReasoningEffort:
+		m.ResetReasoningEffort()
 		return nil
 	case gatewayusagelog.FieldStatusCode:
 		m.ResetStatusCode()

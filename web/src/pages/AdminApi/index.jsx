@@ -17,6 +17,10 @@ const DASHBOARD_USAGE_SIZE = 8
 const DAY_SECONDS = 24 * 60 * 60
 const DEFAULT_TABLE_PAGE_SIZE = 8
 const TABLE_PAGE_SIZE_OPTIONS = [8, 10, 20, 50, 100]
+const TABLE_PAGE_SIZE_SELECT_OPTIONS = TABLE_PAGE_SIZE_OPTIONS.map((value) => ({
+  label: `${value} 条/页`,
+  value,
+}))
 const MAX_TABLE_FETCH_SIZE = 200
 const KEY_TOKEN_WINDOWS = [
   { key: '24h', label: '24h', seconds: DAY_SECONDS },
@@ -73,6 +77,16 @@ const CODEX_UPSTREAM_MODE_OPTIONS = [
 const USAGE_UPSTREAM_FILTER_OPTIONS = [
   { label: '全部上游', value: '' },
   ...CODEX_UPSTREAM_MODE_OPTIONS,
+]
+const CODEX_REASONING_EFFORT_OPTIONS = [
+  { label: 'Low', value: 'low' },
+  { label: 'Medium', value: 'medium' },
+  { label: 'High', value: 'high' },
+  { label: 'XHigh', value: 'xhigh' },
+]
+const USAGE_REASONING_EFFORT_FILTER_OPTIONS = [
+  { label: '全部 Effort', value: '' },
+  ...CODEX_REASONING_EFFORT_OPTIONS,
 ]
 const DEFAULT_USAGE_TIME_RANGE = '24h'
 const USAGE_TIME_RANGE_OPTIONS = [
@@ -150,6 +164,7 @@ const INITIAL_KEY_FORM = {
 const INITIAL_USAGE_FILTERS = {
   keyId: '',
   model: '',
+  reasoningEffort: '',
   success: '',
   upstreamMode: '',
   timeRange: DEFAULT_USAGE_TIME_RANGE,
@@ -283,6 +298,13 @@ function upstreamModeLabel(value) {
   return item?.label || '未记录'
 }
 
+function reasoningEffortLabel(value) {
+  const item = CODEX_REASONING_EFFORT_OPTIONS.find(
+    (option) => option.value === value
+  )
+  return item?.label || '未记录'
+}
+
 function renderUpstreamStats(item) {
   return (
     <div className="text-xs leading-5">
@@ -334,6 +356,30 @@ function getPaginationOffset(pagination) {
   )
   const current = Math.max(1, asInt(pagination?.current, 1))
   return (current - 1) * pageSize
+}
+
+function getVisiblePaginationItems(current, totalPages) {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1)
+  }
+
+  if (current <= 3) {
+    return [1, 2, 3, 'next-gap', totalPages]
+  }
+
+  if (current >= totalPages - 2) {
+    return [1, 'prev-gap', totalPages - 2, totalPages - 1, totalPages]
+  }
+
+  return [
+    1,
+    'prev-gap',
+    current - 1,
+    current,
+    current + 1,
+    'next-gap',
+    totalPages,
+  ]
 }
 
 function getUsageTimeRange(value) {
@@ -741,9 +787,10 @@ function ApiKeyUsageCell({ item }) {
 function TablePagination({ total, pagination, onChange, disabled = false }) {
   const currentState = clampPagination(pagination, total)
   const totalPages = getTotalPages(total, currentState.pageSize)
-  const start =
-    total > 0 ? (currentState.current - 1) * currentState.pageSize + 1 : 0
-  const end = Math.min(total, currentState.current * currentState.pageSize)
+  const paginationItems = getVisiblePaginationItems(
+    currentState.current,
+    totalPages
+  )
 
   const setCurrent = (current) => {
     onChange?.({
@@ -761,18 +808,60 @@ function TablePagination({ total, pagination, onChange, disabled = false }) {
 
   return (
     <div className="admin-table-pagination" aria-label="表格分页">
-      <div className="admin-table-pagination-summary">
-        共 {fmtNumber(total)} 条
-        <span>
-          {start}-{end}
-        </span>
-        <span>
-          第 {currentState.current} / {totalPages} 页
-        </span>
-      </div>
       <div className="admin-table-pagination-controls">
+        <div className="admin-table-pagination-summary">
+          共 {fmtNumber(total)} 条
+        </div>
+        <button
+          type="button"
+          onClick={() => setCurrent(currentState.current - 1)}
+          disabled={disabled || currentState.current <= 1}
+          className="admin-page-button admin-page-button-arrow"
+          aria-label="上一页"
+        >
+          <span aria-hidden="true">‹</span>
+        </button>
+        <div className="admin-table-page-numbers" aria-label="页码">
+          {paginationItems.map((item) =>
+            typeof item === 'number' ? (
+              <button
+                key={item}
+                type="button"
+                className={`admin-page-button ${
+                  item === currentState.current
+                    ? 'admin-page-button-current'
+                    : ''
+                }`}
+                disabled={disabled || item === currentState.current}
+                aria-current={
+                  item === currentState.current ? 'page' : undefined
+                }
+                aria-label={`第 ${item} 页`}
+                onClick={() => setCurrent(item)}
+              >
+                {item}
+              </button>
+            ) : (
+              <span
+                key={item}
+                className="admin-table-pagination-ellipsis"
+                aria-hidden="true"
+              >
+                …
+              </span>
+            )
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setCurrent(currentState.current + 1)}
+          disabled={disabled || currentState.current >= totalPages}
+          className="admin-page-button admin-page-button-arrow"
+          aria-label="下一页"
+        >
+          <span aria-hidden="true">›</span>
+        </button>
         <label className="admin-table-page-size">
-          每页
           <SearchableSelect
             value={currentState.pageSize}
             onChange={(nextValue) =>
@@ -782,33 +871,9 @@ function TablePagination({ total, pagination, onChange, disabled = false }) {
             ariaLabel="每页条数"
             className="admin-table-page-size-input"
             menuPlacement="top"
-            options={TABLE_PAGE_SIZE_OPTIONS}
+            options={TABLE_PAGE_SIZE_SELECT_OPTIONS}
           />
-          条
         </label>
-        <button
-          type="button"
-          onClick={() => setCurrent(currentState.current - 1)}
-          disabled={disabled || currentState.current <= 1}
-          className="admin-page-button"
-        >
-          上一页
-        </button>
-        <button
-          type="button"
-          className="admin-page-button admin-page-button-current"
-          disabled
-        >
-          {currentState.current}
-        </button>
-        <button
-          type="button"
-          onClick={() => setCurrent(currentState.current + 1)}
-          disabled={disabled || currentState.current >= totalPages}
-          className="admin-page-button"
-        >
-          下一页
-        </button>
       </div>
     </div>
   )
@@ -990,6 +1055,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     }
     if (filters.keyId) params.key_id = asInt(filters.keyId, 0)
     if (filters.model) params.model = filters.model
+    if (filters.reasoningEffort) {
+      params.reasoning_effort = filters.reasoningEffort
+    }
     if (filters.success) params.success = filters.success === 'true'
     if (filters.upstreamMode) params.upstream_mode = filters.upstreamMode
     return params
@@ -1569,7 +1637,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     <div className={tableWrapClass}>
       <div className="overflow-auto">
         <table
-          className={`${tableClass} ${compact ? 'min-w-[900px]' : 'min-w-[1880px]'}`}
+          className={`${tableClass} ${compact ? 'min-w-[900px]' : 'min-w-[1980px]'}`}
         >
           <thead>
             <tr>
@@ -1578,6 +1646,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               <th className={thClass}>凭据</th>
               <th className={thClass}>接口</th>
               <th className={thClass}>模型</th>
+              {!compact ? <th className={thClass}>Effort</th> : null}
               {!compact ? <th className={thClass}>上游</th> : null}
               <th className={thClass}>状态</th>
               <th className={thClass}>
@@ -1645,6 +1714,11 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   <td className={`${tdClass} font-mono text-xs`}>
                     {item.model || '-'}
                   </td>
+                  {!compact ? (
+                    <td className={`${tdClass} whitespace-nowrap text-xs`}>
+                      {reasoningEffortLabel(item.reasoning_effort)}
+                    </td>
+                  ) : null}
                   {!compact ? (
                     <td className={tdClass}>
                       <div className="whitespace-nowrap text-xs font-semibold">
@@ -1714,7 +1788,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             ) : (
               <tr>
                 <td
-                  colSpan={compact ? 6 : 13}
+                  colSpan={compact ? 6 : 14}
                   className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                 >
                   {loading ? '加载中...' : '暂无调用记录'}
@@ -2583,12 +2657,13 @@ export default function AdminApiPage({ view = 'dashboard' }) {
           <div className="admin-usage-day-model-body">
             <div className={tableWrapClass}>
               <div className="overflow-auto">
-                <table className={`${tableClass} min-w-[1280px]`}>
+                <table className={`${tableClass} min-w-[1380px]`}>
                   <thead>
                     <tr>
                       <th className={thClass}>时间</th>
                       <th className={thClass}>凭据备注</th>
                       <th className={thClass}>上游</th>
+                      <th className={thClass}>Effort</th>
                       <th className={thClass}>输入 Tokens</th>
                       <th className={thClass}>非缓存输入</th>
                       <th className={thClass}>输出 Tokens</th>
@@ -2616,6 +2691,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                             <div className="mt-1 text-xs text-[#9aa39e]">
                               {item.upstream_fallback ? 'fallback' : 'direct'}
                             </div>
+                          </td>
+                          <td className={`${tdClass} whitespace-nowrap text-xs`}>
+                            {reasoningEffortLabel(item.reasoning_effort)}
                           </td>
                           <td className={tdClass}>
                             {fmtNumber(item.input_tokens)}
@@ -2775,13 +2853,14 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             </div>
             <div className={tableWrapClass}>
               <div className="overflow-auto">
-                <table className={`${tableClass} min-w-[1240px]`}>
+                <table className={`${tableClass} min-w-[1340px]`}>
                   <thead>
                     <tr>
                       <th className={thClass}>时间</th>
                       <th className={thClass}>请求 ID</th>
                       <th className={thClass}>接口</th>
                       <th className={thClass}>模型</th>
+                      <th className={thClass}>Effort</th>
                       <th className={thClass}>上游</th>
                       <th className={thClass}>状态</th>
                       <th className={thClass}>Token</th>
@@ -2803,6 +2882,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                           </td>
                           <td className={`${tdClass} font-mono text-xs`}>
                             {item.model || '-'}
+                          </td>
+                          <td className={`${tdClass} whitespace-nowrap text-xs`}>
+                            {reasoningEffortLabel(item.reasoning_effort)}
                           </td>
                           <td className={tdClass}>
                             <div className="whitespace-nowrap text-xs">
@@ -2842,7 +2924,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     ) : (
                       <tr>
                         <td
-                          colSpan={10}
+                          colSpan={11}
                           className="px-4 py-8 text-center text-sm text-[#9aa39e]"
                         >
                           {usageSessionDetailLoading
@@ -3265,6 +3347,21 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                       })),
                     ]}
                     placeholder="输入模型筛选"
+                  />
+                </label>
+                <label className={fieldClass}>
+                  Effort
+                  <SearchableSelect
+                    value={usageFilters.reasoningEffort}
+                    onChange={(nextValue) =>
+                      setUsageFilters((current) => ({
+                        ...current,
+                        reasoningEffort: nextValue,
+                      }))
+                    }
+                    ariaLabel="Reasoning effort"
+                    options={USAGE_REASONING_EFFORT_FILTER_OPTIONS}
+                    placeholder="输入 Effort"
                   />
                 </label>
                 <label className={fieldClass}>

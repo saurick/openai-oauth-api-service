@@ -38,6 +38,9 @@ func (GatewayUsageLog) Fields() []ent.Field {
 		field.String("model").
 			Default("").
 			MaxLen(128),
+		field.String("reasoning_effort").
+			Default("").
+			MaxLen(16),
 		field.Int("status_code").
 			Default(0),
 		field.Bool("success").
@@ -86,6 +89,7 @@ func (GatewayUsageLog) Indexes() []ent.Index {
 		index.Fields("api_key_id", "created_at"),
 		index.Fields("session_id", "created_at"),
 		index.Fields("model", "created_at"),
+		index.Fields("reasoning_effort", "created_at"),
 		index.Fields("endpoint", "created_at"),
 		index.Fields("upstream_mode", "created_at"),
 		index.Fields("upstream_fallback", "created_at"),

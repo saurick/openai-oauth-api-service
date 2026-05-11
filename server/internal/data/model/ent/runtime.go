@@ -626,80 +626,86 @@ func init() {
 	gatewayusagelog.DefaultModel = gatewayusagelogDescModel.Default.(string)
 	// gatewayusagelog.ModelValidator is a validator for the "model" field. It is called by the builders before save.
 	gatewayusagelog.ModelValidator = gatewayusagelogDescModel.Validators[0].(func(string) error)
+	// gatewayusagelogDescReasoningEffort is the schema descriptor for reasoning_effort field.
+	gatewayusagelogDescReasoningEffort := gatewayusagelogFields[8].Descriptor()
+	// gatewayusagelog.DefaultReasoningEffort holds the default value on creation for the reasoning_effort field.
+	gatewayusagelog.DefaultReasoningEffort = gatewayusagelogDescReasoningEffort.Default.(string)
+	// gatewayusagelog.ReasoningEffortValidator is a validator for the "reasoning_effort" field. It is called by the builders before save.
+	gatewayusagelog.ReasoningEffortValidator = gatewayusagelogDescReasoningEffort.Validators[0].(func(string) error)
 	// gatewayusagelogDescStatusCode is the schema descriptor for status_code field.
-	gatewayusagelogDescStatusCode := gatewayusagelogFields[8].Descriptor()
+	gatewayusagelogDescStatusCode := gatewayusagelogFields[9].Descriptor()
 	// gatewayusagelog.DefaultStatusCode holds the default value on creation for the status_code field.
 	gatewayusagelog.DefaultStatusCode = gatewayusagelogDescStatusCode.Default.(int)
 	// gatewayusagelogDescSuccess is the schema descriptor for success field.
-	gatewayusagelogDescSuccess := gatewayusagelogFields[9].Descriptor()
+	gatewayusagelogDescSuccess := gatewayusagelogFields[10].Descriptor()
 	// gatewayusagelog.DefaultSuccess holds the default value on creation for the success field.
 	gatewayusagelog.DefaultSuccess = gatewayusagelogDescSuccess.Default.(bool)
 	// gatewayusagelogDescStream is the schema descriptor for stream field.
-	gatewayusagelogDescStream := gatewayusagelogFields[10].Descriptor()
+	gatewayusagelogDescStream := gatewayusagelogFields[11].Descriptor()
 	// gatewayusagelog.DefaultStream holds the default value on creation for the stream field.
 	gatewayusagelog.DefaultStream = gatewayusagelogDescStream.Default.(bool)
 	// gatewayusagelogDescInputTokens is the schema descriptor for input_tokens field.
-	gatewayusagelogDescInputTokens := gatewayusagelogFields[11].Descriptor()
+	gatewayusagelogDescInputTokens := gatewayusagelogFields[12].Descriptor()
 	// gatewayusagelog.DefaultInputTokens holds the default value on creation for the input_tokens field.
 	gatewayusagelog.DefaultInputTokens = gatewayusagelogDescInputTokens.Default.(int64)
 	// gatewayusagelogDescOutputTokens is the schema descriptor for output_tokens field.
-	gatewayusagelogDescOutputTokens := gatewayusagelogFields[12].Descriptor()
+	gatewayusagelogDescOutputTokens := gatewayusagelogFields[13].Descriptor()
 	// gatewayusagelog.DefaultOutputTokens holds the default value on creation for the output_tokens field.
 	gatewayusagelog.DefaultOutputTokens = gatewayusagelogDescOutputTokens.Default.(int64)
 	// gatewayusagelogDescTotalTokens is the schema descriptor for total_tokens field.
-	gatewayusagelogDescTotalTokens := gatewayusagelogFields[13].Descriptor()
+	gatewayusagelogDescTotalTokens := gatewayusagelogFields[14].Descriptor()
 	// gatewayusagelog.DefaultTotalTokens holds the default value on creation for the total_tokens field.
 	gatewayusagelog.DefaultTotalTokens = gatewayusagelogDescTotalTokens.Default.(int64)
 	// gatewayusagelogDescCachedTokens is the schema descriptor for cached_tokens field.
-	gatewayusagelogDescCachedTokens := gatewayusagelogFields[14].Descriptor()
+	gatewayusagelogDescCachedTokens := gatewayusagelogFields[15].Descriptor()
 	// gatewayusagelog.DefaultCachedTokens holds the default value on creation for the cached_tokens field.
 	gatewayusagelog.DefaultCachedTokens = gatewayusagelogDescCachedTokens.Default.(int64)
 	// gatewayusagelogDescReasoningTokens is the schema descriptor for reasoning_tokens field.
-	gatewayusagelogDescReasoningTokens := gatewayusagelogFields[15].Descriptor()
+	gatewayusagelogDescReasoningTokens := gatewayusagelogFields[16].Descriptor()
 	// gatewayusagelog.DefaultReasoningTokens holds the default value on creation for the reasoning_tokens field.
 	gatewayusagelog.DefaultReasoningTokens = gatewayusagelogDescReasoningTokens.Default.(int64)
 	// gatewayusagelogDescRequestBytes is the schema descriptor for request_bytes field.
-	gatewayusagelogDescRequestBytes := gatewayusagelogFields[16].Descriptor()
+	gatewayusagelogDescRequestBytes := gatewayusagelogFields[17].Descriptor()
 	// gatewayusagelog.DefaultRequestBytes holds the default value on creation for the request_bytes field.
 	gatewayusagelog.DefaultRequestBytes = gatewayusagelogDescRequestBytes.Default.(int64)
 	// gatewayusagelogDescResponseBytes is the schema descriptor for response_bytes field.
-	gatewayusagelogDescResponseBytes := gatewayusagelogFields[17].Descriptor()
+	gatewayusagelogDescResponseBytes := gatewayusagelogFields[18].Descriptor()
 	// gatewayusagelog.DefaultResponseBytes holds the default value on creation for the response_bytes field.
 	gatewayusagelog.DefaultResponseBytes = gatewayusagelogDescResponseBytes.Default.(int64)
 	// gatewayusagelogDescDurationMs is the schema descriptor for duration_ms field.
-	gatewayusagelogDescDurationMs := gatewayusagelogFields[18].Descriptor()
+	gatewayusagelogDescDurationMs := gatewayusagelogFields[19].Descriptor()
 	// gatewayusagelog.DefaultDurationMs holds the default value on creation for the duration_ms field.
 	gatewayusagelog.DefaultDurationMs = gatewayusagelogDescDurationMs.Default.(int64)
 	// gatewayusagelogDescUpstreamConfiguredMode is the schema descriptor for upstream_configured_mode field.
-	gatewayusagelogDescUpstreamConfiguredMode := gatewayusagelogFields[19].Descriptor()
+	gatewayusagelogDescUpstreamConfiguredMode := gatewayusagelogFields[20].Descriptor()
 	// gatewayusagelog.DefaultUpstreamConfiguredMode holds the default value on creation for the upstream_configured_mode field.
 	gatewayusagelog.DefaultUpstreamConfiguredMode = gatewayusagelogDescUpstreamConfiguredMode.Default.(string)
 	// gatewayusagelog.UpstreamConfiguredModeValidator is a validator for the "upstream_configured_mode" field. It is called by the builders before save.
 	gatewayusagelog.UpstreamConfiguredModeValidator = gatewayusagelogDescUpstreamConfiguredMode.Validators[0].(func(string) error)
 	// gatewayusagelogDescUpstreamMode is the schema descriptor for upstream_mode field.
-	gatewayusagelogDescUpstreamMode := gatewayusagelogFields[20].Descriptor()
+	gatewayusagelogDescUpstreamMode := gatewayusagelogFields[21].Descriptor()
 	// gatewayusagelog.DefaultUpstreamMode holds the default value on creation for the upstream_mode field.
 	gatewayusagelog.DefaultUpstreamMode = gatewayusagelogDescUpstreamMode.Default.(string)
 	// gatewayusagelog.UpstreamModeValidator is a validator for the "upstream_mode" field. It is called by the builders before save.
 	gatewayusagelog.UpstreamModeValidator = gatewayusagelogDescUpstreamMode.Validators[0].(func(string) error)
 	// gatewayusagelogDescUpstreamFallback is the schema descriptor for upstream_fallback field.
-	gatewayusagelogDescUpstreamFallback := gatewayusagelogFields[21].Descriptor()
+	gatewayusagelogDescUpstreamFallback := gatewayusagelogFields[22].Descriptor()
 	// gatewayusagelog.DefaultUpstreamFallback holds the default value on creation for the upstream_fallback field.
 	gatewayusagelog.DefaultUpstreamFallback = gatewayusagelogDescUpstreamFallback.Default.(bool)
 	// gatewayusagelogDescUpstreamErrorType is the schema descriptor for upstream_error_type field.
-	gatewayusagelogDescUpstreamErrorType := gatewayusagelogFields[22].Descriptor()
+	gatewayusagelogDescUpstreamErrorType := gatewayusagelogFields[23].Descriptor()
 	// gatewayusagelog.DefaultUpstreamErrorType holds the default value on creation for the upstream_error_type field.
 	gatewayusagelog.DefaultUpstreamErrorType = gatewayusagelogDescUpstreamErrorType.Default.(string)
 	// gatewayusagelog.UpstreamErrorTypeValidator is a validator for the "upstream_error_type" field. It is called by the builders before save.
 	gatewayusagelog.UpstreamErrorTypeValidator = gatewayusagelogDescUpstreamErrorType.Validators[0].(func(string) error)
 	// gatewayusagelogDescErrorType is the schema descriptor for error_type field.
-	gatewayusagelogDescErrorType := gatewayusagelogFields[23].Descriptor()
+	gatewayusagelogDescErrorType := gatewayusagelogFields[24].Descriptor()
 	// gatewayusagelog.DefaultErrorType holds the default value on creation for the error_type field.
 	gatewayusagelog.DefaultErrorType = gatewayusagelogDescErrorType.Default.(string)
 	// gatewayusagelog.ErrorTypeValidator is a validator for the "error_type" field. It is called by the builders before save.
 	gatewayusagelog.ErrorTypeValidator = gatewayusagelogDescErrorType.Validators[0].(func(string) error)
 	// gatewayusagelogDescCreatedAt is the schema descriptor for created_at field.
-	gatewayusagelogDescCreatedAt := gatewayusagelogFields[24].Descriptor()
+	gatewayusagelogDescCreatedAt := gatewayusagelogFields[25].Descriptor()
 	// gatewayusagelog.DefaultCreatedAt holds the default value on creation for the created_at field.
 	gatewayusagelog.DefaultCreatedAt = gatewayusagelogDescCreatedAt.Default.(func() time.Time)
 	userFields := schema.User{}.Fields()

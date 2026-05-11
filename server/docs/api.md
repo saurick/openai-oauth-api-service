@@ -88,7 +88,7 @@ HTTP 管理导出：
 - `GET /admin/exports/usage.csv`
 - `GET /admin/exports/usage.json`
 
-导出要求管理员登录态，筛选条件与 `api.usage_list` 保持一致：时间范围、key、模型、endpoint、success、upstream_mode。导出行包含 `api_key_name`，按当前 API 凭据备注回补；凭据已删除时为空。导出会写审计日志。
+导出要求管理员登录态，筛选条件与 `api.usage_list` 保持一致：时间范围、key、模型、reasoning_effort、endpoint、success、upstream_mode。导出行包含 `api_key_name` 和 `reasoning_effort`，API 凭据备注按当前 key 表回补；凭据已删除时为空。导出会写审计日志。
 
 ## OpenAI 兼容入口
 
@@ -106,13 +106,14 @@ HTTP 路由：
 usage 记录：
 
 - 成功和失败请求都会记录 usage log
-- 默认记录 endpoint、model、可选 session_id、HTTP 状态、耗时、请求/响应字节数和 token usage
+- 默认记录 endpoint、model、reasoning_effort、可选 session_id、HTTP 状态、耗时、请求/响应字节数和 token usage；未传 reasoning effort 或历史旧数据保持空值，不按 token 反推
 - 上游模式可在管理后台「上游模式」页通过 `api.gateway_upstream_get` / `api.gateway_upstream_set` 读取和切换；未保存运行时设置时，默认 `codex_backend`，也可用 `CODEX_UPSTREAM_MODE` 作为启动时默认值。`codex_backend` 会直接请求 Codex backend `/responses`，backend 失败时自动 fallback 到 `codex_cli`；显式切到 `codex_cli` 时只走 CLI。
 - `codex_cli` 模式 token 优先读取 Codex JSON 事件里的 usage，没有事件时才退回字符数估算；`codex_backend` 模式优先读取 Responses SSE `response.completed.usage`
 - usage log 会记录 `upstream_configured_mode`、`upstream_mode`、`upstream_fallback` 和 `upstream_error_type`，用于区分配置模式、实际执行模式和 fallback 情况。
-- OpenAI-compatible 请求体支持 `reasoning_effort`，可选值为 `low`、`medium`、`high`、`xhigh`
+- OpenAI-compatible 请求体支持 `reasoning_effort`、`reasoningEffort` 和 `reasoning.effort`，可选值为 `low`、`medium`、`high`、`xhigh`；direct backend 会转为 OpenAI Responses 口径的 `reasoning.effort`，CLI 模式会转为 Codex CLI `model_reasoning_effort`
 - direct backend 模式会把 `system` / `developer` 消息合并为 `instructions`；若请求没有这类消息，会补一个最小默认 instructions，因为 Codex backend 要求该字段非空
 - OpenAI-compatible 图片输入支持 data URL 形式的 `image_url` / `input_image`；CLI 模式会临时落盘并通过 Codex CLI `--image` 附加到本次请求，direct backend 模式会直接传入 `/responses` 内容；单次最多 4 张、单张最大 16 MiB
+- OpenAI-compatible PDF 输入支持 `input_file` / `file` 的 `application/pdf` data URL，或带 `mimeType=application/pdf` / `media_type=application/pdf` 的 base64 文件数据；PDF 仅支持 direct backend 模式，单次最多 4 个、单个最大 16 MiB。`txt` / `md` / 代码等文本类附件由客户端读取成文本后按普通 `text` 输入转发；`doc` / `docx` / `xls` / `xlsx` 暂不声明为原生模态，后续如需支持应先增加明确的服务端转换链路。
 - 默认不保存 prompt、response body 或正文采样
 - `/v1/chat/completions` 和 `/v1/responses` 转发前会检查 key 状态、模型权限、key 级总 / 输入 / 输出 / 非缓存输入 token 日周额度、RPM、TPM、日/月请求配额和日/月 token 配额；超限返回 HTTP `429`
 - token 配额以本系统落库 usage 为准，key 级 token 总额度、TPM 和 token 配额允许单次请求短暂越界，下一次请求开始拦截
@@ -225,6 +226,7 @@ usage 记录：
 - `items[].api_key_id`
 - `items[].api_key_name`
 - `items[].api_key_prefix`
+- `items[].reasoning_effort`
 - `items[].upstream_mode`
 - `items[].upstream_fallback`
 - `items[].upstream_error_type`
@@ -238,7 +240,7 @@ usage 记录：
 - `summary.average_duration_ms`
 - `summary.estimated_cost_usd`
 
-筛选条件支持 `upstream_mode=codex_backend|codex_cli`。未传时不按上游模式过滤。
+筛选条件支持 `reasoning_effort=low|medium|high|xhigh` 和 `upstream_mode=codex_backend|codex_cli`。未传时不按对应维度过滤。
 
 ### `api.usage_buckets`
 

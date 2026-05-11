@@ -236,12 +236,6 @@ func requestCodexTokenRefresh(ctx context.Context, client *stdhttp.Client, refre
 }
 
 func codexBackendRequestFromGateway(path string, body []byte, requestModel string, reasoningEffort string) (map[string]any, string, error) {
-	validationPrompt, err := codexCLIPromptFromGatewayRequest(path, body)
-	if err != nil {
-		return nil, "", err
-	}
-	validationPrompt.close()
-
 	var payload map[string]any
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, "", err
@@ -257,7 +251,10 @@ func codexBackendRequestFromGateway(path string, body []byte, requestModel strin
 		model = biz.DefaultCodexModelID
 	}
 
-	instructions, input := codexBackendInputFromPayload(path, payload)
+	instructions, input, err := codexBackendInputFromPayload(path, payload)
+	if err != nil {
+		return nil, "", err
+	}
 	if len(input) == 0 {
 		return nil, "", fmt.Errorf("codex backend upstream prompt is empty")
 	}
@@ -282,17 +279,19 @@ func codexBackendRequestFromGateway(path string, body []byte, requestModel strin
 	return req, model, nil
 }
 
-func codexBackendInputFromPayload(path string, payload map[string]any) (string, []any) {
+func codexBackendInputFromPayload(path string, payload map[string]any) (string, []any, error) {
 	if path == "/v1/responses" {
 		if instructions := strings.TrimSpace(stringValue(payload["instructions"])); instructions != "" {
-			return instructions, codexBackendResponseInputItems(payload["input"])
+			input, err := codexBackendResponseInputItems(payload["input"])
+			return instructions, input, err
 		}
-		return "", codexBackendResponseInputItems(payload["input"])
+		input, err := codexBackendResponseInputItems(payload["input"])
+		return "", input, err
 	}
 	return codexBackendChatInputItems(payload["messages"])
 }
 
-func codexBackendChatInputItems(value any) (string, []any) {
+func codexBackendChatInputItems(value any) (string, []any, error) {
 	messages, _ := value.([]any)
 	instructionParts := make([]string, 0)
 	input := make([]any, 0, len(messages))
@@ -303,7 +302,7 @@ func codexBackendChatInputItems(value any) (string, []any) {
 		}
 		role := strings.TrimSpace(stringValue(message["role"]))
 		content := contentValue(message["content"])
-		if strings.TrimSpace(content.Text) == "" && len(content.Images) == 0 {
+		if content.empty() {
 			continue
 		}
 		switch role {
@@ -312,21 +311,29 @@ func codexBackendChatInputItems(value any) (string, []any) {
 				instructionParts = append(instructionParts, content.Text)
 			}
 		case "user", "assistant":
-			if item := codexBackendMessageItem(role, content); item != nil {
+			item, err := codexBackendMessageItem(role, content)
+			if err != nil {
+				return "", nil, err
+			}
+			if item != nil {
 				input = append(input, item)
 			}
 		}
 	}
-	return strings.TrimSpace(strings.Join(instructionParts, "\n\n")), input
+	return strings.TrimSpace(strings.Join(instructionParts, "\n\n")), input, nil
 }
 
-func codexBackendResponseInputItems(value any) []any {
+func codexBackendResponseInputItems(value any) ([]any, error) {
 	switch v := value.(type) {
 	case string:
 		if strings.TrimSpace(v) == "" {
-			return nil
+			return nil, nil
 		}
-		return []any{codexBackendMessageItem("user", gatewayMessageContent{Text: v})}
+		item, err := codexBackendMessageItem("user", gatewayMessageContent{Text: v})
+		if err != nil {
+			return nil, err
+		}
+		return []any{item}, nil
 	case []any:
 		input := make([]any, 0, len(v))
 		for _, item := range v {
@@ -342,25 +349,37 @@ func codexBackendResponseInputItems(value any) []any {
 				continue
 			}
 			content := contentValue(message["content"])
-			if strings.TrimSpace(content.Text) == "" && len(content.Images) == 0 {
+			if content.empty() {
 				continue
 			}
-			if item := codexBackendMessageItem(role, content); item != nil {
+			item, err := codexBackendMessageItem(role, content)
+			if err != nil {
+				return nil, err
+			}
+			if item != nil {
 				input = append(input, item)
 			}
 		}
-		return input
+		return input, nil
 	default:
 		content := contentValue(value)
-		if strings.TrimSpace(content.Text) == "" && len(content.Images) == 0 {
-			return nil
+		if content.empty() {
+			return nil, nil
 		}
-		return []any{codexBackendMessageItem("user", content)}
+		item, err := codexBackendMessageItem("user", content)
+		if err != nil {
+			return nil, err
+		}
+		return []any{item}, nil
 	}
 }
 
-func codexBackendMessageItem(role string, content gatewayMessageContent) map[string]any {
-	parts := make([]any, 0, 1+len(content.Images))
+func codexBackendMessageItem(role string, content gatewayMessageContent) (map[string]any, error) {
+	normalizedFiles, err := normalizeGatewayPDFSources(content.Files)
+	if err != nil {
+		return nil, err
+	}
+	parts := make([]any, 0, 1+len(content.Images)+len(normalizedFiles))
 	text := strings.TrimSpace(content.Text)
 	if text != "" {
 		partType := "input_text"
@@ -373,20 +392,34 @@ func codexBackendMessageItem(role string, content gatewayMessageContent) map[str
 		if strings.TrimSpace(image.Raw) == "" {
 			continue
 		}
+		if err := validateGatewayImageSource(image); err != nil {
+			return nil, err
+		}
 		parts = append(parts, map[string]any{
 			"type":      "input_image",
 			"image_url": image.Raw,
 			"detail":    "high",
 		})
 	}
+	for i, file := range normalizedFiles {
+		filename := strings.TrimSpace(file.Filename)
+		if filename == "" {
+			filename = fmt.Sprintf("attachment-%d.pdf", i+1)
+		}
+		parts = append(parts, map[string]any{
+			"type":      "input_file",
+			"file_data": file.Raw,
+			"filename":  filename,
+		})
+	}
 	if len(parts) == 0 {
-		return nil
+		return nil, nil
 	}
 	return map[string]any{
 		"type":    "message",
 		"role":    role,
 		"content": parts,
-	}
+	}, nil
 }
 
 func parseCodexBackendSSE(body []byte) (string, openAIUsageMetrics, error) {

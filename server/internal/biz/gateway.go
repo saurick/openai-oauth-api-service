@@ -88,6 +88,7 @@ type GatewayUsageLog struct {
 	Path                   string
 	Endpoint               string
 	Model                  string
+	ReasoningEffort        string
 	StatusCode             int
 	Success                bool
 	Stream                 bool
@@ -109,18 +110,19 @@ type GatewayUsageLog struct {
 }
 
 type GatewayUsageFilter struct {
-	Limit        int
-	Offset       int
-	KeyID        int
-	OwnerUserID  int
-	SessionID    string
-	Model        string
-	Endpoint     string
-	UpstreamMode string
-	SuccessSet   bool
-	Success      bool
-	StartTime    time.Time
-	EndTime      time.Time
+	Limit           int
+	Offset          int
+	KeyID           int
+	OwnerUserID     int
+	SessionID       string
+	Model           string
+	ReasoningEffort string
+	Endpoint        string
+	UpstreamMode    string
+	SuccessSet      bool
+	Success         bool
+	StartTime       time.Time
+	EndTime         time.Time
 }
 
 type GatewayUsageSummary struct {

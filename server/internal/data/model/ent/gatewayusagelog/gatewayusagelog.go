@@ -29,6 +29,8 @@ const (
 	FieldEndpoint = "endpoint"
 	// FieldModel holds the string denoting the model field in the database.
 	FieldModel = "model"
+	// FieldReasoningEffort holds the string denoting the reasoning_effort field in the database.
+	FieldReasoningEffort = "reasoning_effort"
 	// FieldStatusCode holds the string denoting the status_code field in the database.
 	FieldStatusCode = "status_code"
 	// FieldSuccess holds the string denoting the success field in the database.
@@ -78,6 +80,7 @@ var Columns = []string{
 	FieldPath,
 	FieldEndpoint,
 	FieldModel,
+	FieldReasoningEffort,
 	FieldStatusCode,
 	FieldSuccess,
 	FieldStream,
@@ -132,6 +135,10 @@ var (
 	DefaultModel string
 	// ModelValidator is a validator for the "model" field. It is called by the builders before save.
 	ModelValidator func(string) error
+	// DefaultReasoningEffort holds the default value on creation for the "reasoning_effort" field.
+	DefaultReasoningEffort string
+	// ReasoningEffortValidator is a validator for the "reasoning_effort" field. It is called by the builders before save.
+	ReasoningEffortValidator func(string) error
 	// DefaultStatusCode holds the default value on creation for the "status_code" field.
 	DefaultStatusCode int
 	// DefaultSuccess holds the default value on creation for the "success" field.
@@ -222,6 +229,11 @@ func ByEndpoint(opts ...sql.OrderTermOption) OrderOption {
 // ByModel orders the results by the model field.
 func ByModel(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldModel, opts...).ToFunc()
+}
+
+// ByReasoningEffort orders the results by the reasoning_effort field.
+func ByReasoningEffort(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReasoningEffort, opts...).ToFunc()
 }
 
 // ByStatusCode orders the results by the status_code field.

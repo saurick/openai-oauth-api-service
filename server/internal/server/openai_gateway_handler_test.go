@@ -62,6 +62,25 @@ func TestCodexCLIPromptFromChatCompletionsPayloadMaterializesImages(t *testing.T
 	}
 }
 
+func TestCodexCLIPromptRejectsPDFInput(t *testing.T) {
+	body := []byte(`{
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "Summarize this PDF."},
+				{"type": "input_file", "filename": "sample.pdf", "file_data": "data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y="}
+			]}
+		]
+	}`)
+
+	_, err := codexCLIPromptFromGatewayRequest("/v1/chat/completions", body)
+	if err == nil {
+		t.Fatal("expected PDF input to be rejected by Codex CLI prompt builder")
+	}
+	if !strings.Contains(err.Error(), "codex_backend") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestExtractCodexCLIAnswer(t *testing.T) {
 	output := []byte("OpenAI Codex\nuser\nReply\ncodex\nOK\n tokens ignored\n\ntokens used\n1,605\nOK\n")
 
@@ -175,6 +194,29 @@ func TestParseRequestReasoningEffortRejectsUnknownValue(t *testing.T) {
 	}
 }
 
+func TestCodexBackendRequestPassesAllReasoningEfforts(t *testing.T) {
+	for _, effort := range []string{"low", "medium", "high", "xhigh"} {
+		t.Run(effort, func(t *testing.T) {
+			req, _, err := codexBackendRequestFromGateway(
+				"/v1/chat/completions",
+				[]byte(`{"model":"gpt-5.5","messages":[{"role":"user","content":"Reply OK"}]}`),
+				"",
+				effort,
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			reasoning, ok := req["reasoning"].(map[string]any)
+			if !ok {
+				t.Fatalf("missing reasoning payload: %#v", req)
+			}
+			if reasoning["effort"] != effort {
+				t.Fatalf("reasoning.effort = %v, want %s", reasoning["effort"], effort)
+			}
+		})
+	}
+}
+
 func TestRunCodexCLICancelsWithRequestContext(t *testing.T) {
 	bin := filepath.Join(t.TempDir(), "fake-codex")
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\nsleep 5\necho OK\n"), 0o755); err != nil {
@@ -199,6 +241,55 @@ func TestRunCodexCLICancelsWithRequestContext(t *testing.T) {
 	}
 	if elapsed := time.Since(started); elapsed > 2*time.Second {
 		t.Fatalf("codex cli did not stop with request context, elapsed=%s", elapsed)
+	}
+}
+
+func TestRunCodexCLIPassesAllReasoningEfforts(t *testing.T) {
+	tmp := t.TempDir()
+	bin := filepath.Join(tmp, "fake-codex")
+	script := `#!/bin/sh
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-c" ]; then
+    printf "%s" "$2" > "$SEEN_CODEX_CONFIG_PATH"
+  fi
+  shift
+done
+cat >/dev/null
+echo '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"OK"}}'
+echo '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":1,"total_tokens":11}}'
+`
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CODEX_CLI_BIN", bin)
+	t.Setenv("CODEX_CLI_TIMEOUT_SECONDS", "30")
+
+	for _, effort := range []string{"low", "medium", "high", "xhigh"} {
+		t.Run(effort, func(t *testing.T) {
+			seenPath := filepath.Join(tmp, "seen-"+effort)
+			t.Setenv("SEEN_CODEX_CONFIG_PATH", seenPath)
+			content, metrics, err := (&openAIGatewayHandler{}).runCodexCLI(
+				context.Background(),
+				"/v1/chat/completions",
+				[]byte(`{"messages":[{"role":"user","content":"Reply OK"}]}`),
+				"gpt-5.5",
+				effort,
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if content != "OK" || metrics.TotalTokens != 11 {
+				t.Fatalf("content=%q metrics=%#v", content, metrics)
+			}
+			seen, err := os.ReadFile(seenPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := `model_reasoning_effort="` + effort + `"`
+			if string(seen) != want {
+				t.Fatalf("codex config = %q, want %q", string(seen), want)
+			}
+		})
 	}
 }
 
@@ -287,6 +378,84 @@ func TestCodexBackendRequestFromChatCompletionsPayload(t *testing.T) {
 	}
 	if content[1].(map[string]any)["type"] != "input_image" {
 		t.Fatalf("second content part = %#v", content[1])
+	}
+}
+
+func TestCodexBackendRequestFromPDFInput(t *testing.T) {
+	body := []byte(`{
+		"model": "gpt-5.5",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "Summarize this PDF."},
+				{"type": "input_file", "filename": "sample.pdf", "file_data": "data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y="}
+			]}
+		]
+	}`)
+
+	req, _, err := codexBackendRequestFromGateway("/v1/chat/completions", body, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := req["input"].([]any)
+	message := input[0].(map[string]any)
+	content := message["content"].([]any)
+	if content[0].(map[string]any)["type"] != "input_text" {
+		t.Fatalf("first content part = %#v", content[0])
+	}
+	filePart := content[1].(map[string]any)
+	if filePart["type"] != "input_file" {
+		t.Fatalf("second content part = %#v", content[1])
+	}
+	if filePart["filename"] != "sample.pdf" {
+		t.Fatalf("filename = %v, want sample.pdf", filePart["filename"])
+	}
+	if filePart["file_data"] != "data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y=" {
+		t.Fatalf("file_data = %v", filePart["file_data"])
+	}
+}
+
+func TestCodexBackendRequestFromPDFFilePartWithRawBase64(t *testing.T) {
+	body := []byte(`{
+		"model": "gpt-5.5",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "file", "file": {"name": "raw.pdf", "mimeType": "application/pdf", "data": "JVBERi0xLjQKJSVFT0Y="}}
+			]}
+		]
+	}`)
+
+	req, _, err := codexBackendRequestFromGateway("/v1/chat/completions", body, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := req["input"].([]any)
+	message := input[0].(map[string]any)
+	content := message["content"].([]any)
+	filePart := content[0].(map[string]any)
+	if filePart["type"] != "input_file" || filePart["filename"] != "raw.pdf" {
+		t.Fatalf("file part = %#v", filePart)
+	}
+	if filePart["file_data"] != "data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y=" {
+		t.Fatalf("file_data = %v", filePart["file_data"])
+	}
+}
+
+func TestCodexBackendRequestRejectsUnsupportedFileType(t *testing.T) {
+	body := []byte(`{
+		"model": "gpt-5.5",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "input_file", "filename": "sample.docx", "file_data": "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,AAAA"}
+			]}
+		]
+	}`)
+
+	_, _, err := codexBackendRequestFromGateway("/v1/chat/completions", body, "", "")
+	if err == nil {
+		t.Fatal("expected unsupported file type error")
+	}
+	if !strings.Contains(err.Error(), "application/pdf") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -398,6 +567,10 @@ func TestRunCodexBackendPostsResponsesAndParsesSSE(t *testing.T) {
 	}
 	if seen["stream"] != true || seen["model"] != "gpt-5.5" {
 		t.Fatalf("unexpected backend request: %#v", seen)
+	}
+	reasoning := seen["reasoning"].(map[string]any)
+	if reasoning["effort"] != "low" {
+		t.Fatalf("backend reasoning = %#v, want low", reasoning)
 	}
 }
 
