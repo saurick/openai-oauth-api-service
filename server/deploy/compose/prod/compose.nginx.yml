@@ -1,0 +1,19 @@
+name: openai-oauth-api-service-prod
+
+services:
+  nginx:
+    image: "${NGINX_IMAGE:-nginx:1.27-alpine}"
+    container_name: "${PROJECT_SLUG:-openai-oauth-api-service}-nginx"
+    restart: always
+    depends_on:
+      app-server:
+        condition: service_started
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - "./nginx/conf.d:/etc/nginx/conf.d:ro"
+      - "./nginx/snippets:/etc/nginx/snippets:ro"
+      - "${NGINX_CERTS_DIR:-/data/openai-oauth-api-service/nginx/certs}:/etc/nginx/certs:ro"
+      - "${NGINX_ACME_DIR:-/data/openai-oauth-api-service/nginx/acme}:/var/www/acme:ro"
+    networks: {}

@@ -2,13 +2,79 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-11 API 凭据暗色 hover 修复
+- 完成：API 凭据表格选中行 hover 从浅色硬编码改为主题变量，暗夜模式下选中行 hover 保持深色背景和可读文字；表头、普通行 hover 和选中行背景继续复用后台主题变量。
+- 完成：`style:l1` 增加暗夜主题下“选中行 + hover”的背景亮度、文字对比和盒模型断言，覆盖截图中浅色残留问题。
+- 下一步：暂无。
+- 阻塞/风险：本轮只修复后台表格 hover 样式，不改变 API 凭据业务字段、保存或展示映射链路。
+
+## 2026-05-11 凭据 Token 细分限额
+- 补充：修复 API 凭据限额弹窗暗色主题下新限额区块仍使用浅色背景的问题；暗色覆盖规则新增 `bg-[#f7fbf8]` 与 `border-[#e4ece6]`，项目级 `AGENTS.md` 已写入后台前端必须同时支持浅色 / 暗色主题及目标区域回归要求。
+- 补充验证：`style:l1` 已新增暗色模式下打开 API 凭据新建弹窗的回归，覆盖总 Token 与细分 Token 两个限额区块、8 个限制输入框、所有日 / 周总量 / 输入 / 非缓存输入 / 输出字段、背景亮度、文字对比和盒模型。
+- 完成：API 凭据新增日 / 周输入 Token、输出 Token、非缓存输入 Token 限额字段，Ent schema 与 Atlas migration `20260511024741` 已生成并应用到当前开发库；旧凭据默认 0 表示不限，不改变既有总 Token 日 / 周限额语义。
+- 完成：转发前 quota 检查改为同一日 / 周窗口内同时判断总量、输入、输出和非缓存输入；非缓存输入统一按 `input_tokens - cached_tokens` 且下限为 0，不伪造缺失缓存值。
+- 完成：后台 API 凭据创建 / 编辑弹窗可配置细分限额，列表同步展示已设置的总量、输入、输出和非缓存输入日 / 周额度；JSON-RPC 文档和前端说明已同步。
+- 下一步：如需按模型级 policy 继续拆输入 / 输出 / 非缓存输入，需要单独扩展 `gateway_policies`，本轮保持模型策略仍按总 Token，避免两套限额同时膨胀。
+- 阻塞/风险：限额仍以已落库 usage 为真源，单次请求可能在本次成功后使窗口越过额度，下一次请求开始拦截；历史 usage 的缓存缺值不会被回填。
+
+## 2026-05-11 统计凭据备注回显
+- 完成：后端 `usage_list` 和 `usage_session_summaries` 按当前 `gateway_api_keys.name` 回补 `api_key_name`，CSV/JSON usage 导出同步增加 API 凭据备注字段；凭据已删除或缺失时不伪造备注。
+- 完成：后台最近调用、调用明细、每日模型详情和会话聚合表格统一展示“备注 + 前缀”，避免只看凭据前缀难以判断使用方；`style:l1` mock 与断言同步覆盖备注回显。
+- 下一步：如需按历史调用时的备注保留快照，需要单独评估在 usage log 中新增快照字段及迁移口径；本轮保持当前 key 表为备注真源。
+- 阻塞/风险：30 天趋势、Token 构成、模型 / 接口分布是跨凭据聚合图表，没有单个凭据备注可展示；凭据删除后的旧 usage 只能保留前缀。
+
+## 2026-05-11 Compose Nginx 迁移入口
+- 完成：新增可选 `server/deploy/compose/prod/compose.nginx.yml`，使用官方 `nginx:1.27-alpine` 镜像和配置挂载，不构建自定义 Nginx 镜像；默认 `compose.yml` 不启动 Nginx，避免和当前宿主机 Nginx 抢占 `80/443`。
+- 完成：新增 `server/deploy/compose/prod/nginx/` 配置目录，收口 HTTP-01 challenge、主域 HTTPS 反代、旧域名跳转样本、proxy header、`proxy_read_timeout 700s` / `proxy_send_timeout 700s`，反代目标为 Compose 内部 `app-server:8400`。
+- 完成：同步更新 `.env.example`、Compose 部署 README 和部署总览，说明证书目录、ACME webroot、非标准端口预验证、切换宿主机 Nginx 与回滚步骤。
+- 验证通过：`docker compose -f compose.yml -f compose.nginx.yml --env-file .env.example config` 可解析；使用临时自签证书和 `nginx:1.27-alpine` 执行 `nginx -t` 通过；`git diff --check` 通过。
+- 下一步：需要真正切线上入口时，先把当前宿主机证书复制到 `/data/openai-oauth-api-service/nginx/certs`，用 `8080/8443` 验证容器 Nginx 后，再停宿主机 Nginx 切 `80/443`。
+- 阻塞/风险：本轮只增加迁移能力，不切当前线上入口；旧域名 HTTPS redirect server block 依赖旧域名证书，新机器如果不迁旧证书，应先删除或注释对应 server block。
+
+## 2026-05-11 Codex 网关 10 秒 502 修复
+- 完成：排查线上 usage 后确认近 2 小时 502 均为 `codex_backend_upstream_failed`，耗时集中在 `10000-10006ms`，与服务端 `server.http.timeout=10s` 完全吻合；外层 HTTP context 先取消，导致 Codex backend / CLI 600 秒上游超时配置没有生效。
+- 完成：将 dev/prod `server.http.timeout` 调整为 `650s`，覆盖 `CODEX_BACKEND_TIMEOUT_SECONDS=600` 与 `CODEX_CLI_TIMEOUT_SECONDS=600` 的正常等待窗口；`server.grpc.timeout` 保持 `10s`，避免放大无关内部接口等待时间。
+- 完成：本地构建镜像 `oauth-api-service-server:20260511T102030-469f082c-local` 并上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260511T102030-469f082c-local/`；远端只执行 `docker load`、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d app-server`，未在服务器构建。
+- 验证通过：远端当前运行镜像为 `oauth-api-service-server:20260511T102030-469f082c-local`，容器内 `/app/configs/config.yaml` 显示 HTTP timeout `650s`、gRPC timeout `10s`；`/healthz` 返回 `ok`，`/readyz` 返回 `ready`，公网 `https://oauth-api.saurick.me/admin-login` 返回 `HTTP 200`。
+- 验证通过：线上直连 `/v1/chat/completions` 使用现有下游 key 返回 `HTTP 200`、正文 `OK`，耗时约 `1.71s`；部署后 usage 新增记录为 `chat.completions 200`，截至复查没有新增 502。
+- 清理：部署后执行 `docker image prune -a -f` 与 `docker builder prune -f`，未执行 volume prune；根分区从清理前 `38%` 回到 `36%`，当前运行容器和数据库 volume 保持不变。
+- 阻塞/风险：Cloudflare / Nginx 仍可能对极长非流式请求有更外层超时限制；本轮修复的是当前已确认的服务进程 10 秒外层超时。
+
+## 2026-05-11 首页最近调用字段线上部署
+- 完成：按低配服务器发布边界在本地构建镜像 `oauth-api-service-server:20260511T002238-469f082c-local`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260511T002238-469f082c-local/`；远端只执行 `docker load`、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d app-server`，未在服务器构建。
+- 完成：远端当前运行镜像为 `oauth-api-service-server:20260511T002238-469f082c-local`；`/healthz` 返回 `ok`，`/readyz` 返回 `ready`，公网 `https://oauth-api.saurick.me/admin-login` 返回 `HTTP 200`。
+- 验证通过：Browser 插件通过线上 `https://oauth-api.saurick.me/oauth/callback` 注入本轮登录 token 后进入 `/admin-dashboard`，确认「最近调用」已包含请求、Session、缓存输入 / 推理输出、字节、Backend 优先和强制 CLI 字段；未发现新的页面错误，浏览器日志仅保留既有 React Router v7 future flag warning。
+- 清理：部署后执行 `docker image prune -a -f` 与 `docker builder prune -f`，未执行 volume prune；根分区从清理前 `38%` 回到 `36%`，当前运行容器和数据库 volume 保持不变。
+- 阻塞/风险：本轮没有数据库 schema 变更，未执行 migration；远端 release 目录保留本轮上传镜像包，便于短期追溯，后续磁盘紧张时可单独清理 release tar 包。
+
+## 2026-05-11 首页最近调用字段对齐
+- 完成：将 `/admin-dashboard`「最近调用」表格字段对齐 `/admin-usage`「调用明细」口径，补齐请求 ID、Session、请求方法、上游模式、缓存输入 / 推理输出、请求 / 响应字节和同款表头说明，避免首页样本与明细页字段继续漂移。
+- 完成：`style:l1` 增加首页最近调用字段断言，要求请求 ID、Session、缓存输入 / 推理输出、字节和表头 tooltip 与明细页保持一致。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm lint`、`cd web && pnpm style:l1`（22 个场景）均通过；Browser 插件通过真实本地后端登录 `http://127.0.0.1:5176/admin-dashboard`，确认首页最近调用 DOM 已包含新增明细字段，控制台仅有既有 React Router v7 future flag warning。
+- 阻塞/风险：本轮只调整首页最近调用展示和前端回归断言，未修改后端 usage DTO、数据库字段、导出和 `/admin-usage` 明细页真源。
+
+## 2026-05-11 线上证书自动续签口径收口
+- 完成：线上 `8.218.4.199` 的证书续签入口已从旧 `openai.saurick.space` 专用脚本收口为 `/usr/local/sbin/renew-openai-oauth-api-certs.sh`，root crontab 现只保留 `23 3 * * * /usr/local/sbin/renew-openai-oauth-api-certs.sh`。
+- 完成：`acme.sh` 自动续签列表已移除 `openai.saurick.space` 与 `oauth-api.saurick.space`，当前只保留主域 `oauth-api.saurick.me`；旧脚本、旧 acme 状态目录和旧 Cloudflare env 已移到 `/root/ops-backups/acme-renewal-20260510T160712Z/` 下归档，不再位于活跃路径。
+- 验证通过：手动执行新脚本后，日志只扫描 `oauth-api.saurick.me`，按 Let's Encrypt ARI 跳过未到期证书，下一续签时间为 `2026-07-09T14:08:47Z`；`nginx -t` 与 reload 成功，源站证书仍为 Let's Encrypt `E7`，有效期到 `2026-08-08 13:59:44 GMT`。
+- 验证通过：公网 `https://oauth-api.saurick.me/admin-login` 返回 `HTTP 200`，源站直连 `8.218.4.199:443` 使用 SNI `oauth-api.saurick.me` 的证书主机名校验通过。
+- 阻塞/风险：本轮只收口续签自动化和 acme 活跃状态；Nginx 中旧 `saurick.space` 跳转 server block 仍保留但不再自动续签，后续若确认旧域名彻底废弃，可单独清理对应 Nginx 配置与旧证书文件。
+
+## 2026-05-10 上游模式线上部署与 OpenCode 验证
+- 完成：按低配服务器发布边界在本地构建镜像 `oauth-api-service-server:20260510T152408-469f082c-local3`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260510T152408-469f082c-local3/`；远端只执行 `docker load`、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d app-server`，未在服务器构建。
+- 完成：远端 Compose 当前运行镜像为 `oauth-api-service-server:20260510T152408-469f082c-local3`；`/readyz` 返回 `ready`，`https://oauth-api.saurick.me/admin-upstream` 返回新版前端资源，Cloudflare 代理解析正常，本轮未修改 Cloudflare DNS 记录。
+- 验证通过：本地 `opencode models oauth-api-service` 返回 `gpt-5.4/gpt-5.5`；`opencode run -m oauth-api-service/gpt-5.5 --variant high '只回复 pong，不要解释。'` 返回 `pong`，截图中的 `API key 无效` 未复现。
+- Token 对比：生产 usage 记录显示 Backend 单轮 `29 in / 17 out / 46 total / 1.69s`，Backend 带历史 `50 in / 17 out / 67 total / 1.25s`；CLI 单轮 `13765 in / 5 out / 13770 total / 5.40s`；CLI 带历史重试成功为 `13780 in / 17 out / 13797 total / 5.54s` 和 `13775 in / 19 out / 13794 total / 5.99s`。另有一次 CLI 带历史返回 `502 codex_cli_upstream_failed / 10.95s`，最终已切回 `codex_backend`。
+- 清理：部署后执行 `docker image prune -a -f` 与 `docker builder prune -f`；根分区从 `20G used / 52%` 降到 `14G used / 36%`，未执行 volume prune，所有运行中容器保持 up。
+- 阻塞/风险：CLI 路径仍会显著放大输入 token，并存在偶发 `codex_cli_upstream_failed`；高频 OpenCode 默认应保持 `codex_backend`，`codex_cli` 只作为兼容兜底或临时排障模式。
+
 ## 2026-05-10 Codex 上游模式开关与统计
 - 完成：新增 `gateway_settings` 运行时设置表，后台 `api.gateway_upstream_get` / `api.gateway_upstream_set` 可在 `codex_backend` 与 `codex_cli` 间切换；默认仍为 `codex_backend`，未保存后台设置时才读取 `CODEX_UPSTREAM_MODE` 作为启动默认值。
 - 完成：usage log 新增 `upstream_configured_mode`、`upstream_mode`、`upstream_fallback`、`upstream_error_type`；后台 summary、每日模型、凭据统计、会话聚合、请求明细和导出均补充 Backend / CLI / fallback 统计或字段，并支持 `upstream_mode` 筛选。
-- 完成：后台「用量日志」页新增 Codex 上游模式开关；统计卡片、筛选栏、每日模型表、凭据窗口统计、会话表、每日模型详情和会话详情均展示上游模式口径。
-- 验证通过：`cd server && make data` 生成 migration 与 Ent 代码；`cd server && make print_db_url && make migrate_apply` 已应用本地开发库到 `20260510141225`；`cd server && go test ./...`、`cd web && pnpm test`、`cd web && pnpm style:l1`、`cd web && pnpm build` 均通过。
+- 完成：后台新增独立 `/admin-upstream`「上游模式」菜单，仅负责 Codex 上游开关读写；「用量日志」页保留上游模式筛选、统计列和导出字段；业务看板补充上游分布卡片、趋势 tooltip 上游分布和最近调用上游列。
+- 验证通过：`cd server && make data` 生成 migration 与 Ent 代码；`cd server && make print_db_url && make migrate_apply` 已应用本地开发库到 `20260510141225`；`cd server && go test ./...`、`cd web && pnpm test`、`cd web && pnpm style:l1`（22 个场景）、`cd web && pnpm build` 均通过。
 - 本地真实请求对比：经后台开关分别调用 `/v1/chat/completions`，Backend 单轮 `input=25/output=17/total=42/2.45s`，Backend 带历史消息 `input=40/output=5/total=45/1.72s`；CLI 单轮 `input=23593/output=5/total=23598/9.35s`，CLI 带历史消息 `input=23604/output=5/total=23609/7.31s`。四条 usage 均正确记录 configured/actual/fallback 字段，测试后已切回 `codex_backend`。
-- 前端回归：Browser 插件在 `http://127.0.0.1:5176/admin-usage` 验证登录、开关切到 CLI 再切回 Backend、桌面与 390px 移动视口页面非空、无框架错误覆盖；控制台仅有既有 React Router v7 future flag warning。
+- 前端回归：Browser 插件在 `http://127.0.0.1:5176/admin-usage` 验证登录、用量统计桌面与 390px 移动视口页面非空、无框架错误覆盖；`/admin-upstream` 验证独立菜单只展示模式开关，开关切到 CLI 再切回 Backend；控制台仅有既有 React Router v7 future flag warning。
 - 阻塞/风险：本轮只验证本地开发库与本机 Codex 登录态；线上服务器仍需确认能访问 ChatGPT Codex backend，否则即使后台切换为 backend 也会 fallback 或失败。
 
 ## 2026-05-10 线上域名切换到 oauth-api.saurick.me

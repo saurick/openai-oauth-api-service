@@ -11,6 +11,7 @@
   --admin-surface-soft: #f5fbf7;
   --admin-surface-hover: #f1faf4;
   --admin-selected-bg: #eef8f1;
+  --admin-selected-hover-bg: #edf8f1;
   --admin-border: #dce8df;
   --admin-border-soft: #e7efe9;
   --admin-text: #1f2d25;
@@ -47,6 +48,7 @@
   --admin-surface-soft: #1b2538;
   --admin-surface-hover: #203047;
   --admin-selected-bg: #123123;
+  --admin-selected-hover-bg: #163b2a;
   --admin-border: #334155;
   --admin-border-soft: #263345;
   --admin-text: #e5edf5;
@@ -545,11 +547,11 @@
 }
 
 .admin-frame thead {
-  background-color: #f7f7f7;
+  background-color: var(--admin-surface-soft);
 }
 
 .admin-frame tbody tr:hover {
-  background-color: #fbfdfb;
+  background-color: var(--admin-selected-bg);
 }
 
 .admin-frame .admin-data-table {
@@ -563,12 +565,12 @@
 }
 
 .admin-frame .admin-table-row-selected {
-  background-color: #f1faf4;
+  background-color: var(--admin-selected-bg);
   box-shadow: inset 3px 0 0 var(--admin-accent);
 }
 
 .admin-frame .admin-table-row-selected:hover {
-  background-color: #edf8f1;
+  background-color: var(--admin-selected-hover-bg);
 }
 
 .admin-th-help-wrap {
@@ -917,6 +919,7 @@
 .admin-frame [class~='border-[#dce8df]'],
 .admin-frame [class~='border-[#dde8df]'],
 .admin-frame [class~='border-[#d6ded8]'],
+.admin-frame [class~='border-[#e4ece6]'],
 .admin-frame [class~='border-[#d9d9d9]'],
 .admin-frame [class~='border-[#e0e9e3]'] {
   border-color: var(--admin-border);
@@ -957,6 +960,7 @@
 }
 
 .admin-frame [class~='bg-[#f5fbf7]'],
+.admin-frame [class~='bg-[#f7fbf8]'],
 .admin-frame [class~='bg-[#f7faf8]'],
 .admin-frame thead {
   background-color: var(--admin-surface-soft);

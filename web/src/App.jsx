@@ -98,6 +98,14 @@ const App = () => {
             }
           />
           <Route
+            path="/admin-upstream"
+            element={
+              <AuthGuard requireAdmin>
+                <AdminApiPage view="upstream" />
+              </AuthGuard>
+            }
+          />
+          <Route
             path="/admin-analytics"
             element={
               <AuthGuard requireAdmin>

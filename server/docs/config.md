@@ -28,6 +28,8 @@
 
 - HTTP `0.0.0.0:8400`
 - gRPC `0.0.0.0:9400`
+- HTTP 超时 `650s`，需要覆盖 Codex backend / CLI 最长 `600s` 上游等待窗口，避免长请求在外层 HTTP context 先被 10 秒超时切断并记录为 502。
+- gRPC 超时 `10s`，当前主要用于内部接口默认保护，不承载 OpenAI-compatible 长耗时转发。
 
 ## `log`
 

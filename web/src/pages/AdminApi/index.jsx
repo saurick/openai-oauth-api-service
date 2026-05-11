@@ -40,10 +40,8 @@ const inputClass =
   'rounded-md border border-[#d6ded8] bg-white px-3 py-2.5 text-sm text-[#1f2d25] outline-none transition placeholder:text-[#9aa39e] focus:border-[#238a43] focus:ring-2 focus:ring-[#238a43]/15'
 const fieldClass = 'grid gap-1.5 text-sm font-medium text-[#365141]'
 const fieldHintClass = 'text-xs font-normal leading-5 text-[#7b8780]'
-const primaryButtonClass =
-  'admin-button admin-button-primary'
-const secondaryButtonClass =
-  'admin-button admin-button-default'
+const primaryButtonClass = 'admin-button admin-button-primary'
+const secondaryButtonClass = 'admin-button admin-button-default'
 const dangerButtonClass = 'admin-button admin-button-danger'
 const tableActionButtonClass = 'admin-button admin-button-compact'
 const tableDangerButtonClass = 'admin-button admin-button-compact-danger'
@@ -141,6 +139,12 @@ const INITIAL_KEY_FORM = {
   allowedModels: '',
   dailyTokenLimit: '',
   weeklyTokenLimit: '',
+  dailyInputTokenLimit: '',
+  weeklyInputTokenLimit: '',
+  dailyOutputTokenLimit: '',
+  weeklyOutputTokenLimit: '',
+  dailyBillableInputTokenLimit: '',
+  weeklyBillableInputTokenLimit: '',
 }
 
 const INITIAL_USAGE_FILTERS = {
@@ -167,6 +171,12 @@ const VIEW_CONFIG = {
     title: '模型管理',
     description: '维护 `/v1/models` 返回项，并控制请求是否允许使用对应模型。',
   },
+  upstream: {
+    section: '转发配置',
+    title: '上游模式',
+    description:
+      '切换 Codex direct backend 与 Codex CLI 兼容路径，影响后续 API 转发请求。',
+  },
   analytics: {
     section: '用量统计',
     title: '用量统计',
@@ -188,6 +198,16 @@ function asInt(v, fallback = 0) {
 
 function fmtNumber(v) {
   return new Intl.NumberFormat().format(asInt(v, 0))
+}
+
+function billableInputTokens(item) {
+  const provided = asInt(item?.billable_input_tokens, -1)
+  if (provided >= 0) return provided
+  return Math.max(
+    0,
+    asInt(item?.input_tokens, 0) -
+      asInt(item?.cached_input_tokens ?? item?.cached_tokens, 0)
+  )
 }
 
 function fmtDecimalNumber(v) {
@@ -215,11 +235,15 @@ function fmtTokenLimit(value) {
   return `${fmtDecimalNumber(tokens / TOKEN_LIMIT_UNIT)} 百万`
 }
 
-function renderTokenLimitWindow(label, value) {
+function renderTokenLimitPair(label, dailyValue, weeklyValue) {
+  const hasLimit = asInt(dailyValue, 0) > 0 || asInt(weeklyValue, 0) > 0
+  if (!hasLimit) return null
   return (
     <div className="whitespace-nowrap">
       <span className="text-[#7b8780]">{label}：</span>
-      <span>{fmtTokenLimit(value)}</span>
+      <span>
+        日 {fmtTokenLimit(dailyValue)} / 周 {fmtTokenLimit(weeklyValue)}
+      </span>
     </div>
   )
 }
@@ -284,7 +308,10 @@ function getTotalPages(total, pageSize) {
 }
 
 function clampPagination(pagination, total) {
-  const pageSize = Math.max(1, asInt(pagination?.pageSize, DEFAULT_TABLE_PAGE_SIZE))
+  const pageSize = Math.max(
+    1,
+    asInt(pagination?.pageSize, DEFAULT_TABLE_PAGE_SIZE)
+  )
   const totalPages = getTotalPages(total, pageSize)
   const current = Math.min(
     Math.max(1, asInt(pagination?.current, 1)),
@@ -454,8 +481,9 @@ function SearchableSelect({
   )
   const selectedOption = useMemo(
     () =>
-      normalizedOptions.find((option) => String(option.value) === String(value)) ||
-      null,
+      normalizedOptions.find(
+        (option) => String(option.value) === String(value)
+      ) || null,
     [normalizedOptions, value]
   )
   const selectedLabel = selectedOption?.label || ''
@@ -693,6 +721,23 @@ function CopyButton({ value, label = '复制' }) {
   )
 }
 
+function apiKeyRemark(item) {
+  return item?.api_key_name || item?.name || '无备注'
+}
+
+function ApiKeyUsageCell({ item }) {
+  return (
+    <div className="min-w-[160px]">
+      <div className="max-w-[260px] truncate font-medium text-[#1f2d25]">
+        {apiKeyRemark(item)}
+      </div>
+      <div className="mt-1 font-mono text-xs text-[#7b8780]">
+        {item?.api_key_prefix || item?.prefix || '-'}
+      </div>
+    </div>
+  )
+}
+
 function TablePagination({ total, pagination, onChange, disabled = false }) {
   const currentState = clampPagination(pagination, total)
   const totalPages = getTotalPages(total, currentState.pageSize)
@@ -796,9 +841,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const [usageSessionItems, setUsageSessionItems] = useState([])
   const [usageSessionTotal, setUsageSessionTotal] = useState(0)
   const [usageBuckets, setUsageBuckets] = useState([])
-  const [gatewayUpstreamMode, setGatewayUpstreamMode] = useState(
-    'codex_backend'
-  )
+  const [gatewayUpstreamMode, setGatewayUpstreamMode] =
+    useState('codex_backend')
   const [gatewayUpstreamSaving, setGatewayUpstreamSaving] = useState(false)
   const [usageTab, setUsageTab] = useState('daily')
   const [selectedUsageBucket, setSelectedUsageBucket] = useState(null)
@@ -998,29 +1042,31 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       }
 
       if (currentView === 'keys') {
-        const [keysRes, modelsRes] =
-          await Promise.all([
-            apiRpc.call('key_list', {
-              limit: MAX_TABLE_FETCH_SIZE,
-              offset: 0,
-              search: keySearch,
-            }),
-            apiRpc.call('model_list', { limit: MAX_TABLE_FETCH_SIZE, offset: 0 }),
-          ])
+        const [keysRes, modelsRes] = await Promise.all([
+          apiRpc.call('key_list', {
+            limit: MAX_TABLE_FETCH_SIZE,
+            offset: 0,
+            search: keySearch,
+          }),
+          apiRpc.call('model_list', { limit: MAX_TABLE_FETCH_SIZE, offset: 0 }),
+        ])
         setKeyListState(keysRes)
         setModelListState(modelsRes)
         return
       }
 
       if (currentView === 'analytics') {
-        const [keysRes, modelsRes, ...keyTokenStatsResults] =
-          await Promise.all([
+        const [keysRes, modelsRes, ...keyTokenStatsResults] = await Promise.all(
+          [
             apiRpc.call('key_list', {
               limit: MAX_TABLE_FETCH_SIZE,
               offset: 0,
               search: keySearch,
             }),
-            apiRpc.call('model_list', { limit: MAX_TABLE_FETCH_SIZE, offset: 0 }),
+            apiRpc.call('model_list', {
+              limit: MAX_TABLE_FETCH_SIZE,
+              offset: 0,
+            }),
             ...KEY_TOKEN_WINDOWS.map((windowItem) =>
               apiRpc.call('usage_key_summaries', {
                 end_time: now,
@@ -1029,7 +1075,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 start_time: now - windowItem.seconds,
               })
             ),
-          ])
+          ]
+        )
         setKeyListState(keysRes)
         setModelListState(modelsRes)
         setKeyTokenStatsByWindow(
@@ -1056,6 +1103,12 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         return
       }
 
+      if (currentView === 'upstream') {
+        const upstreamRes = await apiRpc.call('gateway_upstream_get', {})
+        setGatewayUpstreamState(upstreamRes)
+        return
+      }
+
       const [
         upstreamRes,
         keysRes,
@@ -1064,35 +1117,34 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         bucketsRes,
         sessionRes,
         ...keyTokenStatsResults
-      ] =
-        await Promise.all([
-          apiRpc.call('gateway_upstream_get', {}),
-          apiRpc.call('key_list', { limit: MAX_TABLE_FETCH_SIZE, offset: 0 }),
-          apiRpc.call('model_list', { limit: MAX_TABLE_FETCH_SIZE, offset: 0 }),
-          apiRpc.call(
-            'usage_list',
-            buildUsageParams(effectiveUsageFilters, activeUsagePagination, now)
-          ),
-          apiRpc.call('usage_buckets', {
-            ...buildUsageWindowParams(effectiveUsageFilters, now),
-            group_by: 'day_model',
-          }),
-          apiRpc.call(
-            'usage_session_summaries',
-            buildUsageParams(effectiveUsageFilters, activeUsagePagination, now)
-          ),
-          ...KEY_TOKEN_WINDOWS.map((windowItem) =>
-            apiRpc.call('usage_key_summaries', {
-              ...buildUsageWindowParams(
-                effectiveUsageFilters,
-                now,
-                windowItem.seconds
-              ),
-              limit: MAX_TABLE_FETCH_SIZE,
-              offset: 0,
-            })
-          ),
-        ])
+      ] = await Promise.all([
+        apiRpc.call('gateway_upstream_get', {}),
+        apiRpc.call('key_list', { limit: MAX_TABLE_FETCH_SIZE, offset: 0 }),
+        apiRpc.call('model_list', { limit: MAX_TABLE_FETCH_SIZE, offset: 0 }),
+        apiRpc.call(
+          'usage_list',
+          buildUsageParams(effectiveUsageFilters, activeUsagePagination, now)
+        ),
+        apiRpc.call('usage_buckets', {
+          ...buildUsageWindowParams(effectiveUsageFilters, now),
+          group_by: 'day_model',
+        }),
+        apiRpc.call(
+          'usage_session_summaries',
+          buildUsageParams(effectiveUsageFilters, activeUsagePagination, now)
+        ),
+        ...KEY_TOKEN_WINDOWS.map((windowItem) =>
+          apiRpc.call('usage_key_summaries', {
+            ...buildUsageWindowParams(
+              effectiveUsageFilters,
+              now,
+              windowItem.seconds
+            ),
+            limit: MAX_TABLE_FETCH_SIZE,
+            offset: 0,
+          })
+        ),
+      ])
       setGatewayUpstreamState(upstreamRes)
       setKeyListState(keysRes)
       setModelListState(modelsRes)
@@ -1146,7 +1198,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   useEffect(() => {
     setKeyPagination((current) => {
       const next = clampPagination(current, filteredKeys.length)
-      return next.current === current.current && next.pageSize === current.pageSize
+      return next.current === current.current &&
+        next.pageSize === current.pageSize
         ? current
         : next
     })
@@ -1155,7 +1208,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   useEffect(() => {
     setKeyStatsPagination((current) => {
       const next = clampPagination(current, keyTokenStatsRows.length)
-      return next.current === current.current && next.pageSize === current.pageSize
+      return next.current === current.current &&
+        next.pageSize === current.pageSize
         ? current
         : next
     })
@@ -1164,7 +1218,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   useEffect(() => {
     setModelPagination((current) => {
       const next = clampPagination(current, models.length)
-      return next.current === current.current && next.pageSize === current.pageSize
+      return next.current === current.current &&
+        next.pageSize === current.pageSize
         ? current
         : next
     })
@@ -1173,7 +1228,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   useEffect(() => {
     setUsagePagination((current) => {
       const next = clampPagination(current, usageTotal)
-      return next.current === current.current && next.pageSize === current.pageSize
+      return next.current === current.current &&
+        next.pageSize === current.pageSize
         ? current
         : next
     })
@@ -1197,11 +1253,27 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         await apiRpc.call('key_update', {
           key_id: editingKeyId,
           name: keyForm.remark.trim(),
-          quota_daily_tokens: tokenLimitInputToTokens(
-            keyForm.dailyTokenLimit
-          ),
+          quota_daily_tokens: tokenLimitInputToTokens(keyForm.dailyTokenLimit),
           quota_weekly_tokens: tokenLimitInputToTokens(
             keyForm.weeklyTokenLimit
+          ),
+          quota_daily_input_tokens: tokenLimitInputToTokens(
+            keyForm.dailyInputTokenLimit
+          ),
+          quota_weekly_input_tokens: tokenLimitInputToTokens(
+            keyForm.weeklyInputTokenLimit
+          ),
+          quota_daily_output_tokens: tokenLimitInputToTokens(
+            keyForm.dailyOutputTokenLimit
+          ),
+          quota_weekly_output_tokens: tokenLimitInputToTokens(
+            keyForm.weeklyOutputTokenLimit
+          ),
+          quota_daily_billable_input_tokens: tokenLimitInputToTokens(
+            keyForm.dailyBillableInputTokenLimit
+          ),
+          quota_weekly_billable_input_tokens: tokenLimitInputToTokens(
+            keyForm.weeklyBillableInputTokenLimit
           ),
           allowed_models: splitModels(keyForm.allowedModels),
           disabled: !!currentKey?.disabled,
@@ -1209,11 +1281,27 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       } else {
         const result = await apiRpc.call('key_create', {
           name: keyForm.remark.trim(),
-          quota_daily_tokens: tokenLimitInputToTokens(
-            keyForm.dailyTokenLimit
-          ),
+          quota_daily_tokens: tokenLimitInputToTokens(keyForm.dailyTokenLimit),
           quota_weekly_tokens: tokenLimitInputToTokens(
             keyForm.weeklyTokenLimit
+          ),
+          quota_daily_input_tokens: tokenLimitInputToTokens(
+            keyForm.dailyInputTokenLimit
+          ),
+          quota_weekly_input_tokens: tokenLimitInputToTokens(
+            keyForm.weeklyInputTokenLimit
+          ),
+          quota_daily_output_tokens: tokenLimitInputToTokens(
+            keyForm.dailyOutputTokenLimit
+          ),
+          quota_weekly_output_tokens: tokenLimitInputToTokens(
+            keyForm.weeklyOutputTokenLimit
+          ),
+          quota_daily_billable_input_tokens: tokenLimitInputToTokens(
+            keyForm.dailyBillableInputTokenLimit
+          ),
+          quota_weekly_billable_input_tokens: tokenLimitInputToTokens(
+            keyForm.weeklyBillableInputTokenLimit
           ),
           allowed_models: splitModels(keyForm.allowedModels),
         })
@@ -1255,6 +1343,24 @@ export default function AdminApiPage({ view = 'dashboard' }) {
           : '',
       dailyTokenLimit: tokenLimitTokensToInput(item.quota_daily_tokens),
       weeklyTokenLimit: tokenLimitTokensToInput(item.quota_weekly_tokens),
+      dailyInputTokenLimit: tokenLimitTokensToInput(
+        item.quota_daily_input_tokens
+      ),
+      weeklyInputTokenLimit: tokenLimitTokensToInput(
+        item.quota_weekly_input_tokens
+      ),
+      dailyOutputTokenLimit: tokenLimitTokensToInput(
+        item.quota_daily_output_tokens
+      ),
+      weeklyOutputTokenLimit: tokenLimitTokensToInput(
+        item.quota_weekly_output_tokens
+      ),
+      dailyBillableInputTokenLimit: tokenLimitTokensToInput(
+        item.quota_daily_billable_input_tokens
+      ),
+      weeklyBillableInputTokenLimit: tokenLimitTokensToInput(
+        item.quota_weekly_billable_input_tokens
+      ),
     })
     setKeyModalOpen(true)
   }
@@ -1463,7 +1569,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     <div className={tableWrapClass}>
       <div className="overflow-auto">
         <table
-          className={`${tableClass} ${compact ? 'min-w-[820px]' : 'min-w-[1800px]'}`}
+          className={`${tableClass} ${compact ? 'min-w-[900px]' : 'min-w-[1880px]'}`}
         >
           <thead>
             <tr>
@@ -1475,7 +1581,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               {!compact ? <th className={thClass}>上游</th> : null}
               <th className={thClass}>状态</th>
               <th className={thClass}>
-                <HeaderWithHelp help="总 Token = 输入 Token + 输出 Token；下方同时展示输入 / 输出拆分。">
+                <HeaderWithHelp help="总 Token = 输入 Token + 输出 Token；非缓存输入 = 输入 Token - 缓存输入。">
                   Token
                 </HeaderWithHelp>
               </th>
@@ -1525,8 +1631,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                       </div>
                     </td>
                   ) : null}
-                  <td className={`${tdClass} font-mono text-xs`}>
-                    {item.api_key_prefix || '-'}
+                  <td className={tdClass}>
+                    <ApiKeyUsageCell item={item} />
                   </td>
                   <td className={tdClass}>
                     {item.endpoint || item.path}
@@ -1565,6 +1671,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                       输入 {fmtNumber(item.input_tokens)}
                       <span className="mx-1 text-[#c0c9c4]">/</span>
                       输出 {fmtNumber(item.output_tokens)}
+                    </div>
+                    <div className="mt-1 text-xs leading-5 text-[#9aa39e]">
+                      非缓存输入 {fmtNumber(billableInputTokens(item))}
                     </div>
                   </td>
                   {!compact ? (
@@ -1633,7 +1742,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
           <SummaryCard
             label="24h Token"
             value={fmtNumber(summary.total_tokens)}
-            sub={`${fmtNumber(summary.input_tokens)} 输入 / ${fmtNumber(summary.output_tokens)} 输出`}
+            sub={`${fmtNumber(summary.input_tokens)} 输入（非缓存 ${fmtNumber(billableInputTokens(summary))}） / ${fmtNumber(summary.output_tokens)} 输出`}
           />
           <SummaryCard
             label="API 凭据"
@@ -1672,12 +1781,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     <SurfacePanel variant="admin" className="p-5 sm:p-6">
       <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-[#1f2d25]">
-            {title}
-          </h2>
-          <div className="mt-1 text-sm text-[#7b8780]">
-            {description}
-          </div>
+          <h2 className="text-lg font-semibold text-[#1f2d25]">{title}</h2>
+          <div className="mt-1 text-sm text-[#7b8780]">{description}</div>
         </div>
         <div className="text-sm text-[#7b8780]">
           {fmtNumber(keyTokenStatsRows.length)} 个凭据
@@ -1777,9 +1882,15 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                       >
                         {fmtNumber(item.tokens[windowItem.key])}
                         <div className="mt-1 text-xs font-normal text-[#9aa39e]">
-                          B {fmtNumber(item.upstream[windowItem.key]?.backend_requests)}
+                          B{' '}
+                          {fmtNumber(
+                            item.upstream[windowItem.key]?.backend_requests
+                          )}
                           <span className="mx-1 text-[#c0c9c4]">/</span>
-                          CLI {fmtNumber(item.upstream[windowItem.key]?.cli_requests)}
+                          CLI{' '}
+                          {fmtNumber(
+                            item.upstream[windowItem.key]?.cli_requests
+                          )}
                         </div>
                       </td>
                     ))}
@@ -1875,7 +1986,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   >
                     重置
                   </button>
-              ) : null}
+                ) : null}
                 <button
                   type="button"
                   onClick={openCreateKey}
@@ -1891,8 +2002,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 <span className="font-semibold text-[#1f2d25]">当前操作</span>
                 <span
                   className={`${selectionTagClass} ${
-                  selectedKey ? 'admin-selection-tag-active' : ''
-                }`}
+                    selectedKey ? 'admin-selection-tag-active' : ''
+                  }`}
                 >
                   {selectedKeyText}
                 </span>
@@ -1906,7 +2017,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   >
                     清空已选
                   </button>
-              ) : null}
+                ) : null}
                 <button
                   type="button"
                   onClick={() => selectedKey && startEditKey(selectedKey)}
@@ -1918,9 +2029,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 <button
                   type="button"
                   onClick={() =>
-                  selectedKey &&
-                  setKeyDisabled(selectedKey.id, !selectedKey.disabled)
-                }
+                    selectedKey &&
+                    setKeyDisabled(selectedKey.id, !selectedKey.disabled)
+                  }
                   disabled={loading || !selectedKey}
                   className={tablePrimaryButtonClass}
                 >
@@ -1940,7 +2051,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
           <div className={tableWrapClass}>
             <div className="overflow-auto">
-              <table className={`${tableClass} min-w-[1080px]`}>
+              <table className={`${tableClass} min-w-[1240px]`}>
                 <thead>
                   <tr>
                     <th className={selectionThClass}>选择</th>
@@ -1955,96 +2066,116 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 </thead>
                 <tbody className="divide-y divide-[#e7efe9] bg-white">
                   {filteredKeys.length > 0 ? (
-                  paginatedKeys.map((item) => {
-                    const isSelected = selectedKeyIdSet.has(item.id)
-                    return (
-                      <tr
-                        key={String(item.id)}
-                        className={`admin-table-row align-top ${
-                          isSelected ? 'admin-table-row-selected' : ''
-                        }`}
-                        onClick={(event) => handleKeyRowClick(event, item.id)}
-                        onDoubleClick={(event) =>
-                          handleKeyRowDoubleClick(event, item)
-                        }
-                        aria-selected={isSelected}
-                        title={TABLE_ROW_INTERACTION_TITLE}
+                    paginatedKeys.map((item) => {
+                      const isSelected = selectedKeyIdSet.has(item.id)
+                      return (
+                        <tr
+                          key={String(item.id)}
+                          className={`admin-table-row align-top ${
+                            isSelected ? 'admin-table-row-selected' : ''
+                          }`}
+                          onClick={(event) => handleKeyRowClick(event, item.id)}
+                          onDoubleClick={(event) =>
+                            handleKeyRowDoubleClick(event, item)
+                          }
+                          aria-selected={isSelected}
+                          title={TABLE_ROW_INTERACTION_TITLE}
+                        >
+                          <td className={selectionTdClass}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) =>
+                                toggleKeySelection(item.id, e.target.checked)
+                              }
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`选择 ${item.name || item.key_prefix || item.id}`}
+                              className="admin-checkbox"
+                            />
+                          </td>
+                          <td className={`${tdClass} font-medium`}>
+                            {item.name || '无备注'}
+                            <div className="mt-1 text-xs text-[#9aa39e]">
+                              最近使用：{fmtTs(item.last_used_at)}
+                            </div>
+                          </td>
+                          <td
+                            className={`${tdClass} whitespace-nowrap text-sm`}
+                          >
+                            {fmtTs(item.created_at)}
+                          </td>
+                          <td
+                            className={`${tdClass} whitespace-nowrap text-sm`}
+                          >
+                            {fmtTs(item.updated_at)}
+                          </td>
+                          <td className={`${tdClass} font-mono text-xs`}>
+                            <div className="flex max-w-[360px] items-start gap-2">
+                              <span className="min-w-0 break-all">
+                                {item.plain_key ||
+                                  `${item.key_prefix}…${item.key_last4}`}
+                              </span>
+                              {item.plain_key ? (
+                                <CopyButton value={item.plain_key} />
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className={tdClass}>
+                            {Array.isArray(item.allowed_models) &&
+                            item.allowed_models.length > 0
+                              ? item.allowed_models.join(', ')
+                              : '不限'}
+                          </td>
+                          <td className={tdClass}>
+                            <div className="grid gap-1 text-sm">
+                              {renderTokenLimitPair(
+                                '总量',
+                                item.quota_daily_tokens,
+                                item.quota_weekly_tokens
+                              ) || (
+                                <span className="whitespace-nowrap">
+                                  总量：不限
+                                </span>
+                              )}
+                              {renderTokenLimitPair(
+                                '输入',
+                                item.quota_daily_input_tokens,
+                                item.quota_weekly_input_tokens
+                              )}
+                              {renderTokenLimitPair(
+                                '输出',
+                                item.quota_daily_output_tokens,
+                                item.quota_weekly_output_tokens
+                              )}
+                              {renderTokenLimitPair(
+                                '非缓存输入',
+                                item.quota_daily_billable_input_tokens,
+                                item.quota_weekly_billable_input_tokens
+                              )}
+                            </div>
+                          </td>
+                          <td className={`${tdClass} whitespace-nowrap`}>
+                            <StatusBadge
+                              active={!item.disabled}
+                              trueText="启用"
+                              falseText="禁用"
+                            />
+                          </td>
+                        </tr>
+                      )
+                    })
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                       >
-                        <td className={selectionTdClass}>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={(e) =>
-                              toggleKeySelection(item.id, e.target.checked)
-                            }
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label={`选择 ${item.name || item.key_prefix || item.id}`}
-                            className="admin-checkbox"
-                          />
-                        </td>
-                        <td className={`${tdClass} font-medium`}>
-                          {item.name || '无备注'}
-                          <div className="mt-1 text-xs text-[#9aa39e]">
-                            最近使用：{fmtTs(item.last_used_at)}
-                          </div>
-                        </td>
-                        <td className={`${tdClass} whitespace-nowrap text-sm`}>
-                          {fmtTs(item.created_at)}
-                        </td>
-                        <td className={`${tdClass} whitespace-nowrap text-sm`}>
-                          {fmtTs(item.updated_at)}
-                        </td>
-                        <td className={`${tdClass} font-mono text-xs`}>
-                          <div className="flex max-w-[360px] items-start gap-2">
-                            <span className="min-w-0 break-all">
-                              {item.plain_key ||
-                                `${item.key_prefix}…${item.key_last4}`}
-                            </span>
-                            {item.plain_key ? (
-                              <CopyButton value={item.plain_key} />
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className={tdClass}>
-                          {Array.isArray(item.allowed_models) &&
-                          item.allowed_models.length > 0
-                            ? item.allowed_models.join(', ')
-                            : '不限'}
-                        </td>
-                        <td className={tdClass}>
-                          <div className="grid gap-1 text-sm">
-                            {renderTokenLimitWindow(
-                              '每日',
-                              item.quota_daily_tokens
-                            )}
-                            {renderTokenLimitWindow(
-                              '每周',
-                              item.quota_weekly_tokens
-                            )}
-                          </div>
-                        </td>
-                        <td className={`${tdClass} whitespace-nowrap`}>
-                          <StatusBadge
-                            active={!item.disabled}
-                            trueText="启用"
-                            falseText="禁用"
-                          />
-                        </td>
-                      </tr>
-                    )
-                  })
-                ) : (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="px-4 py-10 text-center text-sm text-[#9aa39e]"
-                    >
-                      {hasActiveKeyFilters
-                        ? '没有匹配的 API 凭据'
-                        : '暂无 API 凭据'}
-                    </td>
-                  </tr>
-                )}
+                        {hasActiveKeyFilters
+                          ? '没有匹配的 API 凭据'
+                          : '暂无 API 凭据'}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -2098,8 +2229,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
         {renderKeyTokenStats({
           title: '凭据维度',
-          description:
-            '按当前凭据列表汇总各时间窗口的总 Token；无调用显示 0。',
+          description: '按当前凭据列表汇总各时间窗口的总 Token；无调用显示 0。',
           showFilters: true,
         })}
       </div>
@@ -2220,6 +2350,27 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     </SurfacePanel>
   )
 
+  const renderKeyLimitInput = (name, label, hint) => (
+    <label className={fieldClass}>
+      {label}
+      <input
+        type="number"
+        min="0"
+        step="0.1"
+        value={keyForm[name]}
+        onChange={(e) =>
+          setKeyForm((current) => ({
+            ...current,
+            [name]: e.target.value,
+          }))
+        }
+        className={inputClass}
+        placeholder="0 表示不限，1 = 100 万 token"
+      />
+      <span className={fieldHintClass}>{hint}</span>
+    </label>
+  )
+
   const renderKeyModal = () => {
     if (!keyModalOpen) return null
 
@@ -2243,7 +2394,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 {editingKeyId ? '编辑 API 凭据' : '新建 API 凭据'}
               </h2>
               <p className="admin-modal-description">
-                设置备注、模型限制和 token 总额度。
+                设置备注、模型限制和 token 日 / 周额度。
               </p>
             </div>
             <button
@@ -2295,46 +2446,70 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 选项来自模型管理页，避免填入不存在的模型。
               </span>
             </label>
-            <label className={fieldClass}>
-              每日 Token 限制（百万）
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={keyForm.dailyTokenLimit}
-                onChange={(e) =>
-                  setKeyForm((current) => ({
-                    ...current,
-                    dailyTokenLimit: e.target.value,
-                  }))
-                }
-                className={inputClass}
-                placeholder="0 表示不限，1 = 100 万 token"
-              />
-              <span className={fieldHintClass}>
-                按自然日统计；达到每日额度后，该凭据的转发请求会返回 429。
-              </span>
-            </label>
-            <label className={fieldClass}>
-              每周 Token 限制（百万）
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={keyForm.weeklyTokenLimit}
-                onChange={(e) =>
-                  setKeyForm((current) => ({
-                    ...current,
-                    weeklyTokenLimit: e.target.value,
-                  }))
-                }
-                className={inputClass}
-                placeholder="0 表示不限，1 = 100 万 token"
-              />
-              <span className={fieldHintClass}>
-                按自然周统计；留空或 0 表示不限制每周 token。
-              </span>
-            </label>
+            <div className="grid gap-3 rounded-lg border border-[#e4ece6] bg-[#f7fbf8] p-3">
+              <div>
+                <div className="text-sm font-semibold text-[#1f2d25]">
+                  总 Token 限制
+                </div>
+                <div className={fieldHintClass}>
+                  按已落库 usage 的总 Token 判断；达到任一额度后返回 429。
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                {renderKeyLimitInput(
+                  'dailyTokenLimit',
+                  '每日总 Token（百万）',
+                  '按自然日统计；0 表示不限。'
+                )}
+                {renderKeyLimitInput(
+                  'weeklyTokenLimit',
+                  '每周总 Token（百万）',
+                  '按自然周统计；0 表示不限。'
+                )}
+              </div>
+            </div>
+            <div className="grid gap-3 rounded-lg border border-[#e4ece6] bg-[#f7fbf8] p-3">
+              <div>
+                <div className="text-sm font-semibold text-[#1f2d25]">
+                  细分 Token 限制
+                </div>
+                <div className={fieldHintClass}>
+                  输入、输出和非缓存输入分别按日 / 周独立判断；留空或 0 表示不限。
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                {renderKeyLimitInput(
+                  'dailyInputTokenLimit',
+                  '每日输入 Token（百万）',
+                  '按 input_tokens 统计，包含缓存输入。'
+                )}
+                {renderKeyLimitInput(
+                  'weeklyInputTokenLimit',
+                  '每周输入 Token（百万）',
+                  '按 input_tokens 统计，包含缓存输入。'
+                )}
+                {renderKeyLimitInput(
+                  'dailyBillableInputTokenLimit',
+                  '每日非缓存输入（百万）',
+                  '按 input_tokens - cached_tokens 统计，不伪造缺失缓存值。'
+                )}
+                {renderKeyLimitInput(
+                  'weeklyBillableInputTokenLimit',
+                  '每周非缓存输入（百万）',
+                  '按 input_tokens - cached_tokens 统计，不伪造缺失缓存值。'
+                )}
+                {renderKeyLimitInput(
+                  'dailyOutputTokenLimit',
+                  '每日输出 Token（百万）',
+                  '按 output_tokens 统计，reasoning 已包含在输出口径中。'
+                )}
+                {renderKeyLimitInput(
+                  'weeklyOutputTokenLimit',
+                  '每周输出 Token（百万）',
+                  '按 output_tokens 统计，reasoning 已包含在输出口径中。'
+                )}
+              </div>
+            </div>
             <div className="admin-modal-footer">
               <button
                 type="button"
@@ -2364,7 +2539,10 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       1,
       Math.ceil(selectedUsageBucketTotal / usageBucketDetailPagination.pageSize)
     )
-    const currentPage = Math.min(usageBucketDetailPagination.current, totalPages)
+    const currentPage = Math.min(
+      usageBucketDetailPagination.current,
+      totalPages
+    )
 
     return (
       <div className="admin-modal-backdrop">
@@ -2382,11 +2560,15 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         >
           <div className="admin-modal-header admin-usage-day-model-header">
             <div>
-              <h2 id="usage-day-model-detail-title" className="admin-modal-title">
+              <h2
+                id="usage-day-model-detail-title"
+                className="admin-modal-title"
+              >
                 {selectedUsageBucket.model || '-'}
               </h2>
               <p className="admin-modal-description">
-                {fmtDate(selectedUsageBucket.bucket_start)}，上一页 / 下一页只在当天该模型的请求内分页。
+                {fmtDate(selectedUsageBucket.bucket_start)}，上一页 /
+                下一页只在当天该模型的请求内分页。
               </p>
             </div>
             <button
@@ -2401,12 +2583,14 @@ export default function AdminApiPage({ view = 'dashboard' }) {
           <div className="admin-usage-day-model-body">
             <div className={tableWrapClass}>
               <div className="overflow-auto">
-                <table className={`${tableClass} min-w-[1140px]`}>
+                <table className={`${tableClass} min-w-[1280px]`}>
                   <thead>
                     <tr>
                       <th className={thClass}>时间</th>
+                      <th className={thClass}>凭据备注</th>
                       <th className={thClass}>上游</th>
                       <th className={thClass}>输入 Tokens</th>
+                      <th className={thClass}>非缓存输入</th>
                       <th className={thClass}>输出 Tokens</th>
                       <th className={thClass}>缓存 Tokens</th>
                       <th className={thClass}>Reasoning Tokens</th>
@@ -2423,6 +2607,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                             {fmtTs(item.created_at)}
                           </td>
                           <td className={tdClass}>
+                            <ApiKeyUsageCell item={item} />
+                          </td>
+                          <td className={tdClass}>
                             <div className="whitespace-nowrap text-xs">
                               {upstreamModeLabel(item.upstream_mode)}
                             </div>
@@ -2432,6 +2619,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                           </td>
                           <td className={tdClass}>
                             {fmtNumber(item.input_tokens)}
+                          </td>
+                          <td className={tdClass}>
+                            {fmtNumber(billableInputTokens(item))}
                           </td>
                           <td className={tdClass}>
                             {fmtNumber(item.output_tokens)}
@@ -2461,7 +2651,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     ) : (
                       <tr>
                         <td
-                          colSpan={9}
+                          colSpan={11}
                           className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                         >
                           {usageBucketDetailLoading
@@ -2508,7 +2698,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
     const summaryRows = [
       ['会话 ID', selectedUsageSession.session_id || '-'],
-      ['凭据', selectedUsageSession.api_key_prefix || '-'],
+      ['凭据备注', apiKeyRemark(selectedUsageSession)],
+      ['凭据前缀', selectedUsageSession.api_key_prefix || '-'],
       ['首次调用', fmtTs(selectedUsageSession.first_seen_at)],
       ['最近调用', fmtTs(selectedUsageSession.last_seen_at)],
       ['请求数', fmtNumber(selectedUsageSession.total_requests)],
@@ -2526,6 +2717,10 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       ],
       ['Fallback', fmtNumber(selectedUsageSession.fallback_requests)],
       ['输入 Token', fmtNumber(selectedUsageSession.input_tokens)],
+      [
+        '非缓存输入 Token',
+        fmtNumber(billableInputTokens(selectedUsageSession)),
+      ],
       ['输出 Token', fmtNumber(selectedUsageSession.output_tokens)],
       ['缓存 Token', fmtNumber(selectedUsageSession.cached_tokens)],
       ['Reasoning Token', fmtNumber(selectedUsageSession.reasoning_tokens)],
@@ -2631,6 +2826,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                               {fmtNumber(item.input_tokens)} /{' '}
                               {fmtNumber(item.output_tokens)}
                             </div>
+                            <div className="mt-1 text-xs text-[#9aa39e]">
+                              非缓存输入 {fmtNumber(billableInputTokens(item))}
+                            </div>
                           </td>
                           <td className={`${tdClass} whitespace-nowrap`}>
                             {fmtCost(item.estimated_cost_usd)}
@@ -2673,7 +2871,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       <SummaryCard
         label="总 Token"
         value={fmtNumber(summary.total_tokens)}
-        sub={`${fmtNumber(summary.input_tokens)} 输入 / ${fmtNumber(summary.output_tokens)} 输出`}
+        sub={`${fmtNumber(summary.input_tokens)} 输入（非缓存 ${fmtNumber(billableInputTokens(summary))}） / ${fmtNumber(summary.output_tokens)} 输出`}
       />
       <SummaryCard
         label="费用估算"
@@ -2701,10 +2899,15 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             Codex 上游模式
           </h2>
           <div className="mt-1 text-sm text-[#7b8780]">
-            Backend 优先会直连 Codex backend，失败时自动落到 CLI；强制 CLI 会每次走 codex exec。
+            Backend 优先会直连 Codex backend，失败时自动落到 CLI；强制 CLI
+            会每次走 codex exec。
           </div>
         </div>
-        <div className="admin-view-tabs" role="tablist" aria-label="Codex 上游模式">
+        <div
+          className="admin-view-tabs"
+          role="tablist"
+          aria-label="Codex 上游模式"
+        >
           {CODEX_UPSTREAM_MODE_OPTIONS.map((item) => (
             <button
               key={item.value}
@@ -2751,6 +2954,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   <th className={thClass}>请求</th>
                   <th className={thClass}>上游</th>
                   <th className={thClass}>输入 Tokens</th>
+                  <th className={thClass}>非缓存输入</th>
                   <th className={thClass}>输出 Tokens</th>
                   <th className={thClass}>总费用</th>
                   <th className={thClass}>状态</th>
@@ -2783,18 +2987,27 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                           </div>
                         </td>
                         <td className={tdClass}>{renderUpstreamStats(item)}</td>
-                        <td className={tdClass}>{fmtNumber(item.input_tokens)}</td>
-                        <td className={tdClass}>{fmtNumber(item.output_tokens)}</td>
-                        <td className={`${tdClass} whitespace-nowrap font-semibold`}>
+                        <td className={tdClass}>
+                          {fmtNumber(item.input_tokens)}
+                        </td>
+                        <td className={tdClass}>
+                          {fmtNumber(billableInputTokens(item))}
+                        </td>
+                        <td className={tdClass}>
+                          {fmtNumber(item.output_tokens)}
+                        </td>
+                        <td
+                          className={`${tdClass} whitespace-nowrap font-semibold`}
+                        >
                           {fmtCost(item.estimated_cost_usd)}
                         </td>
                         <td className={tdClass}>
                           <span
                             className={
-                            failedRequests > 0
-                              ? 'admin-usage-status-danger'
-                              : 'admin-usage-status-ok'
-                          }
+                              failedRequests > 0
+                                ? 'admin-usage-status-danger'
+                                : 'admin-usage-status-ok'
+                            }
                           >
                             {failedRequests > 0 ? '!' : '✓'}{' '}
                             {fmtRate(failedRequests, totalRequests)} 错误
@@ -2815,7 +3028,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 ) : (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={10}
                       className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                     >
                       {loading ? '加载中...' : '暂无每日模型汇总'}
@@ -2845,7 +3058,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       </div>
       <div className={tableWrapClass}>
         <div className="overflow-auto">
-          <table className={`${tableClass} min-w-[1360px]`}>
+          <table className={`${tableClass} min-w-[1480px]`}>
             <thead>
               <tr>
                 <th className={thClass}>最近调用</th>
@@ -2869,11 +3082,15 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                         首次 {fmtTs(item.first_seen_at)}
                       </div>
                     </td>
-                    <td className={`${tdClass} max-w-[280px] font-mono text-xs`}>
-                      <span className="break-all">{item.session_id || '-'}</span>
+                    <td
+                      className={`${tdClass} max-w-[280px] font-mono text-xs`}
+                    >
+                      <span className="break-all">
+                        {item.session_id || '-'}
+                      </span>
                     </td>
-                    <td className={`${tdClass} font-mono text-xs`}>
-                      {item.api_key_prefix || '-'}
+                    <td className={tdClass}>
+                      <ApiKeyUsageCell item={item} />
                     </td>
                     <td className={`${tdClass} font-semibold`}>
                       {fmtNumber(item.total_requests)}
@@ -2888,6 +3105,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                       <div className="mt-1 text-xs text-[#9aa39e]">
                         {fmtNumber(item.input_tokens)} /{' '}
                         {fmtNumber(item.output_tokens)}
+                      </div>
+                      <div className="mt-1 text-xs text-[#9aa39e]">
+                        非缓存 {fmtNumber(billableInputTokens(item))}
                       </div>
                     </td>
                     <td className={`${tdClass} whitespace-nowrap`}>
@@ -2913,9 +3133,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     colSpan={9}
                     className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                   >
-                    {loading
-                      ? '加载中...'
-                      : '暂无带 session_id 的会话记录'}
+                    {loading ? '加载中...' : '暂无带 session_id 的会话记录'}
                   </td>
                 </tr>
               )}
@@ -2939,15 +3157,15 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       usagePagination,
       usageSessionTotal
     )
-    const activeTotal =
-      usageTab === 'sessions' ? usageSessionTotal : usageTotal
+    const activeTotal = usageTab === 'sessions' ? usageSessionTotal : usageTotal
     const activePage =
       usageTab === 'sessions' ? activeSessionPagination : activePagination
     const usageStart =
-      activeTotal > 0
-        ? (activePage.current - 1) * activePage.pageSize + 1
-        : 0
-    const usageEnd = Math.min(activeTotal, activePage.current * activePage.pageSize)
+      activeTotal > 0 ? (activePage.current - 1) * activePage.pageSize + 1 : 0
+    const usageEnd = Math.min(
+      activeTotal,
+      activePage.current * activePage.pageSize
+    )
     const usageUnit = usageTab === 'sessions' ? '会话' : '请求'
     const detailTitle = usageTab === 'errors' ? '异常请求' : '调用明细'
     const detailDescription =
@@ -2957,15 +3175,12 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
     return (
       <div className="space-y-5">
-        {renderUpstreamModeControl()}
         {renderUsageSummaryCards()}
 
         <SurfacePanel variant="admin" className="p-5 sm:p-6">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-[#1f2d25]">
-                用量日志
-              </h2>
+              <h2 className="text-lg font-semibold text-[#1f2d25]">用量日志</h2>
               <div className="mt-1 text-sm text-[#7b8780]">
                 {activeTimeRange.label} 范围内第 {usageStart}-{usageEnd} 条 / 共{' '}
                 {activeTotal} 条{usageUnit}。
@@ -2991,7 +3206,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               }}
               className="admin-module-toolbar-row"
             >
-              <div className={`${filterGroupClass} admin-module-filter-group-wide`}>
+              <div
+                className={`${filterGroupClass} admin-module-filter-group-wide`}
+              >
                 <label className={fieldClass}>
                   时间范围
                   <SearchableSelect
@@ -3021,7 +3238,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     options={[
                       { label: '全部凭据', value: '' },
                       ...keys.map((item) => ({
-                        label: item.name || item.key_prefix || `凭据 ${item.id}`,
+                        label:
+                          item.name || item.key_prefix || `凭据 ${item.id}`,
                         value: String(item.id),
                       })),
                     ]}
@@ -3112,7 +3330,11 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             </form>
           </div>
 
-          <div className="admin-view-tabs" role="tablist" aria-label="用量日志视图">
+          <div
+            className="admin-view-tabs"
+            role="tablist"
+            aria-label="用量日志视图"
+          >
             {USAGE_TAB_OPTIONS.map((item) => (
               <button
                 key={item.key}
@@ -3161,6 +3383,10 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     )
   }
 
+  const renderUpstream = () => (
+    <div className="space-y-5">{renderUpstreamModeControl()}</div>
+  )
+
   return (
     <AdminFrame
       breadcrumb={`${currentConfig.section || '配置管理'} / ${currentConfig.title}`}
@@ -3190,6 +3416,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         {currentView === 'dashboard' ? renderDashboard() : null}
         {currentView === 'keys' ? renderKeys() : null}
         {currentView === 'models' ? renderModels() : null}
+        {currentView === 'upstream' ? renderUpstream() : null}
         {currentView === 'analytics' ? renderAnalytics() : null}
         {currentView === 'usage' ? renderUsage() : null}
       </div>

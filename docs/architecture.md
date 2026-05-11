@@ -34,7 +34,7 @@
 - 上游状态码、错误类型
 - 可选 session_id，用于客户端显式传入会话标识后的会话聚合
 - 请求字节数、响应字节数
-- input / output / total tokens
+- input / cached input / billable input / output / reasoning / total tokens
 - 延迟、创建时间
 
 如后续需要排障采样，应单独设计脱敏采样策略、TTL 和开关，不能把 prompt / output 正文默认落库。

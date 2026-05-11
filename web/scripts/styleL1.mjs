@@ -170,6 +170,42 @@ const scenarios = [
     },
   },
   {
+    name: 'admin-upstream-desktop',
+    path: '/admin-upstream',
+    viewport: { width: 1440, height: 900 },
+    adminAuth: true,
+    mockApiRpc: true,
+    verify: async (page) => {
+      await expectText(page, '上游模式')
+      await expectText(page, 'Codex 上游模式')
+      await expectText(page, 'Backend 优先')
+      await expectText(page, '强制 CLI')
+      await expectNoText(page, '最近上游请求')
+      await expectNoText(page, '每日模型汇总')
+      await expectNoText(page, '会话聚合')
+      await page.getByRole('tab', { name: '强制 CLI', exact: true }).click()
+      await page.waitForFunction(() => {
+        const tab = [...document.querySelectorAll('[role="tab"]')].find(
+          (node) => node.textContent.trim() === '强制 CLI'
+        )
+        return tab?.getAttribute('aria-selected') === 'true'
+      })
+      await page.getByRole('tab', { name: 'Backend 优先', exact: true }).click()
+      await page.waitForFunction(() => {
+        const tab = [...document.querySelectorAll('[role="tab"]')].find(
+          (node) => node.textContent.trim() === 'Backend 优先'
+        )
+        return tab?.getAttribute('aria-selected') === 'true'
+      })
+      const calls = page.__styleL1ApiRpcCalls || []
+      assert(
+        calls.some((call) => call.method === 'gateway_upstream_get') &&
+          calls.some((call) => call.method === 'gateway_upstream_set'),
+        `admin-upstream-desktop 未调用上游模式读写接口: ${JSON.stringify(calls)}`
+      )
+    },
+  },
+  {
     name: 'admin-keys-desktop',
     path: '/admin-keys',
     viewport: { width: 1440, height: 900 },
@@ -529,7 +565,11 @@ async function assertThemeToggle(page, scenarioName, rootSelector) {
   assert.equal(await lightOption.count(), 1, `${scenarioName} 缺少浅色选项`)
 
   const systemMetrics = await getThemeMetrics(page, rootSelector)
-  assert.equal(systemMetrics.mode, 'system', `${scenarioName} 初始模式应为 system`)
+  assert.equal(
+    systemMetrics.mode,
+    'system',
+    `${scenarioName} 初始模式应为 system`
+  )
   assert.equal(
     systemMetrics.systemPressed,
     'true',
@@ -548,7 +588,11 @@ async function assertThemeToggle(page, scenarioName, rootSelector) {
 
   const darkMetrics = await getThemeMetrics(page, rootSelector)
   assert.equal(darkMetrics.mode, 'dark', `${scenarioName} 未切到暗色模式`)
-  assert.equal(darkMetrics.storedTheme, 'dark', `${scenarioName} 未持久化暗色主题`)
+  assert.equal(
+    darkMetrics.storedTheme,
+    'dark',
+    `${scenarioName} 未持久化暗色主题`
+  )
   assert(
     darkMetrics.surfaceLuminance < 60,
     `${scenarioName} 暗色主题面板亮度异常: ${JSON.stringify(darkMetrics)}`
@@ -623,7 +667,10 @@ async function getThemeMetrics(page, rootSelector) {
     }
 
     function getLuminance(color) {
-      const channels = color.match(/\d+(\.\d+)?/gu)?.slice(0, 3).map(Number)
+      const channels = color
+        .match(/\d+(\.\d+)?/gu)
+        ?.slice(0, 3)
+        .map(Number)
       if (!channels || channels.length < 3) return 0
       return channels[0] * 0.299 + channels[1] * 0.587 + channels[2] * 0.114
     }
@@ -696,6 +743,7 @@ async function assertApiVisuals(page, scenarioName) {
       .filter((title) => /请求|错误|费用|延迟|Token/u.test(title))
     const table = main?.querySelector('table')
     const tableRect = table?.getBoundingClientRect()
+    const tableText = table?.innerText || ''
 
     return {
       barCount: barTitles.length,
@@ -705,12 +753,26 @@ async function assertApiVisuals(page, scenarioName) {
         '错误率',
         '响应耗时',
         '当前 RPM / TPM',
+        '上游分布',
         'API 凭据',
       ].every((text) => document.body.innerText.includes(text)),
       hasDetailsLink: Boolean(main?.querySelector('a[href="/admin-usage"]')),
       hasDistributionPanels:
         headings.includes('模型用量分布') && headings.includes('接口分布'),
       hasRecentCalls: headings.includes('最近调用'),
+      hasRecentCallsDetailFields:
+        tableText.includes('req_style_l1_prod_1') &&
+        tableText.includes('Session：session-style-l1') &&
+        tableText.includes('production-api-key') &&
+        tableText.includes('sk-api-prod') &&
+        tableText.includes('缓存输入 / 推理输出') &&
+        tableText.includes('缓存输入') &&
+        tableText.includes('推理输出') &&
+        tableText.includes('字节') &&
+        tableText.includes('请求 4,096') &&
+        tableText.includes('响应 8,192'),
+      hasRecentCallsHeaderTooltips:
+        table?.querySelectorAll('.admin-th-help[data-tooltip]').length >= 4,
       hasTokenPanel: headings.includes('Token 构成'),
       hasTrendPanel: headings.includes('30 天趋势'),
       trendBarCount: main?.querySelectorAll('[data-trend-bar]').length || 0,
@@ -722,10 +784,9 @@ async function assertApiVisuals(page, scenarioName) {
       })),
       trendLineCount: main?.querySelectorAll('[data-trend-line]').length || 0,
       trendPointCount: main?.querySelectorAll('[data-trend-point]').length || 0,
-      removedSections: [
-        '凭据看板',
-        '30 天按天统计',
-      ].filter((text) => document.body.innerText.includes(text)),
+      removedSections: ['凭据看板', '30 天按天统计'].filter((text) =>
+        document.body.innerText.includes(text)
+      ),
       tableHeight: tableRect?.height || 0,
       tableWidth: tableRect?.width || 0,
       trendMetricButtons: Array.from(
@@ -742,6 +803,14 @@ async function assertApiVisuals(page, scenarioName) {
   assert(metrics.hasTokenPanel, `${scenarioName} 缺少 Token 构成面板`)
   assert(metrics.hasDistributionPanels, `${scenarioName} 缺少用量分布面板`)
   assert(metrics.hasRecentCalls, `${scenarioName} 缺少最近调用面板`)
+  assert(
+    metrics.hasRecentCallsDetailFields,
+    `${scenarioName} 最近调用字段未对齐调用明细: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.hasRecentCallsHeaderTooltips,
+    `${scenarioName} 最近调用缺少明细同款表头说明 tooltip`
+  )
   assert(metrics.hasDetailsLink, `${scenarioName} 最近调用缺少明细页入口`)
   assert(
     ['请求', '错误', '费用', '延迟', 'Token'].every((text) =>
@@ -965,9 +1034,9 @@ async function assertUsageTableVisuals(page, scenarioName) {
     const table = main?.querySelector('table')
     const tableRect = table?.getBoundingClientRect()
     const mainRect = main?.getBoundingClientRect()
-    const tabTexts = Array.from(main?.querySelectorAll('[role="tab"]') || []).map(
-      (node) => node.textContent.trim()
-    )
+    const tabTexts = Array.from(
+      main?.querySelectorAll('[role="tab"]') || []
+    ).map((node) => node.textContent.trim())
 
     return {
       hasDailySummary: document.body.innerText.includes('每日模型汇总'),
@@ -980,8 +1049,17 @@ async function assertUsageTableVisuals(page, scenarioName) {
       hasTimeRangeFilter: Boolean(
         main?.querySelector('[role="combobox"][aria-label="时间范围"]')
       ),
-      hasUsageTabs: ['每日模型', '凭据统计', '会话聚合', '调用明细', '异常请求']
-        .every((text) => tabTexts.includes(text)),
+      hasUpstreamFilter: Boolean(
+        main?.querySelector('[role="combobox"][aria-label="上游模式"]')
+      ),
+      hasUpstreamStats: document.body.innerText.includes('上游分布'),
+      hasUsageTabs: [
+        '每日模型',
+        '凭据统计',
+        '会话聚合',
+        '调用明细',
+        '异常请求',
+      ].every((text) => tabTexts.includes(text)),
       hasUsageWindowSummary: document.body.innerText.includes('24h 范围内第'),
       mainHeight: mainRect?.height || 0,
       tableHeight: tableRect?.height || 0,
@@ -991,6 +1069,8 @@ async function assertUsageTableVisuals(page, scenarioName) {
 
   assert(metrics.hasSidebarUsageNav, `${scenarioName} 缺少后台侧栏 usage 入口`)
   assert(metrics.hasTimeRangeFilter, `${scenarioName} 缺少 usage 时间范围筛选`)
+  assert(metrics.hasUpstreamFilter, `${scenarioName} 缺少上游模式筛选`)
+  assert(metrics.hasUpstreamStats, `${scenarioName} 缺少上游分布统计`)
   assert(metrics.hasUsageTabs, `${scenarioName} 缺少 usage 分段视图`)
   assert(metrics.hasDailySummary, `${scenarioName} 缺少每日模型默认视图`)
   assert(
@@ -1038,6 +1118,8 @@ async function assertUsageDailyModelDetail(page, scenarioName) {
   await expectText(page, 'gpt-5.4')
   await page.getByRole('button', { name: '详情', exact: true }).first().click()
   await expectText(page, '输入 Tokens')
+  await expectText(page, '凭据备注')
+  await expectText(page, 'production-api-key')
   await expectText(page, 'Reasoning Tokens')
   await expectText(page, '下一页')
   const metrics = await page.evaluate(() => {
@@ -1056,7 +1138,8 @@ async function assertUsageDailyModelDetail(page, scenarioName) {
         scrollerRect.left >= rect.left &&
         scrollerRect.right <= rect.right + 1,
       tableHasScrollableWidth:
-        Boolean(scroller && tableRect) && scroller.scrollWidth >= scroller.clientWidth,
+        Boolean(scroller && tableRect) &&
+        scroller.scrollWidth >= scroller.clientWidth,
       width: rect?.width || 0,
     }
   })
@@ -1095,8 +1178,10 @@ async function assertUsageSessionTab(page, scenarioName) {
   await page.getByRole('tab', { name: '会话聚合', exact: true }).click()
   await expectText(page, '会话聚合')
   await expectText(page, 'session-style-l1')
+  await expectText(page, 'production-api-key')
   await page.getByRole('button', { name: '详情', exact: true }).first().click()
   await expectText(page, '会话详情')
+  await expectText(page, '凭据备注')
   await expectText(page, '请求明细')
   await expectText(page, 'req_style_l1_prod_1')
   const metrics = await page.evaluate(() => {
@@ -1124,6 +1209,7 @@ async function assertUsageDetailsTab(page, scenarioName) {
   await expectText(page, '费用估算')
   await expectText(page, '请求')
   await expectText(page, 'Session：session-style-l1')
+  await expectText(page, 'production-api-key')
   await expectText(page, '缓存输入 / 推理输出')
   await expectText(page, '缓存输入')
   await expectText(page, '推理输出')
@@ -1133,14 +1219,18 @@ async function assertUsageDetailsTab(page, scenarioName) {
       document.querySelector('main table button')?.textContent?.includes('详情')
     ),
     hasHeaderTooltips:
-      document.querySelectorAll('main table .admin-th-help[data-tooltip]').length >= 4,
+      document.querySelectorAll('main table .admin-th-help[data-tooltip]')
+        .length >= 4,
     hasPagination: document.body.innerText.includes('共 12 条'),
     hasRequestID: document.body.innerText.includes('req_style_l1_prod_1'),
     hasSessionID: document.body.innerText.includes('session-style-l1'),
     hasTable: Boolean(document.querySelector('main table')),
   }))
   assert(!metrics.hasDetailButton, `${scenarioName} 调用明细不应再有详情按钮`)
-  assert(metrics.hasHeaderTooltips, `${scenarioName} 调用明细缺少表头说明 tooltip`)
+  assert(
+    metrics.hasHeaderTooltips,
+    `${scenarioName} 调用明细缺少表头说明 tooltip`
+  )
   assert(metrics.hasPagination, `${scenarioName} 调用明细缺少分页器`)
   assert(metrics.hasRequestID, `${scenarioName} 调用明细缺少 request_id`)
   assert(metrics.hasSessionID, `${scenarioName} 调用明细缺少 session_id`)
@@ -1158,7 +1248,10 @@ async function assertUsageErrorsTab(page, scenarioName) {
     if (
       calls
         .slice(startIndex)
-        .some((call) => call.method === 'usage_list' && call.params?.success === false)
+        .some(
+          (call) =>
+            call.method === 'usage_list' && call.params?.success === false
+        )
     ) {
       return
     }
@@ -1177,7 +1270,15 @@ async function assertUsageTimeRangeRequest(page, scenarioName) {
   const startIndex = calls.length
   await page.getByRole('combobox', { name: '时间范围' }).click()
   const optionTexts = await page.getByRole('option').allTextContents()
-  for (const text of ['24h', '30 天', '180 天', '1 年', '2 年', '3 年', '5 年']) {
+  for (const text of [
+    '24h',
+    '30 天',
+    '180 天',
+    '1 年',
+    '2 年',
+    '3 年',
+    '5 年',
+  ]) {
     assert(
       optionTexts.some((optionText) => optionText.trim() === text),
       `${scenarioName} usage 时间范围缺少 ${text}: ${JSON.stringify(optionTexts)}`
@@ -1225,9 +1326,11 @@ async function assertUsagePaginationRequest(page, scenarioName) {
   const deadline = Date.now() + 5_000
   while (Date.now() < deadline) {
     if (
-      calls.slice(startIndex).some(
-        (call) => call.method === 'usage_list' && call.params?.offset === 8
-      )
+      calls
+        .slice(startIndex)
+        .some(
+          (call) => call.method === 'usage_list' && call.params?.offset === 8
+        )
     ) {
       await firstPagination.getByRole('button', { name: '上一页' }).click()
       return
@@ -1260,9 +1363,9 @@ async function assertKeyTableVisuals(page, scenarioName) {
       hasRemarkHeader: document.body.innerText.includes('备注'),
       hasCreatedAtHeader: document.body.innerText.includes('创建时间'),
       hasUpdatedAtHeader: document.body.innerText.includes('更新时间'),
-      hasOperationHeader: Array.from(table?.querySelectorAll('thead th') || []).some(
-        (node) => node.textContent.trim() === '操作'
-      ),
+      hasOperationHeader: Array.from(
+        table?.querySelectorAll('thead th') || []
+      ).some((node) => node.textContent.trim() === '操作'),
       createdAtCells: Array.from(main?.querySelectorAll('table tbody tr') || [])
         .map((row) => row.children[2]?.textContent.trim() || '')
         .filter(Boolean),
@@ -1288,12 +1391,15 @@ async function assertKeyTableVisuals(page, scenarioName) {
       hasModelFilter: Boolean(
         main?.querySelector('[role="combobox"][aria-label="按模型筛选"]')
       ),
-      hasTokenLimitHeader: document.body.innerText.includes(
-        'Token 日 / 周限制（百万）'
-      ),
+      hasTokenLimitHeader:
+        document.body.innerText.includes('Token 日 / 周限制（百万）'),
       hasTokenLimitValue:
-        document.body.innerText.includes('每日：1 百万') &&
-        document.body.innerText.includes('每周：5 百万'),
+        document.body.innerText.includes('总量：日 1 百万 / 周 5 百万') &&
+        document.body.innerText.includes('输入：日 0.8 百万 / 周 4 百万') &&
+        document.body.innerText.includes('输出：日 0.2 百万 / 周 1 百万') &&
+        document.body.innerText.includes(
+          '非缓存输入：日 0.45 百万 / 周 2.25 百万'
+        ),
       mainHeight: mainRect?.height || 0,
       tableHeight: tableRect?.height || 0,
       tableWidth: tableRect?.width || 0,
@@ -1338,12 +1444,16 @@ async function assertKeyTableVisuals(page, scenarioName) {
   )
   assert(
     metrics.createdAtCells.length === 8 &&
-      metrics.createdAtCells.every((value) => value !== '-' && /\d/.test(value)),
+      metrics.createdAtCells.every(
+        (value) => value !== '-' && /\d/.test(value)
+      ),
     `${scenarioName} 创建时间列展示异常: ${JSON.stringify(metrics.createdAtCells)}`
   )
   assert(
     metrics.updatedAtCells.length === 8 &&
-      metrics.updatedAtCells.every((value) => value !== '-' && /\d/.test(value)),
+      metrics.updatedAtCells.every(
+        (value) => value !== '-' && /\d/.test(value)
+      ),
     `${scenarioName} 更新时间列展示异常: ${JSON.stringify(metrics.updatedAtCells)}`
   )
   assert(metrics.hasTableToolbar, `${scenarioName} 缺少表格筛选工具条`)
@@ -1411,6 +1521,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
   }
 
   await assertKeyCreateModal(page, scenarioName)
+  await assertKeyDarkTokenLimitModal(page, scenarioName)
   await assertKeyDoubleClickEdit(page, scenarioName)
   await assertTablePagination(page, scenarioName, {
     nextText: 'extra-api-key-9',
@@ -1442,9 +1553,11 @@ async function assertKeySearchAutoQuery(page, scenarioName) {
   const deadline = Date.now() + 5_000
   while (Date.now() < deadline) {
     if (
-      calls.slice(startIndex).some(
-        (call) => call.method === 'key_list' && call.params?.search === 'prod'
-      )
+      calls
+        .slice(startIndex)
+        .some(
+          (call) => call.method === 'key_list' && call.params?.search === 'prod'
+        )
     ) {
       return
     }
@@ -1472,6 +1585,14 @@ async function assertKeyCreateModal(page, scenarioName) {
       hasTokenLimitInput: Boolean(
         node.querySelector('input[placeholder="0 表示不限，1 = 100 万 token"]')
       ),
+      hasDetailedTokenLabels:
+        node.innerText.includes('细分 Token 限制') &&
+        node.innerText.includes('每日输入 Token（百万）') &&
+        node.innerText.includes('每日非缓存输入（百万）') &&
+        node.innerText.includes('每日输出 Token（百万）'),
+      tokenLimitInputCount: node.querySelectorAll(
+        'input[placeholder="0 表示不限，1 = 100 万 token"]'
+      ).length,
       hasSubmitButton: Array.from(node.querySelectorAll('button')).some(
         (button) => button.textContent.trim() === '生成 API 凭据'
       ),
@@ -1487,6 +1608,14 @@ async function assertKeyCreateModal(page, scenarioName) {
     metrics.hasTokenLimitInput,
     `${scenarioName} 新建弹窗缺少百万 token 输入框`
   )
+  assert(
+    metrics.hasDetailedTokenLabels,
+    `${scenarioName} 新建弹窗缺少细分 token 标签`
+  )
+  assert(
+    metrics.tokenLimitInputCount >= 8,
+    `${scenarioName} 新建弹窗细分 token 输入框数量不足: ${metrics.tokenLimitInputCount}`
+  )
   assert(metrics.hasSubmitButton, `${scenarioName} 新建弹窗缺少生成按钮`)
   assert(metrics.width > 0, `${scenarioName} 新建弹窗宽度异常`)
   assert(metrics.height > 0, `${scenarioName} 新建弹窗高度异常`)
@@ -1501,6 +1630,215 @@ async function assertKeyCreateModal(page, scenarioName) {
 
   await dialog.getByRole('button', { name: '取消' }).click()
   await dialog.waitFor({ state: 'hidden' })
+}
+
+async function assertKeyDarkTokenLimitModal(page, scenarioName) {
+  await page.locator('[data-admin-theme-option="dark"]').click()
+  await page.waitForFunction(
+    () => document.documentElement.dataset.adminTheme === 'dark'
+  )
+  await assertKeyTableDarkSelectedHover(page, scenarioName)
+  await page.getByRole('button', { name: '新建 API 凭据', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '新建 API 凭据' })
+  await dialog.waitFor({ state: 'visible' })
+
+  const metrics = await dialog.evaluate((node) => {
+    const panels = Array.from(node.querySelectorAll('[class~="bg-[#f7fbf8]"]'))
+    const inputs = Array.from(
+      node.querySelectorAll(
+        'input[placeholder="0 表示不限，1 = 100 万 token"]'
+      )
+    )
+    const requiredTexts = [
+      '总 Token 限制',
+      '每日总 Token（百万）',
+      '每周总 Token（百万）',
+      '细分 Token 限制',
+      '每日输入 Token（百万）',
+      '每周输入 Token（百万）',
+      '每日非缓存输入（百万）',
+      '每周非缓存输入（百万）',
+      '每日输出 Token（百万）',
+      '每周输出 Token（百万）',
+    ]
+    const missingTexts = requiredTexts.filter(
+      (text) => !node.innerText.includes(text)
+    )
+    const luminance = (color) => {
+      const channels = color
+        .match(/\d+(\.\d+)?/gu)
+        ?.slice(0, 3)
+        .map(Number)
+      if (!channels || channels.length < 3) return 0
+      return channels[0] * 0.299 + channels[1] * 0.587 + channels[2] * 0.114
+    }
+
+    const panelMetrics = panels.map((panel) => {
+      const label =
+        panel.querySelector('.text-sm.font-semibold') ||
+        panel.querySelector('label') ||
+        panel
+      const hint =
+        panel.querySelector('[class~="text-xs"]') ||
+        panel.querySelector('span') ||
+        label
+      const panelStyle = window.getComputedStyle(panel)
+      const labelStyle = window.getComputedStyle(label)
+      const hintStyle = window.getComputedStyle(hint)
+      const rect = panel.getBoundingClientRect()
+      return {
+        background: panelStyle.backgroundColor,
+        backgroundLuminance: luminance(panelStyle.backgroundColor),
+        borderColor: panelStyle.borderColor,
+        height: rect.height,
+        hintColor: hintStyle.color,
+        hintLuminance: luminance(hintStyle.color),
+        labelColor: labelStyle.color,
+        labelLuminance: luminance(labelStyle.color),
+        width: rect.width,
+      }
+    })
+
+    const inputMetrics = inputs.map((input) => {
+      const style = window.getComputedStyle(input)
+      const rect = input.getBoundingClientRect()
+      return {
+        background: style.backgroundColor,
+        backgroundLuminance: luminance(style.backgroundColor),
+        color: style.color,
+        colorLuminance: luminance(style.color),
+        height: rect.height,
+        width: rect.width,
+      }
+    })
+
+    return {
+      inputCount: inputs.length,
+      inputMetrics,
+      missingTexts,
+      mode: document.documentElement.dataset.adminTheme,
+      panelCount: panels.length,
+      panelMetrics,
+    }
+  })
+
+  assert.equal(metrics.mode, 'dark', `${scenarioName} 未保持暗色主题`)
+  assert.equal(
+    metrics.panelCount,
+    2,
+    `${scenarioName} 暗色弹窗限额区块数量异常: ${JSON.stringify(metrics)}`
+  )
+  assert.equal(
+    metrics.inputCount,
+    8,
+    `${scenarioName} 暗色弹窗 token 限制输入框数量异常: ${JSON.stringify(metrics)}`
+  )
+  assert.deepEqual(
+    metrics.missingTexts,
+    [],
+    `${scenarioName} 暗色弹窗缺少限制字段: ${JSON.stringify(metrics.missingTexts)}`
+  )
+  for (const [index, panel] of metrics.panelMetrics.entries()) {
+    assert(
+      panel.width > 0 && panel.height > 0,
+      `${scenarioName} 暗色弹窗第 ${index + 1} 个限额区块盒模型异常: ${JSON.stringify(panel)}`
+    )
+    assert(
+      panel.backgroundLuminance < 70,
+      `${scenarioName} 暗色弹窗第 ${index + 1} 个限额区块背景仍偏亮: ${JSON.stringify(panel)}`
+    )
+    assert(
+      panel.labelLuminance > panel.backgroundLuminance + 80,
+      `${scenarioName} 暗色弹窗第 ${index + 1} 个标题对比不足: ${JSON.stringify(panel)}`
+    )
+    assert(
+      panel.hintLuminance > panel.backgroundLuminance + 45,
+      `${scenarioName} 暗色弹窗第 ${index + 1} 个说明对比不足: ${JSON.stringify(panel)}`
+    )
+  }
+  for (const [index, input] of metrics.inputMetrics.entries()) {
+    assert(
+      input.width > 0 && input.height > 0,
+      `${scenarioName} 暗色弹窗第 ${index + 1} 个 token 输入框盒模型异常: ${JSON.stringify(input)}`
+    )
+    assert(
+      input.colorLuminance > input.backgroundLuminance + 55,
+      `${scenarioName} 暗色弹窗第 ${index + 1} 个 token 输入框对比不足: ${JSON.stringify(input)}`
+    )
+  }
+
+  await dialog.getByRole('button', { name: '取消' }).click()
+  await dialog.waitFor({ state: 'hidden' })
+}
+
+async function assertKeyTableDarkSelectedHover(page, scenarioName) {
+  const rows = page.locator('main table tbody tr')
+  await rows.nth(0).click()
+  await rows.nth(0).hover()
+
+  const metrics = await page.evaluate(() => {
+    const luminance = (color) => {
+      const channels = color
+        .match(/\d+(\.\d+)?/gu)
+        ?.slice(0, 3)
+        .map(Number)
+      if (!channels || channels.length < 3) return 0
+      return channels[0] * 0.299 + channels[1] * 0.587 + channels[2] * 0.114
+    }
+    const row = document.querySelector(
+      'main table tbody tr.admin-table-row-selected'
+    )
+    const cell = row?.querySelector('td:nth-child(2)')
+    const rowStyle = row ? window.getComputedStyle(row) : null
+    const cellStyle = cell ? window.getComputedStyle(cell) : null
+    const rowRect = row?.getBoundingClientRect()
+    const cellRect = cell?.getBoundingClientRect()
+
+    return {
+      background: rowStyle?.backgroundColor || '',
+      backgroundLuminance: luminance(rowStyle?.backgroundColor || ''),
+      cellColor: cellStyle?.color || '',
+      cellLuminance: luminance(cellStyle?.color || ''),
+      cellRect: cellRect
+        ? {
+            height: cellRect.height,
+            width: cellRect.width,
+          }
+        : null,
+      rowRect: rowRect
+        ? {
+            height: rowRect.height,
+            width: rowRect.width,
+          }
+        : null,
+      selectedRows: document.querySelectorAll(
+        'main table tbody tr.admin-table-row-selected'
+      ).length,
+      theme: document.documentElement.dataset.adminTheme,
+    }
+  })
+
+  assert.equal(metrics.theme, 'dark', `${scenarioName} 未处于暗色主题`)
+  assert.equal(
+    metrics.selectedRows,
+    1,
+    `${scenarioName} 暗色 hover 验证前应只有一条选中行`
+  )
+  assert(
+    metrics.backgroundLuminance > 0 && metrics.backgroundLuminance < 70,
+    `${scenarioName} 暗色选中行 hover 背景不应回退到浅色: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.cellLuminance > metrics.backgroundLuminance + 70,
+    `${scenarioName} 暗色选中行 hover 文字对比不足: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.rowRect?.height > 0 &&
+      metrics.rowRect?.width > 0 &&
+      metrics.cellRect?.height > 0 &&
+      metrics.cellRect?.width > 0,
+    `${scenarioName} 暗色选中行 hover 盒模型异常: ${JSON.stringify(metrics)}`
+  )
 }
 
 async function assertKeyDoubleClickEdit(page, scenarioName) {
@@ -1555,7 +1893,9 @@ async function assertOpenSelectMenuNotClipped(
   { placement = null } = {}
 ) {
   const metrics = await page.evaluate((expectedPlacement) => {
-    const root = document.querySelector('.admin-searchable-select[data-open="true"]')
+    const root = document.querySelector(
+      '.admin-searchable-select[data-open="true"]'
+    )
     const menu = root?.querySelector('.admin-searchable-select-menu')
     if (!menu) {
       return { hasMenu: false }
@@ -1583,7 +1923,9 @@ async function assertOpenSelectMenuNotClipped(
           (menuRect.top < rect.top - 1 || menuRect.bottom > rect.bottom + 1)
         clippingAncestors.push({
           className:
-            typeof node.className === 'string' ? node.className : String(node.className),
+            typeof node.className === 'string'
+              ? node.className
+              : String(node.className),
           clipsMenu: clipsMenuX || clipsMenuY,
           overflow: `${style.overflow}/${style.overflowX}/${style.overflowY}`,
           rect: {
@@ -1713,9 +2055,8 @@ async function assertModelTableVisuals(page, scenarioName) {
         (node) => node.textContent.trim() === '禁用'
       ),
       hasPagination: document.body.innerText.includes('共 6 条'),
-      hasFixedListHint: document.body.innerText.includes(
-        '模型列表随代码固定维护'
-      ),
+      hasFixedListHint:
+        document.body.innerText.includes('模型列表随代码固定维护'),
       hasModelCreateButton: Array.from(
         main?.querySelectorAll('button') || []
       ).some((node) => node.textContent.trim() === '新建模型'),
@@ -1790,10 +2131,14 @@ function base64UrlJson(value) {
 
 async function installApiRpcMock(page) {
   const calls = []
+  let upstreamMode = 'codex_backend'
   page.__styleL1ApiRpcCalls = calls
 
   await page.route('**/rpc/api', async (route) => {
     const request = route.request().postDataJSON()
+    if (request.method === 'gateway_upstream_set') {
+      upstreamMode = request.params?.mode || upstreamMode
+    }
     calls.push({
       method: request.method,
       params: request.params || {},
@@ -1806,7 +2151,9 @@ async function installApiRpcMock(page) {
         jsonrpc: '2.0',
         result: {
           code: 0,
-          data: getApiMockData(request.method, request.params || {}),
+          data: getApiMockData(request.method, request.params || {}, {
+            upstreamMode,
+          }),
           message: 'OK',
         },
       }),
@@ -1824,7 +2171,7 @@ async function installAuthConfigMock(page) {
   })
 }
 
-function getApiMockData(method, params = {}) {
+function getApiMockData(method, params = {}, state = {}) {
   if (method === 'summary') {
     const now = Math.floor(Date.now() / 1000)
     const seconds = Number.isFinite(Number(params.start_time))
@@ -1834,7 +2181,10 @@ function getApiMockData(method, params = {}) {
       return {
         summary: {
           average_duration_ms: 640,
+          backend_requests: 3,
+          cli_requests: 1,
           estimated_cost_usd: 0.0312,
+          fallback_requests: 0,
           failed_requests: 0,
           input_tokens: 1860,
           output_tokens: 520,
@@ -1847,7 +2197,10 @@ function getApiMockData(method, params = {}) {
     return {
       summary: {
         average_duration_ms: 842,
+        backend_requests: 206,
+        cli_requests: 92,
         estimated_cost_usd: 1.4288,
+        fallback_requests: 7,
         failed_requests: 11,
         input_tokens: 86410,
         output_tokens: 62522,
@@ -1855,6 +2208,28 @@ function getApiMockData(method, params = {}) {
         total_requests: 298,
         total_tokens: 148932,
       },
+    }
+  }
+
+  if (method === 'gateway_upstream_get') {
+    return {
+      default_mode: 'codex_backend',
+      mode: state.upstreamMode || 'codex_backend',
+      options: [
+        { label: 'Backend 优先', value: 'codex_backend' },
+        { label: '强制 CLI', value: 'codex_cli' },
+      ],
+    }
+  }
+
+  if (method === 'gateway_upstream_set') {
+    return {
+      default_mode: 'codex_backend',
+      mode: state.upstreamMode || params.mode || 'codex_backend',
+      options: [
+        { label: 'Backend 优先', value: 'codex_backend' },
+        { label: '强制 CLI', value: 'codex_cli' },
+      ],
     }
   }
 
@@ -1871,7 +2246,13 @@ function getApiMockData(method, params = {}) {
         last_used_at: 1778000000,
         name: 'production-api-key',
         plain_key: 'ogw_mock_prod_8a2c',
+        quota_daily_billable_input_tokens: 450_000,
+        quota_daily_input_tokens: 800_000,
+        quota_daily_output_tokens: 200_000,
         quota_daily_tokens: 1_000_000,
+        quota_weekly_billable_input_tokens: 2_250_000,
+        quota_weekly_input_tokens: 4_000_000,
+        quota_weekly_output_tokens: 1_000_000,
         quota_weekly_tokens: 5_000_000,
       },
       {
@@ -1885,7 +2266,13 @@ function getApiMockData(method, params = {}) {
         last_used_at: 0,
         name: 'staging-key-with-long-name-for-overflow-check',
         plain_key: 'ogw_mock_stage_3f9d',
+        quota_daily_billable_input_tokens: 0,
+        quota_daily_input_tokens: 0,
+        quota_daily_output_tokens: 0,
         quota_daily_tokens: 0,
+        quota_weekly_billable_input_tokens: 0,
+        quota_weekly_input_tokens: 0,
+        quota_weekly_output_tokens: 0,
         quota_weekly_tokens: 0,
       },
     ]
@@ -1902,7 +2289,13 @@ function getApiMockData(method, params = {}) {
         last_used_at: 1777990000 - index * 100,
         name: `extra-api-key-${id}`,
         plain_key: `ogw_mock_extra_${id}`,
+        quota_daily_billable_input_tokens: 0,
+        quota_daily_input_tokens: 0,
+        quota_daily_output_tokens: 0,
         quota_daily_tokens: id * 1_000_000,
+        quota_weekly_billable_input_tokens: 0,
+        quota_weekly_input_tokens: 0,
+        quota_weekly_output_tokens: 0,
         quota_weekly_tokens: (id + 1) * 1_000_000,
       }
     })
@@ -1987,6 +2380,7 @@ function getApiMockData(method, params = {}) {
     return {
       items: [
         {
+          api_key_name: 'production-api-key',
           api_key_prefix: 'sk-api-prod',
           cached_tokens: model === 'gpt-5.4' ? 272640 : 1200,
           created_at: 1778000000,
@@ -2006,8 +2400,13 @@ function getApiMockData(method, params = {}) {
           status_code: 200,
           success: true,
           total_tokens: 4210,
+          upstream_configured_mode: 'codex_backend',
+          upstream_error_type: '',
+          upstream_fallback: false,
+          upstream_mode: 'codex_backend',
         },
         {
+          api_key_name: 'production-api-key',
           api_key_prefix: 'sk-api-prod',
           cached_tokens: model === 'gpt-5.4' ? 272512 : 40800,
           created_at: 1777999000,
@@ -2027,8 +2426,13 @@ function getApiMockData(method, params = {}) {
           status_code: 200,
           success: true,
           total_tokens: 61200,
+          upstream_configured_mode: 'codex_backend',
+          upstream_error_type: '',
+          upstream_fallback: true,
+          upstream_mode: 'codex_cli',
         },
         {
+          api_key_name: 'staging-key-with-long-name-for-overflow-check',
           api_key_prefix: 'sk-api-stage',
           cached_tokens: 0,
           created_at: 1777998000,
@@ -2048,6 +2452,10 @@ function getApiMockData(method, params = {}) {
           status_code: 502,
           success: false,
           total_tokens: 1080,
+          upstream_configured_mode: 'codex_cli',
+          upstream_error_type: 'codex_cli_upstream_failed',
+          upstream_fallback: false,
+          upstream_mode: 'codex_cli',
         },
       ],
       total: 12,
@@ -2066,6 +2474,9 @@ function getApiMockData(method, params = {}) {
           disabled: false,
           estimated_cost_usd: 0.96,
           failed_requests: 0,
+          backend_requests: 1,
+          cli_requests: 1,
+          fallback_requests: 1,
           input_tokens: 61900,
           output_tokens: 3510,
           success_requests: 2,
@@ -2081,6 +2492,9 @@ function getApiMockData(method, params = {}) {
           disabled: true,
           estimated_cost_usd: null,
           failed_requests: 1,
+          backend_requests: 0,
+          cli_requests: 1,
+          fallback_requests: 0,
           input_tokens: 1000,
           output_tokens: 80,
           success_requests: 0,
@@ -2096,11 +2510,15 @@ function getApiMockData(method, params = {}) {
       items: [
         {
           api_key_id: 1,
+          api_key_name: 'production-api-key',
           api_key_prefix: 'sk-api-prod',
           average_duration_ms: 1026,
           cached_tokens: 42000,
           estimated_cost_usd: 0.86,
           failed_requests: 0,
+          backend_requests: 1,
+          cli_requests: 1,
+          fallback_requests: 1,
           first_seen_at: 1777999000,
           input_tokens: 61900,
           last_seen_at: 1778000000,
@@ -2113,11 +2531,15 @@ function getApiMockData(method, params = {}) {
         },
         {
           api_key_id: 2,
+          api_key_name: 'staging-key-with-long-name-for-overflow-check',
           api_key_prefix: 'sk-api-stage',
           average_duration_ms: 330,
           cached_tokens: 0,
           estimated_cost_usd: null,
           failed_requests: 1,
+          backend_requests: 0,
+          cli_requests: 1,
+          fallback_requests: 0,
           first_seen_at: 1777998000,
           input_tokens: 1000,
           last_seen_at: 1777998000,
@@ -2205,9 +2627,12 @@ function createMockUsageBuckets() {
     return {
       bucket_start: Math.floor(d.getTime() / 1000),
       average_duration_ms: 420 + index * 24,
+      backend_requests: Math.max(0, calls - Math.ceil(calls / 3)),
       cached_tokens: cachedTokens,
+      cli_requests: Math.ceil(calls / 3),
       estimated_cost_usd: Number((calls * (0.018 + index * 0.001)).toFixed(4)),
       failed_requests: index % 4 === 0 ? 2 : 0,
+      fallback_requests: index % 5 === 0 ? 1 : 0,
       input_tokens: inputTokens,
       model,
       output_tokens: outputTokens,
