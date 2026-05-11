@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -17,6 +18,36 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/protobuf/types/known/structpb"
 )
+
+func TestRedactJSONRPCParamsMasksSensitiveFields(t *testing.T) {
+	input := map[string]any{
+		"username": "admin",
+		"password": "adminadmin",
+		"nested": map[string]any{
+			"access_token": "token-value",
+			"key_id":       7,
+		},
+		"items": []any{
+			map[string]any{"plain_key": "ogw_secret"},
+		},
+	}
+
+	got := redactJSONRPCParams(input)
+	want := map[string]any{
+		"username": "admin",
+		"password": "[REDACTED]",
+		"nested": map[string]any{
+			"access_token": "[REDACTED]",
+			"key_id":       7,
+		},
+		"items": []any{
+			map[string]any{"plain_key": "[REDACTED]"},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("redactJSONRPCParams() = %#v, want %#v", got, want)
+	}
+}
 
 func TestJsonrpcData_AuthLogin_OK(t *testing.T) {
 	repo := newMemAuthRepoForData()

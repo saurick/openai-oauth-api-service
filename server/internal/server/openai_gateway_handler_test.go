@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -381,6 +382,120 @@ func TestCodexBackendRequestFromChatCompletionsPayload(t *testing.T) {
 	}
 }
 
+func TestCodexBackendRequestPreservesChatToolsAndToolResults(t *testing.T) {
+	body := []byte(`{
+		"model": "gpt-5.5",
+		"tools": [
+			{"type": "function", "function": {"name": "shell", "description": "Run a command", "parameters": {"type": "object"}}}
+		],
+		"messages": [
+			{"role": "user", "content": "run pwd"},
+			{"role": "assistant", "tool_calls": [
+				{"id": "call_1", "type": "function", "function": {"name": "shell", "arguments": "{\"cmd\":\"pwd\"}"}}
+			]},
+			{"role": "tool", "tool_call_id": "call_1", "content": "C:\\Users\\sauri"}
+		]
+	}`)
+
+	req, _, err := codexBackendRequestFromGateway("/v1/chat/completions", body, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools := req["tools"].([]any)
+	tool := tools[0].(map[string]any)
+	if tool["type"] != "function" || tool["name"] != "shell" {
+		t.Fatalf("tool = %#v", tool)
+	}
+	input := req["input"].([]any)
+	if len(input) != 3 {
+		t.Fatalf("input len = %d, want 3: %#v", len(input), input)
+	}
+	call := input[1].(map[string]any)
+	if call["type"] != "function_call" || call["call_id"] != "call_1" || call["name"] != "shell" {
+		t.Fatalf("function call item = %#v", call)
+	}
+	if call["id"] != "fc_call_1" {
+		t.Fatalf("function call id = %v, want fc_call_1", call["id"])
+	}
+	output := input[2].(map[string]any)
+	if output["type"] != "function_call_output" || output["call_id"] != "call_1" {
+		t.Fatalf("function output item = %#v", output)
+	}
+}
+
+func TestCodexBackendRequestNormalizesFunctionCallIDForBackend(t *testing.T) {
+	body := []byte(`{
+		"model": "gpt-5.5",
+		"input": [
+			{"role": "user", "content": "run pwd"},
+			{"type": "function_call", "id": "call_7DrSS117GxOq1ztYHVJCjrjZ", "call_id": "call_1", "name": "shell", "arguments": "{\"cmd\":\"pwd\"}"},
+			{"type": "function_call_output", "call_id": "call_1", "output": "C:\\Users\\sauri"}
+		]
+	}`)
+
+	req, _, err := codexBackendRequestFromGateway("/v1/responses", body, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := req["input"].([]any)
+	call := input[1].(map[string]any)
+	if call["type"] != "function_call" || call["call_id"] != "call_1" || call["id"] != "fc_call_1" {
+		t.Fatalf("function call item = %#v", call)
+	}
+}
+
+func TestParseCodexBackendSSEPreservesFunctionCall(t *testing.T) {
+	body := []byte("data: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"fc_1\",\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"shell\",\"arguments\":\"{\\\"cmd\\\":\\\"pwd\\\"}\"}}\n\n" +
+		"data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"output\":[{\"id\":\"fc_1\",\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"shell\",\"arguments\":\"{\\\"cmd\\\":\\\"pwd\\\"}\"}],\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}}\n\n")
+
+	content, toolCalls, metrics, err := parseCodexBackendSSE(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if content != "" {
+		t.Fatalf("content = %q, want empty", content)
+	}
+	if len(toolCalls) != 1 || toolCalls[0].CallID != "call_1" || toolCalls[0].Name != "shell" {
+		t.Fatalf("toolCalls = %#v", toolCalls)
+	}
+	if metrics.TotalTokens != 2 {
+		t.Fatalf("metrics = %#v", metrics)
+	}
+}
+
+func TestResponsesStreamUsesResponsesSSEEvents(t *testing.T) {
+	handler := &openAIGatewayHandler{}
+	rec := httptest.NewRecorder()
+
+	n := handler.writeCodexCLIResponsesStream(rec, "gpt-5.5", "OK", nil, openAIUsageMetrics{
+		InputTokens:  1,
+		OutputTokens: 1,
+		TotalTokens:  2,
+	})
+	if n <= 0 {
+		t.Fatalf("response bytes = %d, want positive", n)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"type":"response.output_text.delta"`) {
+		t.Fatalf("stream missing output delta:\n%s", body)
+	}
+	if !strings.Contains(body, `"type":"response.output_item.added"`) {
+		t.Fatalf("stream missing output item added:\n%s", body)
+	}
+	if !strings.Contains(body, `"type":"response.content_part.added"`) {
+		t.Fatalf("stream missing content part added:\n%s", body)
+	}
+	if !strings.Contains(body, `"type":"response.completed"`) {
+		t.Fatalf("stream missing response.completed:\n%s", body)
+	}
+	if strings.Contains(body, "chat.completion.chunk") {
+		t.Fatalf("responses stream must not use chat chunks:\n%s", body)
+	}
+	if !strings.Contains(body, "data: [DONE]") {
+		t.Fatalf("stream missing done marker:\n%s", body)
+	}
+}
+
 func TestCodexBackendRequestFromPDFInput(t *testing.T) {
 	body := []byte(`{
 		"model": "gpt-5.5",
@@ -496,6 +611,7 @@ echo '{"type":"turn.completed","usage":{"input_tokens":20,"output_tokens":1,"tot
 		t.Fatal(err)
 	}
 	t.Setenv("CODEX_UPSTREAM_MODE", "codex_backend")
+	t.Setenv("CODEX_UPSTREAM_FALLBACK_ENABLED", "true")
 	t.Setenv("CODEX_AUTH_FILE", filepath.Join(tmp, "missing-auth.json"))
 	t.Setenv("CODEX_CLI_BIN", bin)
 	t.Setenv("CODEX_CLI_TIMEOUT_SECONDS", "30")
@@ -513,6 +629,83 @@ echo '{"type":"turn.completed","usage":{"input_tokens":20,"output_tokens":1,"tot
 	}
 	if result.Content != "OK" || result.Metrics.TotalTokens != 21 || result.ActualMode != codexUpstreamModeCLI || !result.Fallback {
 		t.Fatalf("result=%#v", result)
+	}
+}
+
+func TestRunCodexUpstreamDoesNotFallbackByDefault(t *testing.T) {
+	tmp := t.TempDir()
+	marker := filepath.Join(tmp, "cli-called")
+	bin := filepath.Join(tmp, "fake-codex")
+	script := `#!/bin/sh
+touch "$FAKE_CODEX_MARKER"
+cat >/dev/null
+echo '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"OK"}}'
+`
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CODEX_UPSTREAM_MODE", "codex_backend")
+	t.Setenv("CODEX_UPSTREAM_FALLBACK_ENABLED", "")
+	t.Setenv("CODEX_AUTH_FILE", filepath.Join(tmp, "missing-auth.json"))
+	t.Setenv("CODEX_CLI_BIN", bin)
+	t.Setenv("FAKE_CODEX_MARKER", marker)
+
+	_, err := (&openAIGatewayHandler{}).runCodexUpstream(
+		context.Background(),
+		codexUpstreamModeBackend,
+		"/v1/chat/completions",
+		[]byte(`{"messages":[{"role":"user","content":"Reply OK"}]}`),
+		"gpt-5.5",
+		"low",
+	)
+	if err == nil {
+		t.Fatal("expected backend failure without CLI fallback")
+	}
+	if !strings.Contains(err.Error(), "codex backend upstream failed") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
+		t.Fatalf("CLI fallback was invoked, marker stat err=%v", statErr)
+	}
+}
+
+func TestRunCodexUpstreamDoesNotFallbackToCLIForToolRequests(t *testing.T) {
+	tmp := t.TempDir()
+	marker := filepath.Join(tmp, "cli-called")
+	bin := filepath.Join(tmp, "fake-codex")
+	script := `#!/bin/sh
+touch "$FAKE_CODEX_MARKER"
+cat >/dev/null
+echo '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"OK"}}'
+`
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CODEX_UPSTREAM_MODE", "codex_backend")
+	t.Setenv("CODEX_UPSTREAM_FALLBACK_ENABLED", "true")
+	t.Setenv("CODEX_AUTH_FILE", filepath.Join(tmp, "missing-auth.json"))
+	t.Setenv("CODEX_CLI_BIN", bin)
+	t.Setenv("FAKE_CODEX_MARKER", marker)
+
+	_, err := (&openAIGatewayHandler{}).runCodexUpstream(
+		context.Background(),
+		codexUpstreamModeBackend,
+		"/v1/chat/completions",
+		[]byte(`{
+			"tools": [{"type":"function","function":{"name":"shell","parameters":{"type":"object"}}}],
+			"messages": [{"role":"user","content":"read system info"}]
+		}`),
+		"gpt-5.5",
+		"low",
+	)
+	if err == nil {
+		t.Fatal("expected backend-only request to skip CLI fallback")
+	}
+	if !strings.Contains(err.Error(), "cannot fallback to codex_cli") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
+		t.Fatalf("CLI fallback was invoked, marker stat err=%v", statErr)
 	}
 }
 
@@ -549,7 +742,7 @@ func TestRunCodexBackendPostsResponsesAndParsesSSE(t *testing.T) {
 	t.Setenv("CODEX_BACKEND_TIMEOUT_SECONDS", "30")
 
 	client := &codexBackendClient{httpClient: upstream.Client()}
-	content, metrics, err := client.run(
+	content, toolCalls, metrics, err := client.run(
 		context.Background(),
 		"/v1/chat/completions",
 		[]byte(`{"messages":[{"role":"user","content":"Reply OK"}]}`),
@@ -562,6 +755,9 @@ func TestRunCodexBackendPostsResponsesAndParsesSSE(t *testing.T) {
 	if content != "OK" {
 		t.Fatalf("content = %q, want OK", content)
 	}
+	if len(toolCalls) != 0 {
+		t.Fatalf("toolCalls = %#v, want none", toolCalls)
+	}
 	if metrics.InputTokens != 9 || metrics.CachedTokens != 3 || metrics.OutputTokens != 5 || metrics.ReasoningTokens != 1 || metrics.TotalTokens != 14 {
 		t.Fatalf("unexpected metrics: %#v", metrics)
 	}
@@ -571,6 +767,50 @@ func TestRunCodexBackendPostsResponsesAndParsesSSE(t *testing.T) {
 	reasoning := seen["reasoning"].(map[string]any)
 	if reasoning["effort"] != "low" {
 		t.Fatalf("backend reasoning = %#v, want low", reasoning)
+	}
+}
+
+func TestRunCodexBackendRetriesTransientHTTPError(t *testing.T) {
+	accessToken := testJWT(time.Now().Add(time.Hour).Unix(), "acct_123")
+	authPath := filepath.Join(t.TempDir(), "auth.json")
+	if err := os.WriteFile(authPath, []byte(`{"tokens":{"access_token":"`+accessToken+`","refresh_token":"refresh-token","account_id":"acct_123"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var attempts atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if attempts.Add(1) == 1 {
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte(`{"error":"temporary upstream failure"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"OK\"}\n\n"))
+		_, _ = w.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}}\n\n"))
+	}))
+	defer upstream.Close()
+
+	t.Setenv("CODEX_AUTH_FILE", authPath)
+	t.Setenv("CODEX_BACKEND_BASE_URL", upstream.URL)
+	t.Setenv("CODEX_BACKEND_TIMEOUT_SECONDS", "30")
+	t.Setenv("CODEX_BACKEND_RETRY_ATTEMPTS", "2")
+
+	client := &codexBackendClient{httpClient: upstream.Client()}
+	content, _, metrics, err := client.run(
+		context.Background(),
+		"/v1/chat/completions",
+		[]byte(`{"messages":[{"role":"user","content":"Reply OK"}]}`),
+		"gpt-5.5",
+		"",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if content != "OK" || metrics.TotalTokens != 2 {
+		t.Fatalf("content=%q metrics=%#v", content, metrics)
+	}
+	if attempts.Load() != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts.Load())
 	}
 }
 
@@ -615,7 +855,7 @@ func TestCodexBackendRefreshesExpiredAccessToken(t *testing.T) {
 	t.Setenv("CODEX_REFRESH_TOKEN_URL_OVERRIDE", refresh.URL+"/oauth/token")
 
 	client := &codexBackendClient{httpClient: upstream.Client()}
-	content, _, err := client.run(
+	content, _, _, err := client.run(
 		context.Background(),
 		"/v1/chat/completions",
 		[]byte(`{"messages":[{"role":"user","content":"Reply OK"}]}`),

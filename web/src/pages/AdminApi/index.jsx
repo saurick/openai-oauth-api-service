@@ -71,8 +71,25 @@ const USAGE_SUCCESS_FILTER_OPTIONS = [
   { label: '失败', value: 'false' },
 ]
 const CODEX_UPSTREAM_MODE_OPTIONS = [
-  { label: 'Backend 优先', value: 'codex_backend' },
+  { label: 'Backend', value: 'codex_backend' },
   { label: '强制 CLI', value: 'codex_cli' },
+]
+const CODEX_UPSTREAM_STRATEGY_OPTIONS = [
+  {
+    label: 'Backend 直连',
+    value: 'backend_only',
+    description: '失败直接返回上游错误',
+  },
+  {
+    label: 'Backend + CLI 兜底',
+    value: 'backend_with_cli_fallback',
+    description: '仅纯文本 / 图片可临时降级',
+  },
+  {
+    label: '强制 CLI',
+    value: 'codex_cli',
+    description: '每次都走服务端 codex exec',
+  },
 ]
 const USAGE_UPSTREAM_FILTER_OPTIONS = [
   { label: '全部上游', value: '' },
@@ -188,9 +205,9 @@ const VIEW_CONFIG = {
   },
   upstream: {
     section: '转发配置',
-    title: '上游模式',
+    title: '上游策略',
     description:
-      '切换 Codex direct backend 与 Codex CLI 兼容路径，影响后续 API 转发请求。',
+      '切换 Codex backend 直连、CLI 兜底或强制 CLI，影响后续 API 转发请求。',
   },
   analytics: {
     section: '用量统计',
@@ -906,8 +923,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const [usageSessionItems, setUsageSessionItems] = useState([])
   const [usageSessionTotal, setUsageSessionTotal] = useState(0)
   const [usageBuckets, setUsageBuckets] = useState([])
-  const [gatewayUpstreamMode, setGatewayUpstreamMode] =
-    useState('codex_backend')
+  const [gatewayUpstreamStrategy, setGatewayUpstreamStrategy] =
+    useState('backend_only')
   const [gatewayUpstreamSaving, setGatewayUpstreamSaving] = useState(false)
   const [usageTab, setUsageTab] = useState('daily')
   const [selectedUsageBucket, setSelectedUsageBucket] = useState(null)
@@ -1038,11 +1055,13 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   }
 
   const setGatewayUpstreamState = (res) => {
-    const nextMode = res?.data?.mode
+    const nextStrategy = res?.data?.strategy
     if (
-      CODEX_UPSTREAM_MODE_OPTIONS.some((option) => option.value === nextMode)
+      CODEX_UPSTREAM_STRATEGY_OPTIONS.some(
+        (option) => option.value === nextStrategy
+      )
     ) {
-      setGatewayUpstreamMode(nextMode)
+      setGatewayUpstreamStrategy(nextStrategy)
     }
   }
 
@@ -1234,16 +1253,16 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     }
   }
 
-  const changeGatewayUpstreamMode = async (mode) => {
-    if (mode === gatewayUpstreamMode || gatewayUpstreamSaving) return
+  const changeGatewayUpstreamStrategy = async (strategy) => {
+    if (strategy === gatewayUpstreamStrategy || gatewayUpstreamSaving) return
     setErrMsg('')
     setGatewayUpstreamSaving(true)
     try {
-      const res = await apiRpc.call('gateway_upstream_set', { mode })
+      const res = await apiRpc.call('gateway_upstream_set', { strategy })
       setGatewayUpstreamState(res)
       await loadAll()
     } catch (e) {
-      setErrMsg(getActionErrorMessage(e, '切换 Codex 上游模式'))
+      setErrMsg(getActionErrorMessage(e, '切换 Codex 上游策略'))
     } finally {
       setGatewayUpstreamSaving(false)
     }
@@ -2978,25 +2997,26 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-[#1f2d25]">
-            Codex 上游模式
+            Codex 上游策略
           </h2>
           <div className="mt-1 text-sm text-[#7b8780]">
-            Backend 优先会直连 Codex backend，失败时自动落到 CLI；强制 CLI
-            会每次走 codex exec。
+            Backend 直连失败时直接返回错误；CLI 兜底只作为临时救急；
+            强制 CLI 会每次走服务端 codex exec。
           </div>
         </div>
         <div
           className="admin-view-tabs"
           role="tablist"
-          aria-label="Codex 上游模式"
+          aria-label="Codex 上游策略"
         >
-          {CODEX_UPSTREAM_MODE_OPTIONS.map((item) => (
+          {CODEX_UPSTREAM_STRATEGY_OPTIONS.map((item) => (
             <button
               key={item.value}
               type="button"
               role="tab"
-              aria-selected={gatewayUpstreamMode === item.value}
-              onClick={() => changeGatewayUpstreamMode(item.value)}
+              aria-selected={gatewayUpstreamStrategy === item.value}
+              title={item.description}
+              onClick={() => changeGatewayUpstreamStrategy(item.value)}
               disabled={loading || gatewayUpstreamSaving}
               className="admin-view-tab"
             >
@@ -3380,7 +3400,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   />
                 </label>
                 <label className={fieldClass}>
-                  上游模式
+                  实际上游
                   <SearchableSelect
                     value={usageFilters.upstreamMode}
                     onChange={(nextValue) =>
@@ -3389,9 +3409,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                         upstreamMode: nextValue,
                       }))
                     }
-                    ariaLabel="上游模式"
+                    ariaLabel="实际执行上游"
                     options={USAGE_UPSTREAM_FILTER_OPTIONS}
-                    placeholder="输入上游模式"
+                    placeholder="输入实际上游"
                   />
                 </label>
               </div>

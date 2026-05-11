@@ -176,9 +176,10 @@ const scenarios = [
     adminAuth: true,
     mockApiRpc: true,
     verify: async (page) => {
-      await expectText(page, '上游模式')
-      await expectText(page, 'Codex 上游模式')
-      await expectText(page, 'Backend 优先')
+      await expectText(page, '上游策略')
+      await expectText(page, 'Codex 上游策略')
+      await expectText(page, 'Backend 直连')
+      await expectText(page, 'Backend + CLI 兜底')
       await expectText(page, '强制 CLI')
       await expectNoText(page, '最近上游请求')
       await expectNoText(page, '每日模型汇总')
@@ -190,10 +191,10 @@ const scenarios = [
         )
         return tab?.getAttribute('aria-selected') === 'true'
       })
-      await page.getByRole('tab', { name: 'Backend 优先', exact: true }).click()
+      await page.getByRole('tab', { name: 'Backend 直连', exact: true }).click()
       await page.waitForFunction(() => {
         const tab = [...document.querySelectorAll('[role="tab"]')].find(
-          (node) => node.textContent.trim() === 'Backend 优先'
+          (node) => node.textContent.trim() === 'Backend 直连'
         )
         return tab?.getAttribute('aria-selected') === 'true'
       })
@@ -201,7 +202,7 @@ const scenarios = [
       assert(
         calls.some((call) => call.method === 'gateway_upstream_get') &&
           calls.some((call) => call.method === 'gateway_upstream_set'),
-        `admin-upstream-desktop 未调用上游模式读写接口: ${JSON.stringify(calls)}`
+        `admin-upstream-desktop 未调用上游策略读写接口: ${JSON.stringify(calls)}`
       )
     },
   },
@@ -1050,7 +1051,7 @@ async function assertUsageTableVisuals(page, scenarioName) {
         main?.querySelector('[role="combobox"][aria-label="时间范围"]')
       ),
       hasUpstreamFilter: Boolean(
-        main?.querySelector('[role="combobox"][aria-label="上游模式"]')
+        main?.querySelector('[role="combobox"][aria-label="实际执行上游"]')
       ),
       hasUpstreamStats: document.body.innerText.includes('上游分布'),
       hasUsageTabs: [
@@ -1069,7 +1070,7 @@ async function assertUsageTableVisuals(page, scenarioName) {
 
   assert(metrics.hasSidebarUsageNav, `${scenarioName} 缺少后台侧栏 usage 入口`)
   assert(metrics.hasTimeRangeFilter, `${scenarioName} 缺少 usage 时间范围筛选`)
-  assert(metrics.hasUpstreamFilter, `${scenarioName} 缺少上游模式筛选`)
+  assert(metrics.hasUpstreamFilter, `${scenarioName} 缺少实际上游筛选`)
   assert(metrics.hasUpstreamStats, `${scenarioName} 缺少上游分布统计`)
   assert(metrics.hasUsageTabs, `${scenarioName} 缺少 usage 分段视图`)
   assert(metrics.hasDailySummary, `${scenarioName} 缺少每日模型默认视图`)
@@ -2195,14 +2196,14 @@ function base64UrlJson(value) {
 
 async function installApiRpcMock(page) {
   const calls = []
-  let upstreamMode = 'codex_backend'
+  const state = {
+    upstreamMode: 'codex_backend',
+    upstreamStrategy: 'backend_only',
+  }
   page.__styleL1ApiRpcCalls = calls
 
   await page.route('**/rpc/api', async (route) => {
     const request = route.request().postDataJSON()
-    if (request.method === 'gateway_upstream_set') {
-      upstreamMode = request.params?.mode || upstreamMode
-    }
     calls.push({
       method: request.method,
       params: request.params || {},
@@ -2215,9 +2216,7 @@ async function installApiRpcMock(page) {
         jsonrpc: '2.0',
         result: {
           code: 0,
-          data: getApiMockData(request.method, request.params || {}, {
-            upstreamMode,
-          }),
+          data: getApiMockData(request.method, request.params || {}, state),
           message: 'OK',
         },
       }),
@@ -2277,21 +2276,32 @@ function getApiMockData(method, params = {}, state = {}) {
 
   if (method === 'gateway_upstream_get') {
     return {
+      default_strategy: 'backend_only',
       default_mode: 'codex_backend',
+      fallback_enabled: false,
       mode: state.upstreamMode || 'codex_backend',
+      strategy: state.upstreamStrategy || 'backend_only',
       options: [
-        { label: 'Backend 优先', value: 'codex_backend' },
+        { label: 'Backend 直连', value: 'backend_only' },
+        { label: 'Backend + CLI 兜底', value: 'backend_with_cli_fallback' },
         { label: '强制 CLI', value: 'codex_cli' },
       ],
     }
   }
 
   if (method === 'gateway_upstream_set') {
+    const strategy = params.strategy || 'backend_only'
+    state.upstreamStrategy = strategy
+    state.upstreamMode = strategy === 'codex_cli' ? 'codex_cli' : 'codex_backend'
     return {
+      default_strategy: 'backend_only',
       default_mode: 'codex_backend',
-      mode: state.upstreamMode || params.mode || 'codex_backend',
+      fallback_enabled: strategy === 'backend_with_cli_fallback',
+      mode: state.upstreamMode,
+      strategy,
       options: [
-        { label: 'Backend 优先', value: 'codex_backend' },
+        { label: 'Backend 直连', value: 'backend_only' },
+        { label: 'Backend + CLI 兜底', value: 'backend_with_cli_fallback' },
         { label: '强制 CLI', value: 'codex_cli' },
       ],
     }

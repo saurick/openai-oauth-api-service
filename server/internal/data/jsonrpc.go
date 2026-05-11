@@ -109,7 +109,7 @@ func (d *JsonrpcData) Handle(
 	if params == nil {
 		d.log.WithContext(ctx).Info("[jsonrpc] params=<nil>")
 	} else {
-		b, _ := json.MarshalIndent(params.AsMap(), "", "  ")
+		b, _ := json.MarshalIndent(redactJSONRPCParams(params.AsMap()), "", "  ")
 		d.log.WithContext(ctx).Infof("[jsonrpc] params=%s", string(b))
 	}
 
@@ -133,6 +133,39 @@ func (d *JsonrpcData) Handle(
 			Code:    errcode.JSONRPCUnknownURL.Code,
 			Message: fmt.Sprintf("unknown jsonrpc url=%s", url),
 		}, nil
+	}
+}
+
+func redactJSONRPCParams(value any) any {
+	switch v := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for key, item := range v {
+			if isSensitiveJSONRPCParamKey(key) {
+				out[key] = "[REDACTED]"
+				continue
+			}
+			out[key] = redactJSONRPCParams(item)
+		}
+		return out
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = redactJSONRPCParams(item)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
+func isSensitiveJSONRPCParamKey(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "password", "token", "access_token", "refresh_token", "authorization",
+		"api_key", "plain_key", "client_secret", "jwt_secret":
+		return true
+	default:
+		return false
 	}
 }
 

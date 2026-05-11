@@ -107,11 +107,15 @@ usage 记录：
 
 - 成功和失败请求都会记录 usage log
 - 默认记录 endpoint、model、reasoning_effort、可选 session_id、HTTP 状态、耗时、请求/响应字节数和 token usage；未传 reasoning effort 或历史旧数据保持空值，不按 token 反推
-- 上游模式可在管理后台「上游模式」页通过 `api.gateway_upstream_get` / `api.gateway_upstream_set` 读取和切换；未保存运行时设置时，默认 `codex_backend`，也可用 `CODEX_UPSTREAM_MODE` 作为启动时默认值。`codex_backend` 会直接请求 Codex backend `/responses`，backend 失败时自动 fallback 到 `codex_cli`；显式切到 `codex_cli` 时只走 CLI。
+- 上游策略可在管理后台「上游策略」页通过 `api.gateway_upstream_get` / `api.gateway_upstream_set` 读取和切换；未保存运行时设置时，默认 Backend 直连。`codex_backend` 会直接请求 Codex backend `/responses`，backend 失败时默认直接返回上游错误；只有显式选择 Backend + CLI 兜底策略时，纯文本 / 图片请求才允许 fallback 到 `codex_cli`。带工具调用、工具历史或文件输入的 backend-only 请求始终不会 fallback 到 CLI；显式切到强制 CLI 时只走 CLI。
 - `codex_cli` 模式 token 优先读取 Codex JSON 事件里的 usage，没有事件时才退回字符数估算；`codex_backend` 模式优先读取 Responses SSE `response.completed.usage`
 - usage log 会记录 `upstream_configured_mode`、`upstream_mode`、`upstream_fallback` 和 `upstream_error_type`，用于区分配置模式、实际执行模式和 fallback 情况。
 - OpenAI-compatible 请求体支持 `reasoning_effort`、`reasoningEffort` 和 `reasoning.effort`，可选值为 `low`、`medium`、`high`、`xhigh`；direct backend 会转为 OpenAI Responses 口径的 `reasoning.effort`，CLI 模式会转为 Codex CLI `model_reasoning_effort`
 - direct backend 模式会把 `system` / `developer` 消息合并为 `instructions`；若请求没有这类消息，会补一个最小默认 instructions，因为 Codex backend 要求该字段非空
+- direct backend 模式会透传 OpenAI-compatible `tools` / `tool_choice`，并在 chat messages 与 Responses input 之间转换 assistant `tool_calls`、`function_call` 和 `function_call_output`，上游返回 function call 时再映射回 Chat Completions `tool_calls` 或 Responses `function_call`；Codex CLI fallback 默认关闭，打开后也只支持纯文本响应，不支持工具调用回传，因此这类请求在 backend 失败时会直接返回上游错误，避免错误转为服务端 `codex exec`
+- direct backend 会在转发 Responses `function_call` 历史前规范化 item `id`，避免客户端回传空字符串或非法字符时触发上游 `input[n].id` 校验错误
+- `/v1/responses` 的 `stream=true` 会返回 Responses SSE 事件，包括 `response.output_item.added`、`response.content_part.added`、`response.output_text.delta` 和 `response.completed`，用于兼容 Codex CLI 自定义 `wire_api="responses"` provider
+- `/v1/models` 除 OpenAI 标准 `data` 外还返回 Codex CLI 读取的 `models` 元数据，包括 reasoning levels、shell type、context window 和输入模态等字段，用于兼容自定义 provider 的模型刷新
 - OpenAI-compatible 图片输入支持 data URL 形式的 `image_url` / `input_image`；CLI 模式会临时落盘并通过 Codex CLI `--image` 附加到本次请求，direct backend 模式会直接传入 `/responses` 内容；单次最多 4 张、单张最大 16 MiB
 - OpenAI-compatible PDF 输入支持 `input_file` / `file` 的 `application/pdf` data URL，或带 `mimeType=application/pdf` / `media_type=application/pdf` 的 base64 文件数据；PDF 仅支持 direct backend 模式，单次最多 4 个、单个最大 16 MiB。`txt` / `md` / 代码等文本类附件由客户端读取成文本后按普通 `text` 输入转发；`doc` / `docx` / `xls` / `xlsx` 暂不声明为原生模态，后续如需支持应先增加明确的服务端转换链路。
 - 默认不保存 prompt、response body 或正文采样
@@ -208,13 +212,15 @@ usage 记录：
 
 ### `api.gateway_upstream_get` / `api.gateway_upstream_set`
 
-读取或切换 Codex 上游模式，用于高频 OpenCode 场景在 direct backend 与 CLI 兼容路径之间切换：
+读取或切换 Codex 上游策略，用于高频 OpenCode 场景在 direct backend、CLI 临时兜底和强制 CLI 兼容路径之间切换：
 
+- `strategy`：当前运行时策略，`backend_only`、`backend_with_cli_fallback` 或 `codex_cli`
 - `mode`：当前运行时模式，`codex_backend` 或 `codex_cli`
-- `default_mode`：未保存设置时的默认模式
-- `options[]`：前端开关可展示的模式列表
+- `fallback_enabled`：当前策略是否允许 backend 失败后 CLI 兜底；工具调用、工具历史和文件输入始终不会兜底
+- `default_strategy` / `default_mode`：未保存设置时的默认策略与模式
+- `options[]`：前端开关可展示的策略列表
 
-`api.gateway_upstream_set` 参数为 `mode`。保存后立即影响后续 `/v1/chat/completions` 与 `/v1/responses` 请求；历史 usage 不会改写。
+`api.gateway_upstream_set` 参数优先使用 `strategy`。为兼容旧前端，仍接受旧的 `mode` 与 `fallback_enabled` 参数并转换为对应策略。保存后立即影响后续 `/v1/chat/completions` 与 `/v1/responses` 请求；历史 usage 不会改写。
 
 ### `api.usage_list`
 

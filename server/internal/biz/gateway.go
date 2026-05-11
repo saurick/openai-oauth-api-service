@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,11 @@ const (
 	GatewayUpstreamModeCodexBackend = "codex_backend"
 	GatewayUpstreamModeCodexCLI     = "codex_cli"
 	GatewaySettingCodexUpstreamMode = "codex_upstream_mode"
+	GatewaySettingCodexFallback     = "codex_upstream_fallback_enabled"
+
+	GatewayUpstreamStrategyBackendOnly         = "backend_only"
+	GatewayUpstreamStrategyBackendWithFallback = "backend_with_cli_fallback"
+	GatewayUpstreamStrategyCodexCLI            = "codex_cli"
 )
 
 var (
@@ -409,6 +415,9 @@ func NormalizeGatewayBearer(auth string) string {
 }
 
 func DefaultGatewayUpstreamMode() string {
+	if mode := NormalizeGatewayUpstreamMode(os.Getenv("CODEX_UPSTREAM_MODE")); mode != "" {
+		return mode
+	}
 	return GatewayUpstreamModeCodexBackend
 }
 
@@ -421,6 +430,50 @@ func NormalizeGatewayUpstreamMode(mode string) string {
 	default:
 		return ""
 	}
+}
+
+func NormalizeGatewayUpstreamStrategy(strategy string) string {
+	switch strings.ToLower(strings.TrimSpace(strategy)) {
+	case GatewayUpstreamStrategyBackendOnly:
+		return GatewayUpstreamStrategyBackendOnly
+	case GatewayUpstreamStrategyBackendWithFallback:
+		return GatewayUpstreamStrategyBackendWithFallback
+	case GatewayUpstreamStrategyCodexCLI:
+		return GatewayUpstreamStrategyCodexCLI
+	default:
+		return ""
+	}
+}
+
+func GatewayUpstreamStrategy(mode string, fallbackEnabled bool) string {
+	mode = NormalizeGatewayUpstreamMode(mode)
+	if mode == GatewayUpstreamModeCodexCLI {
+		return GatewayUpstreamStrategyCodexCLI
+	}
+	if fallbackEnabled {
+		return GatewayUpstreamStrategyBackendWithFallback
+	}
+	return GatewayUpstreamStrategyBackendOnly
+}
+
+func DefaultGatewayUpstreamFallbackEnabled() bool {
+	return parseGatewayBool(os.Getenv("CODEX_UPSTREAM_FALLBACK_ENABLED"))
+}
+
+func parseGatewayBool(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func formatGatewayBool(value bool) string {
+	if value {
+		return "true"
+	}
+	return "false"
 }
 
 func (uc *GatewayUsecase) CreateAPIKey(ctx context.Context, input CreateGatewayAPIKeyInput) (*CreatedGatewayAPIKey, error) {
@@ -813,6 +866,29 @@ func (uc *GatewayUsecase) GetCodexUpstreamMode(ctx context.Context) (string, err
 	return mode, nil
 }
 
+func (uc *GatewayUsecase) GetCodexUpstreamFallbackEnabled(ctx context.Context) (bool, error) {
+	value, err := uc.repo.GetGatewaySetting(ctx, GatewaySettingCodexFallback)
+	if err != nil {
+		return false, err
+	}
+	if strings.TrimSpace(value) == "" {
+		return DefaultGatewayUpstreamFallbackEnabled(), nil
+	}
+	return parseGatewayBool(value), nil
+}
+
+func (uc *GatewayUsecase) GetCodexUpstreamStrategy(ctx context.Context) (string, string, bool, error) {
+	mode, err := uc.GetCodexUpstreamMode(ctx)
+	if err != nil {
+		return "", "", false, err
+	}
+	fallbackEnabled, err := uc.GetCodexUpstreamFallbackEnabled(ctx)
+	if err != nil {
+		return "", "", false, err
+	}
+	return GatewayUpstreamStrategy(mode, fallbackEnabled), mode, fallbackEnabled, nil
+}
+
 func (uc *GatewayUsecase) SetCodexUpstreamMode(ctx context.Context, mode string) (string, error) {
 	normalized := NormalizeGatewayUpstreamMode(mode)
 	if normalized == "" {
@@ -822,6 +898,37 @@ func (uc *GatewayUsecase) SetCodexUpstreamMode(ctx context.Context, mode string)
 		return "", err
 	}
 	return normalized, nil
+}
+
+func (uc *GatewayUsecase) SetCodexUpstreamFallbackEnabled(ctx context.Context, enabled bool) (bool, error) {
+	if err := uc.repo.SetGatewaySetting(ctx, GatewaySettingCodexFallback, formatGatewayBool(enabled)); err != nil {
+		return false, err
+	}
+	return enabled, nil
+}
+
+func (uc *GatewayUsecase) SetCodexUpstreamStrategy(ctx context.Context, strategy string) (string, string, bool, error) {
+	strategy = NormalizeGatewayUpstreamStrategy(strategy)
+	var mode string
+	var fallbackEnabled bool
+	switch strategy {
+	case GatewayUpstreamStrategyBackendOnly:
+		mode = GatewayUpstreamModeCodexBackend
+	case GatewayUpstreamStrategyBackendWithFallback:
+		mode = GatewayUpstreamModeCodexBackend
+		fallbackEnabled = true
+	case GatewayUpstreamStrategyCodexCLI:
+		mode = GatewayUpstreamModeCodexCLI
+	default:
+		return "", "", false, ErrGatewayUpstreamModeInvalid
+	}
+	if err := uc.repo.SetGatewaySetting(ctx, GatewaySettingCodexUpstreamMode, mode); err != nil {
+		return "", "", false, err
+	}
+	if err := uc.repo.SetGatewaySetting(ctx, GatewaySettingCodexFallback, formatGatewayBool(fallbackEnabled)); err != nil {
+		return "", "", false, err
+	}
+	return strategy, mode, fallbackEnabled, nil
 }
 
 func (uc *GatewayUsecase) ListPolicies(ctx context.Context, apiKeyID int) ([]*GatewayPolicy, error) {

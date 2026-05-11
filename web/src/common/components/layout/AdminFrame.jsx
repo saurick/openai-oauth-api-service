@@ -16,7 +16,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/admin-keys', label: 'API 凭据', icon: KeyIcon },
       { to: '/admin-models', label: '模型管理', icon: RouteIcon },
-      { to: '/admin-upstream', label: '上游模式', icon: UpstreamIcon },
+      { to: '/admin-upstream', label: '上游策略', icon: UpstreamIcon },
     ],
   },
   {

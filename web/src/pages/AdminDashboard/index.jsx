@@ -32,7 +32,7 @@ const TREND_CHART_TYPES = [
   { key: 'line', label: '折线' },
 ]
 const CODEX_UPSTREAM_MODE_OPTIONS = [
-  { label: 'Backend 优先', value: 'codex_backend' },
+  { label: 'Backend', value: 'codex_backend' },
   { label: '强制 CLI', value: 'codex_cli' },
 ]
 const CODEX_REASONING_EFFORT_OPTIONS = [
