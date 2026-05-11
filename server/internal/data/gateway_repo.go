@@ -48,6 +48,12 @@ func (r *gatewayRepo) CreateAPIKey(ctx context.Context, input biz.CreateGatewayA
 		SetQuotaTotalTokens(input.QuotaTotalTokens).
 		SetQuotaDailyTokens(input.QuotaDailyTokens).
 		SetQuotaWeeklyTokens(input.QuotaWeeklyTokens).
+		SetQuotaDailyInputTokens(input.QuotaDailyInputTokens).
+		SetQuotaWeeklyInputTokens(input.QuotaWeeklyInputTokens).
+		SetQuotaDailyOutputTokens(input.QuotaDailyOutputTokens).
+		SetQuotaWeeklyOutputTokens(input.QuotaWeeklyOutputTokens).
+		SetQuotaDailyBillableInputTokens(input.QuotaDailyBillableInputTokens).
+		SetQuotaWeeklyBillableInputTokens(input.QuotaWeeklyBillableInputTokens).
 		SetAllowedModels(normalizeStringList(input.AllowedModels))
 	if input.OwnerUserID > 0 {
 		create.SetOwnerUserID(input.OwnerUserID)
@@ -125,6 +131,12 @@ func (r *gatewayRepo) UpdateAPIKey(ctx context.Context, input biz.UpdateGatewayA
 		SetQuotaTotalTokens(input.QuotaTotalTokens).
 		SetQuotaDailyTokens(input.QuotaDailyTokens).
 		SetQuotaWeeklyTokens(input.QuotaWeeklyTokens).
+		SetQuotaDailyInputTokens(input.QuotaDailyInputTokens).
+		SetQuotaWeeklyInputTokens(input.QuotaWeeklyInputTokens).
+		SetQuotaDailyOutputTokens(input.QuotaDailyOutputTokens).
+		SetQuotaWeeklyOutputTokens(input.QuotaWeeklyOutputTokens).
+		SetQuotaDailyBillableInputTokens(input.QuotaDailyBillableInputTokens).
+		SetQuotaWeeklyBillableInputTokens(input.QuotaWeeklyBillableInputTokens).
 		SetAllowedModels(normalizeStringList(input.AllowedModels)).
 		SetDisabled(input.Disabled)
 	if input.OwnerUserID > 0 {
@@ -283,8 +295,45 @@ func (r *gatewayRepo) ListUsageLogs(ctx context.Context, filter biz.GatewayUsage
 	for _, item := range list {
 		out = append(out, mapGatewayUsageLog(item))
 	}
+	r.attachUsageKeyNames(ctx, out)
 	r.attachUsageCosts(ctx, out)
 	return out, total, nil
+}
+
+func (r *gatewayRepo) attachUsageKeyNames(ctx context.Context, list []*biz.GatewayUsageLog) {
+	ids := make([]int, 0, len(list))
+	seen := make(map[int]struct{}, len(list))
+	for _, item := range list {
+		if item == nil || item.APIKeyID <= 0 {
+			continue
+		}
+		if _, ok := seen[item.APIKeyID]; ok {
+			continue
+		}
+		seen[item.APIKeyID] = struct{}{}
+		ids = append(ids, item.APIKeyID)
+	}
+	if len(ids) == 0 {
+		return
+	}
+
+	keys, err := r.data.postgres.GatewayAPIKey.Query().
+		Where(gatewayapikey.IDIn(ids...)).
+		All(ctx)
+	if err != nil {
+		r.log.WithContext(ctx).Warnf("attach usage key names failed err=%v", err)
+		return
+	}
+	names := make(map[int]string, len(keys))
+	for _, key := range keys {
+		names[key.ID] = key.Name
+	}
+	for _, item := range list {
+		if item == nil || item.APIKeyID <= 0 {
+			continue
+		}
+		item.APIKeyName = names[item.APIKeyID]
+	}
 }
 
 func (r *gatewayRepo) attachUsageCosts(ctx context.Context, list []*biz.GatewayUsageLog) {
@@ -514,8 +563,8 @@ LIMIT $` + fmt.Sprint(len(args))
 }
 
 func (r *gatewayRepo) ListUsageSessionSummaries(ctx context.Context, filter biz.GatewayUsageFilter, limit, offset int) ([]*biz.GatewayUsageSessionSummary, int, error) {
-	where, args := buildUsageWhereClause(filter)
-	sessionCondition := "session_id <> ''"
+	where, args := buildUsageWhereClauseWithPrefix(filter, "l.")
+	sessionCondition := "l.session_id <> ''"
 	if where == "" {
 		where = " WHERE " + sessionCondition
 	} else {
@@ -523,8 +572,8 @@ func (r *gatewayRepo) ListUsageSessionSummaries(ctx context.Context, filter biz.
 	}
 
 	countQuery := `SELECT COUNT(*) FROM (
-SELECT session_id FROM gateway_usage_logs` + where + `
-GROUP BY session_id
+SELECT l.session_id FROM gateway_usage_logs l` + where + `
+GROUP BY l.session_id
 ) s`
 	var total int
 	if err := r.data.sqldb.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
@@ -536,26 +585,28 @@ GROUP BY session_id
 	limitPlaceholder := len(queryArgs) - 1
 	offsetPlaceholder := len(queryArgs)
 	query := `SELECT
-session_id,
-COALESCE(MAX(api_key_id), 0),
-COALESCE(MAX(NULLIF(api_key_prefix, '')), ''),
+l.session_id,
+COALESCE(MAX(l.api_key_id), 0),
+COALESCE(MAX(k.key_prefix), MAX(NULLIF(l.api_key_prefix, '')), ''),
+COALESCE(MAX(k.name), ''),
 COUNT(*),
-COALESCE(SUM(CASE WHEN success THEN 1 ELSE 0 END), 0),
-COALESCE(SUM(CASE WHEN success THEN 0 ELSE 1 END), 0),
-COALESCE(SUM(total_tokens), 0),
-COALESCE(SUM(input_tokens), 0),
-COALESCE(SUM(output_tokens), 0),
-COALESCE(SUM(cached_tokens), 0),
-COALESCE(SUM(reasoning_tokens), 0),
-COALESCE(SUM(CASE WHEN upstream_mode = 'codex_backend' THEN 1 ELSE 0 END), 0),
-COALESCE(SUM(CASE WHEN upstream_mode = 'codex_cli' THEN 1 ELSE 0 END), 0),
-COALESCE(SUM(CASE WHEN upstream_fallback THEN 1 ELSE 0 END), 0),
-COALESCE(AVG(duration_ms)::bigint, 0),
-MIN(created_at),
-MAX(created_at)
-FROM gateway_usage_logs` + where + `
-GROUP BY session_id
-ORDER BY MAX(created_at) DESC
+COALESCE(SUM(CASE WHEN l.success THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN l.success THEN 0 ELSE 1 END), 0),
+COALESCE(SUM(l.total_tokens), 0),
+COALESCE(SUM(l.input_tokens), 0),
+COALESCE(SUM(l.output_tokens), 0),
+COALESCE(SUM(l.cached_tokens), 0),
+COALESCE(SUM(l.reasoning_tokens), 0),
+COALESCE(SUM(CASE WHEN l.upstream_mode = 'codex_backend' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN l.upstream_mode = 'codex_cli' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN l.upstream_fallback THEN 1 ELSE 0 END), 0),
+COALESCE(AVG(l.duration_ms)::bigint, 0),
+MIN(l.created_at),
+MAX(l.created_at)
+FROM gateway_usage_logs l
+LEFT JOIN gateway_api_keys k ON k.id = l.api_key_id` + where + `
+GROUP BY l.session_id
+ORDER BY MAX(l.created_at) DESC
 LIMIT $` + fmt.Sprint(limitPlaceholder) + ` OFFSET $` + fmt.Sprint(offsetPlaceholder)
 
 	rows, err := r.data.sqldb.QueryContext(ctx, query, queryArgs...)
@@ -575,6 +626,7 @@ LIMIT $` + fmt.Sprint(limitPlaceholder) + ` OFFSET $` + fmt.Sprint(offsetPlaceho
 			&item.SessionID,
 			&item.APIKeyID,
 			&item.APIKeyPrefix,
+			&item.APIKeyName,
 			&item.TotalRequests,
 			&item.SuccessRequests,
 			&item.FailedRequests,
@@ -1426,21 +1478,27 @@ func mapGatewayAPIKey(item *ent.GatewayAPIKey) *biz.GatewayAPIKey {
 		quotaWeeklyTokens = item.QuotaTotalTokens
 	}
 	return &biz.GatewayAPIKey{
-		ID:                item.ID,
-		OwnerUserID:       ownerUserID,
-		Name:              item.Name,
-		PlainKey:          item.PlainKey,
-		KeyPrefix:         item.KeyPrefix,
-		KeyLast4:          item.KeyLast4,
-		Disabled:          item.Disabled,
-		QuotaRequests:     item.QuotaRequests,
-		QuotaTotalTokens:  item.QuotaTotalTokens,
-		QuotaDailyTokens:  item.QuotaDailyTokens,
-		QuotaWeeklyTokens: quotaWeeklyTokens,
-		AllowedModels:     normalizeStringList(item.AllowedModels),
-		LastUsedAt:        item.LastUsedAt,
-		CreatedAt:         item.CreatedAt,
-		UpdatedAt:         item.UpdatedAt,
+		ID:                             item.ID,
+		OwnerUserID:                    ownerUserID,
+		Name:                           item.Name,
+		PlainKey:                       item.PlainKey,
+		KeyPrefix:                      item.KeyPrefix,
+		KeyLast4:                       item.KeyLast4,
+		Disabled:                       item.Disabled,
+		QuotaRequests:                  item.QuotaRequests,
+		QuotaTotalTokens:               item.QuotaTotalTokens,
+		QuotaDailyTokens:               item.QuotaDailyTokens,
+		QuotaWeeklyTokens:              quotaWeeklyTokens,
+		QuotaDailyInputTokens:          item.QuotaDailyInputTokens,
+		QuotaWeeklyInputTokens:         item.QuotaWeeklyInputTokens,
+		QuotaDailyOutputTokens:         item.QuotaDailyOutputTokens,
+		QuotaWeeklyOutputTokens:        item.QuotaWeeklyOutputTokens,
+		QuotaDailyBillableInputTokens:  item.QuotaDailyBillableInputTokens,
+		QuotaWeeklyBillableInputTokens: item.QuotaWeeklyBillableInputTokens,
+		AllowedModels:                  normalizeStringList(item.AllowedModels),
+		LastUsedAt:                     item.LastUsedAt,
+		CreatedAt:                      item.CreatedAt,
+		UpdatedAt:                      item.UpdatedAt,
 	}
 }
 

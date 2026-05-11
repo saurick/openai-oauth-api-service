@@ -90,7 +90,7 @@ OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS=https://oauth-api.saurick.me
 
 本地 Google OAuth Client 只需要登记后端固定回调 `http://localhost:8400/auth/oauth/callback`。前端当前端口会通过 signed state 自动回跳，例如 `http://localhost:5176/oauth/callback`；生产环境继续登记线上 HTTPS 后端回调，并用 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` 明确允许前端后台域名。
 
-API 转发统一使用服务器 Codex 登录态，默认走 direct Codex backend，并在 backend 失败时自动用 Codex CLI 兜底；管理后台「用量日志」页可以运行时切换 `codex_backend` / `codex_cli`，`CODEX_UPSTREAM_MODE` 只作为未保存后台设置时的启动默认值：
+API 转发统一使用服务器 Codex 登录态，默认走 direct Codex backend，并在 backend 失败时自动用 Codex CLI 兜底；管理后台「上游模式」页可以运行时切换 `codex_backend` / `codex_cli`，`CODEX_UPSTREAM_MODE` 只作为未保存后台设置时的启动默认值：
 
 ```bash
 CODEX_HOST_HOME=/root/.codex

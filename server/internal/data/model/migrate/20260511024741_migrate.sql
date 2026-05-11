@@ -1,0 +1,2 @@
+-- Modify "gateway_api_keys" table
+ALTER TABLE "gateway_api_keys" ADD COLUMN "quota_daily_input_tokens" bigint NOT NULL DEFAULT 0, ADD COLUMN "quota_weekly_input_tokens" bigint NOT NULL DEFAULT 0, ADD COLUMN "quota_daily_output_tokens" bigint NOT NULL DEFAULT 0, ADD COLUMN "quota_weekly_output_tokens" bigint NOT NULL DEFAULT 0, ADD COLUMN "quota_daily_billable_input_tokens" bigint NOT NULL DEFAULT 0, ADD COLUMN "quota_weekly_billable_input_tokens" bigint NOT NULL DEFAULT 0;

@@ -88,7 +88,7 @@ HTTP 管理导出：
 - `GET /admin/exports/usage.csv`
 - `GET /admin/exports/usage.json`
 
-导出要求管理员登录态，筛选条件与 `api.usage_list` 保持一致：时间范围、key、模型、endpoint、success、upstream_mode。导出会写审计日志。
+导出要求管理员登录态，筛选条件与 `api.usage_list` 保持一致：时间范围、key、模型、endpoint、success、upstream_mode。导出行包含 `api_key_name`，按当前 API 凭据备注回补；凭据已删除时为空。导出会写审计日志。
 
 ## OpenAI 兼容入口
 
@@ -107,14 +107,14 @@ usage 记录：
 
 - 成功和失败请求都会记录 usage log
 - 默认记录 endpoint、model、可选 session_id、HTTP 状态、耗时、请求/响应字节数和 token usage
-- 上游模式可在管理后台「用量日志」页通过 `api.gateway_upstream_get` / `api.gateway_upstream_set` 读取和切换；未保存运行时设置时，默认 `codex_backend`，也可用 `CODEX_UPSTREAM_MODE` 作为启动时默认值。`codex_backend` 会直接请求 Codex backend `/responses`，backend 失败时自动 fallback 到 `codex_cli`；显式切到 `codex_cli` 时只走 CLI。
+- 上游模式可在管理后台「上游模式」页通过 `api.gateway_upstream_get` / `api.gateway_upstream_set` 读取和切换；未保存运行时设置时，默认 `codex_backend`，也可用 `CODEX_UPSTREAM_MODE` 作为启动时默认值。`codex_backend` 会直接请求 Codex backend `/responses`，backend 失败时自动 fallback 到 `codex_cli`；显式切到 `codex_cli` 时只走 CLI。
 - `codex_cli` 模式 token 优先读取 Codex JSON 事件里的 usage，没有事件时才退回字符数估算；`codex_backend` 模式优先读取 Responses SSE `response.completed.usage`
 - usage log 会记录 `upstream_configured_mode`、`upstream_mode`、`upstream_fallback` 和 `upstream_error_type`，用于区分配置模式、实际执行模式和 fallback 情况。
 - OpenAI-compatible 请求体支持 `reasoning_effort`，可选值为 `low`、`medium`、`high`、`xhigh`
 - direct backend 模式会把 `system` / `developer` 消息合并为 `instructions`；若请求没有这类消息，会补一个最小默认 instructions，因为 Codex backend 要求该字段非空
 - OpenAI-compatible 图片输入支持 data URL 形式的 `image_url` / `input_image`；CLI 模式会临时落盘并通过 Codex CLI `--image` 附加到本次请求，direct backend 模式会直接传入 `/responses` 内容；单次最多 4 张、单张最大 16 MiB
 - 默认不保存 prompt、response body 或正文采样
-- `/v1/chat/completions` 和 `/v1/responses` 转发前会检查 key 状态、模型权限、key 级 token 总额度、RPM、TPM、日/月请求配额和日/月 token 配额；超限返回 HTTP `429`
+- `/v1/chat/completions` 和 `/v1/responses` 转发前会检查 key 状态、模型权限、key 级总 / 输入 / 输出 / 非缓存输入 token 日周额度、RPM、TPM、日/月请求配额和日/月 token 配额；超限返回 HTTP `429`
 - token 配额以本系统落库 usage 为准，key 级 token 总额度、TPM 和 token 配额允许单次请求短暂越界，下一次请求开始拦截
 
 ## 管理员 OAuth 入口
@@ -196,6 +196,12 @@ usage 记录：
 - `quota_requests`
 - `quota_daily_tokens`
 - `quota_weekly_tokens`
+- `quota_daily_input_tokens`
+- `quota_weekly_input_tokens`
+- `quota_daily_output_tokens`
+- `quota_weekly_output_tokens`
+- `quota_daily_billable_input_tokens`
+- `quota_weekly_billable_input_tokens`
 - `disabled`
 - `owner_user_id`
 
@@ -216,6 +222,9 @@ usage 记录：
 - `items`
 - `total`
 - `items[].upstream_configured_mode`
+- `items[].api_key_id`
+- `items[].api_key_name`
+- `items[].api_key_prefix`
 - `items[].upstream_mode`
 - `items[].upstream_fallback`
 - `items[].upstream_error_type`
@@ -288,6 +297,7 @@ usage 记录：
 - `items[].session_id`
 - `items[].api_key_id`
 - `items[].api_key_prefix`
+- `items[].api_key_name`
 - `items[].total_requests`
 - `items[].success_requests`
 - `items[].failed_requests`

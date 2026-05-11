@@ -224,6 +224,132 @@ func (_u *GatewayAPIKeyUpdate) AddQuotaWeeklyTokens(v int64) *GatewayAPIKeyUpdat
 	return _u
 }
 
+// SetQuotaDailyInputTokens sets the "quota_daily_input_tokens" field.
+func (_u *GatewayAPIKeyUpdate) SetQuotaDailyInputTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.ResetQuotaDailyInputTokens()
+	_u.mutation.SetQuotaDailyInputTokens(v)
+	return _u
+}
+
+// SetNillableQuotaDailyInputTokens sets the "quota_daily_input_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdate) SetNillableQuotaDailyInputTokens(v *int64) *GatewayAPIKeyUpdate {
+	if v != nil {
+		_u.SetQuotaDailyInputTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaDailyInputTokens adds value to the "quota_daily_input_tokens" field.
+func (_u *GatewayAPIKeyUpdate) AddQuotaDailyInputTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.AddQuotaDailyInputTokens(v)
+	return _u
+}
+
+// SetQuotaWeeklyInputTokens sets the "quota_weekly_input_tokens" field.
+func (_u *GatewayAPIKeyUpdate) SetQuotaWeeklyInputTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.ResetQuotaWeeklyInputTokens()
+	_u.mutation.SetQuotaWeeklyInputTokens(v)
+	return _u
+}
+
+// SetNillableQuotaWeeklyInputTokens sets the "quota_weekly_input_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdate) SetNillableQuotaWeeklyInputTokens(v *int64) *GatewayAPIKeyUpdate {
+	if v != nil {
+		_u.SetQuotaWeeklyInputTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaWeeklyInputTokens adds value to the "quota_weekly_input_tokens" field.
+func (_u *GatewayAPIKeyUpdate) AddQuotaWeeklyInputTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.AddQuotaWeeklyInputTokens(v)
+	return _u
+}
+
+// SetQuotaDailyOutputTokens sets the "quota_daily_output_tokens" field.
+func (_u *GatewayAPIKeyUpdate) SetQuotaDailyOutputTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.ResetQuotaDailyOutputTokens()
+	_u.mutation.SetQuotaDailyOutputTokens(v)
+	return _u
+}
+
+// SetNillableQuotaDailyOutputTokens sets the "quota_daily_output_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdate) SetNillableQuotaDailyOutputTokens(v *int64) *GatewayAPIKeyUpdate {
+	if v != nil {
+		_u.SetQuotaDailyOutputTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaDailyOutputTokens adds value to the "quota_daily_output_tokens" field.
+func (_u *GatewayAPIKeyUpdate) AddQuotaDailyOutputTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.AddQuotaDailyOutputTokens(v)
+	return _u
+}
+
+// SetQuotaWeeklyOutputTokens sets the "quota_weekly_output_tokens" field.
+func (_u *GatewayAPIKeyUpdate) SetQuotaWeeklyOutputTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.ResetQuotaWeeklyOutputTokens()
+	_u.mutation.SetQuotaWeeklyOutputTokens(v)
+	return _u
+}
+
+// SetNillableQuotaWeeklyOutputTokens sets the "quota_weekly_output_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdate) SetNillableQuotaWeeklyOutputTokens(v *int64) *GatewayAPIKeyUpdate {
+	if v != nil {
+		_u.SetQuotaWeeklyOutputTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaWeeklyOutputTokens adds value to the "quota_weekly_output_tokens" field.
+func (_u *GatewayAPIKeyUpdate) AddQuotaWeeklyOutputTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.AddQuotaWeeklyOutputTokens(v)
+	return _u
+}
+
+// SetQuotaDailyBillableInputTokens sets the "quota_daily_billable_input_tokens" field.
+func (_u *GatewayAPIKeyUpdate) SetQuotaDailyBillableInputTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.ResetQuotaDailyBillableInputTokens()
+	_u.mutation.SetQuotaDailyBillableInputTokens(v)
+	return _u
+}
+
+// SetNillableQuotaDailyBillableInputTokens sets the "quota_daily_billable_input_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdate) SetNillableQuotaDailyBillableInputTokens(v *int64) *GatewayAPIKeyUpdate {
+	if v != nil {
+		_u.SetQuotaDailyBillableInputTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaDailyBillableInputTokens adds value to the "quota_daily_billable_input_tokens" field.
+func (_u *GatewayAPIKeyUpdate) AddQuotaDailyBillableInputTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.AddQuotaDailyBillableInputTokens(v)
+	return _u
+}
+
+// SetQuotaWeeklyBillableInputTokens sets the "quota_weekly_billable_input_tokens" field.
+func (_u *GatewayAPIKeyUpdate) SetQuotaWeeklyBillableInputTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.ResetQuotaWeeklyBillableInputTokens()
+	_u.mutation.SetQuotaWeeklyBillableInputTokens(v)
+	return _u
+}
+
+// SetNillableQuotaWeeklyBillableInputTokens sets the "quota_weekly_billable_input_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdate) SetNillableQuotaWeeklyBillableInputTokens(v *int64) *GatewayAPIKeyUpdate {
+	if v != nil {
+		_u.SetQuotaWeeklyBillableInputTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaWeeklyBillableInputTokens adds value to the "quota_weekly_billable_input_tokens" field.
+func (_u *GatewayAPIKeyUpdate) AddQuotaWeeklyBillableInputTokens(v int64) *GatewayAPIKeyUpdate {
+	_u.mutation.AddQuotaWeeklyBillableInputTokens(v)
+	return _u
+}
+
 // SetAllowedModels sets the "allowed_models" field.
 func (_u *GatewayAPIKeyUpdate) SetAllowedModels(v []string) *GatewayAPIKeyUpdate {
 	_u.mutation.SetAllowedModels(v)
@@ -401,6 +527,42 @@ func (_u *GatewayAPIKeyUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if value, ok := _u.mutation.AddedQuotaWeeklyTokens(); ok {
 		_spec.AddField(gatewayapikey.FieldQuotaWeeklyTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaDailyInputTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaDailyInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaDailyInputTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaDailyInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaWeeklyInputTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaWeeklyInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaWeeklyInputTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaWeeklyInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaDailyOutputTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaDailyOutputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaDailyOutputTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaDailyOutputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaWeeklyOutputTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaWeeklyOutputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaWeeklyOutputTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaWeeklyOutputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaDailyBillableInputTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaDailyBillableInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaDailyBillableInputTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaDailyBillableInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaWeeklyBillableInputTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaWeeklyBillableInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaWeeklyBillableInputTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaWeeklyBillableInputTokens, field.TypeInt64, value)
 	}
 	if value, ok := _u.mutation.AllowedModels(); ok {
 		_spec.SetField(gatewayapikey.FieldAllowedModels, field.TypeJSON, value)
@@ -637,6 +799,132 @@ func (_u *GatewayAPIKeyUpdateOne) AddQuotaWeeklyTokens(v int64) *GatewayAPIKeyUp
 	return _u
 }
 
+// SetQuotaDailyInputTokens sets the "quota_daily_input_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) SetQuotaDailyInputTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.ResetQuotaDailyInputTokens()
+	_u.mutation.SetQuotaDailyInputTokens(v)
+	return _u
+}
+
+// SetNillableQuotaDailyInputTokens sets the "quota_daily_input_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdateOne) SetNillableQuotaDailyInputTokens(v *int64) *GatewayAPIKeyUpdateOne {
+	if v != nil {
+		_u.SetQuotaDailyInputTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaDailyInputTokens adds value to the "quota_daily_input_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) AddQuotaDailyInputTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.AddQuotaDailyInputTokens(v)
+	return _u
+}
+
+// SetQuotaWeeklyInputTokens sets the "quota_weekly_input_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) SetQuotaWeeklyInputTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.ResetQuotaWeeklyInputTokens()
+	_u.mutation.SetQuotaWeeklyInputTokens(v)
+	return _u
+}
+
+// SetNillableQuotaWeeklyInputTokens sets the "quota_weekly_input_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdateOne) SetNillableQuotaWeeklyInputTokens(v *int64) *GatewayAPIKeyUpdateOne {
+	if v != nil {
+		_u.SetQuotaWeeklyInputTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaWeeklyInputTokens adds value to the "quota_weekly_input_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) AddQuotaWeeklyInputTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.AddQuotaWeeklyInputTokens(v)
+	return _u
+}
+
+// SetQuotaDailyOutputTokens sets the "quota_daily_output_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) SetQuotaDailyOutputTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.ResetQuotaDailyOutputTokens()
+	_u.mutation.SetQuotaDailyOutputTokens(v)
+	return _u
+}
+
+// SetNillableQuotaDailyOutputTokens sets the "quota_daily_output_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdateOne) SetNillableQuotaDailyOutputTokens(v *int64) *GatewayAPIKeyUpdateOne {
+	if v != nil {
+		_u.SetQuotaDailyOutputTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaDailyOutputTokens adds value to the "quota_daily_output_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) AddQuotaDailyOutputTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.AddQuotaDailyOutputTokens(v)
+	return _u
+}
+
+// SetQuotaWeeklyOutputTokens sets the "quota_weekly_output_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) SetQuotaWeeklyOutputTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.ResetQuotaWeeklyOutputTokens()
+	_u.mutation.SetQuotaWeeklyOutputTokens(v)
+	return _u
+}
+
+// SetNillableQuotaWeeklyOutputTokens sets the "quota_weekly_output_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdateOne) SetNillableQuotaWeeklyOutputTokens(v *int64) *GatewayAPIKeyUpdateOne {
+	if v != nil {
+		_u.SetQuotaWeeklyOutputTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaWeeklyOutputTokens adds value to the "quota_weekly_output_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) AddQuotaWeeklyOutputTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.AddQuotaWeeklyOutputTokens(v)
+	return _u
+}
+
+// SetQuotaDailyBillableInputTokens sets the "quota_daily_billable_input_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) SetQuotaDailyBillableInputTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.ResetQuotaDailyBillableInputTokens()
+	_u.mutation.SetQuotaDailyBillableInputTokens(v)
+	return _u
+}
+
+// SetNillableQuotaDailyBillableInputTokens sets the "quota_daily_billable_input_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdateOne) SetNillableQuotaDailyBillableInputTokens(v *int64) *GatewayAPIKeyUpdateOne {
+	if v != nil {
+		_u.SetQuotaDailyBillableInputTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaDailyBillableInputTokens adds value to the "quota_daily_billable_input_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) AddQuotaDailyBillableInputTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.AddQuotaDailyBillableInputTokens(v)
+	return _u
+}
+
+// SetQuotaWeeklyBillableInputTokens sets the "quota_weekly_billable_input_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) SetQuotaWeeklyBillableInputTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.ResetQuotaWeeklyBillableInputTokens()
+	_u.mutation.SetQuotaWeeklyBillableInputTokens(v)
+	return _u
+}
+
+// SetNillableQuotaWeeklyBillableInputTokens sets the "quota_weekly_billable_input_tokens" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdateOne) SetNillableQuotaWeeklyBillableInputTokens(v *int64) *GatewayAPIKeyUpdateOne {
+	if v != nil {
+		_u.SetQuotaWeeklyBillableInputTokens(*v)
+	}
+	return _u
+}
+
+// AddQuotaWeeklyBillableInputTokens adds value to the "quota_weekly_billable_input_tokens" field.
+func (_u *GatewayAPIKeyUpdateOne) AddQuotaWeeklyBillableInputTokens(v int64) *GatewayAPIKeyUpdateOne {
+	_u.mutation.AddQuotaWeeklyBillableInputTokens(v)
+	return _u
+}
+
 // SetAllowedModels sets the "allowed_models" field.
 func (_u *GatewayAPIKeyUpdateOne) SetAllowedModels(v []string) *GatewayAPIKeyUpdateOne {
 	_u.mutation.SetAllowedModels(v)
@@ -844,6 +1132,42 @@ func (_u *GatewayAPIKeyUpdateOne) sqlSave(ctx context.Context) (_node *GatewayAP
 	}
 	if value, ok := _u.mutation.AddedQuotaWeeklyTokens(); ok {
 		_spec.AddField(gatewayapikey.FieldQuotaWeeklyTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaDailyInputTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaDailyInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaDailyInputTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaDailyInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaWeeklyInputTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaWeeklyInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaWeeklyInputTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaWeeklyInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaDailyOutputTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaDailyOutputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaDailyOutputTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaDailyOutputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaWeeklyOutputTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaWeeklyOutputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaWeeklyOutputTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaWeeklyOutputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaDailyBillableInputTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaDailyBillableInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaDailyBillableInputTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaDailyBillableInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.QuotaWeeklyBillableInputTokens(); ok {
+		_spec.SetField(gatewayapikey.FieldQuotaWeeklyBillableInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaWeeklyBillableInputTokens(); ok {
+		_spec.AddField(gatewayapikey.FieldQuotaWeeklyBillableInputTokens, field.TypeInt64, value)
 	}
 	if value, ok := _u.mutation.AllowedModels(); ok {
 		_spec.SetField(gatewayapikey.FieldAllowedModels, field.TypeJSON, value)

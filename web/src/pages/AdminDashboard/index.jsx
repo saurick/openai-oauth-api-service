@@ -31,6 +31,10 @@ const TREND_CHART_TYPES = [
   { key: 'bar', label: '柱状' },
   { key: 'line', label: '折线' },
 ]
+const CODEX_UPSTREAM_MODE_OPTIONS = [
+  { label: 'Backend 优先', value: 'codex_backend' },
+  { label: '强制 CLI', value: 'codex_cli' },
+]
 
 const tableWrapClass = 'overflow-hidden rounded-lg border border-[#dde8df]'
 const tableClass = 'min-w-full text-left text-sm text-[#1f2d25]'
@@ -45,6 +49,16 @@ function asInt(v, fallback = 0) {
 
 function fmtNumber(v) {
   return new Intl.NumberFormat().format(asInt(v, 0))
+}
+
+function billableInputTokens(item) {
+  const provided = asInt(item?.billable_input_tokens, -1)
+  if (provided >= 0) return provided
+  return Math.max(
+    0,
+    asInt(item?.input_tokens, 0) -
+      asInt(item?.cached_input_tokens ?? item?.cached_tokens, 0)
+  )
 }
 
 function fmtCompact(v) {
@@ -86,6 +100,13 @@ function fmtRate(part, total) {
   return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)}%`
 }
 
+function upstreamModeLabel(value) {
+  const item = CODEX_UPSTREAM_MODE_OPTIONS.find(
+    (option) => option.value === value
+  )
+  return item?.label || '未记录'
+}
+
 function percentile(values, ratio) {
   const cleanValues = values
     .map((item) => Number(item))
@@ -117,7 +138,10 @@ function startOfLocalDayUnix(date) {
 
 function pct(part, total) {
   const safeTotal = Math.max(1, Number(total) || 0)
-  return Math.min(100, Math.max(0, Math.round((Number(part) / safeTotal) * 100)))
+  return Math.min(
+    100,
+    Math.max(0, Math.round((Number(part) / safeTotal) * 100))
+  )
 }
 
 function fillDailyBuckets(items, days) {
@@ -142,21 +166,24 @@ function fillDailyBuckets(items, days) {
     const hasSource = Boolean(source)
     return {
       average_duration_ms: asInt(source?.average_duration_ms, 0),
+      billable_input_tokens: billableInputTokens(source),
       bucket_start: asInt(source?.bucket_start, bucketStart),
       cached_tokens: asInt(source?.cached_tokens, 0),
+      backend_requests: asInt(source?.backend_requests, 0),
+      cli_requests: asInt(source?.cli_requests, 0),
       failed_requests: asInt(source?.failed_requests, 0),
+      fallback_requests: asInt(source?.fallback_requests, 0),
       input_tokens: asInt(source?.input_tokens, 0),
       output_tokens: asInt(source?.output_tokens, 0),
       reasoning_tokens: asInt(source?.reasoning_tokens, 0),
       success_requests: asInt(source?.success_requests, 0),
       total_requests: asInt(source?.total_requests, 0),
       total_tokens: asInt(source?.total_tokens, 0),
-      estimated_cost_usd:
-        !hasSource
-          ? 0
-          : source.estimated_cost_usd == null
-            ? null
-            : Number(source.estimated_cost_usd),
+      estimated_cost_usd: !hasSource
+        ? 0
+        : source.estimated_cost_usd == null
+          ? null
+          : Number(source.estimated_cost_usd),
     }
   })
 }
@@ -175,24 +202,36 @@ function sumBuckets(buckets) {
       const requests = asInt(item.total_requests, 0)
       return {
         average_duration_ms: 0,
+        billable_input_tokens:
+          acc.billable_input_tokens + billableInputTokens(item),
         cached_tokens: acc.cached_tokens + asInt(item.cached_tokens, 0),
         duration_weighted_ms:
           acc.duration_weighted_ms +
           asInt(item.average_duration_ms, 0) * requests,
         failed_requests: acc.failed_requests + asInt(item.failed_requests, 0),
+        backend_requests:
+          acc.backend_requests + asInt(item.backend_requests, 0),
+        cli_requests: acc.cli_requests + asInt(item.cli_requests, 0),
+        fallback_requests:
+          acc.fallback_requests + asInt(item.fallback_requests, 0),
         input_tokens: acc.input_tokens + asInt(item.input_tokens, 0),
         output_tokens: acc.output_tokens + asInt(item.output_tokens, 0),
         reasoning_tokens:
           acc.reasoning_tokens + asInt(item.reasoning_tokens, 0),
-        success_requests: acc.success_requests + asInt(item.success_requests, 0),
+        success_requests:
+          acc.success_requests + asInt(item.success_requests, 0),
         total_requests: acc.total_requests + requests,
         total_tokens: acc.total_tokens + asInt(item.total_tokens, 0),
       }
     },
     {
       average_duration_ms: 0,
+      billable_input_tokens: 0,
+      backend_requests: 0,
       cached_tokens: 0,
+      cli_requests: 0,
       duration_weighted_ms: 0,
+      fallback_requests: 0,
       failed_requests: 0,
       input_tokens: 0,
       output_tokens: 0,
@@ -238,6 +277,11 @@ function getTrendTooltipRows(item, metricConfig) {
       ['总请求', fmtNumber(item.total_requests)],
       ['成功', fmtNumber(item.success_requests)],
       ['失败', fmtNumber(item.failed_requests)],
+      [
+        'Backend / CLI',
+        `${fmtNumber(item.backend_requests)} / ${fmtNumber(item.cli_requests)}`,
+      ],
+      ['Fallback', fmtNumber(item.fallback_requests)],
     ]
   }
   if (metricConfig.key === 'errors') {
@@ -264,6 +308,7 @@ function getTrendTooltipRows(item, metricConfig) {
   return [
     ['总 Token', fmtNumber(item.total_tokens)],
     ['输入', fmtNumber(item.input_tokens)],
+    ['非缓存输入', fmtNumber(billableInputTokens(item))],
     ['缓存输入', fmtNumber(item.cached_tokens)],
     ['输出', fmtNumber(item.output_tokens)],
     ['Reasoning', fmtNumber(item.reasoning_tokens)],
@@ -300,6 +345,40 @@ function StatusBadge({ active, text }) {
     >
       {text}
     </span>
+  )
+}
+
+function HeaderWithHelp({ children, help }) {
+  if (!help) return children
+  return (
+    <span className="admin-th-help-wrap">
+      <span>{children}</span>
+      <button
+        type="button"
+        className="admin-th-help"
+        aria-label={`${children}说明：${help}`}
+        data-tooltip={help}
+      >
+        ?
+      </button>
+    </span>
+  )
+}
+
+function apiKeyRemark(item) {
+  return item?.api_key_name || item?.name || '无备注'
+}
+
+function ApiKeyUsageCell({ item }) {
+  return (
+    <div className="min-w-[160px]">
+      <div className="max-w-[240px] truncate font-medium text-[#1f2d25]">
+        {apiKeyRemark(item)}
+      </div>
+      <div className="mt-1 font-mono text-xs text-[#7b8780]">
+        {item?.api_key_prefix || item?.prefix || '-'}
+      </div>
+    </div>
   )
 }
 
@@ -370,7 +449,8 @@ function UsageTrendChart({ buckets, chartType, metric }) {
                 {fmtShortDate(activeBucket.bucket_start)}
               </span>
               <span className="font-semibold text-[#1478ff]">
-                {metricConfig.label} {fmtTrendValue(metricConfig.key, activeValue)}
+                {metricConfig.label}{' '}
+                {fmtTrendValue(metricConfig.key, activeValue)}
               </span>
             </div>
             <div className="space-y-1">
@@ -446,6 +526,7 @@ function TokenComposition({ stats }) {
   const total = Math.max(1, asInt(stats.total_tokens, 0))
   const rows = [
     ['输入 Token', stats.input_tokens, 'bg-[#1478ff]'],
+    ['非缓存输入', billableInputTokens(stats), 'bg-[#54a3ff]'],
     ['缓存输入', stats.cached_tokens, 'bg-[#78c596]'],
     ['输出 Token', stats.output_tokens, 'bg-[#d6a23a]'],
     ['Reasoning 输出', stats.reasoning_tokens, 'bg-[#9d7bd9]'],
@@ -509,7 +590,8 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
         <div>
           <h2 className="text-lg font-semibold text-[#1f2d25]">最近调用</h2>
           <div className="mt-1 text-sm text-[#7b8780]">
-            最近 24 小时 {usageItems.length} 条样本 / 共 {fmtNumber(usageTotal)} 条。
+            最近 24 小时 {usageItems.length} 条样本 / 共 {fmtNumber(usageTotal)}{' '}
+            条。
           </div>
         </div>
         <a
@@ -522,17 +604,41 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
 
       <div className={tableWrapClass}>
         <div className="overflow-auto">
-          <table className={`${tableClass} min-w-[960px]`}>
+          <table className={`${tableClass} min-w-[1880px]`}>
             <thead>
               <tr>
                 <th className={thClass}>时间</th>
+                <th className={thClass}>请求</th>
                 <th className={thClass}>凭据</th>
                 <th className={thClass}>接口</th>
                 <th className={thClass}>模型</th>
+                <th className={thClass}>上游</th>
                 <th className={thClass}>状态</th>
-                <th className={thClass}>Token</th>
-                <th className={thClass}>费用估算</th>
-                <th className={thClass}>耗时</th>
+                <th className={thClass}>
+                  <HeaderWithHelp help="总 Token = 输入 Token + 输出 Token；非缓存输入 = 输入 Token - 缓存输入。">
+                    Token
+                  </HeaderWithHelp>
+                </th>
+                <th className={thClass}>
+                  <HeaderWithHelp help="缓存输入是命中上下文缓存的输入 Token；推理输出是模型内部 reasoning 输出 Token。">
+                    缓存输入 / 推理输出
+                  </HeaderWithHelp>
+                </th>
+                <th className={thClass}>
+                  <HeaderWithHelp help="按当前模型价格口径估算；未配置价格时显示未配置。">
+                    费用估算
+                  </HeaderWithHelp>
+                </th>
+                <th className={thClass}>
+                  <HeaderWithHelp help="网关从收到请求到返回响应的耗时，单位毫秒。">
+                    耗时
+                  </HeaderWithHelp>
+                </th>
+                <th className={thClass}>
+                  <HeaderWithHelp help="请求字节 / 响应字节，用于判断单次调用的数据体大小。">
+                    字节
+                  </HeaderWithHelp>
+                </th>
                 <th className={thClass}>错误</th>
               </tr>
             </thead>
@@ -541,16 +647,33 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
                 usageItems.map((item) => (
                   <tr key={String(item.id)} className="align-top">
                     <td className={tdClass}>{fmtTs(item.created_at)}</td>
-                    <td
-                      className={`${tdClass} whitespace-nowrap font-mono text-xs`}
-                    >
-                      {item.api_key_prefix || '-'}
+                    <td className={`${tdClass} min-w-[220px]`}>
+                      <div className="font-mono text-xs">
+                        {item.request_id || '-'}
+                      </div>
+                      <div className="mt-1 break-all text-xs text-[#9aa39e]">
+                        Session：{item.session_id || '未传入'}
+                      </div>
                     </td>
-                    <td className={tdClass}>{item.endpoint || item.path}</td>
-                    <td
-                      className={`${tdClass} whitespace-nowrap font-mono text-xs`}
-                    >
+                    <td className={tdClass}>
+                      <ApiKeyUsageCell item={item} />
+                    </td>
+                    <td className={tdClass}>
+                      {item.endpoint || item.path}
+                      <div className="mt-1 text-xs text-[#9aa39e]">
+                        {item.method || '-'}
+                      </div>
+                    </td>
+                    <td className={`${tdClass} font-mono text-xs`}>
                       {item.model || '-'}
+                    </td>
+                    <td className={tdClass}>
+                      <div className="whitespace-nowrap text-xs font-semibold">
+                        {upstreamModeLabel(item.upstream_mode)}
+                      </div>
+                      <div className="mt-1 text-xs text-[#9aa39e]">
+                        {item.upstream_fallback ? 'fallback' : 'direct'}
+                      </div>
                     </td>
                     <td className={tdClass}>
                       <StatusBadge
@@ -559,17 +682,37 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
                       />
                     </td>
                     <td className={tdClass}>
-                      {fmtNumber(item.total_tokens)}
-                      <div className="mt-1 text-xs text-[#9aa39e]">
-                        {fmtNumber(item.input_tokens)} /{' '}
-                        {fmtNumber(item.output_tokens)}
+                      <div className="font-semibold">
+                        总 {fmtNumber(item.total_tokens)}
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-[#9aa39e]">
+                        输入 {fmtNumber(item.input_tokens)}
+                        <span className="mx-1 text-[#c0c9c4]">/</span>
+                        输出 {fmtNumber(item.output_tokens)}
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-[#9aa39e]">
+                        非缓存输入 {fmtNumber(billableInputTokens(item))}
                       </div>
                     </td>
                     <td className={tdClass}>
+                      <div className="text-xs leading-5">
+                        缓存输入 {fmtNumber(item.cached_tokens)}
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-[#9aa39e]">
+                        推理输出 {fmtNumber(item.reasoning_tokens)}
+                      </div>
+                    </td>
+                    <td className={`${tdClass} whitespace-nowrap`}>
                       {fmtCost(item.estimated_cost_usd)}
                     </td>
+                    <td className={tdClass}>{fmtDuration(item.duration_ms)}</td>
                     <td className={tdClass}>
-                      {fmtDuration(item.duration_ms)}
+                      <div className="text-xs leading-5">
+                        请求 {fmtNumber(item.request_bytes)}
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-[#9aa39e]">
+                        响应 {fmtNumber(item.response_bytes)}
+                      </div>
                     </td>
                     <td className={tdClass}>{item.error_type || '-'}</td>
                   </tr>
@@ -577,7 +720,7 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
               ) : (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={13}
                     className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                   >
                     {loading ? '加载中...' : '暂无调用记录'}
@@ -641,7 +784,11 @@ export default function AdminDashboardPage() {
     [usageItems]
   )
   const sampleP95Duration = useMemo(
-    () => percentile(usageItems.map((item) => item.duration_ms), 0.95),
+    () =>
+      percentile(
+        usageItems.map((item) => item.duration_ms),
+        0.95
+      ),
     [usageItems]
   )
 
@@ -715,7 +862,7 @@ export default function AdminDashboardPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
         <SummaryCard
           label="今日消费"
           tone="green"
@@ -748,6 +895,12 @@ export default function AdminDashboardPage() {
           tone="blue"
           value={`${fmtNumber(minuteSummary.total_requests)} RPM`}
           sub={`${fmtNumber(minuteSummary.total_tokens)} TPM`}
+        />
+        <SummaryCard
+          label="上游分布"
+          tone="amber"
+          value={`${fmtNumber(summary.backend_requests)} / ${fmtNumber(summary.cli_requests)}`}
+          sub={`${fmtNumber(summary.fallback_requests)} 次 fallback`}
         />
         <SummaryCard
           label="API 凭据"

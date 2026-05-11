@@ -37,21 +37,27 @@ var (
 )
 
 type GatewayAPIKey struct {
-	ID                int
-	OwnerUserID       int
-	Name              string
-	PlainKey          string
-	KeyPrefix         string
-	KeyLast4          string
-	Disabled          bool
-	QuotaRequests     int64
-	QuotaTotalTokens  int64
-	QuotaDailyTokens  int64
-	QuotaWeeklyTokens int64
-	AllowedModels     []string
-	LastUsedAt        *time.Time
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	ID                             int
+	OwnerUserID                    int
+	Name                           string
+	PlainKey                       string
+	KeyPrefix                      string
+	KeyLast4                       string
+	Disabled                       bool
+	QuotaRequests                  int64
+	QuotaTotalTokens               int64
+	QuotaDailyTokens               int64
+	QuotaWeeklyTokens              int64
+	QuotaDailyInputTokens          int64
+	QuotaWeeklyInputTokens         int64
+	QuotaDailyOutputTokens         int64
+	QuotaWeeklyOutputTokens        int64
+	QuotaDailyBillableInputTokens  int64
+	QuotaWeeklyBillableInputTokens int64
+	AllowedModels                  []string
+	LastUsedAt                     *time.Time
+	CreatedAt                      time.Time
+	UpdatedAt                      time.Time
 }
 
 type CreatedGatewayAPIKey struct {
@@ -75,6 +81,7 @@ type GatewayUsageLog struct {
 	ID                     int
 	APIKeyID               int
 	APIKeyPrefix           string
+	APIKeyName             string
 	SessionID              string
 	RequestID              string
 	Method                 string
@@ -178,6 +185,7 @@ type GatewayUsageSessionSummary struct {
 	SessionID         string
 	APIKeyID          int
 	APIKeyPrefix      string
+	APIKeyName        string
 	TotalRequests     int64
 	SuccessRequests   int64
 	FailedRequests    int64
@@ -196,25 +204,37 @@ type GatewayUsageSessionSummary struct {
 }
 
 type CreateGatewayAPIKeyInput struct {
-	Name              string
-	OwnerUserID       int
-	QuotaRequests     int64
-	QuotaTotalTokens  int64
-	QuotaDailyTokens  int64
-	QuotaWeeklyTokens int64
-	AllowedModels     []string
+	Name                           string
+	OwnerUserID                    int
+	QuotaRequests                  int64
+	QuotaTotalTokens               int64
+	QuotaDailyTokens               int64
+	QuotaWeeklyTokens              int64
+	QuotaDailyInputTokens          int64
+	QuotaWeeklyInputTokens         int64
+	QuotaDailyOutputTokens         int64
+	QuotaWeeklyOutputTokens        int64
+	QuotaDailyBillableInputTokens  int64
+	QuotaWeeklyBillableInputTokens int64
+	AllowedModels                  []string
 }
 
 type UpdateGatewayAPIKeyInput struct {
-	ID                int
-	Name              string
-	OwnerUserID       int
-	QuotaRequests     int64
-	QuotaTotalTokens  int64
-	QuotaDailyTokens  int64
-	QuotaWeeklyTokens int64
-	AllowedModels     []string
-	Disabled          bool
+	ID                             int
+	Name                           string
+	OwnerUserID                    int
+	QuotaRequests                  int64
+	QuotaTotalTokens               int64
+	QuotaDailyTokens               int64
+	QuotaWeeklyTokens              int64
+	QuotaDailyInputTokens          int64
+	QuotaWeeklyInputTokens         int64
+	QuotaDailyOutputTokens         int64
+	QuotaWeeklyOutputTokens        int64
+	QuotaDailyBillableInputTokens  int64
+	QuotaWeeklyBillableInputTokens int64
+	AllowedModels                  []string
+	Disabled                       bool
 }
 
 type GatewayPolicy struct {
@@ -406,6 +426,12 @@ func (uc *GatewayUsecase) CreateAPIKey(ctx context.Context, input CreateGatewayA
 	input.QuotaTotalTokens = normalizeNonNegativeInt64(input.QuotaTotalTokens)
 	input.QuotaDailyTokens = normalizeNonNegativeInt64(input.QuotaDailyTokens)
 	input.QuotaWeeklyTokens = normalizeNonNegativeInt64(input.QuotaWeeklyTokens)
+	input.QuotaDailyInputTokens = normalizeNonNegativeInt64(input.QuotaDailyInputTokens)
+	input.QuotaWeeklyInputTokens = normalizeNonNegativeInt64(input.QuotaWeeklyInputTokens)
+	input.QuotaDailyOutputTokens = normalizeNonNegativeInt64(input.QuotaDailyOutputTokens)
+	input.QuotaWeeklyOutputTokens = normalizeNonNegativeInt64(input.QuotaWeeklyOutputTokens)
+	input.QuotaDailyBillableInputTokens = normalizeNonNegativeInt64(input.QuotaDailyBillableInputTokens)
+	input.QuotaWeeklyBillableInputTokens = normalizeNonNegativeInt64(input.QuotaWeeklyBillableInputTokens)
 	allowedModels, err := normalizeAllowedCodexModels(input.AllowedModels)
 	if err != nil {
 		return nil, err
@@ -446,6 +472,12 @@ func (uc *GatewayUsecase) UpdateAPIKey(ctx context.Context, input UpdateGatewayA
 	input.QuotaTotalTokens = normalizeNonNegativeInt64(input.QuotaTotalTokens)
 	input.QuotaDailyTokens = normalizeNonNegativeInt64(input.QuotaDailyTokens)
 	input.QuotaWeeklyTokens = normalizeNonNegativeInt64(input.QuotaWeeklyTokens)
+	input.QuotaDailyInputTokens = normalizeNonNegativeInt64(input.QuotaDailyInputTokens)
+	input.QuotaWeeklyInputTokens = normalizeNonNegativeInt64(input.QuotaWeeklyInputTokens)
+	input.QuotaDailyOutputTokens = normalizeNonNegativeInt64(input.QuotaDailyOutputTokens)
+	input.QuotaWeeklyOutputTokens = normalizeNonNegativeInt64(input.QuotaWeeklyOutputTokens)
+	input.QuotaDailyBillableInputTokens = normalizeNonNegativeInt64(input.QuotaDailyBillableInputTokens)
+	input.QuotaWeeklyBillableInputTokens = normalizeNonNegativeInt64(input.QuotaWeeklyBillableInputTokens)
 	allowedModels, err := normalizeAllowedCodexModels(input.AllowedModels)
 	if err != nil {
 		return nil, err
@@ -540,17 +572,27 @@ func (uc *GatewayUsecase) CheckAPIKeyTokenQuota(ctx context.Context, key *Gatewa
 	if key == nil || key.ID <= 0 {
 		return ErrGatewayAPIKeyNotFound
 	}
-	dailyLimit := key.QuotaDailyTokens
-	weeklyLimit := effectiveAPIKeyWeeklyTokens(key)
-	if dailyLimit <= 0 && weeklyLimit <= 0 {
+	dailyLimits := gatewayAPIKeyTokenQuotaLimits{
+		TotalTokens:         key.QuotaDailyTokens,
+		InputTokens:         key.QuotaDailyInputTokens,
+		OutputTokens:        key.QuotaDailyOutputTokens,
+		BillableInputTokens: key.QuotaDailyBillableInputTokens,
+	}
+	weeklyLimits := gatewayAPIKeyTokenQuotaLimits{
+		TotalTokens:         effectiveAPIKeyWeeklyTokens(key),
+		InputTokens:         key.QuotaWeeklyInputTokens,
+		OutputTokens:        key.QuotaWeeklyOutputTokens,
+		BillableInputTokens: key.QuotaWeeklyBillableInputTokens,
+	}
+	if !dailyLimits.enabled() && !weeklyLimits.enabled() {
 		return nil
 	}
 	if now.IsZero() {
 		now = time.Now()
 	}
 
-	checkTokenWindow := func(limit int64, start time.Time) error {
-		if limit <= 0 {
+	checkTokenWindow := func(limits gatewayAPIKeyTokenQuotaLimits, start time.Time) error {
+		if !limits.enabled() {
 			return nil
 		}
 		summary, err := uc.repo.SummarizeUsage(ctx, GatewayUsageFilter{
@@ -559,17 +601,51 @@ func (uc *GatewayUsecase) CheckAPIKeyTokenQuota(ctx context.Context, key *Gatewa
 		if err != nil {
 			return err
 		}
-		if summary != nil && summary.TotalTokens >= limit {
+		if limits.exceeded(summary) {
 			return ErrGatewayQuotaExceeded
 		}
 		return nil
 	}
 
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	if err := checkTokenWindow(dailyLimit, dayStart); err != nil {
+	if err := checkTokenWindow(dailyLimits, dayStart); err != nil {
 		return err
 	}
-	return checkTokenWindow(weeklyLimit, weekStart(dayStart))
+	return checkTokenWindow(weeklyLimits, weekStart(dayStart))
+}
+
+type gatewayAPIKeyTokenQuotaLimits struct {
+	TotalTokens         int64
+	InputTokens         int64
+	OutputTokens        int64
+	BillableInputTokens int64
+}
+
+func (limits gatewayAPIKeyTokenQuotaLimits) enabled() bool {
+	return limits.TotalTokens > 0 ||
+		limits.InputTokens > 0 ||
+		limits.OutputTokens > 0 ||
+		limits.BillableInputTokens > 0
+}
+
+func (limits gatewayAPIKeyTokenQuotaLimits) exceeded(summary *GatewayUsageSummary) bool {
+	if summary == nil {
+		return false
+	}
+	if limits.TotalTokens > 0 && summary.TotalTokens >= limits.TotalTokens {
+		return true
+	}
+	if limits.InputTokens > 0 && summary.InputTokens >= limits.InputTokens {
+		return true
+	}
+	if limits.OutputTokens > 0 && summary.OutputTokens >= limits.OutputTokens {
+		return true
+	}
+	if limits.BillableInputTokens > 0 &&
+		usageBillableInputTokens(summary.InputTokens, summary.CachedTokens) >= limits.BillableInputTokens {
+		return true
+	}
+	return false
 }
 
 func effectiveAPIKeyWeeklyTokens(key *GatewayAPIKey) int64 {
@@ -589,6 +665,19 @@ func weekStart(dayStart time.Time) time.Time {
 	weekday := int(dayStart.Weekday())
 	daysSinceMonday := (weekday + 6) % 7
 	return dayStart.AddDate(0, 0, -daysSinceMonday)
+}
+
+func usageBillableInputTokens(inputTokens, cachedTokens int64) int64 {
+	if inputTokens <= 0 {
+		return 0
+	}
+	if cachedTokens <= 0 {
+		return inputTokens
+	}
+	if cachedTokens >= inputTokens {
+		return 0
+	}
+	return inputTokens - cachedTokens
 }
 
 func (uc *GatewayUsecase) CheckPolicy(ctx context.Context, key *GatewayAPIKey, modelID string, now time.Time) error {

@@ -56,8 +56,8 @@ func (h *adminExportHandler) handleUsageCSV(ctx context.Context, w stdhttp.Respo
 	w.Header().Set("Content-Disposition", `attachment; filename="gateway-usage.csv"`)
 	writer := csv.NewWriter(w)
 	_ = writer.Write([]string{
-		"created_at", "api_key_id", "api_key_prefix", "endpoint", "model", "status_code", "success",
-		"input_tokens", "cached_tokens", "output_tokens", "reasoning_tokens", "total_tokens",
+		"created_at", "api_key_id", "api_key_prefix", "api_key_name", "endpoint", "model", "status_code", "success",
+		"input_tokens", "billable_input_tokens", "cached_input_tokens", "cached_tokens", "output_tokens", "reasoning_tokens", "total_tokens",
 		"estimated_cost_usd", "duration_ms", "error_type",
 	})
 	for _, item := range items {
@@ -69,11 +69,14 @@ func (h *adminExportHandler) handleUsageCSV(ctx context.Context, w stdhttp.Respo
 			item.CreatedAt.Format(time.RFC3339),
 			strconv.Itoa(item.APIKeyID),
 			item.APIKeyPrefix,
+			item.APIKeyName,
 			item.Endpoint,
 			item.Model,
 			strconv.Itoa(item.StatusCode),
 			strconv.FormatBool(item.Success),
 			strconv.FormatInt(item.InputTokens, 10),
+			strconv.FormatInt(usageBillableInputTokens(item.InputTokens, item.CachedTokens), 10),
+			strconv.FormatInt(item.CachedTokens, 10),
 			strconv.FormatInt(item.CachedTokens, 10),
 			strconv.FormatInt(item.OutputTokens, 10),
 			strconv.FormatInt(item.ReasoningTokens, 10),
@@ -205,7 +208,10 @@ func mapUsageExportRow(item *biz.GatewayUsageLog) map[string]any {
 	}
 	row := map[string]any{
 		"api_key_id":               item.APIKeyID,
+		"api_key_name":             item.APIKeyName,
 		"api_key_prefix":           item.APIKeyPrefix,
+		"billable_input_tokens":    usageBillableInputTokens(item.InputTokens, item.CachedTokens),
+		"cached_input_tokens":      item.CachedTokens,
 		"cached_tokens":            item.CachedTokens,
 		"created_at":               item.CreatedAt.Format(time.RFC3339),
 		"duration_ms":              item.DurationMS,
@@ -232,4 +238,17 @@ func mapUsageExportRow(item *biz.GatewayUsageLog) map[string]any {
 		row["estimated_cost_usd"] = nil
 	}
 	return row
+}
+
+func usageBillableInputTokens(inputTokens, cachedTokens int64) int64 {
+	if inputTokens <= 0 {
+		return 0
+	}
+	if cachedTokens <= 0 {
+		return inputTokens
+	}
+	if cachedTokens >= inputTokens {
+		return 0
+	}
+	return inputTokens - cachedTokens
 }

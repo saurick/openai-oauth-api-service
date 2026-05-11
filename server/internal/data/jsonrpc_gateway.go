@@ -87,12 +87,18 @@ func (d *JsonrpcData) handleGateway(
 
 	case "key_create":
 		item, err := d.gatewayUC.CreateAPIKey(ctx, biz.CreateGatewayAPIKeyInput{
-			Name:              getString(pm, "name"),
-			OwnerUserID:       getInt(pm, "owner_user_id", 0),
-			QuotaRequests:     getInt64(pm, "quota_requests", 0),
-			QuotaDailyTokens:  getInt64(pm, "quota_daily_tokens", 0),
-			QuotaWeeklyTokens: getInt64WithFallback(pm, "quota_weekly_tokens", "quota_total_tokens"),
-			AllowedModels:     getStringList(pm, "allowed_models"),
+			Name:                           getString(pm, "name"),
+			OwnerUserID:                    getInt(pm, "owner_user_id", 0),
+			QuotaRequests:                  getInt64(pm, "quota_requests", 0),
+			QuotaDailyTokens:               getInt64(pm, "quota_daily_tokens", 0),
+			QuotaWeeklyTokens:              getInt64WithFallback(pm, "quota_weekly_tokens", "quota_total_tokens"),
+			QuotaDailyInputTokens:          getInt64(pm, "quota_daily_input_tokens", 0),
+			QuotaWeeklyInputTokens:         getInt64(pm, "quota_weekly_input_tokens", 0),
+			QuotaDailyOutputTokens:         getInt64(pm, "quota_daily_output_tokens", 0),
+			QuotaWeeklyOutputTokens:        getInt64(pm, "quota_weekly_output_tokens", 0),
+			QuotaDailyBillableInputTokens:  getInt64(pm, "quota_daily_billable_input_tokens", 0),
+			QuotaWeeklyBillableInputTokens: getInt64(pm, "quota_weekly_billable_input_tokens", 0),
+			AllowedModels:                  getStringList(pm, "allowed_models"),
 		})
 		if err != nil {
 			return id, d.mapGatewayError(ctx, err), nil
@@ -108,14 +114,20 @@ func (d *JsonrpcData) handleGateway(
 	case "key_update":
 		keyID := getInt(pm, "key_id", 0)
 		item, err := d.gatewayUC.UpdateAPIKey(ctx, biz.UpdateGatewayAPIKeyInput{
-			ID:                keyID,
-			Name:              getString(pm, "name"),
-			OwnerUserID:       getInt(pm, "owner_user_id", 0),
-			QuotaRequests:     getInt64(pm, "quota_requests", 0),
-			QuotaDailyTokens:  getInt64(pm, "quota_daily_tokens", 0),
-			QuotaWeeklyTokens: getInt64WithFallback(pm, "quota_weekly_tokens", "quota_total_tokens"),
-			AllowedModels:     getStringList(pm, "allowed_models"),
-			Disabled:          getBool(pm, "disabled", false),
+			ID:                             keyID,
+			Name:                           getString(pm, "name"),
+			OwnerUserID:                    getInt(pm, "owner_user_id", 0),
+			QuotaRequests:                  getInt64(pm, "quota_requests", 0),
+			QuotaDailyTokens:               getInt64(pm, "quota_daily_tokens", 0),
+			QuotaWeeklyTokens:              getInt64WithFallback(pm, "quota_weekly_tokens", "quota_total_tokens"),
+			QuotaDailyInputTokens:          getInt64(pm, "quota_daily_input_tokens", 0),
+			QuotaWeeklyInputTokens:         getInt64(pm, "quota_weekly_input_tokens", 0),
+			QuotaDailyOutputTokens:         getInt64(pm, "quota_daily_output_tokens", 0),
+			QuotaWeeklyOutputTokens:        getInt64(pm, "quota_weekly_output_tokens", 0),
+			QuotaDailyBillableInputTokens:  getInt64(pm, "quota_daily_billable_input_tokens", 0),
+			QuotaWeeklyBillableInputTokens: getInt64(pm, "quota_weekly_billable_input_tokens", 0),
+			AllowedModels:                  getStringList(pm, "allowed_models"),
+			Disabled:                       getBool(pm, "disabled", false),
 		})
 		if err != nil {
 			return id, d.mapGatewayError(ctx, err), nil
@@ -675,19 +687,25 @@ func mapGatewayAPIKeyForRPC(item *biz.GatewayAPIKey, includePlainKey bool) map[s
 		return map[string]any{}
 	}
 	data := map[string]any{
-		"id":                  item.ID,
-		"owner_user_id":       item.OwnerUserID,
-		"name":                item.Name,
-		"key_prefix":          item.KeyPrefix,
-		"key_last4":           item.KeyLast4,
-		"disabled":            item.Disabled,
-		"quota_requests":      item.QuotaRequests,
-		"quota_total_tokens":  item.QuotaTotalTokens,
-		"quota_daily_tokens":  item.QuotaDailyTokens,
-		"quota_weekly_tokens": item.QuotaWeeklyTokens,
-		"allowed_models":      stringListForRPC(item.AllowedModels),
-		"created_at":          item.CreatedAt.Unix(),
-		"updated_at":          item.UpdatedAt.Unix(),
+		"id":                                 item.ID,
+		"owner_user_id":                      item.OwnerUserID,
+		"name":                               item.Name,
+		"key_prefix":                         item.KeyPrefix,
+		"key_last4":                          item.KeyLast4,
+		"disabled":                           item.Disabled,
+		"quota_requests":                     item.QuotaRequests,
+		"quota_total_tokens":                 item.QuotaTotalTokens,
+		"quota_daily_tokens":                 item.QuotaDailyTokens,
+		"quota_weekly_tokens":                item.QuotaWeeklyTokens,
+		"quota_daily_input_tokens":           item.QuotaDailyInputTokens,
+		"quota_weekly_input_tokens":          item.QuotaWeeklyInputTokens,
+		"quota_daily_output_tokens":          item.QuotaDailyOutputTokens,
+		"quota_weekly_output_tokens":         item.QuotaWeeklyOutputTokens,
+		"quota_daily_billable_input_tokens":  item.QuotaDailyBillableInputTokens,
+		"quota_weekly_billable_input_tokens": item.QuotaWeeklyBillableInputTokens,
+		"allowed_models":                     stringListForRPC(item.AllowedModels),
+		"created_at":                         item.CreatedAt.Unix(),
+		"updated_at":                         item.UpdatedAt.Unix(),
 	}
 	if includePlainKey {
 		data["plain_key"] = item.PlainKey
@@ -730,10 +748,12 @@ func mapGatewayUsageForRPC(item *biz.GatewayUsageLog) map[string]any {
 	if item == nil {
 		return map[string]any{}
 	}
+	billableInputTokens := gatewayBillableInputTokens(item.InputTokens, item.CachedTokens)
 	data := map[string]any{
 		"id":                       item.ID,
 		"api_key_id":               item.APIKeyID,
 		"api_key_prefix":           item.APIKeyPrefix,
+		"api_key_name":             item.APIKeyName,
 		"session_id":               item.SessionID,
 		"request_id":               item.RequestID,
 		"method":                   item.Method,
@@ -747,6 +767,8 @@ func mapGatewayUsageForRPC(item *biz.GatewayUsageLog) map[string]any {
 		"output_tokens":            item.OutputTokens,
 		"total_tokens":             item.TotalTokens,
 		"cached_tokens":            item.CachedTokens,
+		"cached_input_tokens":      item.CachedTokens,
+		"billable_input_tokens":    billableInputTokens,
 		"reasoning_tokens":         item.ReasoningTokens,
 		"request_bytes":            item.RequestBytes,
 		"response_bytes":           item.ResponseBytes,
@@ -791,21 +813,24 @@ func mapGatewaySummary(item *biz.GatewayUsageSummary) map[string]any {
 	if item == nil {
 		return map[string]any{}
 	}
+	billableInputTokens := gatewayBillableInputTokens(item.InputTokens, item.CachedTokens)
 	data := map[string]any{
-		"total_requests":      item.TotalRequests,
-		"success_requests":    item.SuccessRequests,
-		"failed_requests":     item.FailedRequests,
-		"total_tokens":        item.TotalTokens,
-		"input_tokens":        item.InputTokens,
-		"output_tokens":       item.OutputTokens,
-		"cached_tokens":       item.CachedTokens,
-		"reasoning_tokens":    item.ReasoningTokens,
-		"total_bytes_in":      item.TotalBytesIn,
-		"total_bytes_out":     item.TotalBytesOut,
-		"average_duration_ms": item.AverageDurationMS,
-		"backend_requests":    item.BackendRequests,
-		"cli_requests":        item.CLIRequests,
-		"fallback_requests":   item.FallbackRequests,
+		"total_requests":        item.TotalRequests,
+		"success_requests":      item.SuccessRequests,
+		"failed_requests":       item.FailedRequests,
+		"total_tokens":          item.TotalTokens,
+		"input_tokens":          item.InputTokens,
+		"output_tokens":         item.OutputTokens,
+		"cached_tokens":         item.CachedTokens,
+		"cached_input_tokens":   item.CachedTokens,
+		"billable_input_tokens": billableInputTokens,
+		"reasoning_tokens":      item.ReasoningTokens,
+		"total_bytes_in":        item.TotalBytesIn,
+		"total_bytes_out":       item.TotalBytesOut,
+		"average_duration_ms":   item.AverageDurationMS,
+		"backend_requests":      item.BackendRequests,
+		"cli_requests":          item.CLIRequests,
+		"fallback_requests":     item.FallbackRequests,
 	}
 	if item.EstimatedCostUSD != nil {
 		data["estimated_cost_usd"] = *item.EstimatedCostUSD
@@ -819,23 +844,26 @@ func mapGatewayUsageBucketForRPC(item *biz.GatewayUsageBucket) map[string]any {
 	if item == nil {
 		return map[string]any{}
 	}
+	billableInputTokens := gatewayBillableInputTokens(item.InputTokens, item.CachedTokens)
 	data := map[string]any{
-		"bucket_start":        item.BucketStart.Unix(),
-		"model":               item.Model,
-		"total_requests":      item.TotalRequests,
-		"success_requests":    item.SuccessRequests,
-		"failed_requests":     item.FailedRequests,
-		"total_tokens":        item.TotalTokens,
-		"input_tokens":        item.InputTokens,
-		"output_tokens":       item.OutputTokens,
-		"cached_tokens":       item.CachedTokens,
-		"reasoning_tokens":    item.ReasoningTokens,
-		"total_bytes_in":      item.TotalBytesIn,
-		"total_bytes_out":     item.TotalBytesOut,
-		"average_duration_ms": item.AverageDurationMS,
-		"backend_requests":    item.BackendRequests,
-		"cli_requests":        item.CLIRequests,
-		"fallback_requests":   item.FallbackRequests,
+		"bucket_start":          item.BucketStart.Unix(),
+		"model":                 item.Model,
+		"total_requests":        item.TotalRequests,
+		"success_requests":      item.SuccessRequests,
+		"failed_requests":       item.FailedRequests,
+		"total_tokens":          item.TotalTokens,
+		"input_tokens":          item.InputTokens,
+		"output_tokens":         item.OutputTokens,
+		"cached_tokens":         item.CachedTokens,
+		"cached_input_tokens":   item.CachedTokens,
+		"billable_input_tokens": billableInputTokens,
+		"reasoning_tokens":      item.ReasoningTokens,
+		"total_bytes_in":        item.TotalBytesIn,
+		"total_bytes_out":       item.TotalBytesOut,
+		"average_duration_ms":   item.AverageDurationMS,
+		"backend_requests":      item.BackendRequests,
+		"cli_requests":          item.CLIRequests,
+		"fallback_requests":     item.FallbackRequests,
 	}
 	if item.EstimatedCostUSD != nil {
 		data["estimated_cost_usd"] = *item.EstimatedCostUSD
@@ -849,23 +877,26 @@ func mapGatewayUsageKeySummaryForRPC(item *biz.GatewayUsageKeySummary) map[strin
 	if item == nil {
 		return map[string]any{}
 	}
+	billableInputTokens := gatewayBillableInputTokens(item.InputTokens, item.CachedTokens)
 	data := map[string]any{
-		"api_key_id":          item.APIKeyID,
-		"api_key_prefix":      item.APIKeyPrefix,
-		"api_key_name":        item.APIKeyName,
-		"disabled":            item.Disabled,
-		"total_requests":      item.TotalRequests,
-		"success_requests":    item.SuccessRequests,
-		"failed_requests":     item.FailedRequests,
-		"total_tokens":        item.TotalTokens,
-		"input_tokens":        item.InputTokens,
-		"output_tokens":       item.OutputTokens,
-		"cached_tokens":       item.CachedTokens,
-		"reasoning_tokens":    item.ReasoningTokens,
-		"average_duration_ms": item.AverageDurationMS,
-		"backend_requests":    item.BackendRequests,
-		"cli_requests":        item.CLIRequests,
-		"fallback_requests":   item.FallbackRequests,
+		"api_key_id":            item.APIKeyID,
+		"api_key_prefix":        item.APIKeyPrefix,
+		"api_key_name":          item.APIKeyName,
+		"disabled":              item.Disabled,
+		"total_requests":        item.TotalRequests,
+		"success_requests":      item.SuccessRequests,
+		"failed_requests":       item.FailedRequests,
+		"total_tokens":          item.TotalTokens,
+		"input_tokens":          item.InputTokens,
+		"output_tokens":         item.OutputTokens,
+		"cached_tokens":         item.CachedTokens,
+		"cached_input_tokens":   item.CachedTokens,
+		"billable_input_tokens": billableInputTokens,
+		"reasoning_tokens":      item.ReasoningTokens,
+		"average_duration_ms":   item.AverageDurationMS,
+		"backend_requests":      item.BackendRequests,
+		"cli_requests":          item.CLIRequests,
+		"fallback_requests":     item.FallbackRequests,
 	}
 	if item.EstimatedCostUSD != nil {
 		data["estimated_cost_usd"] = *item.EstimatedCostUSD
@@ -879,24 +910,28 @@ func mapGatewayUsageSessionSummaryForRPC(item *biz.GatewayUsageSessionSummary) m
 	if item == nil {
 		return map[string]any{}
 	}
+	billableInputTokens := gatewayBillableInputTokens(item.InputTokens, item.CachedTokens)
 	data := map[string]any{
-		"session_id":          item.SessionID,
-		"api_key_id":          item.APIKeyID,
-		"api_key_prefix":      item.APIKeyPrefix,
-		"total_requests":      item.TotalRequests,
-		"success_requests":    item.SuccessRequests,
-		"failed_requests":     item.FailedRequests,
-		"total_tokens":        item.TotalTokens,
-		"input_tokens":        item.InputTokens,
-		"output_tokens":       item.OutputTokens,
-		"cached_tokens":       item.CachedTokens,
-		"reasoning_tokens":    item.ReasoningTokens,
-		"average_duration_ms": item.AverageDurationMS,
-		"backend_requests":    item.BackendRequests,
-		"cli_requests":        item.CLIRequests,
-		"fallback_requests":   item.FallbackRequests,
-		"first_seen_at":       item.FirstSeenAt.Unix(),
-		"last_seen_at":        item.LastSeenAt.Unix(),
+		"session_id":            item.SessionID,
+		"api_key_id":            item.APIKeyID,
+		"api_key_prefix":        item.APIKeyPrefix,
+		"api_key_name":          item.APIKeyName,
+		"total_requests":        item.TotalRequests,
+		"success_requests":      item.SuccessRequests,
+		"failed_requests":       item.FailedRequests,
+		"total_tokens":          item.TotalTokens,
+		"input_tokens":          item.InputTokens,
+		"output_tokens":         item.OutputTokens,
+		"cached_tokens":         item.CachedTokens,
+		"cached_input_tokens":   item.CachedTokens,
+		"billable_input_tokens": billableInputTokens,
+		"reasoning_tokens":      item.ReasoningTokens,
+		"average_duration_ms":   item.AverageDurationMS,
+		"backend_requests":      item.BackendRequests,
+		"cli_requests":          item.CLIRequests,
+		"fallback_requests":     item.FallbackRequests,
+		"first_seen_at":         item.FirstSeenAt.Unix(),
+		"last_seen_at":          item.LastSeenAt.Unix(),
 	}
 	if item.EstimatedCostUSD != nil {
 		data["estimated_cost_usd"] = *item.EstimatedCostUSD
@@ -904,6 +939,19 @@ func mapGatewayUsageSessionSummaryForRPC(item *biz.GatewayUsageSessionSummary) m
 		data["estimated_cost_usd"] = nil
 	}
 	return data
+}
+
+func gatewayBillableInputTokens(inputTokens, cachedTokens int64) int64 {
+	if inputTokens <= 0 {
+		return 0
+	}
+	if cachedTokens <= 0 {
+		return inputTokens
+	}
+	if cachedTokens >= inputTokens {
+		return 0
+	}
+	return inputTokens - cachedTokens
 }
 
 func mapGatewayPolicyForRPC(item *biz.GatewayPolicy) map[string]any {

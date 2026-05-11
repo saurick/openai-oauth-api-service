@@ -7,6 +7,7 @@
 | 路径 | 说明 |
 | --- | --- |
 | `compose/prod/compose.yml` | PostgreSQL + 后端服务 |
+| `compose/prod/compose.nginx.yml` | 可选容器化 Nginx 入口层，迁移或切入口时叠加启用 |
 | `compose/prod/.env.example` | 生产环境变量示例 |
 | `compose/prod/README.md` | Compose 运行说明 |
 
@@ -22,3 +23,11 @@ cp .env.example .env
 # 管理员账号默认保持 admin/adminadmin；不要在部署时擅自生成或替换管理员密码。
 docker compose -f compose.yml up -d
 ```
+
+如需让 Nginx 也跟随 Compose 迁移，可在准备好证书目录和 ACME webroot 后叠加启用：
+
+```bash
+docker compose -f compose.yml -f compose.nginx.yml --env-file .env up -d nginx
+```
+
+当前线上仍使用宿主机 Nginx；容器化 Nginx 是迁移/切入口能力，不是默认启动项。

@@ -35,6 +35,18 @@ const (
 	FieldQuotaDailyTokens = "quota_daily_tokens"
 	// FieldQuotaWeeklyTokens holds the string denoting the quota_weekly_tokens field in the database.
 	FieldQuotaWeeklyTokens = "quota_weekly_tokens"
+	// FieldQuotaDailyInputTokens holds the string denoting the quota_daily_input_tokens field in the database.
+	FieldQuotaDailyInputTokens = "quota_daily_input_tokens"
+	// FieldQuotaWeeklyInputTokens holds the string denoting the quota_weekly_input_tokens field in the database.
+	FieldQuotaWeeklyInputTokens = "quota_weekly_input_tokens"
+	// FieldQuotaDailyOutputTokens holds the string denoting the quota_daily_output_tokens field in the database.
+	FieldQuotaDailyOutputTokens = "quota_daily_output_tokens"
+	// FieldQuotaWeeklyOutputTokens holds the string denoting the quota_weekly_output_tokens field in the database.
+	FieldQuotaWeeklyOutputTokens = "quota_weekly_output_tokens"
+	// FieldQuotaDailyBillableInputTokens holds the string denoting the quota_daily_billable_input_tokens field in the database.
+	FieldQuotaDailyBillableInputTokens = "quota_daily_billable_input_tokens"
+	// FieldQuotaWeeklyBillableInputTokens holds the string denoting the quota_weekly_billable_input_tokens field in the database.
+	FieldQuotaWeeklyBillableInputTokens = "quota_weekly_billable_input_tokens"
 	// FieldAllowedModels holds the string denoting the allowed_models field in the database.
 	FieldAllowedModels = "allowed_models"
 	// FieldLastUsedAt holds the string denoting the last_used_at field in the database.
@@ -61,6 +73,12 @@ var Columns = []string{
 	FieldQuotaTotalTokens,
 	FieldQuotaDailyTokens,
 	FieldQuotaWeeklyTokens,
+	FieldQuotaDailyInputTokens,
+	FieldQuotaWeeklyInputTokens,
+	FieldQuotaDailyOutputTokens,
+	FieldQuotaWeeklyOutputTokens,
+	FieldQuotaDailyBillableInputTokens,
+	FieldQuotaWeeklyBillableInputTokens,
 	FieldAllowedModels,
 	FieldLastUsedAt,
 	FieldCreatedAt,
@@ -100,6 +118,18 @@ var (
 	DefaultQuotaDailyTokens int64
 	// DefaultQuotaWeeklyTokens holds the default value on creation for the "quota_weekly_tokens" field.
 	DefaultQuotaWeeklyTokens int64
+	// DefaultQuotaDailyInputTokens holds the default value on creation for the "quota_daily_input_tokens" field.
+	DefaultQuotaDailyInputTokens int64
+	// DefaultQuotaWeeklyInputTokens holds the default value on creation for the "quota_weekly_input_tokens" field.
+	DefaultQuotaWeeklyInputTokens int64
+	// DefaultQuotaDailyOutputTokens holds the default value on creation for the "quota_daily_output_tokens" field.
+	DefaultQuotaDailyOutputTokens int64
+	// DefaultQuotaWeeklyOutputTokens holds the default value on creation for the "quota_weekly_output_tokens" field.
+	DefaultQuotaWeeklyOutputTokens int64
+	// DefaultQuotaDailyBillableInputTokens holds the default value on creation for the "quota_daily_billable_input_tokens" field.
+	DefaultQuotaDailyBillableInputTokens int64
+	// DefaultQuotaWeeklyBillableInputTokens holds the default value on creation for the "quota_weekly_billable_input_tokens" field.
+	DefaultQuotaWeeklyBillableInputTokens int64
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -169,6 +199,36 @@ func ByQuotaDailyTokens(opts ...sql.OrderTermOption) OrderOption {
 // ByQuotaWeeklyTokens orders the results by the quota_weekly_tokens field.
 func ByQuotaWeeklyTokens(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldQuotaWeeklyTokens, opts...).ToFunc()
+}
+
+// ByQuotaDailyInputTokens orders the results by the quota_daily_input_tokens field.
+func ByQuotaDailyInputTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaDailyInputTokens, opts...).ToFunc()
+}
+
+// ByQuotaWeeklyInputTokens orders the results by the quota_weekly_input_tokens field.
+func ByQuotaWeeklyInputTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaWeeklyInputTokens, opts...).ToFunc()
+}
+
+// ByQuotaDailyOutputTokens orders the results by the quota_daily_output_tokens field.
+func ByQuotaDailyOutputTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaDailyOutputTokens, opts...).ToFunc()
+}
+
+// ByQuotaWeeklyOutputTokens orders the results by the quota_weekly_output_tokens field.
+func ByQuotaWeeklyOutputTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaWeeklyOutputTokens, opts...).ToFunc()
+}
+
+// ByQuotaDailyBillableInputTokens orders the results by the quota_daily_billable_input_tokens field.
+func ByQuotaDailyBillableInputTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaDailyBillableInputTokens, opts...).ToFunc()
+}
+
+// ByQuotaWeeklyBillableInputTokens orders the results by the quota_weekly_billable_input_tokens field.
+func ByQuotaWeeklyBillableInputTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaWeeklyBillableInputTokens, opts...).ToFunc()
 }
 
 // ByLastUsedAt orders the results by the last_used_at field.

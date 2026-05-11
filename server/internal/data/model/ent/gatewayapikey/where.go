@@ -109,6 +109,36 @@ func QuotaWeeklyTokens(v int64) predicate.GatewayAPIKey {
 	return predicate.GatewayAPIKey(sql.FieldEQ(FieldQuotaWeeklyTokens, v))
 }
 
+// QuotaDailyInputTokens applies equality check predicate on the "quota_daily_input_tokens" field. It's identical to QuotaDailyInputTokensEQ.
+func QuotaDailyInputTokens(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldQuotaDailyInputTokens, v))
+}
+
+// QuotaWeeklyInputTokens applies equality check predicate on the "quota_weekly_input_tokens" field. It's identical to QuotaWeeklyInputTokensEQ.
+func QuotaWeeklyInputTokens(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldQuotaWeeklyInputTokens, v))
+}
+
+// QuotaDailyOutputTokens applies equality check predicate on the "quota_daily_output_tokens" field. It's identical to QuotaDailyOutputTokensEQ.
+func QuotaDailyOutputTokens(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldQuotaDailyOutputTokens, v))
+}
+
+// QuotaWeeklyOutputTokens applies equality check predicate on the "quota_weekly_output_tokens" field. It's identical to QuotaWeeklyOutputTokensEQ.
+func QuotaWeeklyOutputTokens(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldQuotaWeeklyOutputTokens, v))
+}
+
+// QuotaDailyBillableInputTokens applies equality check predicate on the "quota_daily_billable_input_tokens" field. It's identical to QuotaDailyBillableInputTokensEQ.
+func QuotaDailyBillableInputTokens(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldQuotaDailyBillableInputTokens, v))
+}
+
+// QuotaWeeklyBillableInputTokens applies equality check predicate on the "quota_weekly_billable_input_tokens" field. It's identical to QuotaWeeklyBillableInputTokensEQ.
+func QuotaWeeklyBillableInputTokens(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldQuotaWeeklyBillableInputTokens, v))
+}
+
 // LastUsedAt applies equality check predicate on the "last_used_at" field. It's identical to LastUsedAtEQ.
 func LastUsedAt(v time.Time) predicate.GatewayAPIKey {
 	return predicate.GatewayAPIKey(sql.FieldEQ(FieldLastUsedAt, v))
@@ -667,6 +697,246 @@ func QuotaWeeklyTokensLT(v int64) predicate.GatewayAPIKey {
 // QuotaWeeklyTokensLTE applies the LTE predicate on the "quota_weekly_tokens" field.
 func QuotaWeeklyTokensLTE(v int64) predicate.GatewayAPIKey {
 	return predicate.GatewayAPIKey(sql.FieldLTE(FieldQuotaWeeklyTokens, v))
+}
+
+// QuotaDailyInputTokensEQ applies the EQ predicate on the "quota_daily_input_tokens" field.
+func QuotaDailyInputTokensEQ(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldQuotaDailyInputTokens, v))
+}
+
+// QuotaDailyInputTokensNEQ applies the NEQ predicate on the "quota_daily_input_tokens" field.
+func QuotaDailyInputTokensNEQ(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNEQ(FieldQuotaDailyInputTokens, v))
+}
+
+// QuotaDailyInputTokensIn applies the In predicate on the "quota_daily_input_tokens" field.
+func QuotaDailyInputTokensIn(vs ...int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldIn(FieldQuotaDailyInputTokens, vs...))
+}
+
+// QuotaDailyInputTokensNotIn applies the NotIn predicate on the "quota_daily_input_tokens" field.
+func QuotaDailyInputTokensNotIn(vs ...int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNotIn(FieldQuotaDailyInputTokens, vs...))
+}
+
+// QuotaDailyInputTokensGT applies the GT predicate on the "quota_daily_input_tokens" field.
+func QuotaDailyInputTokensGT(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGT(FieldQuotaDailyInputTokens, v))
+}
+
+// QuotaDailyInputTokensGTE applies the GTE predicate on the "quota_daily_input_tokens" field.
+func QuotaDailyInputTokensGTE(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGTE(FieldQuotaDailyInputTokens, v))
+}
+
+// QuotaDailyInputTokensLT applies the LT predicate on the "quota_daily_input_tokens" field.
+func QuotaDailyInputTokensLT(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLT(FieldQuotaDailyInputTokens, v))
+}
+
+// QuotaDailyInputTokensLTE applies the LTE predicate on the "quota_daily_input_tokens" field.
+func QuotaDailyInputTokensLTE(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLTE(FieldQuotaDailyInputTokens, v))
+}
+
+// QuotaWeeklyInputTokensEQ applies the EQ predicate on the "quota_weekly_input_tokens" field.
+func QuotaWeeklyInputTokensEQ(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldQuotaWeeklyInputTokens, v))
+}
+
+// QuotaWeeklyInputTokensNEQ applies the NEQ predicate on the "quota_weekly_input_tokens" field.
+func QuotaWeeklyInputTokensNEQ(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNEQ(FieldQuotaWeeklyInputTokens, v))
+}
+
+// QuotaWeeklyInputTokensIn applies the In predicate on the "quota_weekly_input_tokens" field.
+func QuotaWeeklyInputTokensIn(vs ...int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldIn(FieldQuotaWeeklyInputTokens, vs...))
+}
+
+// QuotaWeeklyInputTokensNotIn applies the NotIn predicate on the "quota_weekly_input_tokens" field.
+func QuotaWeeklyInputTokensNotIn(vs ...int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNotIn(FieldQuotaWeeklyInputTokens, vs...))
+}
+
+// QuotaWeeklyInputTokensGT applies the GT predicate on the "quota_weekly_input_tokens" field.
+func QuotaWeeklyInputTokensGT(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGT(FieldQuotaWeeklyInputTokens, v))
+}
+
+// QuotaWeeklyInputTokensGTE applies the GTE predicate on the "quota_weekly_input_tokens" field.
+func QuotaWeeklyInputTokensGTE(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGTE(FieldQuotaWeeklyInputTokens, v))
+}
+
+// QuotaWeeklyInputTokensLT applies the LT predicate on the "quota_weekly_input_tokens" field.
+func QuotaWeeklyInputTokensLT(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLT(FieldQuotaWeeklyInputTokens, v))
+}
+
+// QuotaWeeklyInputTokensLTE applies the LTE predicate on the "quota_weekly_input_tokens" field.
+func QuotaWeeklyInputTokensLTE(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLTE(FieldQuotaWeeklyInputTokens, v))
+}
+
+// QuotaDailyOutputTokensEQ applies the EQ predicate on the "quota_daily_output_tokens" field.
+func QuotaDailyOutputTokensEQ(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldQuotaDailyOutputTokens, v))
+}
+
+// QuotaDailyOutputTokensNEQ applies the NEQ predicate on the "quota_daily_output_tokens" field.
+func QuotaDailyOutputTokensNEQ(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNEQ(FieldQuotaDailyOutputTokens, v))
+}
+
+// QuotaDailyOutputTokensIn applies the In predicate on the "quota_daily_output_tokens" field.
+func QuotaDailyOutputTokensIn(vs ...int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldIn(FieldQuotaDailyOutputTokens, vs...))
+}
+
+// QuotaDailyOutputTokensNotIn applies the NotIn predicate on the "quota_daily_output_tokens" field.
+func QuotaDailyOutputTokensNotIn(vs ...int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNotIn(FieldQuotaDailyOutputTokens, vs...))
+}
+
+// QuotaDailyOutputTokensGT applies the GT predicate on the "quota_daily_output_tokens" field.
+func QuotaDailyOutputTokensGT(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGT(FieldQuotaDailyOutputTokens, v))
+}
+
+// QuotaDailyOutputTokensGTE applies the GTE predicate on the "quota_daily_output_tokens" field.
+func QuotaDailyOutputTokensGTE(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGTE(FieldQuotaDailyOutputTokens, v))
+}
+
+// QuotaDailyOutputTokensLT applies the LT predicate on the "quota_daily_output_tokens" field.
+func QuotaDailyOutputTokensLT(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLT(FieldQuotaDailyOutputTokens, v))
+}
+
+// QuotaDailyOutputTokensLTE applies the LTE predicate on the "quota_daily_output_tokens" field.
+func QuotaDailyOutputTokensLTE(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLTE(FieldQuotaDailyOutputTokens, v))
+}
+
+// QuotaWeeklyOutputTokensEQ applies the EQ predicate on the "quota_weekly_output_tokens" field.
+func QuotaWeeklyOutputTokensEQ(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldQuotaWeeklyOutputTokens, v))
+}
+
+// QuotaWeeklyOutputTokensNEQ applies the NEQ predicate on the "quota_weekly_output_tokens" field.
+func QuotaWeeklyOutputTokensNEQ(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNEQ(FieldQuotaWeeklyOutputTokens, v))
+}
+
+// QuotaWeeklyOutputTokensIn applies the In predicate on the "quota_weekly_output_tokens" field.
+func QuotaWeeklyOutputTokensIn(vs ...int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldIn(FieldQuotaWeeklyOutputTokens, vs...))
+}
+
+// QuotaWeeklyOutputTokensNotIn applies the NotIn predicate on the "quota_weekly_output_tokens" field.
+func QuotaWeeklyOutputTokensNotIn(vs ...int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNotIn(FieldQuotaWeeklyOutputTokens, vs...))
+}
+
+// QuotaWeeklyOutputTokensGT applies the GT predicate on the "quota_weekly_output_tokens" field.
+func QuotaWeeklyOutputTokensGT(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGT(FieldQuotaWeeklyOutputTokens, v))
+}
+
+// QuotaWeeklyOutputTokensGTE applies the GTE predicate on the "quota_weekly_output_tokens" field.
+func QuotaWeeklyOutputTokensGTE(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGTE(FieldQuotaWeeklyOutputTokens, v))
+}
+
+// QuotaWeeklyOutputTokensLT applies the LT predicate on the "quota_weekly_output_tokens" field.
+func QuotaWeeklyOutputTokensLT(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLT(FieldQuotaWeeklyOutputTokens, v))
+}
+
+// QuotaWeeklyOutputTokensLTE applies the LTE predicate on the "quota_weekly_output_tokens" field.
+func QuotaWeeklyOutputTokensLTE(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLTE(FieldQuotaWeeklyOutputTokens, v))
+}
+
+// QuotaDailyBillableInputTokensEQ applies the EQ predicate on the "quota_daily_billable_input_tokens" field.
+func QuotaDailyBillableInputTokensEQ(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldQuotaDailyBillableInputTokens, v))
+}
+
+// QuotaDailyBillableInputTokensNEQ applies the NEQ predicate on the "quota_daily_billable_input_tokens" field.
+func QuotaDailyBillableInputTokensNEQ(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNEQ(FieldQuotaDailyBillableInputTokens, v))
+}
+
+// QuotaDailyBillableInputTokensIn applies the In predicate on the "quota_daily_billable_input_tokens" field.
+func QuotaDailyBillableInputTokensIn(vs ...int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldIn(FieldQuotaDailyBillableInputTokens, vs...))
+}
+
+// QuotaDailyBillableInputTokensNotIn applies the NotIn predicate on the "quota_daily_billable_input_tokens" field.
+func QuotaDailyBillableInputTokensNotIn(vs ...int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNotIn(FieldQuotaDailyBillableInputTokens, vs...))
+}
+
+// QuotaDailyBillableInputTokensGT applies the GT predicate on the "quota_daily_billable_input_tokens" field.
+func QuotaDailyBillableInputTokensGT(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGT(FieldQuotaDailyBillableInputTokens, v))
+}
+
+// QuotaDailyBillableInputTokensGTE applies the GTE predicate on the "quota_daily_billable_input_tokens" field.
+func QuotaDailyBillableInputTokensGTE(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGTE(FieldQuotaDailyBillableInputTokens, v))
+}
+
+// QuotaDailyBillableInputTokensLT applies the LT predicate on the "quota_daily_billable_input_tokens" field.
+func QuotaDailyBillableInputTokensLT(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLT(FieldQuotaDailyBillableInputTokens, v))
+}
+
+// QuotaDailyBillableInputTokensLTE applies the LTE predicate on the "quota_daily_billable_input_tokens" field.
+func QuotaDailyBillableInputTokensLTE(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLTE(FieldQuotaDailyBillableInputTokens, v))
+}
+
+// QuotaWeeklyBillableInputTokensEQ applies the EQ predicate on the "quota_weekly_billable_input_tokens" field.
+func QuotaWeeklyBillableInputTokensEQ(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldQuotaWeeklyBillableInputTokens, v))
+}
+
+// QuotaWeeklyBillableInputTokensNEQ applies the NEQ predicate on the "quota_weekly_billable_input_tokens" field.
+func QuotaWeeklyBillableInputTokensNEQ(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNEQ(FieldQuotaWeeklyBillableInputTokens, v))
+}
+
+// QuotaWeeklyBillableInputTokensIn applies the In predicate on the "quota_weekly_billable_input_tokens" field.
+func QuotaWeeklyBillableInputTokensIn(vs ...int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldIn(FieldQuotaWeeklyBillableInputTokens, vs...))
+}
+
+// QuotaWeeklyBillableInputTokensNotIn applies the NotIn predicate on the "quota_weekly_billable_input_tokens" field.
+func QuotaWeeklyBillableInputTokensNotIn(vs ...int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNotIn(FieldQuotaWeeklyBillableInputTokens, vs...))
+}
+
+// QuotaWeeklyBillableInputTokensGT applies the GT predicate on the "quota_weekly_billable_input_tokens" field.
+func QuotaWeeklyBillableInputTokensGT(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGT(FieldQuotaWeeklyBillableInputTokens, v))
+}
+
+// QuotaWeeklyBillableInputTokensGTE applies the GTE predicate on the "quota_weekly_billable_input_tokens" field.
+func QuotaWeeklyBillableInputTokensGTE(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGTE(FieldQuotaWeeklyBillableInputTokens, v))
+}
+
+// QuotaWeeklyBillableInputTokensLT applies the LT predicate on the "quota_weekly_billable_input_tokens" field.
+func QuotaWeeklyBillableInputTokensLT(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLT(FieldQuotaWeeklyBillableInputTokens, v))
+}
+
+// QuotaWeeklyBillableInputTokensLTE applies the LTE predicate on the "quota_weekly_billable_input_tokens" field.
+func QuotaWeeklyBillableInputTokensLTE(v int64) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLTE(FieldQuotaWeeklyBillableInputTokens, v))
 }
 
 // AllowedModelsIsNil applies the IsNil predicate on the "allowed_models" field.

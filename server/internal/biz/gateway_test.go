@@ -106,8 +106,18 @@ func TestGatewayUsecaseCheckAPIKeyTokenQuota(t *testing.T) {
 	weekStart := weekStart(dayStart)
 	repo := &gatewayPolicyTestRepo{
 		summaryByStart: map[time.Time]*GatewayUsageSummary{
-			dayStart:  {TotalTokens: 100},
-			weekStart: {TotalTokens: 500},
+			dayStart: {
+				TotalTokens:  100,
+				InputTokens:  80,
+				CachedTokens: 30,
+				OutputTokens: 20,
+			},
+			weekStart: {
+				TotalTokens:  500,
+				InputTokens:  380,
+				CachedTokens: 180,
+				OutputTokens: 120,
+			},
 		},
 	}
 	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
@@ -135,6 +145,21 @@ func TestGatewayUsecaseCheckAPIKeyTokenQuota(t *testing.T) {
 	err = uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9, QuotaTotalTokens: 500}, now)
 	if err != ErrGatewayQuotaExceeded {
 		t.Fatalf("CheckAPIKeyTokenQuota legacy total err = %v, want ErrGatewayQuotaExceeded", err)
+	}
+
+	err = uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9, QuotaDailyInputTokens: 80}, now)
+	if err != ErrGatewayQuotaExceeded {
+		t.Fatalf("CheckAPIKeyTokenQuota daily input err = %v, want ErrGatewayQuotaExceeded", err)
+	}
+
+	err = uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9, QuotaWeeklyOutputTokens: 121}, now)
+	if err != nil {
+		t.Fatalf("CheckAPIKeyTokenQuota weekly output err = %v, want nil", err)
+	}
+
+	err = uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9, QuotaWeeklyBillableInputTokens: 200}, now)
+	if err != ErrGatewayQuotaExceeded {
+		t.Fatalf("CheckAPIKeyTokenQuota weekly billable input err = %v, want ErrGatewayQuotaExceeded", err)
 	}
 
 	err = uc.CheckAPIKeyTokenQuota(context.Background(), &GatewayAPIKey{ID: 9}, now)

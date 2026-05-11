@@ -10,18 +10,24 @@ import (
 func TestMapGatewayAPIKeyForRPCIsStructCompatible(t *testing.T) {
 	now := time.Unix(100, 0)
 	item := &biz.GatewayAPIKey{
-		ID:                1,
-		Name:              "smoke",
-		PlainKey:          "ogw_plain",
-		KeyPrefix:         "ogw_test",
-		KeyLast4:          "abcd",
-		AllowedModels:     []string{"gpt-5.5", "gpt-5.3-codex"},
-		QuotaRequests:     100,
-		QuotaTotalTokens:  200,
-		QuotaDailyTokens:  300,
-		QuotaWeeklyTokens: 900,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		ID:                             1,
+		Name:                           "smoke",
+		PlainKey:                       "ogw_plain",
+		KeyPrefix:                      "ogw_test",
+		KeyLast4:                       "abcd",
+		AllowedModels:                  []string{"gpt-5.5", "gpt-5.3-codex"},
+		QuotaRequests:                  100,
+		QuotaTotalTokens:               200,
+		QuotaDailyTokens:               300,
+		QuotaWeeklyTokens:              900,
+		QuotaDailyInputTokens:          301,
+		QuotaWeeklyInputTokens:         901,
+		QuotaDailyOutputTokens:         302,
+		QuotaWeeklyOutputTokens:        902,
+		QuotaDailyBillableInputTokens:  303,
+		QuotaWeeklyBillableInputTokens: 903,
+		CreatedAt:                      now,
+		UpdatedAt:                      now,
 	}
 
 	data := mapGatewayAPIKeyForRPC(item, true)
@@ -43,6 +49,14 @@ func TestMapGatewayAPIKeyForRPCIsStructCompatible(t *testing.T) {
 	if s.AsMap()["quota_daily_tokens"] != float64(300) ||
 		s.AsMap()["quota_weekly_tokens"] != float64(900) {
 		t.Fatalf("unexpected quota token windows: %#v", s.AsMap())
+	}
+	if s.AsMap()["quota_daily_input_tokens"] != float64(301) ||
+		s.AsMap()["quota_weekly_input_tokens"] != float64(901) ||
+		s.AsMap()["quota_daily_output_tokens"] != float64(302) ||
+		s.AsMap()["quota_weekly_output_tokens"] != float64(902) ||
+		s.AsMap()["quota_daily_billable_input_tokens"] != float64(303) ||
+		s.AsMap()["quota_weekly_billable_input_tokens"] != float64(903) {
+		t.Fatalf("unexpected detailed quota token windows: %#v", s.AsMap())
 	}
 }
 
@@ -123,6 +137,33 @@ func TestMapGatewayUsageKeySummaryForRPCIsStructCompatible(t *testing.T) {
 	}
 }
 
+func TestMapGatewayUsageForRPCIncludesKeyName(t *testing.T) {
+	item := &biz.GatewayUsageLog{
+		ID:           10,
+		APIKeyID:     3,
+		APIKeyPrefix: "ogw_test",
+		APIKeyName:   "production",
+		CreatedAt:    time.Unix(1778000000, 0),
+		InputTokens:  100,
+		CachedTokens: 40,
+		OutputTokens: 20,
+		TotalTokens:  120,
+	}
+
+	data := mapGatewayUsageForRPC(item)
+	s := newDataStruct(data)
+	if s == nil {
+		t.Fatalf("expected gateway usage rpc data to be structpb-compatible")
+	}
+
+	got := s.AsMap()
+	if got["api_key_id"] != float64(3) ||
+		got["api_key_prefix"] != "ogw_test" ||
+		got["api_key_name"] != "production" {
+		t.Fatalf("unexpected key fields: %#v", got)
+	}
+}
+
 func TestMapGatewayUsageSessionSummaryForRPCIsStructCompatible(t *testing.T) {
 	cost := 1.23
 	first := time.Unix(1778000000, 0)
@@ -131,6 +172,7 @@ func TestMapGatewayUsageSessionSummaryForRPCIsStructCompatible(t *testing.T) {
 		SessionID:         "session-123",
 		APIKeyID:          3,
 		APIKeyPrefix:      "ogw_test",
+		APIKeyName:        "production",
 		TotalRequests:     4,
 		SuccessRequests:   3,
 		FailedRequests:    1,
@@ -152,7 +194,9 @@ func TestMapGatewayUsageSessionSummaryForRPCIsStructCompatible(t *testing.T) {
 	}
 
 	got := s.AsMap()
-	if got["session_id"] != "session-123" || got["api_key_id"] != float64(3) {
+	if got["session_id"] != "session-123" ||
+		got["api_key_id"] != float64(3) ||
+		got["api_key_name"] != "production" {
 		t.Fatalf("unexpected session fields: %#v", got)
 	}
 	if got["first_seen_at"] != float64(first.Unix()) ||

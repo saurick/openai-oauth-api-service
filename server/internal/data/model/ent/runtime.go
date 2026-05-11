@@ -176,12 +176,36 @@ func init() {
 	gatewayapikeyDescQuotaWeeklyTokens := gatewayapikeyFields[10].Descriptor()
 	// gatewayapikey.DefaultQuotaWeeklyTokens holds the default value on creation for the quota_weekly_tokens field.
 	gatewayapikey.DefaultQuotaWeeklyTokens = gatewayapikeyDescQuotaWeeklyTokens.Default.(int64)
+	// gatewayapikeyDescQuotaDailyInputTokens is the schema descriptor for quota_daily_input_tokens field.
+	gatewayapikeyDescQuotaDailyInputTokens := gatewayapikeyFields[11].Descriptor()
+	// gatewayapikey.DefaultQuotaDailyInputTokens holds the default value on creation for the quota_daily_input_tokens field.
+	gatewayapikey.DefaultQuotaDailyInputTokens = gatewayapikeyDescQuotaDailyInputTokens.Default.(int64)
+	// gatewayapikeyDescQuotaWeeklyInputTokens is the schema descriptor for quota_weekly_input_tokens field.
+	gatewayapikeyDescQuotaWeeklyInputTokens := gatewayapikeyFields[12].Descriptor()
+	// gatewayapikey.DefaultQuotaWeeklyInputTokens holds the default value on creation for the quota_weekly_input_tokens field.
+	gatewayapikey.DefaultQuotaWeeklyInputTokens = gatewayapikeyDescQuotaWeeklyInputTokens.Default.(int64)
+	// gatewayapikeyDescQuotaDailyOutputTokens is the schema descriptor for quota_daily_output_tokens field.
+	gatewayapikeyDescQuotaDailyOutputTokens := gatewayapikeyFields[13].Descriptor()
+	// gatewayapikey.DefaultQuotaDailyOutputTokens holds the default value on creation for the quota_daily_output_tokens field.
+	gatewayapikey.DefaultQuotaDailyOutputTokens = gatewayapikeyDescQuotaDailyOutputTokens.Default.(int64)
+	// gatewayapikeyDescQuotaWeeklyOutputTokens is the schema descriptor for quota_weekly_output_tokens field.
+	gatewayapikeyDescQuotaWeeklyOutputTokens := gatewayapikeyFields[14].Descriptor()
+	// gatewayapikey.DefaultQuotaWeeklyOutputTokens holds the default value on creation for the quota_weekly_output_tokens field.
+	gatewayapikey.DefaultQuotaWeeklyOutputTokens = gatewayapikeyDescQuotaWeeklyOutputTokens.Default.(int64)
+	// gatewayapikeyDescQuotaDailyBillableInputTokens is the schema descriptor for quota_daily_billable_input_tokens field.
+	gatewayapikeyDescQuotaDailyBillableInputTokens := gatewayapikeyFields[15].Descriptor()
+	// gatewayapikey.DefaultQuotaDailyBillableInputTokens holds the default value on creation for the quota_daily_billable_input_tokens field.
+	gatewayapikey.DefaultQuotaDailyBillableInputTokens = gatewayapikeyDescQuotaDailyBillableInputTokens.Default.(int64)
+	// gatewayapikeyDescQuotaWeeklyBillableInputTokens is the schema descriptor for quota_weekly_billable_input_tokens field.
+	gatewayapikeyDescQuotaWeeklyBillableInputTokens := gatewayapikeyFields[16].Descriptor()
+	// gatewayapikey.DefaultQuotaWeeklyBillableInputTokens holds the default value on creation for the quota_weekly_billable_input_tokens field.
+	gatewayapikey.DefaultQuotaWeeklyBillableInputTokens = gatewayapikeyDescQuotaWeeklyBillableInputTokens.Default.(int64)
 	// gatewayapikeyDescCreatedAt is the schema descriptor for created_at field.
-	gatewayapikeyDescCreatedAt := gatewayapikeyFields[13].Descriptor()
+	gatewayapikeyDescCreatedAt := gatewayapikeyFields[19].Descriptor()
 	// gatewayapikey.DefaultCreatedAt holds the default value on creation for the created_at field.
 	gatewayapikey.DefaultCreatedAt = gatewayapikeyDescCreatedAt.Default.(func() time.Time)
 	// gatewayapikeyDescUpdatedAt is the schema descriptor for updated_at field.
-	gatewayapikeyDescUpdatedAt := gatewayapikeyFields[14].Descriptor()
+	gatewayapikeyDescUpdatedAt := gatewayapikeyFields[20].Descriptor()
 	// gatewayapikey.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	gatewayapikey.DefaultUpdatedAt = gatewayapikeyDescUpdatedAt.Default.(func() time.Time)
 	// gatewayapikey.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
