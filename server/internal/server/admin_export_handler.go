@@ -123,6 +123,7 @@ func (h *adminExportHandler) requireAdminAndBuildFilter(ctx context.Context, w s
 	filter := biz.GatewayUsageFilter{
 		Limit:           200,
 		KeyID:           queryInt(r, "key_id"),
+		KeyIDs:          queryIntList(r, "key_ids"),
 		Model:           strings.TrimSpace(r.URL.Query().Get("model")),
 		ReasoningEffort: strings.TrimSpace(r.URL.Query().Get("reasoning_effort")),
 		Endpoint:        strings.TrimSpace(r.URL.Query().Get("endpoint")),
@@ -173,6 +174,7 @@ func (h *adminExportHandler) auditExport(ctx context.Context, format string, cou
 			"format":           format,
 			"count":            count,
 			"key_id":           filter.KeyID,
+			"key_ids":          filter.KeyIDs,
 			"model":            filter.Model,
 			"reasoning_effort": filter.ReasoningEffort,
 			"endpoint":         filter.Endpoint,
@@ -191,6 +193,29 @@ func (h *adminExportHandler) auditExport(ctx context.Context, format string, cou
 func queryInt(r *stdhttp.Request, key string) int {
 	n, _ := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get(key)))
 	return n
+}
+
+func queryIntList(r *stdhttp.Request, key string) []int {
+	rawValues := r.URL.Query()[key]
+	if len(rawValues) == 0 {
+		return []int{}
+	}
+	out := make([]int, 0, len(rawValues))
+	seen := make(map[int]struct{}, len(rawValues))
+	for _, rawValue := range rawValues {
+		for _, part := range strings.Split(rawValue, ",") {
+			n, err := strconv.Atoi(strings.TrimSpace(part))
+			if err != nil || n <= 0 {
+				continue
+			}
+			if _, ok := seen[n]; ok {
+				continue
+			}
+			seen[n] = struct{}{}
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 func queryUnixTime(r *stdhttp.Request, key string, fallback time.Time) time.Time {

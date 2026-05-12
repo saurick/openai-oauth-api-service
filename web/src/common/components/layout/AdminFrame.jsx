@@ -17,6 +17,7 @@ const NAV_GROUPS = [
       { to: '/admin-keys', label: 'API 凭据', icon: KeyIcon },
       { to: '/admin-models', label: '模型管理', icon: RouteIcon },
       { to: '/admin-upstream', label: '上游策略', icon: UpstreamIcon },
+      { to: '/admin-client-config', label: '客户端模板', icon: ConfigIcon },
     ],
   },
   {
@@ -226,6 +227,21 @@ function ChartIcon() {
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"
+        strokeWidth="2"
+      />
+    </svg>
+  )
+}
+
+function ConfigIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M7 4h7l3 3v13H7zM14 4v4h4M9 12h6M9 15h6M9 18h4"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
         strokeWidth="2"
       />
     </svg>

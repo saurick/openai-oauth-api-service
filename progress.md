@@ -2,6 +2,53 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+
+## 2026-05-12 线上 502 排查
+- 完成：公网 `/healthz`、`/readyz` 均返回正常，最小 `/v1/responses` 非流式请求返回 `OK`，说明 Cloudflare、入口层、app-server 与 Codex 登录态主路径当前可用。
+- 完成：通过管理员 JSON-RPC 查询线上 usage，当前上游策略为 `strategy=backend_with_cli_fallback`、`mode=codex_backend`、`fallback_enabled=true`；失败明细共 190 条，均为 `status_code=502`、`error_type=codex_backend_upstream_failed`，其中近 200 条成功请求仍主要走 `codex_backend`，说明不是服务整体不可用。
+- 发现：失败请求集中在 `/v1/responses`、`reasoning_effort=high`，请求体大小从约 48KB 到 1.43MB，近期失败多为 300KB~470KB；带工具调用或工具历史的请求属于 backend-only，代码会禁止 fallback 到 `codex_cli`，因此即使后台打开 Backend + CLI 兜底，仍会直接返回 502。
+- 验证通过：公网 `/v1/models` 正常；最小 `/v1/responses`、函数工具调用、带 `function_call` 历史的 Responses 请求均返回 `HTTP 200`，未复现旧的 function_call id 校验问题。
+- 阻塞/风险：当前本机到 `8.218.4.199:22` SSH 超时，未能读取远端容器日志中的上游原始错误 body；下一步需要从可达网络或云控制台进入服务器执行 `docker logs --since ... openai-oauth-api-service-server`，重点看 `codex backend upstream failed before fallback` 的 status/body，再决定是上游 429/5xx、请求过大/上下文过长、工具历史格式，还是代理/出口抖动。
+
+## 2026-05-12 API 凭据多选与备注同步改写部署
+- 完成：修正 `api.key_update` 备注口径，编辑备注时保留原随机段并同步改写 `plain_key`、`key_hash`、`key_prefix`、`key_last4`；文档、前端提示和进度说明已从“编辑不改写 key”改为当前真源，避免继续沿用旧风险说明。
+- 完成：API 凭据表保持单击行互斥单选，复选框支持累加多选；用量日志「调用凭据」筛选改为多选，前端统一向 usage 列表、每日模型、凭据统计、会话聚合、异常请求和导出路径传 `key_ids`，后端保留旧 `key_id` 兼容且多选优先。
+- 验证通过：`cd server && go test ./internal/biz ./internal/data ./internal/server`、`cd web && pnpm test && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs && node --check scripts/styleL1.mjs`、`cd web && pnpm css && pnpm build`、`cd web && STYLE_L1_PORT=4324 NODE_USE_ENV_PROXY=0 pnpm style:l1`。
+- 部署：本地构建镜像 `oauth-api-service-server:20260512T043120-bc28db59-local`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260512T043120-bc28db59-local/`；远端仅执行 `docker load`、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d app-server`，未在服务器构建。
+- 线上验证：远端容器运行镜像为 `oauth-api-service-server:20260512T043120-bc28db59-local`，容器内 `GIT_SHA=bc28db59e8df9621fa7333fe21f5f98e2f207cd7-local`，`CODEX_UPSTREAM_MODE=codex_backend`、`CODEX_UPSTREAM_FALLBACK_ENABLED=false`；远端本机与公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`，公网 `/admin-login` 返回 `HTTP 200`；远端本机 RPC `usage_list` 携带 `key_ids:[1,2]` 返回 `code=0`、`total=69`；`opencode models oauth-api-service` 正常列出 `gpt-5.4/gpt-5.5`。
+- 清理：部署后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260511T230544-bc28db59-local`，回收 `347.6MB`；根分区从清理前 `47%` 回到 `46%`，未执行 volume prune。
+- 阻塞/风险：本轮没有 schema 变更，不需要 Atlas migration；编辑备注会使旧完整 key 失效，使用方需同步替换为后台显示的新完整凭据。远端 release tar 包仍保留用于短期追溯。
+
+## 2026-05-11 API 凭据备注前缀生成
+- 完成：新建 API 凭据时，后端按 `ogw_<备注>_<随机串>` 生成明文 key；备注为空时先生成默认备注再写入明文前缀，历史凭据更正另见后续记录。
+- 完成：备注校验收口到后端业务层，创建与编辑均只允许 ASCII 字母和数字；前端备注输入同步过滤非字母数字字符，凭据弹窗关闭浏览器原生校验以统一走页面中文错误提示，并更新新建弹窗提示、mock 与文档口径。
+- 修正：空备注默认名称从 `key <last4>` 调整为 `key<last4>`，避免默认备注自身违反字母数字规则。
+- 验证通过：`cd server && go test ./internal/biz ./internal/data`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs && node --check scripts/styleL1.mjs && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4324 NODE_USE_ENV_PROXY=0 pnpm style:l1`。
+- 阻塞/风险：历史已有非字母数字备注会原样展示，但再次保存时需要改成新规则；后续编辑备注会改写 key 备注段并同步哈希，客户端需替换为新的完整凭据。
+
+## 2026-05-11 API 凭据备注前缀部署与历史 key 更正
+- 部署：本地构建镜像 `oauth-api-service-server:20260511T225044-bc28db59-local`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260511T225044-bc28db59-local/`；远端仅执行 `docker load`、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d app-server`，未在服务器构建。
+- 完成：本地开发库 3 条、线上生产库 9 条历史 `gateway_api_keys` 均更正为 `ogw_<备注>_<原随机串>` 形式，并同步更新 `name`、`plain_key`、`key_hash`、`key_prefix`、`key_last4`；本地备份表为 `gateway_api_keys_backup_remark_prefix_local_20260511T2255`，线上备份表为 `gateway_api_keys_backup_remark_prefix_remote_20260511T2255`。
+- 完成：本机 `~/.config/opencode/opencode.json` 与 `~/.codex/config.toml` 中命中的旧 key 已替换为新 key，备份分别为 `.bak-20260511T2255-before-key-remark-prefix`。
+- 验证通过：线上本机与公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`，公网 `/admin-login` 返回 `HTTP 200`；本地脚本校验本地 3 条、线上 9 条均满足 `sha256(plain_key)=key_hash`、`key_prefix=plain_key[:12]`、`key_last4=plain_key[-4:]`；使用线上新 key 调用公网 `/v1/models` 返回 `HTTP 200` 和 6 个模型；`opencode models oauth-api-service` 返回 `gpt-5.4/gpt-5.5`，`codex exec ... model_provider="saurick-oauth" "只回复 OK"` 返回 `OK`。
+- 清理：部署后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260511T211545-bc28db59`，回收 `347.6MB`；根分区从清理前 `47%` 回到 `45%`，未执行 volume prune。
+- 阻塞/风险：本轮没有 schema 变更，不需要 Atlas migration；旧 key 已失效，仍保存旧 key 的其他客户端需要同步替换。Codex 验证期间仍出现插件/模型刷新 warning，但请求最终完成并返回 `OK`。
+
+## 2026-05-11 空备注 key 前缀补丁部署
+- 修复：补齐空备注创建顺序问题，后端现在先确定默认备注 `key<last4>`，再生成 `ogw_key<last4>_<随机串>`；避免空备注新建仍只得到 `ogw_<随机串>`。
+- 部署：本地构建镜像 `oauth-api-service-server:20260511T230544-bc28db59-local`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260511T230544-bc28db59-local/`；远端仅执行 `docker load`、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d app-server`，未在服务器构建。
+- 验证通过：`cd server && go test ./internal/biz ./internal/data`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs && node --check scripts/styleL1.mjs && pnpm test`、`cd web && pnpm css && pnpm build`、`cd web && STYLE_L1_PORT=4324 NODE_USE_ENV_PROXY=0 pnpm style:l1`。
+- 线上验证：远端本机 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；远端本机 RPC 创建空备注临时 key 返回 `created_name=key49sI`、`plain_key` 形如 `ogw_key49sI_...`，验证后已删除临时 key。
+- 清理：部署后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260511T225044-bc28db59-local`，回收 `347.6MB`；根分区从清理前 `47%` 回到 `45%`，未执行 volume prune。
+- 阻塞/风险：公网脚本直连 `/rpc/auth` 被入口层返回 `403`，本轮 RPC 验证改走服务器本机 `127.0.0.1:8400`；浏览器后台页面不受该脚本入口限制影响。
+
+## 2026-05-11 bc28db59 线上部署
+- 完成：本地构建镜像 `oauth-api-service-server:20260511T211545-bc28db59`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260511T211545-bc28db59/`；远端仅执行 `docker load`、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d app-server`，未在服务器构建。
+- 完成：远端当前运行镜像为 `oauth-api-service-server:20260511T211545-bc28db59`，容器内 `GIT_SHA=bc28db59e8df9621fa7333fe21f5f98e2f207cd7`。
+- 验证通过：`cd server && go test -count=1 ./...`、`cd web && pnpm test -- --run`、`cd web && pnpm build`；远端本机与公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`，公网 `/admin-login` 返回 `HTTP 200`；`opencode models oauth-api-service` 正常列出 `gpt-5.4/gpt-5.5`，`opencode run --pure -m oauth-api-service/gpt-5.5 --variant low --format json '只回复 OK'` 返回 `OK`。
+- 清理：部署后执行 `docker image prune -a -f` 与 `docker builder prune -f`，仅删除未被容器使用的旧镜像 `20260511T201505-d530adb7-local`，回收 `347.6MB`；根分区从清理前 `46%` 回到 `45%`，未执行 volume prune。
+- 阻塞/风险：本轮没有新增 schema migration，未执行 Atlas migration；远端 release tar 包仍保留用于短期追溯。
+
 ## 2026-05-11 上游策略三态与无兜底部署
 - 完成：后台 `/admin-upstream` 从旧「上游模式」改为「上游策略」，前端展示三种策略：Backend 直连、Backend + CLI 兜底、强制 CLI；当前线上已持久化为 `backend_only`，即 `mode=codex_backend`、`fallback_enabled=false`。
 - 完成：`api.gateway_upstream_get` / `api.gateway_upstream_set` 返回并接受 `strategy`，同时保留旧 `mode + fallback_enabled` 入参兼容；服务端运行时读取同一套设置，避免 UI 只改文案但实际 fallback 口径不变。
@@ -291,3 +338,66 @@
 - 验证通过：`cd server && go test -count=1 ./internal/server ./internal/biz ./internal/data`、`git diff --check`；新增测试覆盖默认不 fallback、显式打开开关才允许纯文本 fallback，以及工具请求不 fallback。
 - 验证通过：远端当前运行镜像为 `oauth-api-service-server:20260511T194408-d530adb7-local`，环境变量包含 `CODEX_UPSTREAM_MODE=codex_backend`、`CODEX_UPSTREAM_FALLBACK_ENABLED=false`；容器内和公网 `/healthz`、`/readyz` 均正常。
 - 验证通过：公网真实工具请求返回 `HTTP 200` 和 `tool_calls`；usage 最新记录 `id=512` 为 `upstream_mode=codex_backend`、`upstream_fallback=false`、`status_code=200`。
+
+## 2026-05-11 API 凭据多选
+- 完成：API 凭据表保持单击行互斥单选，复选框改为可累加多选；用量日志「调用凭据」筛选改为多选，前端向 usage 列表、每日模型、凭据统计、会话聚合、异常请求等统一传 `key_ids`。
+- 完成：后端 `GatewayUsageFilter` 增加 `KeyIDs`，JSON-RPC 与 usage 导出均支持 `key_ids`，并保留旧 `key_id` 单选兼容；多选时优先按 `key_ids` 过滤。
+- 文档：同步更新 `server/docs/api.md`，说明 `api.usage_list` 及相关聚合接口支持 `key_ids` 多凭据过滤。
+- 验证通过：`cd web && pnpm test`、`cd server && go test ./internal/biz ./internal/data ./internal/server`；`pnpm style:l1` 新增覆盖凭据多选筛选并通过。
+- 下一步：无阻塞；未涉及 schema 变更和部署配置，不需要 migration。
+
+## 2026-05-12 客户端配置模板页面
+- 完成：新增后台「客户端模板」菜单和 `/admin-client-config` 页面，支持 macOS / Windows 的 Codex 与 opencode 配置模板导出；模板只保留 Base URL、API Key、Codex profile、模型变体和必要运行选项，不导出 auth.json、历史会话、projects 信任记录、opencode secrets 或本机绝对路径。
+- 完成：按用户要求通过 `ssh sauri@192.168.0.44` 查看 Windows 配置口径，确认 Windows Codex 需要 `[windows] sandbox = "elevated"`，Windows opencode 配置主路径为 `%USERPROFILE%\.config\opencode\opencode.json`，Codex 为 `%USERPROFILE%\.codex\config.toml`。
+- 完成：页面提供上传配置文件入口，只替换显式占位符 `{{BASE_URL}}`、`{{API_KEY}}`、`{{PROFILE}}`，不做启发式替换，避免误改个人字段或隐藏状态。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm style:l1`、`cd web && pnpm build`；`style:l1` 覆盖客户端模板页桌面 / 移动、浅色 / 暗色、上传占位符替换、无横向溢出和后台 chrome 回归。
+- 阻塞/风险：本轮是前端静态模板导出功能，没有后端持久化上传文件，也没有把真实 key 落库；如果后续要做共享模板管理，需要单独设计密钥脱敏、权限和审计。
+
+## 2026-05-12 客户端配置模板部署
+- 部署：本地完成 `cd server && go test ./internal/server ./internal/biz ./internal/data`、`cd web && pnpm test`、`cd web && pnpm style:l1` 后，按低配服务器发布约定在本机构建镜像 `oauth-api-service-server:20260512T130207-bc28db5-local`，上传到 `8.218.4.199` 后仅执行 `docker load` 和 `docker compose up -d app-server`，未在服务器构建。
+- 验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260512T130207-bc28db5-local`；容器内与公网 `/healthz` 均返回 `ok`，`/readyz` 均返回 `ready`；`https://oauth-api.saurick.me/admin-client-config` 返回前端 HTML；管理员 JSON-RPC 登录与 `api.summary` 查询返回 `code=0`。
+- 清理：部署前记录远端 `/` 使用率 48%、Docker images 4.71GB；执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260512T043120-bc28db59-local`，回收 347.6MB；清理后 `/` 使用率 46%、Docker images 4.007GB，所有运行中容器保持正常；已删除本轮上传 tar 包与本地临时 tar 包。
+- 阻塞/风险：本轮没有 schema 变更，不需要 migration；当前部署包含工作区内尚未提交的多处服务端与前端改动，后续提交时需按路径核对，不要误以为只有客户端模板页改动。
+
+## 2026-05-12 客户端配置模板上传入口移除
+- 完成：移除 `/admin-client-config` 页面里的“上传已有模板并替换占位符”入口，页面只保留内置 Codex / opencode 模板的参数填写、预览、复制和下载，减少不必要功能复杂度。
+- 完成：删除前端 `replaceClientConfigPlaceholders` helper 及对应测试，更新 README 与 `style:l1` 断言，避免继续维护无实际收益的上传分支。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm style:l1`；客户端模板页桌面 / 移动、浅色 / 暗色、无上传入口、无横向溢出和后台 chrome 回归通过。
+- 下一步：如需上线，需要重新构建镜像并按低配服务器发布流程部署；当前仅完成本地代码修改与验证。
+
+## 2026-05-12 客户端配置下载文件名修正与部署
+- 完成：客户端模板下载文件名改为真实配置文件名：Codex 固定 `config.toml`，opencode 固定 `opencode.json`，不再使用 `codex-config.windows.toml` / `opencode.windows.json` 这类自定义文件名，方便直接替换目标配置文件。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm style:l1`、`cd web && pnpm build`；新增测试确认 macOS / Windows 下载文件名均与真实配置文件名一致。
+- 部署：本地构建镜像 `oauth-api-service-server:20260512T132600-bc28db5-local`，上传到 `8.218.4.199` 后仅执行 `docker load` 和 `docker compose up -d app-server`，未在服务器构建。
+- 线上验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260512T132600-bc28db5-local`；容器内与公网 `/healthz` 返回 `ok`，`/readyz` 返回 `ready`；`https://oauth-api.saurick.me/admin-client-config` 已返回新前端资源 `index.BMklAv9U.js`。
+- 清理：部署前记录远端 `/` 使用率 48%、Docker images 4.71GB；执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260512T130207-bc28db5-local`，回收 347.6MB；清理后 `/` 使用率 46%、Docker images 4.007GB；已删除本轮上传 tar 包与本地临时 tar 包。
+
+## 2026-05-12 客户端配置教程文案收口
+- 完成：客户端模板页安装教程第 3 步改为按当前选择显示单一客户端名称，选择 Codex 时显示“安装 Codex”，选择 opencode 时显示“安装 opencode”，不再写“Codex 或 opencode”。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm style:l1`。
+- 下一步：如需上线，需要重新构建镜像并按低配服务器发布流程部署；当前仅完成本地代码修改与验证。
+
+## 2026-05-12 客户端配置教程文案部署
+- 部署：本地构建镜像 `oauth-api-service-server:20260512T133600-bc28db5-local`，上传到 `8.218.4.199` 后仅执行 `docker load` 和 `docker compose up -d app-server`，未在服务器构建。
+- 线上验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260512T133600-bc28db5-local`；容器内与公网 `/healthz` 返回 `ok`，`/readyz` 返回 `ready`；`https://oauth-api.saurick.me/admin-client-config` 已返回新前端资源 `index.UclIJ6sg.js`。
+- 清理：部署前记录远端 `/` 使用率 48%、Docker images 4.71GB；执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260512T132600-bc28db5-local`，回收 347.6MB；清理后 `/` 使用率 46%、Docker images 4.007GB；已删除本轮上传 tar 包与本地临时 tar 包。
+
+## 2026-05-12 opencode 教程文案部署
+- 完成：客户端模板页教程第 1 步改为按当前客户端显示，选择 opencode 时只提示填写 Base URL 和 API Key，不再出现 Codex profile 文案；选择 Codex 时仍提示确认 profile。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm style:l1`。
+- 部署：本地构建镜像 `oauth-api-service-server:20260512T141400-bc28db5-local`，上传到 `8.218.4.199` 后仅执行 `docker load` 和 `docker compose up -d app-server`，未在服务器构建。
+- 线上验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260512T141400-bc28db5-local`；容器内与公网 `/healthz` 返回 `ok`，`/readyz` 返回 `ready`；`https://oauth-api.saurick.me/admin-client-config` 已返回新前端资源 `index.RpJgmBD_.js`。
+- 清理：部署前记录远端 `/` 使用率 48%、Docker images 4.71GB；执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260512T133600-bc28db5-local`，回收 347.6MB；清理后 `/` 使用率 46%、Docker images 4.007GB；已删除本轮上传 tar 包与本地临时 tar 包。
+
+## 2026-05-12 客户端模板默认 medium 部署
+- 完成：Codex 模板默认 `model_reasoning_effort` 改为 `medium`；opencode 模板默认 agent `variant` 改为 `medium`，模型默认 `reasoningEffort` 改为 `medium`；opencode 模板移除 `gpt-5.4`，只保留 `gpt-5.5`。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm style:l1`；测试覆盖 Codex 默认 medium、opencode build/plan medium、opencode 只包含 `gpt-5.5`。
+- 部署：本地构建镜像 `oauth-api-service-server:20260512T143300-bc28db5-local`，上传到 `8.218.4.199` 后仅执行 `docker load` 和 `docker compose up -d app-server`，未在服务器构建。
+- 线上验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260512T143300-bc28db5-local`；容器内与公网 `/healthz` 返回 `ok`，`/readyz` 返回 `ready`；`https://oauth-api.saurick.me/admin-client-config` 已返回新前端资源 `index.Cu2SXAFD.js`。
+- 清理：部署前记录远端 `/` 使用率 48%、Docker images 4.71GB；执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260512T141400-bc28db5-local`，回收 347.6MB；清理后 `/` 使用率 46%、Docker images 4.007GB；已删除本轮上传 tar 包与本地临时 tar 包。
+
+## 2026-05-12 客户端模板代码预览对比度修复
+- 完成：修复 `/admin-client-config` 配置预览在浅色模式下代码文字被后台主题全局 `text-slate-100` 覆盖为深色导致看不清的问题；预览区改用 `admin-code-preview` 专用样式，固定深色代码背景与高对比浅色代码文本，不使用 `!important`。
+- 回归：`style:l1` 的客户端模板页断言新增浅色 / 暗色代码预览对比度检查，继续覆盖桌面、移动端、无横向溢出和后台 chrome。
+- 验证通过：`cd web && pnpm css`、`cd web && pnpm test`、`cd web && pnpm style:l1`。
+- 下一步：当前仅完成本地前端修复；如需线上生效，需要重新构建镜像并按低配服务器发布流程部署。

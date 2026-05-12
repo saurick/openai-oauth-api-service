@@ -68,6 +68,23 @@ func TestMapGatewayAPIKeyForRPCCanHidePlainKey(t *testing.T) {
 	}
 }
 
+func TestGatewayUsageFilterFromParamsSupportsKeyIDs(t *testing.T) {
+	filter := gatewayUsageFilterFromParams(map[string]any{
+		"key_id":  1,
+		"key_ids": []any{2, float64(3), "4", 0, "bad"},
+	})
+
+	if filter.KeyID != 1 {
+		t.Fatalf("KeyID = %d, want 1", filter.KeyID)
+	}
+	if len(filter.KeyIDs) != 3 ||
+		filter.KeyIDs[0] != 2 ||
+		filter.KeyIDs[1] != 3 ||
+		filter.KeyIDs[2] != 4 {
+		t.Fatalf("KeyIDs = %#v, want [2 3 4]", filter.KeyIDs)
+	}
+}
+
 func TestMapGatewayUsageBucketForRPCIsStructCompatible(t *testing.T) {
 	start := time.Unix(1778000000, 0)
 	item := &biz.GatewayUsageBucket{

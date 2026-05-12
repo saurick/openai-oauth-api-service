@@ -11,7 +11,7 @@ function loadTableInteractionModule() {
     .replace(/export function /g, 'function ')
     .replace(/export const /g, 'const ')
     .concat(
-      '\nmodule.exports = { TABLE_ROW_INTERACTION_TITLE, isInteractiveTableTarget, getExclusiveTableSelectionAfterClick, toggleExclusiveTableSelection };\n'
+      '\nmodule.exports = { TABLE_ROW_INTERACTION_TITLE, isInteractiveTableTarget, getTableSelectionAfterClick, toggleTableSelection };\n'
     )
 
   const sandbox = {
@@ -24,33 +24,26 @@ function loadTableInteractionModule() {
 
 const {
   TABLE_ROW_INTERACTION_TITLE,
-  getExclusiveTableSelectionAfterClick,
+  getTableSelectionAfterClick,
   isInteractiveTableTarget,
-  toggleExclusiveTableSelection,
+  toggleTableSelection,
 } = loadTableInteractionModule()
 
 function localArray(value) {
   return Array.from(value)
 }
 
-test('tableInteraction: 行点击只保留当前选择', () => {
-  assert.deepEqual(localArray(getExclusiveTableSelectionAfterClick(2)), [2])
-  assert.deepEqual(localArray(getExclusiveTableSelectionAfterClick(null)), [])
+test('tableInteraction: 行点击保持互斥单选', () => {
+  assert.deepEqual(localArray(getTableSelectionAfterClick([], 2)), [2])
+  assert.deepEqual(localArray(getTableSelectionAfterClick([1], 2)), [2])
+  assert.deepEqual(localArray(getTableSelectionAfterClick([1], null)), [])
+  assert.deepEqual(localArray(getTableSelectionAfterClick([1, 2], 2)), [2])
 })
 
-test('tableInteraction: 勾选框按互斥选择处理', () => {
-  assert.deepEqual(
-    localArray(toggleExclusiveTableSelection([1], 2, true)),
-    [2]
-  )
-  assert.deepEqual(
-    localArray(toggleExclusiveTableSelection([2], 2, false)),
-    []
-  )
-  assert.deepEqual(
-    localArray(toggleExclusiveTableSelection([1, 2], 1, false)),
-    [2]
-  )
+test('tableInteraction: 勾选框按多选处理', () => {
+  assert.deepEqual(localArray(toggleTableSelection([1], 2, true)), [1, 2])
+  assert.deepEqual(localArray(toggleTableSelection([2], 2, false)), [])
+  assert.deepEqual(localArray(toggleTableSelection([1, 2], 1, false)), [2])
 })
 
 test('tableInteraction: 行内操作控件不触发行选择', () => {
@@ -70,5 +63,5 @@ test('tableInteraction: 行内操作控件不触发行选择', () => {
 })
 
 test('tableInteraction: 保留表格行交互提示文案', () => {
-  assert.equal(TABLE_ROW_INTERACTION_TITLE, '单击单选，双击编辑')
+  assert.equal(TABLE_ROW_INTERACTION_TITLE, '单击单选，复选框多选，双击编辑')
 })

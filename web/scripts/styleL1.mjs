@@ -207,6 +207,31 @@ const scenarios = [
     },
   },
   {
+    name: 'admin-client-config-desktop',
+    path: '/admin-client-config',
+    viewport: { width: 1440, height: 900 },
+    adminAuth: true,
+    verify: async (page) => {
+      await expectText(page, '客户端配置模板')
+      await expectText(page, 'Codex')
+      await expectText(page, 'opencode')
+      await assertAdminChrome(page, 'admin-client-config-desktop')
+      await assertClientConfigVisuals(page, 'admin-client-config-desktop')
+    },
+  },
+  {
+    name: 'admin-client-config-mobile',
+    path: '/admin-client-config',
+    viewport: { width: 390, height: 844 },
+    adminAuth: true,
+    verify: async (page) => {
+      await expectText(page, '客户端配置模板')
+      await expectText(page, '配置预览')
+      await assertAdminChrome(page, 'admin-client-config-mobile')
+      await assertClientConfigVisuals(page, 'admin-client-config-mobile')
+    },
+  },
+  {
     name: 'admin-keys-desktop',
     path: '/admin-keys',
     viewport: { width: 1440, height: 900 },
@@ -764,8 +789,8 @@ async function assertApiVisuals(page, scenarioName) {
       hasRecentCallsDetailFields:
         tableText.includes('req_style_l1_prod_1') &&
         tableText.includes('Session：session-style-l1') &&
-        tableText.includes('production-api-key') &&
-        tableText.includes('sk-api-prod') &&
+        tableText.includes('productionapikey') &&
+        tableText.includes('ogw_production') &&
         tableText.includes('缓存输入 / 推理输出') &&
         tableText.includes('缓存输入') &&
         tableText.includes('推理输出') &&
@@ -1090,6 +1115,7 @@ async function assertUsageTableVisuals(page, scenarioName) {
   await assertUsageKeyStatsTab(page, scenarioName)
   await assertUsageSessionTab(page, scenarioName)
   await assertUsageDetailsTab(page, scenarioName)
+  await assertUsageKeyMultiFilterRequest(page, scenarioName)
   await assertUsageTimeRangeRequest(page, scenarioName)
   await assertUsagePaginationRequest(page, scenarioName)
   await assertUsageErrorsTab(page, scenarioName)
@@ -1120,7 +1146,7 @@ async function assertUsageDailyModelDetail(page, scenarioName) {
   await page.getByRole('button', { name: '详情', exact: true }).first().click()
   await expectText(page, '输入 Tokens')
   await expectText(page, '凭据备注')
-  await expectText(page, 'production-api-key')
+  await expectText(page, 'productionapikey')
   await expectText(page, 'Reasoning Tokens')
   await expectText(page, '下一页')
   const metrics = await page.evaluate(() => {
@@ -1168,8 +1194,8 @@ async function assertUsageKeyStatsTab(page, scenarioName) {
       )
     ),
     hasStatsRows:
-      document.body.innerText.includes('production-api-key') &&
-      document.body.innerText.includes('staging-key-with-long-name'),
+      document.body.innerText.includes('productionapikey') &&
+      document.body.innerText.includes('stagingkeylongname'),
   }))
   assert(metrics.hasSearchInput, `${scenarioName} 凭据统计缺少搜索框`)
   assert(metrics.hasStatsRows, `${scenarioName} 凭据统计缺少统计行`)
@@ -1179,7 +1205,7 @@ async function assertUsageSessionTab(page, scenarioName) {
   await page.getByRole('tab', { name: '会话聚合', exact: true }).click()
   await expectText(page, '会话聚合')
   await expectText(page, 'session-style-l1')
-  await expectText(page, 'production-api-key')
+  await expectText(page, 'productionapikey')
   await page.getByRole('button', { name: '详情', exact: true }).first().click()
   await expectText(page, '会话详情')
   await expectText(page, '凭据备注')
@@ -1210,7 +1236,7 @@ async function assertUsageDetailsTab(page, scenarioName) {
   await expectText(page, '费用估算')
   await expectText(page, '请求')
   await expectText(page, 'Session：session-style-l1')
-  await expectText(page, 'production-api-key')
+  await expectText(page, 'productionapikey')
   await expectText(page, '缓存输入 / 推理输出')
   await expectText(page, '缓存输入')
   await expectText(page, '推理输出')
@@ -1236,6 +1262,46 @@ async function assertUsageDetailsTab(page, scenarioName) {
   assert(metrics.hasRequestID, `${scenarioName} 调用明细缺少 request_id`)
   assert(metrics.hasSessionID, `${scenarioName} 调用明细缺少 session_id`)
   assert(metrics.hasTable, `${scenarioName} 调用明细缺少表格`)
+}
+
+async function assertUsageKeyMultiFilterRequest(page, scenarioName) {
+  const calls = page.__styleL1ApiRpcCalls || []
+  const startIndex = calls.length
+  await page.getByRole('combobox', { name: '调用凭据' }).click()
+  await page.getByRole('option', { name: 'productionapikey' }).click()
+  await page
+    .getByRole('option', { name: 'stagingkeylongnameforoverflowcheck' })
+    .click()
+  await page.getByRole('button', { name: '应用筛选', exact: true }).click()
+
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    const matched = calls.slice(startIndex).some((call) => {
+      const keyIDs = call.params?.key_ids || []
+      return (
+        call.method === 'usage_list' &&
+        keyIDs.length === 2 &&
+        keyIDs.includes(1) &&
+        keyIDs.includes(2)
+      )
+    })
+    const hasSummary = await page.evaluate(() => {
+      const input = document.querySelector(
+        'main [role="combobox"][aria-label="调用凭据"]'
+      )
+      return input?.value === '已选 2 个凭据'
+    })
+    if (matched && hasSummary) {
+      return
+    }
+    await delay(100)
+  }
+
+  assert.fail(
+    `${scenarioName} 多选调用凭据后未按 key_ids 查询: ${JSON.stringify(
+      calls.slice(startIndex)
+    )}`
+  )
 }
 
 async function assertUsageErrorsTab(page, scenarioName) {
@@ -1346,6 +1412,138 @@ async function assertUsagePaginationRequest(page, scenarioName) {
   )
 }
 
+
+async function assertClientConfigVisuals(page, scenarioName) {
+  const metrics = await page.evaluate(() => {
+    const main = document.querySelector('main')
+    const pre = main?.querySelector('pre')
+    const preRect = pre?.getBoundingClientRect()
+    const mainRect = main?.getBoundingClientRect()
+    const preStyle = window.getComputedStyle(pre)
+    const text = document.body.innerText
+    return {
+      hasClientConfigNav: text.includes('客户端模板'),
+      hasNoPersonalStateWarning:
+        text.includes('不会导出 Codex 的 auth.json') &&
+        text.includes('projects 信任记录') &&
+        text.includes('本机绝对路径'),
+      hasInstallPath: text.includes('~/.codex/config.toml'),
+      hasPlaceholders:
+        pre?.innerText.includes('https://oauth-api.saurick.me/v1') &&
+        pre?.innerText.includes('<API_KEY>') &&
+        pre?.innerText.includes('[profiles."saurick"]'),
+      hasNoUploadArea:
+        !text.includes('上传已有模板') && !text.includes('选择配置文件'),
+      mainHeight: mainRect?.height || 0,
+      previewBackground: preStyle.backgroundColor,
+      previewContrast: getContrastRatio(preStyle.color, preStyle.backgroundColor),
+      previewHeight: preRect?.height || 0,
+      previewTextColor: preStyle.color,
+      previewWidth: preRect?.width || 0,
+    }
+
+    function getContrastRatio(foreground, background) {
+      const fg = getRelativeLuminance(foreground)
+      const bg = getRelativeLuminance(background)
+      const lighter = Math.max(fg, bg)
+      const darker = Math.min(fg, bg)
+      return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    function getRelativeLuminance(color) {
+      const channels = color
+        .match(/\d+(\.\d+)?/gu)
+        ?.slice(0, 3)
+        .map(Number)
+      if (!channels || channels.length < 3) return 0
+      const [r, g, b] = channels.map((channel) => {
+        const value = channel / 255
+        return value <= 0.03928
+          ? value / 12.92
+          : ((value + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+  })
+
+  assert(metrics.hasClientConfigNav, `${scenarioName} 缺少客户端模板菜单入口`)
+  assert(metrics.hasNoUploadArea, `${scenarioName} 不应再显示上传配置文件入口`)
+  assert(metrics.hasPlaceholders, `${scenarioName} 配置预览未渲染默认占位模板`)
+  assert(metrics.hasInstallPath, `${scenarioName} 缺少目标安装路径说明`)
+  assert(
+    metrics.hasNoPersonalStateWarning,
+    `${scenarioName} 缺少不导出个人状态的安全提示`
+  )
+  assert(metrics.mainHeight > 0, `${scenarioName} 后台内容区高度异常`)
+  assert(metrics.previewHeight > 0, `${scenarioName} 配置预览高度异常`)
+  assert(metrics.previewWidth > 0, `${scenarioName} 配置预览宽度异常`)
+  assert(
+    metrics.previewContrast >= 7,
+    `${scenarioName} 浅色模式代码预览对比度不足: ${JSON.stringify(metrics)}`
+  )
+
+  await page.locator('[data-admin-theme-option="dark"]').click()
+  await page.waitForFunction(
+    () => document.documentElement.dataset.adminTheme === 'dark'
+  )
+  const darkMetrics = await page.evaluate(() => {
+    const panel = document.querySelector('.admin-surface-panel')
+    const label = document.querySelector('main label')
+    const pre = document.querySelector('main pre')
+    const luminance = (color) => {
+      const channels = color
+        .match(/\d+(\.\d+)?/gu)
+        ?.slice(0, 3)
+        .map(Number)
+      if (!channels || channels.length < 3) return 0
+      return channels[0] * 0.299 + channels[1] * 0.587 + channels[2] * 0.114
+    }
+    const panelStyle = window.getComputedStyle(panel)
+    const labelStyle = window.getComputedStyle(label)
+    const preStyle = window.getComputedStyle(pre)
+    return {
+      labelLuminance: luminance(labelStyle.color),
+      panelLuminance: luminance(panelStyle.backgroundColor),
+      preContrast: getContrastRatio(preStyle.color, preStyle.backgroundColor),
+      preHeight: pre.getBoundingClientRect().height,
+      preLuminance: luminance(preStyle.backgroundColor),
+    }
+
+    function getContrastRatio(foreground, background) {
+      const fg = getRelativeLuminance(foreground)
+      const bg = getRelativeLuminance(background)
+      const lighter = Math.max(fg, bg)
+      const darker = Math.min(fg, bg)
+      return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    function getRelativeLuminance(color) {
+      const channels = color
+        .match(/\d+(\.\d+)?/gu)
+        ?.slice(0, 3)
+        .map(Number)
+      if (!channels || channels.length < 3) return 0
+      const [r, g, b] = channels.map((channel) => {
+        const value = channel / 255
+        return value <= 0.03928
+          ? value / 12.92
+          : ((value + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+  })
+  assert(
+    darkMetrics.panelLuminance < 60 &&
+      darkMetrics.labelLuminance > darkMetrics.panelLuminance + 80,
+    `${scenarioName} 暗色模式配置页文字对比异常: ${JSON.stringify(darkMetrics)}`
+  )
+  assert(darkMetrics.preHeight > 0, `${scenarioName} 暗色模式预览区高度异常`)
+  assert(
+    darkMetrics.preContrast >= 7,
+    `${scenarioName} 暗色模式代码预览对比度不足: ${JSON.stringify(darkMetrics)}`
+  )
+}
+
 async function assertKeyTableVisuals(page, scenarioName) {
   const metrics = await page.evaluate(() => {
     const main = document.querySelector('main')
@@ -1358,7 +1556,9 @@ async function assertKeyTableVisuals(page, scenarioName) {
 
     return {
       createButtonDisabled: Boolean(createButton?.disabled),
-      hasFullPlainKey: document.body.innerText.includes('ogw_mock_prod_8a2c'),
+      hasFullPlainKey: document.body.innerText.includes(
+        'ogw_productionapikey_8a2c'
+      ),
       hasCurrentOperationRow: document.body.innerText.includes('当前操作'),
       hasPagination: Boolean(main?.querySelector('.admin-table-pagination')),
       hasRemarkHeader: document.body.innerText.includes('备注'),
@@ -1525,8 +1725,8 @@ async function assertKeyTableVisuals(page, scenarioName) {
   await assertKeyDarkTokenLimitModal(page, scenarioName)
   await assertKeyDoubleClickEdit(page, scenarioName)
   await assertTablePagination(page, scenarioName, {
-    nextText: 'extra-api-key-9',
-    previousText: 'production-api-key',
+    nextText: 'extraapikey9',
+    previousText: 'productionapikey',
   })
   await assertKeySearchAutoQuery(page, scenarioName)
   await assertKeyTableSelectionInteraction(page, scenarioName)
@@ -1581,8 +1781,16 @@ async function assertKeyCreateModal(page, scenarioName) {
     const rect = node.getBoundingClientRect()
     return {
       hasRemarkInput: Boolean(
-        node.querySelector('input[placeholder="例如内部测试 key"]')
+        node.querySelector('input[placeholder="例如 team1"]')
       ),
+      remarkPattern:
+        node
+          .querySelector('input[placeholder="例如 team1"]')
+          ?.getAttribute('pattern') || '',
+      hasRemarkHint:
+        node.innerText.includes('留空时使用默认备注') &&
+        node.innerText.includes('ogw_备注_随机串'),
+      formNoValidate: Boolean(node.querySelector('form')?.noValidate),
       hasTokenLimitInput: Boolean(
         node.querySelector('input[placeholder="0 表示不限，1 = 100 万 token"]')
       ),
@@ -1605,6 +1813,16 @@ async function assertKeyCreateModal(page, scenarioName) {
   })
 
   assert(metrics.hasRemarkInput, `${scenarioName} 新建弹窗缺少备注输入框`)
+  assert.equal(
+    metrics.remarkPattern,
+    '[A-Za-z0-9]*',
+    `${scenarioName} 备注输入框未限制为字母数字`
+  )
+  assert(metrics.hasRemarkHint, `${scenarioName} 新建弹窗缺少备注生成口径提示`)
+  assert(
+    metrics.formNoValidate,
+    `${scenarioName} 凭据弹窗应关闭浏览器原生校验，统一走页面中文错误提示`
+  )
   assert(
     metrics.hasTokenLimitInput,
     `${scenarioName} 新建弹窗缺少百万 token 输入框`
@@ -1629,6 +1847,15 @@ async function assertKeyCreateModal(page, scenarioName) {
     `${scenarioName} 新建弹窗高度溢出视口`
   )
 
+  const remarkInput = dialog.locator('input[placeholder="例如 team1"]')
+  await remarkInput.fill('team-1 中文')
+  const sanitizedRemark = await remarkInput.inputValue()
+  assert.equal(
+    sanitizedRemark,
+    'team1',
+    `${scenarioName} 备注输入框未过滤非字母数字字符`
+  )
+
   await dialog.getByRole('button', { name: '取消' }).click()
   await dialog.waitFor({ state: 'hidden' })
 }
@@ -1646,9 +1873,7 @@ async function assertKeyDarkTokenLimitModal(page, scenarioName) {
   const metrics = await dialog.evaluate((node) => {
     const panels = Array.from(node.querySelectorAll('[class~="bg-[#f7fbf8]"]'))
     const inputs = Array.from(
-      node.querySelectorAll(
-        'input[placeholder="0 表示不限，1 = 100 万 token"]'
-      )
+      node.querySelectorAll('input[placeholder="0 表示不限，1 = 100 万 token"]')
     )
     const requiredTexts = [
       '总 Token 限制',
@@ -1847,11 +2072,11 @@ async function assertKeyDoubleClickEdit(page, scenarioName) {
   const dialog = page.getByRole('dialog', { name: '编辑 API 凭据' })
   await dialog.waitFor({ state: 'visible' })
   const value = await dialog
-    .locator('input[placeholder="例如内部测试 key"]')
+    .locator('input[placeholder="例如 team1"]')
     .inputValue()
   assert.equal(
     value,
-    'production-api-key',
+    'productionapikey',
     `${scenarioName} 双击 key 行未打开对应编辑弹窗`
   )
   await dialog.getByRole('button', { name: '取消' }).click()
@@ -2292,7 +2517,8 @@ function getApiMockData(method, params = {}, state = {}) {
   if (method === 'gateway_upstream_set') {
     const strategy = params.strategy || 'backend_only'
     state.upstreamStrategy = strategy
-    state.upstreamMode = strategy === 'codex_cli' ? 'codex_cli' : 'codex_backend'
+    state.upstreamMode =
+      strategy === 'codex_cli' ? 'codex_cli' : 'codex_backend'
     return {
       default_strategy: 'backend_only',
       default_mode: 'codex_backend',
@@ -2314,12 +2540,12 @@ function getApiMockData(method, params = {}, state = {}) {
         disabled: false,
         id: 1,
         key_last4: '8a2c',
-        key_prefix: 'sk-api-prod',
+        key_prefix: 'ogw_production',
         created_at: 1777900000,
         updated_at: 1777950000,
         last_used_at: 1778000000,
-        name: 'production-api-key',
-        plain_key: 'ogw_mock_prod_8a2c',
+        name: 'productionapikey',
+        plain_key: 'ogw_productionapikey_8a2c',
         quota_daily_billable_input_tokens: 450_000,
         quota_daily_input_tokens: 800_000,
         quota_daily_output_tokens: 200_000,
@@ -2334,12 +2560,12 @@ function getApiMockData(method, params = {}, state = {}) {
         disabled: true,
         id: 2,
         key_last4: '3f9d',
-        key_prefix: 'sk-api-stage',
+        key_prefix: 'ogw_stagingke',
         created_at: 1777800000,
         updated_at: 1777850000,
         last_used_at: 0,
-        name: 'staging-key-with-long-name-for-overflow-check',
-        plain_key: 'ogw_mock_stage_3f9d',
+        name: 'stagingkeylongnameforoverflowcheck',
+        plain_key: 'ogw_stagingkeylongname_3f9d',
         quota_daily_billable_input_tokens: 0,
         quota_daily_input_tokens: 0,
         quota_daily_output_tokens: 0,
@@ -2357,12 +2583,12 @@ function getApiMockData(method, params = {}, state = {}) {
         disabled: index % 3 === 0,
         id,
         key_last4: `x${id}z${index}`,
-        key_prefix: `sk-api-extra-${id}`,
+        key_prefix: `ogw_extra${id}`,
         created_at: 1777700000 - index * 1_000,
         updated_at: 1777750000 - index * 1_000,
         last_used_at: 1777990000 - index * 100,
-        name: `extra-api-key-${id}`,
-        plain_key: `ogw_mock_extra_${id}`,
+        name: `extraapikey${id}`,
+        plain_key: `ogw_extraapikey${id}_x${id}`,
         quota_daily_billable_input_tokens: 0,
         quota_daily_input_tokens: 0,
         quota_daily_output_tokens: 0,
@@ -2455,8 +2681,8 @@ function getApiMockData(method, params = {}, state = {}) {
     return {
       items: [
         {
-          api_key_name: 'production-api-key',
-          api_key_prefix: 'sk-api-prod',
+          api_key_name: 'productionapikey',
+          api_key_prefix: 'ogw_production',
           cached_tokens: model === 'gpt-5.4' ? 272640 : 1200,
           created_at: 1778000000,
           duration_ms: 813,
@@ -2482,8 +2708,8 @@ function getApiMockData(method, params = {}, state = {}) {
           upstream_mode: 'codex_backend',
         },
         {
-          api_key_name: 'production-api-key',
-          api_key_prefix: 'sk-api-prod',
+          api_key_name: 'productionapikey',
+          api_key_prefix: 'ogw_production',
           cached_tokens: model === 'gpt-5.4' ? 272512 : 40800,
           created_at: 1777999000,
           duration_ms: 1240,
@@ -2509,8 +2735,8 @@ function getApiMockData(method, params = {}, state = {}) {
           upstream_mode: 'codex_cli',
         },
         {
-          api_key_name: 'staging-key-with-long-name-for-overflow-check',
-          api_key_prefix: 'sk-api-stage',
+          api_key_name: 'stagingkeylongnameforoverflowcheck',
+          api_key_prefix: 'ogw_stagingke',
           cached_tokens: 0,
           created_at: 1777998000,
           duration_ms: 330,
@@ -2545,8 +2771,8 @@ function getApiMockData(method, params = {}, state = {}) {
       items: [
         {
           api_key_id: 1,
-          api_key_name: 'production-api-key',
-          api_key_prefix: 'sk-api-prod',
+          api_key_name: 'productionapikey',
+          api_key_prefix: 'ogw_production',
           average_duration_ms: 980,
           cached_tokens: 42000,
           disabled: false,
@@ -2563,8 +2789,8 @@ function getApiMockData(method, params = {}, state = {}) {
         },
         {
           api_key_id: 2,
-          api_key_name: 'staging-key-with-long-name-for-overflow-check',
-          api_key_prefix: 'sk-api-stage',
+          api_key_name: 'stagingkeylongnameforoverflowcheck',
+          api_key_prefix: 'ogw_stagingke',
           average_duration_ms: 330,
           cached_tokens: 0,
           disabled: true,
@@ -2588,8 +2814,8 @@ function getApiMockData(method, params = {}, state = {}) {
       items: [
         {
           api_key_id: 1,
-          api_key_name: 'production-api-key',
-          api_key_prefix: 'sk-api-prod',
+          api_key_name: 'productionapikey',
+          api_key_prefix: 'ogw_production',
           average_duration_ms: 1026,
           cached_tokens: 42000,
           estimated_cost_usd: 0.86,
@@ -2609,8 +2835,8 @@ function getApiMockData(method, params = {}, state = {}) {
         },
         {
           api_key_id: 2,
-          api_key_name: 'staging-key-with-long-name-for-overflow-check',
-          api_key_prefix: 'sk-api-stage',
+          api_key_name: 'stagingkeylongnameforoverflowcheck',
+          api_key_prefix: 'ogw_stagingke',
           average_duration_ms: 330,
           cached_tokens: 0,
           estimated_cost_usd: null,
@@ -2641,9 +2867,9 @@ function getApiMockData(method, params = {}, state = {}) {
           disabled: false,
           id: 7,
           key_last4: '7abc',
-          key_prefix: 'sk-api-user',
+          key_prefix: 'ogw_myteam',
           last_used_at: 1778000000,
-          name: 'my-team-key',
+          name: 'myteamkey',
           owner_user_id: 7,
         },
       ],
@@ -2667,7 +2893,7 @@ function getApiMockData(method, params = {}, state = {}) {
     return {
       items: [
         {
-          api_key_prefix: 'sk-api-user',
+          api_key_prefix: 'ogw_myteam',
           created_at: 1778000000,
           endpoint: 'responses',
           estimated_cost_usd: 0.12,

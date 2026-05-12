@@ -9,6 +9,7 @@ import { appAlert } from '@/common/components/modal/alertBridge'
 import AdminLoginPage from '@/pages/AdminLogin'
 import AdminApiPage from '@/pages/AdminApi'
 import AdminDashboardPage from '@/pages/AdminDashboard'
+import AdminClientConfigPage from '@/pages/AdminClientConfig'
 import OAuthCallbackPage from '@/pages/OAuthCallback'
 
 import 'normalize.css/normalize.css'
@@ -102,6 +103,14 @@ const App = () => {
             element={
               <AuthGuard requireAdmin>
                 <AdminApiPage view="upstream" />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin-client-config"
+            element={
+              <AuthGuard requireAdmin>
+                <AdminClientConfigPage />
               </AuthGuard>
             }
           />

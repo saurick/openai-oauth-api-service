@@ -33,6 +33,20 @@ func TestNewGatewayAPIKeySecretStoresOnlyDerivedParts(t *testing.T) {
 	}
 }
 
+func TestNewGatewayAPIKeySecretWithRemarkPrefixesPlainKey(t *testing.T) {
+	secret, err := NewGatewayAPIKeySecretWithRemark("team1")
+	if err != nil {
+		t.Fatalf("NewGatewayAPIKeySecretWithRemark() error = %v", err)
+	}
+	if !strings.HasPrefix(secret.PlainKey, GatewayAPIKeyPrefix+"team1_") {
+		t.Fatalf("plain key = %q, want remark after gateway prefix", secret.PlainKey)
+	}
+
+	if _, err := NewGatewayAPIKeySecretWithRemark("team-1"); err != ErrGatewayAPIKeyRemarkInvalid {
+		t.Fatalf("NewGatewayAPIKeySecretWithRemark() err = %v, want ErrGatewayAPIKeyRemarkInvalid", err)
+	}
+}
+
 func TestOfficialModelPriceMapContainsStandardTokenRates(t *testing.T) {
 	prices := OfficialModelPriceMap()
 	price := prices["gpt-5.5"]
@@ -66,8 +80,75 @@ func TestGatewayUsecaseCreateAPIKeyAllowsBlankRemark(t *testing.T) {
 	if repo.createdInput.Name == "" {
 		t.Fatalf("expected fallback remark to be generated")
 	}
-	if !strings.HasPrefix(repo.createdInput.Name, "key ") {
+	if !strings.HasPrefix(repo.createdInput.Name, "key") {
 		t.Fatalf("fallback remark = %q, want key prefix", repo.createdInput.Name)
+	}
+	if strings.Contains(repo.createdInput.Name, " ") {
+		t.Fatalf("fallback remark = %q, want alphanumeric remark", repo.createdInput.Name)
+	}
+	if !strings.HasPrefix(created.PlainKey, GatewayAPIKeyPrefix+repo.createdInput.Name+"_") {
+		t.Fatalf("plain key = %q, want fallback remark prefix %q", created.PlainKey, repo.createdInput.Name)
+	}
+}
+
+func TestGatewayUsecaseCreateAPIKeyUsesRemarkPrefix(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+
+	created, err := uc.CreateAPIKey(context.Background(), CreateGatewayAPIKeyInput{Name: "client7"})
+	if err != nil {
+		t.Fatalf("CreateAPIKey() error = %v", err)
+	}
+	if repo.createdInput.Name != "client7" {
+		t.Fatalf("created name = %q, want client7", repo.createdInput.Name)
+	}
+	if !strings.HasPrefix(created.PlainKey, GatewayAPIKeyPrefix+"client7_") {
+		t.Fatalf("plain key = %q, want remark after gateway prefix", created.PlainKey)
+	}
+}
+
+func TestGatewayUsecaseCreateAPIKeyRejectsInvalidRemark(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+
+	if _, err := uc.CreateAPIKey(context.Background(), CreateGatewayAPIKeyInput{Name: "client-7"}); err != ErrGatewayAPIKeyRemarkInvalid {
+		t.Fatalf("CreateAPIKey() err = %v, want ErrGatewayAPIKeyRemarkInvalid", err)
+	}
+}
+
+func TestGatewayUsecaseUpdateAPIKeyRejectsInvalidRemark(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+
+	if _, err := uc.UpdateAPIKey(context.Background(), UpdateGatewayAPIKeyInput{ID: 1, Name: "client-7"}); err != ErrGatewayAPIKeyRemarkInvalid {
+		t.Fatalf("UpdateAPIKey() err = %v, want ErrGatewayAPIKeyRemarkInvalid", err)
+	}
+}
+
+func TestGatewayUsecaseUpdateAPIKeyRewritesPlainKeyRemark(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{currentKey: &GatewayAPIKey{ID: 1, Name: "alreadynew", PlainKey: "ogw_old_random_part_with_under_score"}}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+
+	updated, err := uc.UpdateAPIKey(context.Background(), UpdateGatewayAPIKeyInput{ID: 1, Name: "new"})
+	if err != nil {
+		t.Fatalf("UpdateAPIKey() error = %v", err)
+	}
+	wantPlain := "ogw_new_random_part_with_under_score"
+	if updated.PlainKey != wantPlain {
+		t.Fatalf("updated plain key = %q, want %q", updated.PlainKey, wantPlain)
+	}
+	if repo.updatedInput.Secret.KeyHash == "" || repo.updatedInput.Secret.KeyPrefix != wantPlain[:12] {
+		t.Fatalf("updated secret not derived from rewritten plain key: %+v", repo.updatedInput.Secret)
+	}
+}
+
+func TestRebuildGatewayAPIKeySecretWithRemarkReplacesFirstSegment(t *testing.T) {
+	secret, err := RebuildGatewayAPIKeySecretWithRemark("ogw_123123111_uHuQ6wGpD7bJ", "ggg")
+	if err != nil {
+		t.Fatalf("RebuildGatewayAPIKeySecretWithRemark() error = %v", err)
+	}
+	if secret.PlainKey != "ogw_ggg_uHuQ6wGpD7bJ" {
+		t.Fatalf("plain key = %q, want first segment replaced", secret.PlainKey)
 	}
 }
 
@@ -251,6 +332,8 @@ type gatewayPolicyTestRepo struct {
 	summaryByStart map[time.Time]*GatewayUsageSummary
 	settings       map[string]string
 	createdInput   CreateGatewayAPIKeyInput
+	updatedInput   UpdateGatewayAPIKeyInput
+	currentKey     *GatewayAPIKey
 	deletedIDs     []int
 }
 
@@ -269,8 +352,15 @@ func (r *gatewayPolicyTestRepo) ListAPIKeys(context.Context, int, int, string) (
 func (r *gatewayPolicyTestRepo) ListAPIKeysByOwner(context.Context, int, int, int) ([]*GatewayAPIKey, int, error) {
 	return nil, 0, nil
 }
-func (r *gatewayPolicyTestRepo) UpdateAPIKey(context.Context, UpdateGatewayAPIKeyInput) (*GatewayAPIKey, error) {
-	return nil, nil
+func (r *gatewayPolicyTestRepo) UpdateAPIKey(_ context.Context, input UpdateGatewayAPIKeyInput) (*GatewayAPIKey, error) {
+	r.updatedInput = input
+	return &GatewayAPIKey{ID: input.ID, Name: input.Name, PlainKey: input.Secret.PlainKey, KeyPrefix: input.Secret.KeyPrefix, KeyLast4: input.Secret.KeyLast4}, nil
+}
+func (r *gatewayPolicyTestRepo) GetAPIKeyByID(context.Context, int) (*GatewayAPIKey, error) {
+	if r.currentKey != nil {
+		return r.currentKey, nil
+	}
+	return &GatewayAPIKey{ID: 1, Name: "old", PlainKey: "ogw_old_random_part"}, nil
 }
 func (r *gatewayPolicyTestRepo) DeleteAPIKey(context.Context, int) error { return nil }
 func (r *gatewayPolicyTestRepo) DeleteAPIKeys(_ context.Context, ids []int) (int, error) {
