@@ -77,7 +77,7 @@ HTTP 路由：
 - `user_usage_summary`
 - `user_usage_list`
 
-用途：管理员管理下游 API key、组织用户归属、key+model 策略、固定官方模型列表启停、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；数据库保存 `plain_key` 用于后台展示，同时保存 `key_hash` 用于鉴权匹配，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
+用途：管理员管理下游 API key、组织用户归属、key+model 策略、固定官方模型列表启停、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；若创建参数 `name` 非空，备注必须只包含字母和数字，并会生成 `ogw_<name>_<random>` 形式的明文 key。数据库保存 `plain_key` 用于后台展示，同时保存 `key_hash` 用于鉴权匹配，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
 
 模型目录以服务端代码中的官方 Codex 列表为真源，管理端只允许读取和启停；`model_upsert` / `model_delete` 不作为正式管理接口开放。
 
@@ -190,6 +190,8 @@ usage 记录：
 
 ### `api.key_create`
 
+创建参数 `name` 可留空；非空时只允许 ASCII 字母和数字。留空时后端使用 `key<last4>` 作为默认备注，并同样写入新 key 明文前缀。`api.key_update` 更新备注时沿用同一限制；更新备注会把既有 `ogw_<old_remark>_<random>` 改写为 `ogw_<new_remark>_<random>`，保留原随机段，并同步更新 `plain_key`、`key_hash`、`key_prefix` 和 `key_last4`。
+
 返回创建后的 key 元数据和完整明文：
 
 - `id`
@@ -246,7 +248,7 @@ usage 记录：
 - `summary.average_duration_ms`
 - `summary.estimated_cost_usd`
 
-筛选条件支持 `reasoning_effort=low|medium|high|xhigh` 和 `upstream_mode=codex_backend|codex_cli`。未传时不按对应维度过滤。
+筛选条件支持 `key_id` 单凭据兼容参数、`key_ids` 多凭据数组或逗号分隔值、`reasoning_effort=low|medium|high|xhigh` 和 `upstream_mode=codex_backend|codex_cli`。未传时不按对应维度过滤；同时传 `key_ids` 与 `key_id` 时优先按 `key_ids` 过滤。
 
 ### `api.usage_buckets`
 
@@ -294,7 +296,7 @@ usage 记录：
 - `items[].average_duration_ms`
 - `items[].estimated_cost_usd`
 
-筛选条件与 `api.usage_list` 保持一致。费用估算优先使用数据库价格覆盖值，再回落到内置官方价格表；窗口内存在未配置价格的模型时，对应 key 的 `estimated_cost_usd` 返回 `null`。
+筛选条件与 `api.usage_list` 保持一致，包括 `key_ids` 多凭据过滤。费用估算优先使用数据库价格覆盖值，再回落到内置官方价格表；窗口内存在未配置价格的模型时，对应 key 的 `estimated_cost_usd` 返回 `null`。
 
 ### `api.usage_session_summaries`
 
@@ -322,7 +324,7 @@ usage 记录：
 - `items[].last_seen_at`
 - `items[].estimated_cost_usd`
 
-筛选条件与 `api.usage_list` 保持一致，并支持用 `session_id` 继续下钻请求级明细。`session_id` 来自客户端请求头 `X-Session-ID` / `X-Conversation-ID` / `X-Thread-ID`，或请求 JSON 顶层及 `metadata` 里的 `session_id` / `conversation_id` / `thread_id`。没有会话标识的历史记录不会伪造成会话聚合行。
+筛选条件与 `api.usage_list` 保持一致，包括 `key_ids` 多凭据过滤，并支持用 `session_id` 继续下钻请求级明细。`session_id` 来自客户端请求头 `X-Session-ID` / `X-Conversation-ID` / `X-Thread-ID`，或请求 JSON 顶层及 `metadata` 里的 `session_id` / `conversation_id` / `thread_id`。没有会话标识的历史记录不会伪造成会话聚合行。
 
 ### `api.official_model_price_list`
 

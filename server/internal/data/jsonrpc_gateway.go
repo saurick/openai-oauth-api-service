@@ -492,6 +492,8 @@ func (d *JsonrpcData) mapGatewayError(ctx context.Context, err error) *v1.Jsonrp
 		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "导出时间范围过大"}
 	case errors.Is(err, biz.ErrGatewayUpstreamModeInvalid):
 		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "Codex 上游策略参数错误"}
+	case errors.Is(err, biz.ErrGatewayAPIKeyRemarkInvalid):
+		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "备注只能包含字母和数字"}
 	default:
 		return &v1.JsonrpcResult{Code: errcode.APIOperationFailed.Code, Message: errcode.APIOperationFailed.Message}
 	}
@@ -590,6 +592,7 @@ func gatewayUsageFilterFromParams(pm map[string]any) biz.GatewayUsageFilter {
 		Limit:           getInt(pm, "limit", 30),
 		Offset:          getInt(pm, "offset", 0),
 		KeyID:           getInt(pm, "key_id", 0),
+		KeyIDs:          getIntList(pm, "key_ids"),
 		SessionID:       getString(pm, "session_id"),
 		Model:           getString(pm, "model"),
 		ReasoningEffort: getString(pm, "reasoning_effort"),

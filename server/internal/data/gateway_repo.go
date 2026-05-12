@@ -124,9 +124,27 @@ func (r *gatewayRepo) ListAPIKeysByOwner(ctx context.Context, ownerUserID, limit
 	return out, total, nil
 }
 
+func (r *gatewayRepo) GetAPIKeyByID(ctx context.Context, id int) (*biz.GatewayAPIKey, error) {
+	if id <= 0 {
+		return nil, biz.ErrBadParam
+	}
+	item, err := r.data.postgres.GatewayAPIKey.Get(ctx, id)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, biz.ErrGatewayAPIKeyNotFound
+		}
+		return nil, err
+	}
+	return mapGatewayAPIKey(item), nil
+}
+
 func (r *gatewayRepo) UpdateAPIKey(ctx context.Context, input biz.UpdateGatewayAPIKeyInput) (*biz.GatewayAPIKey, error) {
 	update := r.data.postgres.GatewayAPIKey.UpdateOneID(input.ID).
 		SetName(input.Name).
+		SetPlainKey(input.Secret.PlainKey).
+		SetKeyHash(input.Secret.KeyHash).
+		SetKeyPrefix(input.Secret.KeyPrefix).
+		SetKeyLast4(input.Secret.KeyLast4).
 		SetQuotaRequests(input.QuotaRequests).
 		SetQuotaTotalTokens(input.QuotaTotalTokens).
 		SetQuotaDailyTokens(input.QuotaDailyTokens).
@@ -1134,7 +1152,9 @@ func (r *gatewayRepo) pruneGatewayModels(ctx context.Context, allowedModelIDs []
 }
 
 func (r *gatewayRepo) applyUsageFilter(ctx context.Context, q *ent.GatewayUsageLogQuery, filter biz.GatewayUsageFilter) *ent.GatewayUsageLogQuery {
-	if filter.KeyID > 0 {
+	if len(filter.KeyIDs) > 0 {
+		q = q.Where(gatewayusagelog.APIKeyIDIn(filter.KeyIDs...))
+	} else if filter.KeyID > 0 {
 		q = q.Where(gatewayusagelog.APIKeyIDEQ(filter.KeyID))
 	}
 	if filter.OwnerUserID > 0 {
@@ -1192,7 +1212,21 @@ func buildUsageWhereClauseWithPrefix(filter biz.GatewayUsageFilter, columnPrefix
 		conditions = append(conditions, fmt.Sprintf(format, len(args)))
 	}
 
-	if filter.KeyID > 0 {
+	addIn := func(column string, values []int) {
+		if len(values) == 0 {
+			return
+		}
+		placeholders := make([]string, 0, len(values))
+		for _, value := range values {
+			args = append(args, value)
+			placeholders = append(placeholders, fmt.Sprintf("$%d", len(args)))
+		}
+		conditions = append(conditions, column+" IN ("+strings.Join(placeholders, ", ")+")")
+	}
+
+	if len(filter.KeyIDs) > 0 {
+		addIn(col("api_key_id"), filter.KeyIDs)
+	} else if filter.KeyID > 0 {
 		add(col("api_key_id")+" = $%d", filter.KeyID)
 	}
 	if filter.OwnerUserID > 0 {

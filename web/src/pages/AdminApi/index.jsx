@@ -6,10 +6,10 @@ import { ADMIN_BASE_PATH } from '@/common/utils/adminRpc'
 import { getActionErrorMessage } from '@/common/utils/errorMessage'
 import { JsonRpc } from '@/common/utils/jsonRpc'
 import {
-  getExclusiveTableSelectionAfterClick,
+  getTableSelectionAfterClick,
   isInteractiveTableTarget,
   TABLE_ROW_INTERACTION_TITLE,
-  toggleExclusiveTableSelection,
+  toggleTableSelection,
 } from '@/common/utils/tableInteraction'
 
 const PAGE_SIZE = 30
@@ -125,6 +125,8 @@ const USAGE_TAB_OPTIONS = [
   { key: 'errors', label: '异常请求' },
 ]
 const TOKEN_LIMIT_UNIT = 1_000_000
+const KEY_REMARK_MAX_LENGTH = 80
+const KEY_REMARK_PATTERN = '[A-Za-z0-9]*'
 const CODEX_MODEL_CATALOG = [
   {
     cached_input_usd_per_million: 0.5,
@@ -178,8 +180,14 @@ const INITIAL_KEY_FORM = {
   weeklyBillableInputTokenLimit: '',
 }
 
+function normalizeKeyRemarkInput(value) {
+  return String(value || '')
+    .replace(/[^A-Za-z0-9]/g, '')
+    .slice(0, KEY_REMARK_MAX_LENGTH)
+}
+
 const INITIAL_USAGE_FILTERS = {
-  keyId: '',
+  keyIds: [],
   model: '',
   reasoningEffort: '',
   success: '',
@@ -525,6 +533,16 @@ function normalizeSelectOptions(options) {
     .filter((option) => option.label)
 }
 
+function normalizeSelectedValues(value) {
+  return Array.from(
+    new Set(
+      (Array.isArray(value) ? value : [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+    )
+  )
+}
+
 function SearchableSelect({
   ariaLabel,
   className = inputClass,
@@ -662,6 +680,198 @@ function SearchableSelect({
                   onClick={() => selectOption(option)}
                 >
                   {option.label}
+                </button>
+              )
+            })
+          ) : (
+            <div className="admin-searchable-select-empty">无匹配选项</div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function SearchableMultiSelect({
+  ariaLabel,
+  className = inputClass,
+  disabled = false,
+  menuPlacement = 'bottom',
+  onChange,
+  options,
+  placeholder = '输入筛选',
+  summaryLabel,
+  value,
+}) {
+  const listboxId = useId()
+  const rootRef = useRef(null)
+  const inputRef = useRef(null)
+  const normalizedOptions = useMemo(
+    () => normalizeSelectOptions(options),
+    [options]
+  )
+  const selectedValues = useMemo(() => normalizeSelectedValues(value), [value])
+  const selectedValueSet = useMemo(
+    () => new Set(selectedValues),
+    [selectedValues]
+  )
+  const selectedLabels = useMemo(
+    () =>
+      normalizedOptions
+        .filter((option) => selectedValueSet.has(String(option.value)))
+        .map((option) => option.label),
+    [normalizedOptions, selectedValueSet]
+  )
+  const selectedSummary =
+    selectedLabels.length > 0
+      ? selectedLabels.length === 1
+        ? selectedLabels[0]
+        : `已选 ${selectedLabels.length} 个${summaryLabel || '选项'}`
+      : ''
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState(selectedSummary)
+
+  useEffect(() => {
+    if (!open) {
+      setQuery(selectedSummary)
+    }
+  }, [open, selectedSummary])
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const handlePointerDown = (event) => {
+      if (rootRef.current?.contains(event.target)) return
+      setOpen(false)
+      setQuery(selectedSummary)
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => window.removeEventListener('pointerdown', handlePointerDown)
+  }, [open, selectedSummary])
+
+  const activeQuery =
+    query === selectedSummary ? '' : query.trim().toLowerCase()
+  const filteredOptions = activeQuery
+    ? normalizedOptions.filter((option) => {
+        const label = option.label.toLowerCase()
+        const optionValue = String(option.value).toLowerCase()
+        return label.includes(activeQuery) || optionValue.includes(activeQuery)
+      })
+    : normalizedOptions
+
+  const toggleOption = (option) => {
+    const optionValue = String(option.value)
+    const nextValues = selectedValueSet.has(optionValue)
+      ? selectedValues.filter((item) => item !== optionValue)
+      : [...selectedValues, optionValue]
+    onChange?.(nextValues)
+    setQuery('')
+    setOpen(true)
+    window.requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  const clearSelection = () => {
+    onChange?.([])
+    setQuery('')
+    setOpen(true)
+    window.requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  const resetToSelected = () => {
+    setOpen(false)
+    setQuery(selectedSummary)
+  }
+
+  return (
+    <div
+      ref={rootRef}
+      className="admin-searchable-select admin-searchable-multi-select"
+      data-menu-placement={menuPlacement}
+      data-open={open ? 'true' : 'false'}
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-controls={listboxId}
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        autoComplete="off"
+        disabled={disabled}
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => {
+          setOpen(true)
+          window.requestAnimationFrame(() => inputRef.current?.select())
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            resetToSelected()
+            return
+          }
+          if (e.key === 'Enter' && open) {
+            e.preventDefault()
+            if (filteredOptions.length > 0) {
+              toggleOption(filteredOptions[0])
+            }
+          }
+        }}
+        onBlur={(e) => {
+          if (!rootRef.current?.contains(e.relatedTarget)) {
+            resetToSelected()
+          }
+        }}
+        className={`${className} admin-searchable-select-input`}
+        placeholder={placeholder}
+      />
+      {selectedValues.length > 0 ? (
+        <button
+          type="button"
+          className="admin-searchable-select-clear"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={clearSelection}
+          aria-label={`清空${ariaLabel}`}
+        >
+          ×
+        </button>
+      ) : (
+        <div className="admin-searchable-select-caret" aria-hidden="true" />
+      )}
+      {open && !disabled ? (
+        <div
+          id={listboxId}
+          role="listbox"
+          aria-multiselectable="true"
+          className="admin-searchable-select-menu"
+        >
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((option) => {
+              const selected = selectedValueSet.has(String(option.value))
+              return (
+                <button
+                  key={`${option.value}-${option.label}`}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className={`admin-searchable-select-option admin-searchable-multi-option ${
+                    selected ? 'admin-searchable-select-option-active' : ''
+                  }`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => toggleOption(option)}
+                >
+                  <span
+                    className="admin-searchable-multi-check"
+                    aria-hidden="true"
+                  >
+                    {selected ? '✓' : ''}
+                  </span>
+                  <span>{option.label}</span>
                 </button>
               )
             })
@@ -981,7 +1191,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   }, [keys, selectedKeyIds])
   const selectedKeyText = selectedKey
     ? selectedKey.name || selectedKey.key_prefix || `凭据 ${selectedKey.id}`
-    : '请先单击或勾选一条凭据'
+    : selectedKeyIds.length > 1
+      ? `已选 ${selectedKeyIds.length} 个凭据`
+      : '请先单击或勾选一条凭据'
   const filteredKeys = useMemo(
     () =>
       keys.filter((item) => {
@@ -1072,7 +1284,10 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       end_time: now,
       start_time: now - windowSeconds,
     }
-    if (filters.keyId) params.key_id = asInt(filters.keyId, 0)
+    const keyIds = normalizeSelectedValues(filters.keyIds)
+      .map((item) => asInt(item, 0))
+      .filter((item) => item > 0)
+    if (keyIds.length > 0) params.key_ids = keyIds
     if (filters.model) params.model = filters.model
     if (filters.reasoningEffort) {
       params.reasoning_effort = filters.reasoningEffort
@@ -1515,12 +1730,12 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   }
 
   const selectKeyRow = (keyId) => {
-    setSelectedKeyIds(getExclusiveTableSelectionAfterClick(keyId))
+    setSelectedKeyIds((current) => getTableSelectionAfterClick(current, keyId))
   }
 
   const toggleKeySelection = (keyId, checked) => {
     setSelectedKeyIds((current) =>
-      toggleExclusiveTableSelection(current, keyId, checked)
+      toggleTableSelection(current, keyId, checked)
     )
   }
 
@@ -2102,7 +2317,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 </span>
               </div>
               <div className={selectionActionsClass}>
-                {selectedKey ? (
+                {selectedKeyIds.length > 0 ? (
                   <button
                     type="button"
                     onClick={() => setSelectedKeyIds([])}
@@ -2499,7 +2714,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               ×
             </button>
           </div>
-          <form onSubmit={saveKey} className="admin-modal-form">
+          <form onSubmit={saveKey} className="admin-modal-form" noValidate>
             <label className={fieldClass}>
               备注名称
               <input
@@ -2507,13 +2722,19 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 onChange={(e) =>
                   setKeyForm((current) => ({
                     ...current,
-                    remark: e.target.value,
+                    remark: normalizeKeyRemarkInput(e.target.value),
                   }))
                 }
+                maxLength={KEY_REMARK_MAX_LENGTH}
+                pattern={KEY_REMARK_PATTERN}
+                inputMode="text"
                 className={inputClass}
-                placeholder="例如内部测试 key"
+                placeholder="例如 team1"
               />
-              <span className={fieldHintClass}>留空时后端会生成默认备注。</span>
+              <span className={fieldHintClass}>
+                仅支持字母和数字；留空时使用默认备注，编辑备注会同步改写
+                ogw_备注_随机串。
+              </span>
             </label>
             <label className={fieldClass}>
               允许模型
@@ -2567,7 +2788,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   细分 Token 限制
                 </div>
                 <div className={fieldHintClass}>
-                  输入、输出和非缓存输入分别按日 / 周独立判断；留空或 0 表示不限。
+                  输入、输出和非缓存输入分别按日 / 周独立判断；留空或 0
+                  表示不限。
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
@@ -2711,7 +2933,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                               {item.upstream_fallback ? 'fallback' : 'direct'}
                             </div>
                           </td>
-                          <td className={`${tdClass} whitespace-nowrap text-xs`}>
+                          <td
+                            className={`${tdClass} whitespace-nowrap text-xs`}
+                          >
                             {reasoningEffortLabel(item.reasoning_effort)}
                           </td>
                           <td className={tdClass}>
@@ -2902,7 +3126,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                           <td className={`${tdClass} font-mono text-xs`}>
                             {item.model || '-'}
                           </td>
-                          <td className={`${tdClass} whitespace-nowrap text-xs`}>
+                          <td
+                            className={`${tdClass} whitespace-nowrap text-xs`}
+                          >
                             {reasoningEffortLabel(item.reasoning_effort)}
                           </td>
                           <td className={tdClass}>
@@ -3000,8 +3226,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             Codex 上游策略
           </h2>
           <div className="mt-1 text-sm text-[#7b8780]">
-            Backend 直连失败时直接返回错误；CLI 兜底只作为临时救急；
-            强制 CLI 会每次走服务端 codex exec。
+            Backend 直连失败时直接返回错误；CLI 兜底只作为临时救急； 强制 CLI
+            会每次走服务端 codex exec。
           </div>
         </div>
         <div
@@ -3328,24 +3554,21 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 </label>
                 <label className={fieldClass}>
                   调用凭据
-                  <SearchableSelect
-                    value={usageFilters.keyId}
+                  <SearchableMultiSelect
+                    value={usageFilters.keyIds}
                     onChange={(nextValue) =>
                       setUsageFilters((current) => ({
                         ...current,
-                        keyId: nextValue,
+                        keyIds: nextValue,
                       }))
                     }
                     ariaLabel="调用凭据"
-                    options={[
-                      { label: '全部凭据', value: '' },
-                      ...keys.map((item) => ({
-                        label:
-                          item.name || item.key_prefix || `凭据 ${item.id}`,
-                        value: String(item.id),
-                      })),
-                    ]}
+                    options={keys.map((item) => ({
+                      label: item.name || item.key_prefix || `凭据 ${item.id}`,
+                      value: String(item.id),
+                    }))}
                     placeholder="输入凭据筛选"
+                    summaryLabel="凭据"
                   />
                 </label>
                 <label className={fieldClass}>

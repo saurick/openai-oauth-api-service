@@ -413,6 +413,30 @@
   transform: translateY(-62%) rotate(45deg);
 }
 
+.admin-frame .admin-searchable-select-clear {
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #66736b;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.admin-frame .admin-searchable-select-clear:hover {
+  background: #eef8f1;
+  color: #1f7a3a;
+}
+
 .admin-frame .admin-searchable-select-menu {
   position: absolute;
   top: calc(100% + 4px);
@@ -454,6 +478,26 @@
 .admin-frame .admin-searchable-select-option-active {
   background: #eef8f1;
   color: #1f7a3a;
+}
+
+.admin-frame .admin-searchable-multi-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-frame .admin-searchable-multi-check {
+  display: inline-flex;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #cbd8cf;
+  border-radius: 4px;
+  color: #1f7a3a;
+  font-size: 11px;
+  line-height: 1;
 }
 
 .admin-frame .admin-searchable-select-empty {
@@ -540,6 +584,20 @@
   background: var(--admin-surface);
   color: var(--admin-accent);
   box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
+}
+
+.admin-frame .admin-code-preview {
+  border-radius: 0 0 8px 8px;
+  background: #101827;
+  color: #e5edf5;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+  white-space: pre;
+}
+
+.admin-frame .admin-code-preview code {
+  color: inherit;
 }
 
 .admin-frame table {
@@ -810,7 +868,7 @@
   background: color-mix(in srgb, var(--admin-accent) 12%, var(--admin-surface));
   color: var(--admin-text);
   font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
     monospace;
   font-size: 12px;
   font-weight: 700;
@@ -860,7 +918,7 @@
   margin-top: 6px;
   color: var(--admin-text);
   font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
     monospace;
   font-size: 13px;
   line-height: 1.45;
@@ -1076,6 +1134,8 @@
 .admin-frame .admin-page-button,
 .admin-frame .admin-searchable-select-menu,
 .admin-frame .admin-searchable-select-option,
+.admin-frame .admin-searchable-select-clear,
+.admin-frame .admin-searchable-multi-check,
 .admin-frame .admin-selection-tag,
 .admin-modal-close {
   border-color: var(--admin-border);
@@ -1135,6 +1195,10 @@
   border-color: var(--admin-muted);
 }
 
+.admin-frame .admin-searchable-select-clear {
+  color: var(--admin-muted);
+}
+
 .admin-frame .admin-module-toolbar-row-compact,
 .admin-modal-header {
   border-color: var(--admin-border-soft);
@@ -1165,14 +1229,20 @@
 }
 
 :root[data-admin-theme='dark'] .admin-frame [class~='text-[#238a43]'],
-:root[data-admin-theme='dark'] .admin-frame [class~='hover:text-[#238a43]']:hover,
-:root[data-admin-theme='dark'] .admin-frame [class~='hover:text-[#2f934d]']:hover {
+:root[data-admin-theme='dark']
+  .admin-frame
+  [class~='hover:text-[#238a43]']:hover,
+:root[data-admin-theme='dark']
+  .admin-frame
+  [class~='hover:text-[#2f934d]']:hover {
   color: var(--admin-accent);
 }
 
 :root[data-admin-theme='dark'] .admin-frame [class~='bg-[#c7d3c5]'],
 :root[data-admin-theme='dark'] .admin-frame [class~='hover:bg-[#e7efe9]']:hover,
-:root[data-admin-theme='dark'] .admin-login-shell [class~='hover:bg-[#f0f4f1]']:hover {
+:root[data-admin-theme='dark']
+  .admin-login-shell
+  [class~='hover:bg-[#f0f4f1]']:hover {
   background-color: var(--admin-surface-hover);
 }
 /* stylelint-enable no-descending-specificity, no-duplicate-selectors */

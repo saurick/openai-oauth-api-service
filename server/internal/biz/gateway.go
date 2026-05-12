@@ -40,6 +40,7 @@ var (
 	ErrGatewayPolicyInvalid       = errors.New("gateway policy invalid")
 	ErrGatewayExportRange         = errors.New("gateway export range too large")
 	ErrGatewayUpstreamModeInvalid = errors.New("gateway upstream mode invalid")
+	ErrGatewayAPIKeyRemarkInvalid = errors.New("gateway api key remark invalid")
 )
 
 type GatewayAPIKey struct {
@@ -119,6 +120,7 @@ type GatewayUsageFilter struct {
 	Limit           int
 	Offset          int
 	KeyID           int
+	KeyIDs          []int
 	OwnerUserID     int
 	SessionID       string
 	Model           string
@@ -230,6 +232,7 @@ type CreateGatewayAPIKeyInput struct {
 type UpdateGatewayAPIKeyInput struct {
 	ID                             int
 	Name                           string
+	Secret                         GatewayAPIKeySecret
 	OwnerUserID                    int
 	QuotaRequests                  int64
 	QuotaTotalTokens               int64
@@ -317,6 +320,7 @@ type GatewayRepo interface {
 	CreateAPIKey(ctx context.Context, input CreateGatewayAPIKeyInput, secret GatewayAPIKeySecret) (*GatewayAPIKey, error)
 	ListAPIKeys(ctx context.Context, limit, offset int, search string) ([]*GatewayAPIKey, int, error)
 	ListAPIKeysByOwner(ctx context.Context, ownerUserID, limit, offset int) ([]*GatewayAPIKey, int, error)
+	GetAPIKeyByID(ctx context.Context, id int) (*GatewayAPIKey, error)
 	UpdateAPIKey(ctx context.Context, input UpdateGatewayAPIKeyInput) (*GatewayAPIKey, error)
 	DeleteAPIKey(ctx context.Context, id int) error
 	DeleteAPIKeys(ctx context.Context, ids []int) (int, error)
@@ -375,13 +379,42 @@ func NewGatewayUsecase(repo GatewayRepo, logger log.Logger, tp *trace.TracerProv
 }
 
 func NewGatewayAPIKeySecret() (GatewayAPIKeySecret, error) {
+	return NewGatewayAPIKeySecretWithRemark("")
+}
+
+func NewGatewayAPIKeySecretWithRemark(remark string) (GatewayAPIKeySecret, error) {
+	remark, err := NormalizeGatewayAPIKeyRemark(remark)
+	if err != nil {
+		return GatewayAPIKeySecret{}, err
+	}
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return GatewayAPIKeySecret{}, err
 	}
 
-	plain := GatewayAPIKeyPrefix + base64.RawURLEncoding.EncodeToString(raw)
+	randomPart := base64.RawURLEncoding.EncodeToString(raw)
+	plain := GatewayAPIKeyPrefix + randomPart
+	if remark != "" {
+		plain = GatewayAPIKeyPrefix + remark + "_" + randomPart
+	}
 	return BuildGatewayAPIKeySecret(plain), nil
+}
+
+func NormalizeGatewayAPIKeyRemark(remark string) (string, error) {
+	remark = strings.TrimSpace(remark)
+	if remark == "" {
+		return "", nil
+	}
+	if len(remark) > 80 {
+		return "", ErrGatewayAPIKeyRemarkInvalid
+	}
+	for _, r := range remark {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			continue
+		}
+		return "", ErrGatewayAPIKeyRemarkInvalid
+	}
+	return remark, nil
 }
 
 func BuildGatewayAPIKeySecret(plain string) GatewayAPIKeySecret {
@@ -401,6 +434,32 @@ func BuildGatewayAPIKeySecret(plain string) GatewayAPIKeySecret {
 		KeyPrefix: prefix,
 		KeyLast4:  last4,
 	}
+}
+
+func RebuildGatewayAPIKeySecretWithRemark(plain string, nextRemark string) (GatewayAPIKeySecret, error) {
+	nextRemark, err := NormalizeGatewayAPIKeyRemark(nextRemark)
+	if err != nil {
+		return GatewayAPIKeySecret{}, err
+	}
+	plain = strings.TrimSpace(plain)
+	if plain == "" {
+		return NewGatewayAPIKeySecretWithRemark(nextRemark)
+	}
+	if !strings.HasPrefix(plain, GatewayAPIKeyPrefix) {
+		return GatewayAPIKeySecret{}, ErrBadParam
+	}
+
+	suffix := strings.TrimPrefix(plain, GatewayAPIKeyPrefix)
+	if idx := strings.Index(suffix, "_"); idx >= 0 && idx+1 < len(suffix) {
+		suffix = suffix[idx+1:]
+	}
+	if suffix == "" {
+		return GatewayAPIKeySecret{}, ErrBadParam
+	}
+	if nextRemark == "" {
+		return BuildGatewayAPIKeySecret(GatewayAPIKeyPrefix + suffix), nil
+	}
+	return BuildGatewayAPIKeySecret(GatewayAPIKeyPrefix + nextRemark + "_" + suffix), nil
 }
 
 func NormalizeGatewayBearer(auth string) string {
@@ -477,7 +536,11 @@ func formatGatewayBool(value bool) string {
 }
 
 func (uc *GatewayUsecase) CreateAPIKey(ctx context.Context, input CreateGatewayAPIKeyInput) (*CreatedGatewayAPIKey, error) {
-	input.Name = strings.TrimSpace(input.Name)
+	name, err := NormalizeGatewayAPIKeyRemark(input.Name)
+	if err != nil {
+		return nil, err
+	}
+	input.Name = name
 	input.QuotaTotalTokens = normalizeNonNegativeInt64(input.QuotaTotalTokens)
 	input.QuotaDailyTokens = normalizeNonNegativeInt64(input.QuotaDailyTokens)
 	input.QuotaWeeklyTokens = normalizeNonNegativeInt64(input.QuotaWeeklyTokens)
@@ -493,12 +556,16 @@ func (uc *GatewayUsecase) CreateAPIKey(ctx context.Context, input CreateGatewayA
 	}
 	input.AllowedModels = allowedModels
 
-	secret, err := NewGatewayAPIKeySecret()
+	secret, err := NewGatewayAPIKeySecretWithRemark(input.Name)
 	if err != nil {
 		return nil, err
 	}
 	if input.Name == "" {
-		input.Name = "key " + secret.KeyLast4
+		input.Name = "key" + secret.KeyLast4
+		secret, err = RebuildGatewayAPIKeySecretWithRemark(secret.PlainKey, input.Name)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	item, err := uc.repo.CreateAPIKey(ctx, input, secret)
@@ -523,7 +590,11 @@ func (uc *GatewayUsecase) UpdateAPIKey(ctx context.Context, input UpdateGatewayA
 	if input.ID <= 0 {
 		return nil, ErrBadParam
 	}
-	input.Name = strings.TrimSpace(input.Name)
+	name, err := NormalizeGatewayAPIKeyRemark(input.Name)
+	if err != nil {
+		return nil, err
+	}
+	input.Name = name
 	input.QuotaTotalTokens = normalizeNonNegativeInt64(input.QuotaTotalTokens)
 	input.QuotaDailyTokens = normalizeNonNegativeInt64(input.QuotaDailyTokens)
 	input.QuotaWeeklyTokens = normalizeNonNegativeInt64(input.QuotaWeeklyTokens)
@@ -539,8 +610,17 @@ func (uc *GatewayUsecase) UpdateAPIKey(ctx context.Context, input UpdateGatewayA
 	}
 	input.AllowedModels = allowedModels
 	if input.Name == "" {
-		input.Name = "key " + strconv.Itoa(input.ID)
+		input.Name = "key" + strconv.Itoa(input.ID)
 	}
+	current, err := uc.repo.GetAPIKeyByID(ctx, input.ID)
+	if err != nil {
+		return nil, err
+	}
+	secret, err := RebuildGatewayAPIKeySecretWithRemark(current.PlainKey, input.Name)
+	if err != nil {
+		return nil, err
+	}
+	input.Secret = secret
 	return uc.repo.UpdateAPIKey(ctx, input)
 }
 
@@ -813,11 +893,31 @@ func (uc *GatewayUsecase) CreateUsageLog(ctx context.Context, item *GatewayUsage
 }
 
 func normalizeUsageFilter(filter GatewayUsageFilter) GatewayUsageFilter {
+	filter.KeyIDs = normalizePositiveIDs(filter.KeyIDs)
+	if len(filter.KeyIDs) == 0 && filter.KeyID > 0 {
+		filter.KeyIDs = []int{filter.KeyID}
+	}
 	filter.SessionID = strings.TrimSpace(filter.SessionID)
 	filter.Model = strings.TrimSpace(filter.Model)
 	filter.Endpoint = strings.TrimSpace(filter.Endpoint)
 	filter.UpstreamMode = NormalizeGatewayUpstreamMode(filter.UpstreamMode)
 	return filter
+}
+
+func normalizePositiveIDs(ids []int) []int {
+	out := make([]int, 0, len(ids))
+	seen := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
 }
 
 func (uc *GatewayUsecase) ListUsageLogs(ctx context.Context, filter GatewayUsageFilter) ([]*GatewayUsageLog, int, error) {
