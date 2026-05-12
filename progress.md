@@ -401,3 +401,10 @@
 - 回归：`style:l1` 的客户端模板页断言新增浅色 / 暗色代码预览对比度检查，继续覆盖桌面、移动端、无横向溢出和后台 chrome。
 - 验证通过：`cd web && pnpm css`、`cd web && pnpm test`、`cd web && pnpm style:l1`。
 - 下一步：当前仅完成本地前端修复；如需线上生效，需要重新构建镜像并按低配服务器发布流程部署。
+
+## 2026-05-12 客户端模板与用量筛选提交部署
+- 提交：已提交并推送 `8957746 完善客户端模板与用量筛选` 到 `origin/main`。
+- 验证通过：提交前执行 `cd server && go test ./internal/server ./internal/biz ./internal/data`、`cd web && pnpm test && pnpm style:l1 && pnpm build`。
+- 部署：按低配服务器发布约定在本机构建镜像 `oauth-api-service-server:20260512T184202-8957746e`，上传到 `8.218.4.199` 后仅执行 `docker load` 和 `docker compose up -d app-server`，未在服务器构建。
+- 线上验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260512T184202-8957746e`；容器内与公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；`/admin-client-config` 已返回新前端资源 `index.DYXQUfGa.js`；管理员 `admin/adminadmin` 登录、`summary` 和 `usage_list` 携带 `key_ids` 请求均返回 `code=0`。
+- 清理：部署前记录远端 `/` 使用率 48%、Docker images 4.71GB；执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260512T143300-bc28db5-local`，回收 347.6MB；清理后 `/` 使用率 47%、Docker images 4.007GB；已删除远端和本地本轮镜像 tar 包。
