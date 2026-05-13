@@ -14,6 +14,13 @@
 - 下一步：部署后复测长上下文 OpenCode 会话；若仍有 502，需要继续看新 usage 的 `upstream_error_type` / `diagnostic.upstream_body`，区分上游真实 `response.failed/incomplete`、账号限流、模型超上下文、网络断流和客户端主动取消。
 - 阻塞/风险：本轮只修复客户端 / Cloudflare 空闲超时导致的断流，不改变 backend-only 请求不能 fallback 到 CLI 的策略；如果 Codex backend 自身在大工具历史上返回失败，仍会按真实上游错误记录为 502。若部署后仍出现 125s 左右取消，下一步应改为实时转发 / 转换 Codex backend 上游 SSE，而不是继续只在等待结果期间做合成保活。
 
+## 2026-05-13 OpenCode stream 修复发布
+- 完成：提交并推送 `081f551e`（`修复 OpenCode 长流式请求保活`）；本地构建镜像 `oauth-api-service-server:20260513T201322-081f551e`，构建过程包含前端生产构建和服务端 Linux 二进制构建。
+- 验证通过：`cd server && go test -count=1 ./...`、`cd web && pnpm test -- --run`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4324 NODE_USE_ENV_PROXY=0 pnpm style:l1`（24 个场景）、`git diff --check`。
+- 部署进度：镜像包已上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260513T201322-081f551e/`，远端 `docker load` 已确认加载 `oauth-api-service-server:20260513T201322-081f551e`；migration 文件已上传到同一 release 的 `migrate/` 目录。
+- 阻塞：执行 Atlas 容器迁移前检查时，远端 Docker / SSH 开始无响应；随后 SSH 卡在 banner exchange，公网 `/healthz` 与 `/readyz` 均超时。当前未确认完成 `migrate apply`、未更新 Compose `.env` 的 `APP_IMAGE`、未执行 `docker compose up -d app-server`，因此不能视为已完成线上切换。
+- 下一步：等服务器 SSH 或云控制台恢复后，先检查 `docker ps`、Atlas 临时容器、`df -h /`、`docker system df` 和当前 app 镜像；确认数据库 migration 状态后再继续更新 `APP_IMAGE=oauth-api-service-server:20260513T201322-081f551e`、重启 `app-server`、验证 `/healthz` / `/readyz` / OpenCode 最小调用。禁止在确认现场前重启 Docker 或清理 volume。
+
 
 ## 2026-05-12 线上 502 排查
 - 完成：公网 `/healthz`、`/readyz` 均返回正常，最小 `/v1/responses` 非流式请求返回 `OK`，说明 Cloudflare、入口层、app-server 与 Codex 登录态主路径当前可用。
