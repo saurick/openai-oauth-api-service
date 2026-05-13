@@ -2,6 +2,11 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-13 Atlas 线上迁移规则收口
+- 完成：将线上 / 低配服务器 Atlas migration 口径写入 `AGENTS.md`、`server/deploy/README.md` 和 `server/deploy/compose/prod/README.md`：统一使用宿主机 `/usr/local/bin/atlas` 与 `flock /tmp/atlas-migrate.lock`，migration 目录随 release 上传，禁止通过 `arigaio/atlas:*` 临时容器或 Compose 服务执行生产迁移。
+- 下一步：后续若补自动发布脚本，应把 Atlas 预检、host DSN 和迁移锁做成脚本级门禁。
+- 阻塞/风险：本轮只更新本仓库规则和 runbook；仓库当前仍没有正式远端发布脚本，因此脚本层尚未自动拦截 Atlas 容器用法。
+
 ## 2026-05-13 OpenCode stream terminate 排查
 - 发现：截图中的 `request_id=435ee41334021f2bd599110ad1044d26` 是 `/v1/chat/completions`、`stream=true`、`reasoning_effort=high` 请求，usage 记录 `HTTP 502`、`duration_ms≈125s`、`request_bytes=167189`、`backend_only=true`，诊断为 `upstream_body=context canceled`；本机 OpenCode 日志同类长请求出现 `ECONNRESET` 和 Cloudflare `524 A timeout occurred`。
 - 结论：最小 `chat.completions stream` 与 `/v1/responses stream` 线上均能返回 `HTTP 200` 和 `OK`，不是流式格式整体不可用；问题集中在大上下文 / 工具历史等 backend-only 长请求。当前服务只在流开始时发一次首包，随后等待 Codex backend 完整结束，长时间无输出会被 Cloudflare / 客户端 / 代理断开，导致上游 context 被取消，OpenCode UI 表现为 shell `terminated`。
