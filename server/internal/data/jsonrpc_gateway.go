@@ -589,17 +589,18 @@ func gatewayUsageFilterFromParams(pm map[string]any) biz.GatewayUsageFilter {
 		end = time.Unix(endRaw, 0)
 	}
 	return biz.GatewayUsageFilter{
-		Limit:           getInt(pm, "limit", 30),
-		Offset:          getInt(pm, "offset", 0),
-		KeyID:           getInt(pm, "key_id", 0),
-		KeyIDs:          getIntList(pm, "key_ids"),
-		SessionID:       getString(pm, "session_id"),
-		Model:           getString(pm, "model"),
-		ReasoningEffort: getString(pm, "reasoning_effort"),
-		Endpoint:        getString(pm, "endpoint"),
-		UpstreamMode:    getString(pm, "upstream_mode"),
-		StartTime:       start,
-		EndTime:         end,
+		Limit:             getInt(pm, "limit", 30),
+		Offset:            getInt(pm, "offset", 0),
+		KeyID:             getInt(pm, "key_id", 0),
+		KeyIDs:            getIntList(pm, "key_ids"),
+		SessionID:         getString(pm, "session_id"),
+		Model:             getString(pm, "model"),
+		ReasoningEffort:   getString(pm, "reasoning_effort"),
+		Endpoint:          getString(pm, "endpoint"),
+		UpstreamMode:      getString(pm, "upstream_mode"),
+		UpstreamErrorType: getString(pm, "upstream_error_type"),
+		StartTime:         start,
+		EndTime:           end,
 		SuccessSet: func() bool {
 			_, ok := pm["success"]
 			return ok
@@ -789,6 +790,8 @@ func mapGatewayUsageForRPC(item *biz.GatewayUsageLog) map[string]any {
 		"upstream_fallback":        item.UpstreamFallback,
 		"upstream_error_type":      item.UpstreamErrorType,
 		"error_type":               item.ErrorType,
+		"diagnostic":               mapGatewayUsageDiagnosticForRPC(item.Diagnostic),
+		"diagnostic_summary":       item.Diagnostic.Summary(),
 		"created_at":               item.CreatedAt.Unix(),
 	}
 	if item.EstimatedCostUSD != nil {
@@ -797,6 +800,35 @@ func mapGatewayUsageForRPC(item *biz.GatewayUsageLog) map[string]any {
 		data["estimated_cost_usd"] = nil
 	}
 	return data
+}
+
+func mapGatewayUsageDiagnosticForRPC(item biz.GatewayUsageDiagnostic) map[string]any {
+	out := make(map[string]any)
+	if item.RequestBytes > 0 {
+		out["request_bytes"] = item.RequestBytes
+	}
+	if item.ResponseBytes > 0 {
+		out["response_bytes"] = item.ResponseBytes
+	}
+	if item.BackendOnly {
+		out["backend_only"] = true
+	}
+	if item.FallbackEnabled {
+		out["fallback_enabled"] = true
+	}
+	if item.FallbackBlocked {
+		out["fallback_blocked"] = true
+	}
+	if item.ReasoningEffort != "" {
+		out["reasoning_effort"] = item.ReasoningEffort
+	}
+	if item.UpstreamHTTPStatus > 0 {
+		out["upstream_http_status"] = item.UpstreamHTTPStatus
+	}
+	if item.UpstreamBody != "" {
+		out["upstream_body"] = item.UpstreamBody
+	}
+	return out
 }
 
 func gatewayUpstreamStrategyFromLegacyParams(mode string, fallbackEnabled bool) string {

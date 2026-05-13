@@ -61,6 +61,8 @@ const (
 	FieldUpstreamFallback = "upstream_fallback"
 	// FieldUpstreamErrorType holds the string denoting the upstream_error_type field in the database.
 	FieldUpstreamErrorType = "upstream_error_type"
+	// FieldDiagnostic holds the string denoting the diagnostic field in the database.
+	FieldDiagnostic = "diagnostic"
 	// FieldErrorType holds the string denoting the error_type field in the database.
 	FieldErrorType = "error_type"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -96,6 +98,7 @@ var Columns = []string{
 	FieldUpstreamMode,
 	FieldUpstreamFallback,
 	FieldUpstreamErrorType,
+	FieldDiagnostic,
 	FieldErrorType,
 	FieldCreatedAt,
 }

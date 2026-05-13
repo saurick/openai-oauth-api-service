@@ -28,13 +28,15 @@ import (
 )
 
 const (
-	maxGatewayRequestBytes   = 32 << 20
-	maxGatewayImages         = 4
-	maxGatewayImageBytes     = 16 << 20
-	maxGatewayFiles          = 4
-	maxGatewayFileBytes      = 16 << 20
-	defaultCodexCLITimeout   = 600 * time.Second
-	gatewayUsageWriteTimeout = 5 * time.Second
+	maxGatewayRequestBytes                = 32 << 20
+	maxGatewayImages                      = 4
+	maxGatewayImageBytes                  = 16 << 20
+	maxGatewayFiles                       = 4
+	maxGatewayFileBytes                   = 16 << 20
+	defaultCodexCLITimeout                = 600 * time.Second
+	gatewayUsageWriteTimeout              = 5 * time.Second
+	defaultGatewayStreamHeartbeatInterval = 15 * time.Second
+	statusClientClosedRequest             = 499
 )
 
 var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
@@ -57,6 +59,7 @@ type codexUpstreamCallResult struct {
 	ActualMode        string
 	Fallback          bool
 	UpstreamErrorType string
+	Diagnostic        biz.GatewayUsageDiagnostic
 }
 
 type codexCLIPrompt struct {
@@ -188,7 +191,7 @@ func (h *openAIGatewayHandler) handleModels(w stdhttp.ResponseWriter, r *stdhttp
 				},
 				"availability_nux":                 map[string]any{"message": ""},
 				"upgrade":                          nil,
-				"supports_reasoning_summaries":     true,
+				"supports_reasoning_summaries":     false,
 				"default_reasoning_summary":        "none",
 				"support_verbosity":                true,
 				"default_verbosity":                "low",
@@ -408,14 +411,39 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 	start time.Time,
 ) {
 	upstreamMode := h.configuredCodexUpstreamMode(r.Context())
-	result, err := h.runCodexUpstream(r.Context(), upstreamMode, r.URL.Path, body, requestModel, reasoningEffort)
+	var streamWriter *gatewayStreamWriter
+	if stream {
+		streamWriter = newGatewayStreamWriter(w, r.URL.Path, requestModel)
+	}
+
+	requestDiagnostic := gatewayUsageDiagnosticForRequest(r.URL.Path, body, reasoningEffort)
+	result, err := h.runCodexUpstreamWithStreamHeartbeat(r, streamWriter, upstreamMode, body, requestModel, reasoningEffort)
 	if err != nil {
 		status := stdhttp.StatusBadGateway
-		errorType := "codex_cli_upstream_failed"
-		if upstreamMode == codexUpstreamModeBackend {
-			errorType = "codex_backend_upstream_failed"
+		errorType := result.UpstreamErrorType
+		if errorType == "" {
+			errorType = upstreamErrorType(err, upstreamMode)
 		}
-		h.writeGatewayError(w, status, err, errorType)
+		if isGatewayClientCanceled(err) {
+			status = statusClientClosedRequest
+			errorType = "client_canceled"
+		}
+		if h.log != nil {
+			h.log.WithContext(r.Context()).Warnf("codex upstream request failed request_id=%s mode=%s endpoint=%s model=%s error_type=%s err=%v", requestID, upstreamMode, endpoint, requestModel, errorType, err)
+		}
+		responseBytes := int64(0)
+		diagnostic := result.Diagnostic
+		if diagnostic.RequestBytes == 0 {
+			diagnostic = requestDiagnostic
+		}
+		if streamWriter != nil {
+			responseBytes = streamWriter.writeError(err, errorType)
+		} else {
+			h.writeGatewayError(w, status, err, errorType)
+		}
+		if responseBytes > 0 {
+			diagnostic.ResponseBytes = responseBytes
+		}
 		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
 			APIKeyID:               key.ID,
 			APIKeyPrefix:           key.KeyPrefix,
@@ -430,11 +458,13 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 			Success:                false,
 			Stream:                 stream,
 			RequestBytes:           int64(len(body)),
+			ResponseBytes:          responseBytes,
 			DurationMS:             time.Since(start).Milliseconds(),
 			UpstreamConfiguredMode: upstreamMode,
 			UpstreamMode:           upstreamMode,
 			UpstreamErrorType:      errorType,
 			ErrorType:              errorType,
+			Diagnostic:             diagnostic,
 			CreatedAt:              time.Now(),
 		})
 		return
@@ -448,7 +478,9 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 
 	if stream {
 		var responseBytes int64
-		if r.URL.Path == "/v1/responses" {
+		if streamWriter != nil {
+			responseBytes = streamWriter.writeSuccess(metrics.Model, content, toolCalls, metrics)
+		} else if r.URL.Path == "/v1/responses" {
 			responseBytes = h.writeCodexCLIResponsesStream(w, metrics.Model, content, toolCalls, metrics)
 		} else {
 			responseBytes = h.writeCodexCLIChatStream(w, metrics.Model, content, toolCalls, metrics)
@@ -533,7 +565,9 @@ func (h *openAIGatewayHandler) configuredCodexUpstreamMode(ctx context.Context) 
 	}
 	mode, err := h.gatewayUC.GetCodexUpstreamMode(ctx)
 	if err != nil {
-		h.log.WithContext(ctx).Warnf("get codex upstream mode failed: %v", err)
+		if h.log != nil {
+			h.log.WithContext(ctx).Warnf("get codex upstream mode failed: %v", err)
+		}
 		return codexUpstreamMode()
 	}
 	if mode == "" {
@@ -561,11 +595,15 @@ func (h *openAIGatewayHandler) runCodexUpstream(ctx context.Context, upstreamMod
 		if h.log != nil {
 			h.log.WithContext(ctx).Warnf("codex backend upstream failed before fallback: %v", err)
 		}
-		if !h.configuredCodexUpstreamFallbackEnabled(ctx) {
-			return codexUpstreamCallResult{}, fmt.Errorf("codex backend upstream failed: %w", err)
+		errorType := upstreamErrorType(err, codexUpstreamModeBackend)
+		fallbackEnabled := h.configuredCodexUpstreamFallbackEnabled(ctx)
+		diagnostic := gatewayUsageDiagnosticForUpstreamFailure(path, body, reasoningEffort, err, fallbackEnabled)
+		if !fallbackEnabled {
+			return codexUpstreamCallResult{ActualMode: codexUpstreamModeBackend, UpstreamErrorType: errorType, Diagnostic: diagnostic}, fmt.Errorf("codex backend upstream failed: %w", err)
 		}
-		if gatewayRequestRequiresCodexBackend(path, body) {
-			return codexUpstreamCallResult{}, fmt.Errorf("codex backend upstream failed: %v; request uses backend-only features and cannot fallback to codex_cli", err)
+		if diagnostic.BackendOnly {
+			diagnostic.FallbackBlocked = true
+			return codexUpstreamCallResult{ActualMode: codexUpstreamModeBackend, UpstreamErrorType: errorType, Diagnostic: diagnostic}, fmt.Errorf("codex backend upstream failed: %v; request uses backend-only features and cannot fallback to codex_cli", err)
 		}
 		fallbackContent, fallbackMetrics, fallbackErr := h.runCodexCLI(ctx, path, body, requestModel, reasoningEffort)
 		if fallbackErr == nil {
@@ -574,20 +612,63 @@ func (h *openAIGatewayHandler) runCodexUpstream(ctx context.Context, upstreamMod
 				Metrics:           fallbackMetrics,
 				ActualMode:        codexUpstreamModeCLI,
 				Fallback:          true,
-				UpstreamErrorType: "codex_backend_upstream_failed",
+				UpstreamErrorType: errorType,
 			}, nil
 		}
-		return codexUpstreamCallResult{}, fmt.Errorf("codex backend upstream failed: %v; codex cli fallback failed: %w", err, fallbackErr)
+		fallbackErrorType := upstreamErrorType(fallbackErr, codexUpstreamModeCLI)
+		diagnostic.UpstreamBody = summarizeErrorForUsage(fallbackErr)
+		return codexUpstreamCallResult{ActualMode: codexUpstreamModeCLI, Fallback: true, UpstreamErrorType: fallbackErrorType, Diagnostic: diagnostic}, fmt.Errorf("codex backend upstream failed: %v; codex cli fallback failed: %w", err, fallbackErr)
 	default:
 		content, metrics, err := h.runCodexCLI(ctx, path, body, requestModel, reasoningEffort)
 		if err != nil {
-			return codexUpstreamCallResult{}, err
+			diagnostic := gatewayUsageDiagnosticForUpstreamFailure(path, body, reasoningEffort, err, false)
+			return codexUpstreamCallResult{ActualMode: codexUpstreamModeCLI, UpstreamErrorType: upstreamErrorType(err, codexUpstreamModeCLI), Diagnostic: diagnostic}, err
 		}
 		return codexUpstreamCallResult{
 			Content:    content,
 			Metrics:    metrics,
 			ActualMode: codexUpstreamModeCLI,
 		}, nil
+	}
+}
+
+type codexUpstreamAsyncResult struct {
+	result codexUpstreamCallResult
+	err    error
+}
+
+func (h *openAIGatewayHandler) runCodexUpstreamWithStreamHeartbeat(
+	r *stdhttp.Request,
+	streamWriter *gatewayStreamWriter,
+	upstreamMode string,
+	body []byte,
+	requestModel string,
+	reasoningEffort string,
+) (codexUpstreamCallResult, error) {
+	if streamWriter == nil {
+		return h.runCodexUpstream(r.Context(), upstreamMode, r.URL.Path, body, requestModel, reasoningEffort)
+	}
+
+	done := make(chan codexUpstreamAsyncResult, 1)
+	go func() {
+		result, err := h.runCodexUpstream(r.Context(), upstreamMode, r.URL.Path, body, requestModel, reasoningEffort)
+		done <- codexUpstreamAsyncResult{result: result, err: err}
+	}()
+
+	ticker := time.NewTicker(gatewayStreamHeartbeatInterval())
+	defer ticker.Stop()
+	for {
+		select {
+		case out := <-done:
+			return out.result, out.err
+		case <-ticker.C:
+			streamWriter.writeHeartbeat()
+		case <-r.Context().Done():
+			return codexUpstreamCallResult{
+				ActualMode:        upstreamMode,
+				UpstreamErrorType: "client_canceled",
+			}, r.Context().Err()
+		}
 	}
 }
 
@@ -612,6 +693,119 @@ func codexUpstreamFallbackEnabled() bool {
 	default:
 		return false
 	}
+}
+
+func gatewayStreamHeartbeatInterval() time.Duration {
+	if raw := strings.TrimSpace(os.Getenv("GATEWAY_STREAM_HEARTBEAT_SECONDS")); raw != "" {
+		if seconds, err := strconv.Atoi(raw); err == nil && seconds > 0 {
+			return time.Duration(seconds) * time.Second
+		}
+	}
+	return defaultGatewayStreamHeartbeatInterval
+}
+
+func upstreamErrorType(err error, mode string) string {
+	if isGatewayClientCanceled(err) {
+		return "client_canceled"
+	}
+	if mode == codexUpstreamModeBackend {
+		return codexBackendErrorType(err)
+	}
+	return codexCLIErrorType(err)
+}
+
+func isGatewayClientCanceled(err error) bool {
+	return errors.Is(err, context.Canceled)
+}
+
+func codexBackendErrorType(err error) string {
+	if err == nil {
+		return ""
+	}
+	var httpErr codexBackendHTTPError
+	if errors.As(err, &httpErr) {
+		switch {
+		case httpErr.status == stdhttp.StatusUnauthorized || httpErr.status == stdhttp.StatusForbidden:
+			return "codex_backend_auth_failed"
+		case httpErr.status == stdhttp.StatusTooManyRequests:
+			return "codex_backend_rate_limited"
+		case httpErr.status >= 500:
+			return "codex_backend_http_5xx"
+		default:
+			return "codex_backend_http_error"
+		}
+	}
+	text := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(text, "timed out") || strings.Contains(text, "deadline exceeded"):
+		return "codex_backend_timeout"
+	case strings.Contains(text, "unauthorized") || strings.Contains(text, "refresh") || strings.Contains(text, "auth"):
+		return "codex_backend_auth_failed"
+	case strings.Contains(text, "response failed"):
+		return "codex_backend_response_failed"
+	case strings.Contains(text, "response incomplete"):
+		return "codex_backend_response_incomplete"
+	case strings.Contains(text, "connection reset") || strings.Contains(text, "unexpected eof") || strings.Contains(text, "stream error"):
+		return "codex_backend_stream_error"
+	default:
+		return "codex_backend_upstream_failed"
+	}
+}
+
+func codexCLIErrorType(err error) string {
+	if err == nil {
+		return ""
+	}
+	text := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(text, "timed out") || strings.Contains(text, "deadline exceeded"):
+		return "codex_cli_timeout"
+	case strings.Contains(text, "returned empty answer"):
+		return "codex_cli_empty_answer"
+	case strings.Contains(text, "prompt is empty"):
+		return "codex_cli_empty_prompt"
+	case strings.Contains(text, "executable file not found") || strings.Contains(text, "no such file or directory"):
+		return "codex_cli_not_found"
+	default:
+		return "codex_cli_upstream_failed"
+	}
+}
+
+func gatewayUsageDiagnosticForRequest(path string, body []byte, reasoningEffort string) biz.GatewayUsageDiagnostic {
+	return biz.GatewayUsageDiagnostic{
+		RequestBytes:    int64(len(body)),
+		BackendOnly:     gatewayRequestRequiresCodexBackend(path, body),
+		ReasoningEffort: strings.TrimSpace(reasoningEffort),
+	}
+}
+
+func gatewayUsageDiagnosticForUpstreamFailure(path string, body []byte, reasoningEffort string, err error, fallbackEnabled bool) biz.GatewayUsageDiagnostic {
+	diagnostic := gatewayUsageDiagnosticForRequest(path, body, reasoningEffort)
+	diagnostic.FallbackEnabled = fallbackEnabled
+	if fallbackEnabled && diagnostic.BackendOnly {
+		diagnostic.FallbackBlocked = true
+	}
+	var httpErr codexBackendHTTPError
+	if errors.As(err, &httpErr) {
+		diagnostic.UpstreamHTTPStatus = httpErr.status
+		diagnostic.ResponseBytes = int64(len(httpErr.body))
+		diagnostic.UpstreamBody = summarizeCodexBackendBody(httpErr.body)
+	} else {
+		diagnostic.UpstreamBody = summarizeErrorForUsage(err)
+	}
+	return diagnostic
+}
+
+func summarizeErrorForUsage(err error) string {
+	if err == nil {
+		return ""
+	}
+	text := strings.TrimSpace(err.Error())
+	const maxLen = 240
+	if len(text) > maxLen {
+		text = text[:maxLen]
+	}
+	return text
 }
 
 func gatewayRequestRequiresCodexBackend(path string, body []byte) bool {
@@ -1494,13 +1688,151 @@ func buildCodexCLIResponsesPayload(model string, content string, toolCalls []gat
 	}
 }
 
+type gatewayStreamWriter struct {
+	w          stdhttp.ResponseWriter
+	flusher    stdhttp.Flusher
+	path       string
+	model      string
+	started    bool
+	now        int64
+	responseID string
+	bytes      int64
+}
+
+func newGatewayStreamWriter(w stdhttp.ResponseWriter, path string, model string) *gatewayStreamWriter {
+	s := &gatewayStreamWriter{
+		w:     w,
+		path:  path,
+		model: strings.TrimSpace(model),
+		now:   time.Now().Unix(),
+	}
+	s.flusher, _ = w.(stdhttp.Flusher)
+	if s.model == "" {
+		s.model = biz.DefaultCodexModelID
+	}
+	s.responseID = fmt.Sprintf("resp_codex_%d", s.now)
+	s.start()
+	return s
+}
+
+func (s *gatewayStreamWriter) start() {
+	if s == nil || s.started {
+		return
+	}
+	s.w.Header().Set("Content-Type", "text/event-stream")
+	s.w.Header().Set("Cache-Control", "no-cache")
+	s.w.Header().Set("Connection", "keep-alive")
+	s.w.WriteHeader(stdhttp.StatusOK)
+	s.started = true
+	if s.path == "/v1/responses" {
+		s.bytes += writeGatewaySSE(s.w, s.flusher, map[string]any{
+			"type": "response.created",
+			"response": map[string]any{
+				"id":                  s.responseID,
+				"object":              "response",
+				"created_at":          s.now,
+				"model":               s.model,
+				"status":              "in_progress",
+				"output":              []any{},
+				"output_text":         "",
+				"parallel_tool_calls": false,
+			},
+		})
+	} else {
+		s.bytes += writeGatewaySSEComment(s.w, s.flusher, "keepalive")
+	}
+}
+
+func (s *gatewayStreamWriter) writeSuccess(model string, content string, toolCalls []gatewayToolCall, metrics openAIUsageMetrics) int64 {
+	if s == nil {
+		return 0
+	}
+	if strings.TrimSpace(model) != "" {
+		s.model = strings.TrimSpace(model)
+	}
+	if s.path == "/v1/responses" {
+		h := &openAIGatewayHandler{}
+		s.bytes += h.writeCodexCLIResponsesStreamBody(s.w, s.flusher, s.responseID, s.now, s.model, content, toolCalls, metrics, false)
+	} else {
+		h := &openAIGatewayHandler{}
+		s.bytes += h.writeCodexCLIChatStreamBody(s.w, s.flusher, s.model, content, toolCalls, metrics)
+	}
+	return s.bytes
+}
+
+func (s *gatewayStreamWriter) writeHeartbeat() int64 {
+	if s == nil {
+		return 0
+	}
+	var n int64
+	if s.path == "/v1/responses" {
+		n = writeGatewaySSE(s.w, s.flusher, map[string]any{
+			"type": "response.in_progress",
+			"response": map[string]any{
+				"id":                  s.responseID,
+				"object":              "response",
+				"created_at":          s.now,
+				"model":               s.model,
+				"status":              "in_progress",
+				"output":              []any{},
+				"output_text":         "",
+				"parallel_tool_calls": false,
+			},
+		})
+	} else {
+		n = writeGatewaySSEComment(s.w, s.flusher, "keepalive")
+	}
+	s.bytes += n
+	return n
+}
+
+func (s *gatewayStreamWriter) writeError(err error, errorType string) int64 {
+	if s == nil {
+		return 0
+	}
+	message := mapGatewayHTTPErrorMessage(err)
+	if s.path == "/v1/responses" {
+		s.bytes += writeGatewaySSE(s.w, s.flusher, map[string]any{
+			"type": "response.failed",
+			"response": map[string]any{
+				"id":                  s.responseID,
+				"object":              "response",
+				"created_at":          s.now,
+				"model":               s.model,
+				"status":              "failed",
+				"output":              []any{},
+				"output_text":         "",
+				"parallel_tool_calls": false,
+				"error": map[string]any{
+					"message": message,
+					"type":    "gateway_error",
+					"code":    errorType,
+				},
+			},
+		})
+	} else {
+		s.bytes += writeGatewaySSE(s.w, s.flusher, map[string]any{
+			"error": map[string]any{
+				"message": message,
+				"type":    "gateway_error",
+				"code":    errorType,
+			},
+		})
+	}
+	s.bytes += writeGatewaySSEData(s.w, s.flusher, "[DONE]")
+	return s.bytes
+}
+
 func (h *openAIGatewayHandler) writeCodexCLIChatStream(w stdhttp.ResponseWriter, model string, content string, toolCalls []gatewayToolCall, metrics openAIUsageMetrics) int64 {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(stdhttp.StatusOK)
 	flusher, _ := w.(stdhttp.Flusher)
+	return h.writeCodexCLIChatStreamBody(w, flusher, model, content, toolCalls, metrics)
+}
 
+func (h *openAIGatewayHandler) writeCodexCLIChatStreamBody(w stdhttp.ResponseWriter, flusher stdhttp.Flusher, model string, content string, toolCalls []gatewayToolCall, metrics openAIUsageMetrics) int64 {
 	id := fmt.Sprintf("chatcmpl-codex-%d", time.Now().Unix())
 	created := time.Now().Unix()
 	delta := map[string]any{
@@ -1574,22 +1906,28 @@ func (h *openAIGatewayHandler) writeCodexCLIResponsesStream(w stdhttp.ResponseWr
 
 	now := time.Now().Unix()
 	responseID := fmt.Sprintf("resp_codex_%d", now)
+	return h.writeCodexCLIResponsesStreamBody(w, flusher, responseID, now, model, content, toolCalls, metrics, true)
+}
+
+func (h *openAIGatewayHandler) writeCodexCLIResponsesStreamBody(w stdhttp.ResponseWriter, flusher stdhttp.Flusher, responseID string, now int64, model string, content string, toolCalls []gatewayToolCall, metrics openAIUsageMetrics, includeCreated bool) int64 {
 	output := responsesOutputPayload(content, toolCalls, now)
 	responseBytes := int64(0)
 
-	responseBytes += writeGatewaySSE(w, flusher, map[string]any{
-		"type": "response.created",
-		"response": map[string]any{
-			"id":                  responseID,
-			"object":              "response",
-			"created_at":          now,
-			"model":               model,
-			"status":              "in_progress",
-			"output":              []any{},
-			"output_text":         "",
-			"parallel_tool_calls": false,
-		},
-	})
+	if includeCreated {
+		responseBytes += writeGatewaySSE(w, flusher, map[string]any{
+			"type": "response.created",
+			"response": map[string]any{
+				"id":                  responseID,
+				"object":              "response",
+				"created_at":          now,
+				"model":               model,
+				"status":              "in_progress",
+				"output":              []any{},
+				"output_text":         "",
+				"parallel_tool_calls": false,
+			},
+		})
+	}
 
 	if strings.TrimSpace(content) != "" {
 		messageID := fmt.Sprintf("msg_codex_%d", now)
@@ -1676,6 +2014,16 @@ func writeGatewaySSE(w stdhttp.ResponseWriter, flusher stdhttp.Flusher, payload 
 
 func writeGatewaySSEData(w stdhttp.ResponseWriter, flusher stdhttp.Flusher, data string) int64 {
 	line := append([]byte("data: "), []byte(data)...)
+	line = append(line, '\n', '\n')
+	n, _ := w.Write(line)
+	if flusher != nil {
+		flusher.Flush()
+	}
+	return int64(n)
+}
+
+func writeGatewaySSEComment(w stdhttp.ResponseWriter, flusher stdhttp.Flusher, comment string) int64 {
+	line := append([]byte(": "), []byte(strings.TrimSpace(comment))...)
 	line = append(line, '\n', '\n')
 	n, _ := w.Write(line)
 	if flusher != nil {
@@ -1801,16 +2149,16 @@ func responsesUsagePayload(metrics openAIUsageMetrics) map[string]any {
 }
 
 func (h *openAIGatewayHandler) recordUsage(ctx context.Context, key *biz.GatewayAPIKey, item *biz.GatewayUsageLog) {
-	if item == nil {
+	if item == nil || h.gatewayUC == nil {
 		return
 	}
 	writeCtx, cancel := context.WithTimeout(context.Background(), gatewayUsageWriteTimeout)
 	defer cancel()
-	if err := h.gatewayUC.CreateUsageLog(writeCtx, item); err != nil {
+	if err := h.gatewayUC.CreateUsageLog(writeCtx, item); err != nil && h.log != nil {
 		h.log.WithContext(ctx).Errorf("record gateway usage failed: %v", err)
 	}
 	if key != nil && key.ID > 0 {
-		if err := h.gatewayUC.TouchAPIKeyUsed(writeCtx, key.ID, time.Now()); err != nil {
+		if err := h.gatewayUC.TouchAPIKeyUsed(writeCtx, key.ID, time.Now()); err != nil && h.log != nil {
 			h.log.WithContext(ctx).Warnf("touch gateway key failed: %v", err)
 		}
 	}

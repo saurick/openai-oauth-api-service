@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"server/internal/data/model/ent/gatewayusagelog"
 	"strings"
@@ -65,6 +66,8 @@ type GatewayUsageLog struct {
 	UpstreamFallback bool `json:"upstream_fallback,omitempty"`
 	// UpstreamErrorType holds the value of the "upstream_error_type" field.
 	UpstreamErrorType string `json:"upstream_error_type,omitempty"`
+	// Diagnostic holds the value of the "diagnostic" field.
+	Diagnostic map[string]interface{} `json:"diagnostic,omitempty"`
 	// ErrorType holds the value of the "error_type" field.
 	ErrorType string `json:"error_type,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -77,6 +80,8 @@ func (*GatewayUsageLog) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case gatewayusagelog.FieldDiagnostic:
+			values[i] = new([]byte)
 		case gatewayusagelog.FieldSuccess, gatewayusagelog.FieldStream, gatewayusagelog.FieldUpstreamFallback:
 			values[i] = new(sql.NullBool)
 		case gatewayusagelog.FieldID, gatewayusagelog.FieldAPIKeyID, gatewayusagelog.FieldStatusCode, gatewayusagelog.FieldInputTokens, gatewayusagelog.FieldOutputTokens, gatewayusagelog.FieldTotalTokens, gatewayusagelog.FieldCachedTokens, gatewayusagelog.FieldReasoningTokens, gatewayusagelog.FieldRequestBytes, gatewayusagelog.FieldResponseBytes, gatewayusagelog.FieldDurationMs:
@@ -251,6 +256,14 @@ func (_m *GatewayUsageLog) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.UpstreamErrorType = value.String
 			}
+		case gatewayusagelog.FieldDiagnostic:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field diagnostic", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Diagnostic); err != nil {
+					return fmt.Errorf("unmarshal field diagnostic: %w", err)
+				}
+			}
 		case gatewayusagelog.FieldErrorType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field error_type", values[i])
@@ -372,6 +385,9 @@ func (_m *GatewayUsageLog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("upstream_error_type=")
 	builder.WriteString(_m.UpstreamErrorType)
+	builder.WriteString(", ")
+	builder.WriteString("diagnostic=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Diagnostic))
 	builder.WriteString(", ")
 	builder.WriteString("error_type=")
 	builder.WriteString(_m.ErrorType)

@@ -109,13 +109,13 @@ usage 记录：
 - 默认记录 endpoint、model、reasoning_effort、可选 session_id、HTTP 状态、耗时、请求/响应字节数和 token usage；未传 reasoning effort 或历史旧数据保持空值，不按 token 反推
 - 上游策略可在管理后台「上游策略」页通过 `api.gateway_upstream_get` / `api.gateway_upstream_set` 读取和切换；未保存运行时设置时，默认 Backend 直连。`codex_backend` 会直接请求 Codex backend `/responses`，backend 失败时默认直接返回上游错误；只有显式选择 Backend + CLI 兜底策略时，纯文本 / 图片请求才允许 fallback 到 `codex_cli`。带工具调用、工具历史或文件输入的 backend-only 请求始终不会 fallback 到 CLI；显式切到强制 CLI 时只走 CLI。
 - `codex_cli` 模式 token 优先读取 Codex JSON 事件里的 usage，没有事件时才退回字符数估算；`codex_backend` 模式优先读取 Responses SSE `response.completed.usage`
-- usage log 会记录 `upstream_configured_mode`、`upstream_mode`、`upstream_fallback` 和 `upstream_error_type`，用于区分配置模式、实际执行模式和 fallback 情况。
+- usage log 会记录 `upstream_configured_mode`、`upstream_mode`、`upstream_fallback` 和细分 `upstream_error_type`，用于区分配置模式、实际执行模式、fallback 情况和失败类型；后台表格会保留原始错误码并展示简短中文说明，完整含义见下方“上游错误类型”。
 - OpenAI-compatible 请求体支持 `reasoning_effort`、`reasoningEffort` 和 `reasoning.effort`，可选值为 `low`、`medium`、`high`、`xhigh`；direct backend 会转为 OpenAI Responses 口径的 `reasoning.effort`，CLI 模式会转为 Codex CLI `model_reasoning_effort`
 - direct backend 模式会把 `system` / `developer` 消息合并为 `instructions`；若请求没有这类消息，会补一个最小默认 instructions，因为 Codex backend 要求该字段非空
 - direct backend 模式会透传 OpenAI-compatible `tools` / `tool_choice`，并在 chat messages 与 Responses input 之间转换 assistant `tool_calls`、`function_call` 和 `function_call_output`，上游返回 function call 时再映射回 Chat Completions `tool_calls` 或 Responses `function_call`；Codex CLI fallback 默认关闭，打开后也只支持纯文本响应，不支持工具调用回传，因此这类请求在 backend 失败时会直接返回上游错误，避免错误转为服务端 `codex exec`
 - direct backend 会在转发 Responses `function_call` 历史前规范化 item `id`，避免客户端回传空字符串或非法字符时触发上游 `input[n].id` 校验错误
-- `/v1/responses` 的 `stream=true` 会返回 Responses SSE 事件，包括 `response.output_item.added`、`response.content_part.added`、`response.output_text.delta` 和 `response.completed`，用于兼容 Codex CLI 自定义 `wire_api="responses"` provider
-- `/v1/models` 除 OpenAI 标准 `data` 外还返回 Codex CLI 读取的 `models` 元数据，包括 reasoning levels、shell type、context window 和输入模态等字段，用于兼容自定义 provider 的模型刷新
+- `/v1/chat/completions` 和 `/v1/responses` 的 `stream=true` 会先返回并 flush 首包，等待 Codex backend/CLI 结果期间按 `GATEWAY_STREAM_HEARTBEAT_SECONDS` 输出保活事件，避免 Codex / OpenCode / Cloudflare / 代理在长请求无输出时断开连接。`/v1/responses` 首包为 `response.created`，等待期间继续输出标准 `response.in_progress`，随后输出 `response.output_item.added`、`response.content_part.added`、`response.output_text.delta` 和 `response.completed`，用于兼容 Codex CLI 自定义 `wire_api="responses"` provider；如果上游在首字节后失败，会在 SSE 内返回 `response.failed` 与 `[DONE]`，不再尝试把已开始的流改写成 HTTP 502。下游客户端主动断开会按 `client_canceled` 记录，不再归类为 Backend 上游 502。
+- `/v1/models` 除 OpenAI 标准 `data` 外还返回 Codex CLI 读取的 `models` 元数据，包括 reasoning levels、shell type、context window 和输入模态等字段，用于兼容自定义 provider 的模型刷新；当前网关不透传 Codex reasoning summary 过程事件，因此模型元数据声明 `supports_reasoning_summaries=false`
 - OpenAI-compatible 图片输入支持 data URL 形式的 `image_url` / `input_image`；CLI 模式会临时落盘并通过 Codex CLI `--image` 附加到本次请求，direct backend 模式会直接传入 `/responses` 内容；单次最多 4 张、单张最大 16 MiB
 - OpenAI-compatible PDF 输入支持 `input_file` / `file` 的 `application/pdf` data URL，或带 `mimeType=application/pdf` / `media_type=application/pdf` 的 base64 文件数据；PDF 仅支持 direct backend 模式，单次最多 4 个、单个最大 16 MiB。`txt` / `md` / 代码等文本类附件由客户端读取成文本后按普通 `text` 输入转发；`doc` / `docx` / `xls` / `xlsx` 暂不声明为原生模态，后续如需支持应先增加明确的服务端转换链路。
 - 默认不保存 prompt、response body 或正文采样
@@ -212,6 +212,28 @@ usage 记录：
 - `disabled`
 - `owner_user_id`
 
+### 上游错误类型
+
+`usage.error_type` / `items[].upstream_error_type` 保留机器可检索的原始错误码，便于和服务日志里的 `request_id`、`error_type` 对齐。后台表格只展示短说明；排障时仍以原始错误码和服务日志为准。
+
+| 错误码 | 后台短说明 | 常见含义 / 排查方向 |
+| --- | --- | --- |
+| `codex_backend_auth_failed` | Backend 鉴权失败 | 服务器 Codex 登录态无效、`auth.json` / refresh token 失效，或上游返回 401 / 403。 |
+| `codex_backend_rate_limited` | Backend 限流 | 上游返回 429，可能是账号、模型或组织维度被限流。 |
+| `codex_backend_http_5xx` | Backend 5xx | Codex backend 或其上游服务返回 5xx。 |
+| `codex_backend_timeout` | Backend 超时 | Codex backend 调用超过超时时间；常见于上游慢、网络慢或 `CODEX_BACKEND_TIMEOUT_SECONDS` 到期。 |
+| `codex_backend_response_failed` | Backend response failed | 上游 SSE 返回 `response.failed`，表示本次 response 执行失败。 |
+| `codex_backend_response_incomplete` | Backend response incomplete | 上游 SSE 返回 `response.incomplete`，可能因长度、上下文、策略、工具或内部中断。 |
+| `codex_backend_stream_error` | Backend 流中断 | SSE 流连接 reset、unexpected EOF、代理或网络断流。 |
+| `codex_backend_http_error` | Backend HTTP 错误 | backend 返回其他非 2xx HTTP 状态，且不属于鉴权、限流或 5xx。 |
+| `codex_backend_upstream_failed` | Backend 未分类失败 | backend 兜底错误，需要结合服务日志里的 `err` 查看。 |
+| `client_canceled` | 客户端取消 | 下游客户端或入口代理主动断开请求；通常应排查客户端超时、网络中断或流式保活是否被识别。 |
+| `codex_cli_timeout` | CLI 超时 | Codex CLI 执行超过 `CODEX_CLI_TIMEOUT_SECONDS`。 |
+| `codex_cli_not_found` | CLI 不存在 | 容器内找不到 `codex` 二进制，或 `CODEX_CLI_BIN` / PATH 配错。 |
+| `codex_cli_empty_prompt` | CLI 空输入 | 请求体没有有效 user input，或请求转换后 prompt 为空。 |
+| `codex_cli_empty_answer` | CLI 空回复 | CLI 正常退出但未解析到最终回答，可能输出格式变化或模型无最终回答。 |
+| `codex_cli_upstream_failed` | CLI 未分类失败 | CLI 兜底错误，需要结合服务日志里的命令错误和输出摘要查看。 |
+
 ### `api.gateway_upstream_get` / `api.gateway_upstream_set`
 
 读取或切换 Codex 上游策略，用于高频 OpenCode 场景在 direct backend、CLI 临时兜底和强制 CLI 兼容路径之间切换：
@@ -238,6 +260,8 @@ usage 记录：
 - `items[].upstream_mode`
 - `items[].upstream_fallback`
 - `items[].upstream_error_type`
+- `items[].diagnostic`
+- `items[].diagnostic_summary`
 - `summary.total_requests`
 - `summary.success_requests`
 - `summary.failed_requests`
@@ -248,7 +272,7 @@ usage 记录：
 - `summary.average_duration_ms`
 - `summary.estimated_cost_usd`
 
-筛选条件支持 `key_id` 单凭据兼容参数、`key_ids` 多凭据数组或逗号分隔值、`reasoning_effort=low|medium|high|xhigh` 和 `upstream_mode=codex_backend|codex_cli`。未传时不按对应维度过滤；同时传 `key_ids` 与 `key_id` 时优先按 `key_ids` 过滤。
+筛选条件支持 `key_id` 单凭据兼容参数、`key_ids` 多凭据数组或逗号分隔值、`reasoning_effort=low|medium|high|xhigh`、`upstream_mode=codex_backend|codex_cli` 和 `upstream_error_type`。未传时不按对应维度过滤；同时传 `key_ids` 与 `key_id` 时优先按 `key_ids` 过滤。
 
 ### `api.usage_buckets`
 

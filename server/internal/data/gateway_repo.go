@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -284,6 +285,9 @@ func (r *gatewayRepo) CreateUsageLog(ctx context.Context, item *biz.GatewayUsage
 		SetUpstreamFallback(item.UpstreamFallback).
 		SetUpstreamErrorType(item.UpstreamErrorType).
 		SetErrorType(item.ErrorType)
+	if diag := mapGatewayUsageDiagnosticForDB(item.Diagnostic); len(diag) > 0 {
+		create.SetDiagnostic(diag)
+	}
 	if item.APIKeyID > 0 {
 		create.SetAPIKeyID(item.APIKeyID)
 	}
@@ -1184,6 +1188,9 @@ func (r *gatewayRepo) applyUsageFilter(ctx context.Context, q *ent.GatewayUsageL
 	if filter.UpstreamMode != "" {
 		q = q.Where(gatewayusagelog.UpstreamModeEQ(filter.UpstreamMode))
 	}
+	if filter.UpstreamErrorType != "" {
+		q = q.Where(gatewayusagelog.UpstreamErrorTypeEQ(filter.UpstreamErrorType))
+	}
 	if filter.SuccessSet {
 		q = q.Where(gatewayusagelog.SuccessEQ(filter.Success))
 	}
@@ -1246,6 +1253,9 @@ func buildUsageWhereClauseWithPrefix(filter biz.GatewayUsageFilter, columnPrefix
 	}
 	if filter.UpstreamMode != "" {
 		add(col("upstream_mode")+" = $%d", filter.UpstreamMode)
+	}
+	if filter.UpstreamErrorType != "" {
+		add(col("upstream_error_type")+" = $%d", filter.UpstreamErrorType)
 	}
 	if filter.SuccessSet {
 		add(col("success")+" = $%d", filter.Success)
@@ -1672,7 +1682,84 @@ func mapGatewayUsageLog(item *ent.GatewayUsageLog) *biz.GatewayUsageLog {
 		UpstreamFallback:       item.UpstreamFallback,
 		UpstreamErrorType:      item.UpstreamErrorType,
 		ErrorType:              item.ErrorType,
+		Diagnostic:             mapGatewayUsageDiagnosticFromDB(item.Diagnostic),
 		CreatedAt:              item.CreatedAt,
+	}
+}
+
+func mapGatewayUsageDiagnosticForDB(item biz.GatewayUsageDiagnostic) map[string]any {
+	out := make(map[string]any)
+	if item.RequestBytes > 0 {
+		out["request_bytes"] = item.RequestBytes
+	}
+	if item.ResponseBytes > 0 {
+		out["response_bytes"] = item.ResponseBytes
+	}
+	if item.BackendOnly {
+		out["backend_only"] = true
+	}
+	if item.FallbackEnabled {
+		out["fallback_enabled"] = true
+	}
+	if item.FallbackBlocked {
+		out["fallback_blocked"] = true
+	}
+	if item.ReasoningEffort != "" {
+		out["reasoning_effort"] = item.ReasoningEffort
+	}
+	if item.UpstreamHTTPStatus > 0 {
+		out["upstream_http_status"] = item.UpstreamHTTPStatus
+	}
+	if item.UpstreamBody != "" {
+		out["upstream_body"] = item.UpstreamBody
+	}
+	return out
+}
+
+func mapGatewayUsageDiagnosticFromDB(raw map[string]any) biz.GatewayUsageDiagnostic {
+	if len(raw) == 0 {
+		return biz.GatewayUsageDiagnostic{}
+	}
+	return biz.GatewayUsageDiagnostic{
+		RequestBytes:       diagnosticInt64(raw["request_bytes"]),
+		ResponseBytes:      diagnosticInt64(raw["response_bytes"]),
+		BackendOnly:        diagnosticBool(raw["backend_only"]),
+		FallbackEnabled:    diagnosticBool(raw["fallback_enabled"]),
+		FallbackBlocked:    diagnosticBool(raw["fallback_blocked"]),
+		ReasoningEffort:    strings.TrimSpace(fmt.Sprint(raw["reasoning_effort"])),
+		UpstreamHTTPStatus: int(diagnosticInt64(raw["upstream_http_status"])),
+		UpstreamBody:       strings.TrimSpace(fmt.Sprint(raw["upstream_body"])),
+	}
+}
+
+func diagnosticInt64(value any) int64 {
+	switch v := value.(type) {
+	case int64:
+		return v
+	case int:
+		return int64(v)
+	case float64:
+		return int64(v)
+	case json.Number:
+		n, _ := v.Int64()
+		return n
+	case string:
+		n, _ := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+		return n
+	default:
+		return 0
+	}
+}
+
+func diagnosticBool(value any) bool {
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		b, _ := strconv.ParseBool(strings.TrimSpace(v))
+		return b
+	default:
+		return false
 	}
 }
 

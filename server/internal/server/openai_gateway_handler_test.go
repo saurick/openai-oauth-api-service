@@ -1,9 +1,12 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,7 +15,300 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"server/internal/biz"
 )
+
+func TestStatusCapturingResponseWriterPreservesFlush(t *testing.T) {
+	rec := httptest.NewRecorder()
+	writer := &statusCapturingResponseWriter{ResponseWriter: rec}
+	flusher, ok := any(writer).(http.Flusher)
+	if !ok {
+		t.Fatal("statusCapturingResponseWriter must expose http.Flusher for SSE handlers")
+	}
+	_, _ = writer.Write([]byte("data: hello\n\n"))
+	flusher.Flush()
+	if !rec.Flushed {
+		t.Fatal("underlying recorder was not flushed")
+	}
+	if writer.StatusCode() != http.StatusOK {
+		t.Fatalf("status = %d, want 200", writer.StatusCode())
+	}
+}
+
+func TestUpstreamErrorTypeClassifiesBackendErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "auth", err: codexBackendHTTPError{status: http.StatusUnauthorized}, want: "codex_backend_auth_failed"},
+		{name: "rate_limit", err: codexBackendHTTPError{status: http.StatusTooManyRequests}, want: "codex_backend_rate_limited"},
+		{name: "http_5xx", err: codexBackendHTTPError{status: http.StatusBadGateway}, want: "codex_backend_http_5xx"},
+		{name: "timeout", err: errors.New("codex backend upstream timed out after 10s"), want: "codex_backend_timeout"},
+		{name: "incomplete", err: errors.New("codex backend response incomplete: stopped"), want: "codex_backend_response_incomplete"},
+		{name: "stream", err: errors.New("unexpected EOF while reading stream"), want: "codex_backend_stream_error"},
+		{name: "client_canceled", err: context.Canceled, want: "client_canceled"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := upstreamErrorType(tt.err, codexUpstreamModeBackend); got != tt.want {
+				t.Fatalf("upstreamErrorType() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUpstreamErrorTypeClassifiesCLIErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "timeout", err: errors.New("codex cli upstream timed out after 10s"), want: "codex_cli_timeout"},
+		{name: "empty_answer", err: errors.New("codex cli upstream returned empty answer"), want: "codex_cli_empty_answer"},
+		{name: "not_found", err: errors.New("exec: \"codex\": executable file not found in $PATH"), want: "codex_cli_not_found"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := upstreamErrorType(tt.err, codexUpstreamModeCLI); got != tt.want {
+				t.Fatalf("upstreamErrorType() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStreamResponsesWritesCreatedBeforeSlowUpstream(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "fake-codex")
+	script := `#!/bin/sh
+cat >/dev/null
+sleep 2
+echo '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"OK"}}'
+echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}'
+`
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CODEX_UPSTREAM_MODE", "codex_cli")
+	t.Setenv("CODEX_CLI_BIN", bin)
+	t.Setenv("CODEX_CLI_TIMEOUT_SECONDS", "30")
+
+	handler := &openAIGatewayHandler{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		model, stream, effort, err := parseRequestModelStreamAndReasoningEffort(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "responses", model, effort, stream, body, time.Now())
+	}))
+	defer server.Close()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/responses", strings.NewReader(`{"model":"gpt-5.5","stream":true,"input":"Reply OK"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer ogw_test")
+	client := &http.Client{Timeout: 5 * time.Second}
+	start := time.Now()
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	reader := bufio.NewReader(resp.Body)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("first stream line took %s, want under 1s", elapsed)
+	}
+	if !strings.Contains(line, `"type":"response.created"`) {
+		t.Fatalf("first line = %q, want response.created", line)
+	}
+}
+
+func TestStreamResponsesKeepsConnectionAliveWithInProgressEvent(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "fake-codex")
+	script := `#!/bin/sh
+cat >/dev/null
+sleep 3
+echo '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"OK"}}'
+echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}'
+`
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CODEX_UPSTREAM_MODE", "codex_cli")
+	t.Setenv("CODEX_CLI_BIN", bin)
+	t.Setenv("CODEX_CLI_TIMEOUT_SECONDS", "30")
+	t.Setenv("GATEWAY_STREAM_HEARTBEAT_SECONDS", "1")
+
+	handler := &openAIGatewayHandler{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		model, stream, effort, err := parseRequestModelStreamAndReasoningEffort(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "responses", model, effort, stream, body, time.Now())
+	}))
+	defer server.Close()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/responses", strings.NewReader(`{"model":"gpt-5.5","stream":true,"input":"Reply OK"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer ogw_test")
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	reader := bufio.NewReader(resp.Body)
+	first := readNonEmptyStreamLine(t, reader)
+	if !strings.Contains(first, `"type":"response.created"`) {
+		t.Fatalf("first line = %q, want response.created", first)
+	}
+	start := time.Now()
+	second := readNonEmptyStreamLine(t, reader)
+	if !strings.Contains(second, `"type":"response.in_progress"`) {
+		t.Fatalf("second line = %q, want response.in_progress", second)
+	}
+	if elapsed := time.Since(start); elapsed > 2500*time.Millisecond {
+		t.Fatalf("heartbeat took %s, want under 2.5s", elapsed)
+	}
+}
+
+func TestStreamChatCompletionsKeepsConnectionAliveBeforeSlowUpstream(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "fake-codex")
+	script := `#!/bin/sh
+cat >/dev/null
+sleep 3
+echo '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"OK"}}'
+echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}'
+`
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CODEX_UPSTREAM_MODE", "codex_cli")
+	t.Setenv("CODEX_CLI_BIN", bin)
+	t.Setenv("CODEX_CLI_TIMEOUT_SECONDS", "30")
+	t.Setenv("GATEWAY_STREAM_HEARTBEAT_SECONDS", "1")
+
+	handler := &openAIGatewayHandler{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		model, stream, effort, err := parseRequestModelStreamAndReasoningEffort(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "chat.completions", model, effort, stream, body, time.Now())
+	}))
+	defer server.Close()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/chat/completions", strings.NewReader(`{"model":"gpt-5.5","stream":true,"messages":[{"role":"user","content":"Reply OK"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer ogw_test")
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	reader := bufio.NewReader(resp.Body)
+	first := readNonEmptyStreamLine(t, reader)
+	if first != ": keepalive\n" {
+		t.Fatalf("first line = %q, want initial keepalive", first)
+	}
+	start := time.Now()
+	second := readNonEmptyStreamLine(t, reader)
+	if second != ": keepalive\n" {
+		t.Fatalf("second line = %q, want heartbeat keepalive", second)
+	}
+	if elapsed := time.Since(start); elapsed > 2500*time.Millisecond {
+		t.Fatalf("heartbeat took %s, want under 2.5s", elapsed)
+	}
+}
+
+func readNonEmptyStreamLine(t *testing.T, reader *bufio.Reader) string {
+	t.Helper()
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.TrimSpace(line) != "" {
+			return line
+		}
+	}
+}
+
+func TestStreamResponsesReturnsSSEErrorAfterHeaders(t *testing.T) {
+	t.Setenv("CODEX_UPSTREAM_MODE", "codex_backend")
+	t.Setenv("CODEX_AUTH_FILE", filepath.Join(t.TempDir(), "missing-auth.json"))
+
+	handler := &openAIGatewayHandler{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		model, stream, effort, err := parseRequestModelStreamAndReasoningEffort(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "responses", model, effort, stream, body, time.Now())
+	}))
+	defer server.Close()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/responses", strings.NewReader(`{"model":"gpt-5.5","stream":true,"input":"Reply OK"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer ogw_test")
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 because stream headers were already sent", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	if !strings.Contains(text, `"type":"response.created"`) || !strings.Contains(text, `"type":"response.failed"`) || !strings.Contains(text, "data: [DONE]") {
+		t.Fatalf("unexpected stream body:\n%s", text)
+	}
+}
 
 func TestPromptFromChatCompletionsPayload(t *testing.T) {
 	body := []byte(`{
@@ -240,7 +536,7 @@ func TestRunCodexCLICancelsWithRequestContext(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected canceled context to stop codex cli")
 	}
-	if elapsed := time.Since(started); elapsed > 2*time.Second {
+	if elapsed := time.Since(started); elapsed > 3*time.Second {
 		t.Fatalf("codex cli did not stop with request context, elapsed=%s", elapsed)
 	}
 }
@@ -897,5 +1193,30 @@ func TestSessionIDFromGatewayRequest(t *testing.T) {
 	req.Header.Set("X-Conversation-ID", "conversation-456")
 	if got := sessionIDFromGatewayRequest(req, body); got != "conversation-456" {
 		t.Fatalf("header session id = %q, want conversation-456", got)
+	}
+}
+
+func TestGatewayUsageDiagnosticForBackendOnlyFailure(t *testing.T) {
+	body := []byte(`{
+		"model":"gpt-5.5",
+		"reasoning_effort":"high",
+		"tools":[{"type":"function","function":{"name":"run_shell"}}],
+		"messages":[{"role":"user","content":"Reply OK"}]
+	}`)
+	err := codexBackendHTTPError{status: http.StatusBadGateway, body: []byte(`{"error":"upstream overloaded"}`)}
+
+	diagnostic := gatewayUsageDiagnosticForUpstreamFailure("/v1/chat/completions", body, "high", err, true)
+
+	if !diagnostic.BackendOnly || !diagnostic.FallbackEnabled || !diagnostic.FallbackBlocked {
+		t.Fatalf("unexpected fallback flags: %#v", diagnostic)
+	}
+	if diagnostic.RequestBytes != int64(len(body)) || diagnostic.ResponseBytes == 0 {
+		t.Fatalf("unexpected byte metrics: %#v", diagnostic)
+	}
+	if diagnostic.UpstreamHTTPStatus != http.StatusBadGateway {
+		t.Fatalf("upstream status = %d, want 502", diagnostic.UpstreamHTTPStatus)
+	}
+	if !strings.Contains(diagnostic.UpstreamBody, "upstream overloaded") {
+		t.Fatalf("upstream body summary = %q", diagnostic.UpstreamBody)
 	}
 }

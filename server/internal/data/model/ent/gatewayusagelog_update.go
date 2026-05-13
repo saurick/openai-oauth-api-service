@@ -439,6 +439,18 @@ func (_u *GatewayUsageLogUpdate) SetNillableUpstreamErrorType(v *string) *Gatewa
 	return _u
 }
 
+// SetDiagnostic sets the "diagnostic" field.
+func (_u *GatewayUsageLogUpdate) SetDiagnostic(v map[string]interface{}) *GatewayUsageLogUpdate {
+	_u.mutation.SetDiagnostic(v)
+	return _u
+}
+
+// ClearDiagnostic clears the value of the "diagnostic" field.
+func (_u *GatewayUsageLogUpdate) ClearDiagnostic() *GatewayUsageLogUpdate {
+	_u.mutation.ClearDiagnostic()
+	return _u
+}
+
 // SetErrorType sets the "error_type" field.
 func (_u *GatewayUsageLogUpdate) SetErrorType(v string) *GatewayUsageLogUpdate {
 	_u.mutation.SetErrorType(v)
@@ -666,6 +678,12 @@ func (_u *GatewayUsageLogUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.UpstreamErrorType(); ok {
 		_spec.SetField(gatewayusagelog.FieldUpstreamErrorType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Diagnostic(); ok {
+		_spec.SetField(gatewayusagelog.FieldDiagnostic, field.TypeJSON, value)
+	}
+	if _u.mutation.DiagnosticCleared() {
+		_spec.ClearField(gatewayusagelog.FieldDiagnostic, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.ErrorType(); ok {
 		_spec.SetField(gatewayusagelog.FieldErrorType, field.TypeString, value)
@@ -1102,6 +1120,18 @@ func (_u *GatewayUsageLogUpdateOne) SetNillableUpstreamErrorType(v *string) *Gat
 	return _u
 }
 
+// SetDiagnostic sets the "diagnostic" field.
+func (_u *GatewayUsageLogUpdateOne) SetDiagnostic(v map[string]interface{}) *GatewayUsageLogUpdateOne {
+	_u.mutation.SetDiagnostic(v)
+	return _u
+}
+
+// ClearDiagnostic clears the value of the "diagnostic" field.
+func (_u *GatewayUsageLogUpdateOne) ClearDiagnostic() *GatewayUsageLogUpdateOne {
+	_u.mutation.ClearDiagnostic()
+	return _u
+}
+
 // SetErrorType sets the "error_type" field.
 func (_u *GatewayUsageLogUpdateOne) SetErrorType(v string) *GatewayUsageLogUpdateOne {
 	_u.mutation.SetErrorType(v)
@@ -1359,6 +1389,12 @@ func (_u *GatewayUsageLogUpdateOne) sqlSave(ctx context.Context) (_node *Gateway
 	}
 	if value, ok := _u.mutation.UpstreamErrorType(); ok {
 		_spec.SetField(gatewayusagelog.FieldUpstreamErrorType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Diagnostic(); ok {
+		_spec.SetField(gatewayusagelog.FieldDiagnostic, field.TypeJSON, value)
+	}
+	if _u.mutation.DiagnosticCleared() {
+		_spec.ClearField(gatewayusagelog.FieldDiagnostic, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.ErrorType(); ok {
 		_spec.SetField(gatewayusagelog.FieldErrorType, field.TypeString, value)

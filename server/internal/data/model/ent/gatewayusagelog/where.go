@@ -1339,6 +1339,16 @@ func UpstreamErrorTypeContainsFold(v string) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldContainsFold(FieldUpstreamErrorType, v))
 }
 
+// DiagnosticIsNil applies the IsNil predicate on the "diagnostic" field.
+func DiagnosticIsNil() predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldIsNull(FieldDiagnostic))
+}
+
+// DiagnosticNotNil applies the NotNil predicate on the "diagnostic" field.
+func DiagnosticNotNil() predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNotNull(FieldDiagnostic))
+}
+
 // ErrorTypeEQ applies the EQ predicate on the "error_type" field.
 func ErrorTypeEQ(v string) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldEQ(FieldErrorType, v))

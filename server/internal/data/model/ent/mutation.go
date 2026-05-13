@@ -8331,6 +8331,7 @@ type GatewayUsageLogMutation struct {
 	upstream_mode            *string
 	upstream_fallback        *bool
 	upstream_error_type      *string
+	diagnostic               *map[string]interface{}
 	error_type               *string
 	created_at               *time.Time
 	clearedFields            map[string]struct{}
@@ -9515,6 +9516,55 @@ func (m *GatewayUsageLogMutation) ResetUpstreamErrorType() {
 	m.upstream_error_type = nil
 }
 
+// SetDiagnostic sets the "diagnostic" field.
+func (m *GatewayUsageLogMutation) SetDiagnostic(value map[string]interface{}) {
+	m.diagnostic = &value
+}
+
+// Diagnostic returns the value of the "diagnostic" field in the mutation.
+func (m *GatewayUsageLogMutation) Diagnostic() (r map[string]interface{}, exists bool) {
+	v := m.diagnostic
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDiagnostic returns the old "diagnostic" field's value of the GatewayUsageLog entity.
+// If the GatewayUsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayUsageLogMutation) OldDiagnostic(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDiagnostic is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDiagnostic requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDiagnostic: %w", err)
+	}
+	return oldValue.Diagnostic, nil
+}
+
+// ClearDiagnostic clears the value of the "diagnostic" field.
+func (m *GatewayUsageLogMutation) ClearDiagnostic() {
+	m.diagnostic = nil
+	m.clearedFields[gatewayusagelog.FieldDiagnostic] = struct{}{}
+}
+
+// DiagnosticCleared returns if the "diagnostic" field was cleared in this mutation.
+func (m *GatewayUsageLogMutation) DiagnosticCleared() bool {
+	_, ok := m.clearedFields[gatewayusagelog.FieldDiagnostic]
+	return ok
+}
+
+// ResetDiagnostic resets all changes to the "diagnostic" field.
+func (m *GatewayUsageLogMutation) ResetDiagnostic() {
+	m.diagnostic = nil
+	delete(m.clearedFields, gatewayusagelog.FieldDiagnostic)
+}
+
 // SetErrorType sets the "error_type" field.
 func (m *GatewayUsageLogMutation) SetErrorType(s string) {
 	m.error_type = &s
@@ -9621,7 +9671,7 @@ func (m *GatewayUsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GatewayUsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 27)
 	if m.api_key_id != nil {
 		fields = append(fields, gatewayusagelog.FieldAPIKeyID)
 	}
@@ -9694,6 +9744,9 @@ func (m *GatewayUsageLogMutation) Fields() []string {
 	if m.upstream_error_type != nil {
 		fields = append(fields, gatewayusagelog.FieldUpstreamErrorType)
 	}
+	if m.diagnostic != nil {
+		fields = append(fields, gatewayusagelog.FieldDiagnostic)
+	}
 	if m.error_type != nil {
 		fields = append(fields, gatewayusagelog.FieldErrorType)
 	}
@@ -9756,6 +9809,8 @@ func (m *GatewayUsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.UpstreamFallback()
 	case gatewayusagelog.FieldUpstreamErrorType:
 		return m.UpstreamErrorType()
+	case gatewayusagelog.FieldDiagnostic:
+		return m.Diagnostic()
 	case gatewayusagelog.FieldErrorType:
 		return m.ErrorType()
 	case gatewayusagelog.FieldCreatedAt:
@@ -9817,6 +9872,8 @@ func (m *GatewayUsageLogMutation) OldField(ctx context.Context, name string) (en
 		return m.OldUpstreamFallback(ctx)
 	case gatewayusagelog.FieldUpstreamErrorType:
 		return m.OldUpstreamErrorType(ctx)
+	case gatewayusagelog.FieldDiagnostic:
+		return m.OldDiagnostic(ctx)
 	case gatewayusagelog.FieldErrorType:
 		return m.OldErrorType(ctx)
 	case gatewayusagelog.FieldCreatedAt:
@@ -9998,6 +10055,13 @@ func (m *GatewayUsageLogMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetUpstreamErrorType(v)
 		return nil
+	case gatewayusagelog.FieldDiagnostic:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDiagnostic(v)
+		return nil
 	case gatewayusagelog.FieldErrorType:
 		v, ok := value.(string)
 		if !ok {
@@ -10168,6 +10232,9 @@ func (m *GatewayUsageLogMutation) ClearedFields() []string {
 	if m.FieldCleared(gatewayusagelog.FieldAPIKeyID) {
 		fields = append(fields, gatewayusagelog.FieldAPIKeyID)
 	}
+	if m.FieldCleared(gatewayusagelog.FieldDiagnostic) {
+		fields = append(fields, gatewayusagelog.FieldDiagnostic)
+	}
 	return fields
 }
 
@@ -10184,6 +10251,9 @@ func (m *GatewayUsageLogMutation) ClearField(name string) error {
 	switch name {
 	case gatewayusagelog.FieldAPIKeyID:
 		m.ClearAPIKeyID()
+		return nil
+	case gatewayusagelog.FieldDiagnostic:
+		m.ClearDiagnostic()
 		return nil
 	}
 	return fmt.Errorf("unknown GatewayUsageLog nullable field %s", name)
@@ -10264,6 +10334,9 @@ func (m *GatewayUsageLogMutation) ResetField(name string) error {
 		return nil
 	case gatewayusagelog.FieldUpstreamErrorType:
 		m.ResetUpstreamErrorType()
+		return nil
+	case gatewayusagelog.FieldDiagnostic:
+		m.ResetDiagnostic()
 		return nil
 	case gatewayusagelog.FieldErrorType:
 		m.ResetErrorType()

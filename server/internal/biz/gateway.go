@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -84,6 +85,45 @@ type GatewayModel struct {
 	UpdatedAt   time.Time
 }
 
+type GatewayUsageDiagnostic struct {
+	RequestBytes       int64  `json:"request_bytes"`
+	ResponseBytes      int64  `json:"response_bytes"`
+	BackendOnly        bool   `json:"backend_only"`
+	FallbackEnabled    bool   `json:"fallback_enabled"`
+	FallbackBlocked    bool   `json:"fallback_blocked"`
+	ReasoningEffort    string `json:"reasoning_effort"`
+	UpstreamHTTPStatus int    `json:"upstream_http_status"`
+	UpstreamBody       string `json:"upstream_body"`
+}
+
+func (d GatewayUsageDiagnostic) Summary() string {
+	parts := make([]string, 0, 6)
+	if d.RequestBytes > 0 {
+		parts = append(parts, fmt.Sprintf("request=%dB", d.RequestBytes))
+	}
+	if d.ResponseBytes > 0 {
+		parts = append(parts, fmt.Sprintf("response=%dB", d.ResponseBytes))
+	}
+	if d.BackendOnly {
+		parts = append(parts, "backend-only")
+	}
+	if d.FallbackBlocked {
+		parts = append(parts, "fallback-blocked")
+	} else if d.FallbackEnabled {
+		parts = append(parts, "fallback-enabled")
+	}
+	if d.ReasoningEffort != "" {
+		parts = append(parts, "effort="+d.ReasoningEffort)
+	}
+	if d.UpstreamHTTPStatus > 0 {
+		parts = append(parts, fmt.Sprintf("upstream_http=%d", d.UpstreamHTTPStatus))
+	}
+	if d.UpstreamBody != "" {
+		parts = append(parts, "upstream_body="+d.UpstreamBody)
+	}
+	return strings.Join(parts, ", ")
+}
+
 type GatewayUsageLog struct {
 	ID                     int
 	APIKeyID               int
@@ -112,25 +152,27 @@ type GatewayUsageLog struct {
 	UpstreamFallback       bool
 	UpstreamErrorType      string
 	ErrorType              string
+	Diagnostic             GatewayUsageDiagnostic
 	CreatedAt              time.Time
 	EstimatedCostUSD       *float64
 }
 
 type GatewayUsageFilter struct {
-	Limit           int
-	Offset          int
-	KeyID           int
-	KeyIDs          []int
-	OwnerUserID     int
-	SessionID       string
-	Model           string
-	ReasoningEffort string
-	Endpoint        string
-	UpstreamMode    string
-	SuccessSet      bool
-	Success         bool
-	StartTime       time.Time
-	EndTime         time.Time
+	Limit             int
+	Offset            int
+	KeyID             int
+	KeyIDs            []int
+	OwnerUserID       int
+	SessionID         string
+	Model             string
+	ReasoningEffort   string
+	Endpoint          string
+	UpstreamMode      string
+	UpstreamErrorType string
+	SuccessSet        bool
+	Success           bool
+	StartTime         time.Time
+	EndTime           time.Time
 }
 
 type GatewayUsageSummary struct {
@@ -901,6 +943,7 @@ func normalizeUsageFilter(filter GatewayUsageFilter) GatewayUsageFilter {
 	filter.Model = strings.TrimSpace(filter.Model)
 	filter.Endpoint = strings.TrimSpace(filter.Endpoint)
 	filter.UpstreamMode = NormalizeGatewayUpstreamMode(filter.UpstreamMode)
+	filter.UpstreamErrorType = strings.TrimSpace(filter.UpstreamErrorType)
 	return filter
 }
 

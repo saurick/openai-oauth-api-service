@@ -96,6 +96,7 @@
 - `CODEX_BACKEND_TIMEOUT_SECONDS`：direct backend 单次请求超时，默认 `600` 秒。
 - `CODEX_BACKEND_RETRY_ATTEMPTS`：direct backend 瞬时失败重试次数，默认 `2`；仅对 HTTP `429` / `5xx`、上游 `response.failed` / `response.incomplete` 和连接类错误生效。
 - `CODEX_BACKEND_USER_AGENT`：direct backend 请求 `User-Agent`，默认 `codex-cli`。
+- `GATEWAY_STREAM_HEARTBEAT_SECONDS`：`stream=true` 请求等待上游期间的 SSE keepalive 间隔，默认 `15` 秒；用于避免 OpenCode / Cloudflare / 代理在长请求无输出时断开连接。
 - `CODEX_AUTH_FILE`：可选，显式指定 Codex `auth.json`；默认读取 `CODEX_HOME/auth.json`。
 - `CODEX_REFRESH_TOKEN_URL_OVERRIDE`：可选，覆盖 ChatGPT OAuth refresh token 端点，默认 `https://auth.openai.com/oauth/token`。
 - `HTTP_PROXY` / `HTTPS_PROXY` / `WS_PROXY` / `WSS_PROXY` / `ALL_PROXY` 及对应小写变量：可选 Codex CLI 出站代理。
