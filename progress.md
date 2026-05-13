@@ -20,6 +20,8 @@
 - 部署进度：镜像包已上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260513T201322-081f551e/`，远端 `docker load` 已确认加载 `oauth-api-service-server:20260513T201322-081f551e`；migration 文件已上传到同一 release 的 `migrate/` 目录。
 - 阻塞：执行 Atlas 容器迁移前检查时，远端 Docker / SSH 开始无响应；随后 SSH 卡在 banner exchange，公网 `/healthz` 与 `/readyz` 均超时。当前未确认完成 `migrate apply`、未更新 Compose `.env` 的 `APP_IMAGE`、未执行 `docker compose up -d app-server`，因此不能视为已完成线上切换。
 - 下一步：等服务器 SSH 或云控制台恢复后，先检查 `docker ps`、Atlas 临时容器、`df -h /`、`docker system df` 和当前 app 镜像；确认数据库 migration 状态后再继续更新 `APP_IMAGE=oauth-api-service-server:20260513T201322-081f551e`、重启 `app-server`、验证 `/healthz` / `/readyz` / OpenCode 最小调用。禁止在确认现场前重启 Docker 或清理 volume。
+- 补充排查：服务器重启后线上旧镜像 `oauth-api-service-server:20260512T212250-5eb24e4d-local` 自动恢复，公网 `/healthz` 与 `/readyz` 正常；`openai-oauth-api-service-server` 当前 `OOMKilled=false`，内存约 17MiB / 900MiB。今天 20:17 之后内核日志没有记录具体 OOM kill，但 `systemd-journald` 持续报告 `Under memory pressure`，时间点与拉取 / 运行 `arigaio/atlas:latest` 容器迁移检查重合；截图中的 `python3/gunicorn` OOM 记录来自 5 月 10 日历史 Docker 容器，不是本项目 Go 服务。
+- 处理：已删除本次引入的 `arigaio/atlas:latest` 镜像，未清理 volume，保留已 load 的新业务镜像 `oauth-api-service-server:20260513T201322-081f551e`。后续迁移禁止在低配服务器上拉起 Atlas 容器，应改为上传轻量 `atlas` 二进制、使用已验证的轻量迁移方式，或在资源更充足环境执行后再远端只做加载 / 重启。
 
 
 ## 2026-05-12 线上 502 排查
