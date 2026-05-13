@@ -22,6 +22,9 @@
 - 下一步：等服务器 SSH 或云控制台恢复后，先检查 `docker ps`、Atlas 临时容器、`df -h /`、`docker system df` 和当前 app 镜像；确认数据库 migration 状态后再继续更新 `APP_IMAGE=oauth-api-service-server:20260513T201322-081f551e`、重启 `app-server`、验证 `/healthz` / `/readyz` / OpenCode 最小调用。禁止在确认现场前重启 Docker 或清理 volume。
 - 补充排查：服务器重启后线上旧镜像 `oauth-api-service-server:20260512T212250-5eb24e4d-local` 自动恢复，公网 `/healthz` 与 `/readyz` 正常；`openai-oauth-api-service-server` 当前 `OOMKilled=false`，内存约 17MiB / 900MiB。今天 20:17 之后内核日志没有记录具体 OOM kill，但 `systemd-journald` 持续报告 `Under memory pressure`，时间点与拉取 / 运行 `arigaio/atlas:latest` 容器迁移检查重合；截图中的 `python3/gunicorn` OOM 记录来自 5 月 10 日历史 Docker 容器，不是本项目 Go 服务。
 - 处理：已删除本次引入的 `arigaio/atlas:latest` 镜像，未清理 volume，保留已 load 的新业务镜像 `oauth-api-service-server:20260513T201322-081f551e`。后续迁移禁止在低配服务器上拉起 Atlas 容器，应改为上传轻量 `atlas` 二进制、使用已验证的轻量迁移方式，或在资源更充足环境执行后再远端只做加载 / 重启。
+- 完成部署：按固定版本安装 `/usr/local/bin/atlas v1.1.0`，sha256 校验通过；宿主机使用 `127.0.0.1:5433` 连接数据库，`atlas migrate status` 显示当前版本 `20260512130053`、无 pending。已更新远端 `.env` 的 `APP_IMAGE=oauth-api-service-server:20260513T201322-081f551e` 并重启 `app-server`，线上容器版本为 `081f551e26a9a24bbabd06de2c0e7d72cf114ed4`。
+- 部署验证：远端本机与公网 `/healthz`、`/readyz` 均返回 200；`opencode models oauth-api-service` 返回 `oauth-api-service/gpt-5.5`；重启 mihomo 后恢复 `172.19.0.1:7890` 监听，`opencode run --pure -m oauth-api-service/gpt-5.5 --variant low --format json '只回复 OK'` 返回 `OK`，未出现 `error`、`terminated`、`ECONNRESET` 或 `response.failed`。部署后 `openai-oauth-api-service-server` 约 42MiB / 900MiB，`OOMKilled=false`，根分区 48%，保留上一版镜像用于回滚，仅执行 `docker builder prune -f`（回收 0B），未执行 volume prune。
+- 额外发现：重启后 mihomo 早于 Docker bridge 就绪启动，导致 `listen tcp 172.19.0.1:7890: bind: cannot assign requested address`，app-server 代理请求报 `connect: connection refused`；手动 `systemctl restart mihomo` 后恢复。后续应给 mihomo service 增加 Docker network 就绪依赖或启动前等待 `172.19.0.1`，避免服务器重启后代理入口缺失。
 
 
 ## 2026-05-12 线上 502 排查
