@@ -4,6 +4,8 @@
 
 部署构建边界：目标服务器配置较低，只负责导入已经构建好的镜像、启动 Compose、执行 migration 和部署后检查；不要在服务器上执行 `docker build`、`pnpm build`、`go build`、`make build_server` 等重构建步骤。镜像必须在本地开发机或 CI 构建完成后，再上传到服务器。
 
+Atlas migration 在生产 / 低配服务器上统一使用宿主机 `/usr/local/bin/atlas`，不要拉起 `arigaio/atlas:*` 临时容器，也不要把 Atlas 增加到 Compose。迁移目录随 release 上传，执行时使用宿主机可达的 PostgreSQL DSN（当前 Compose 默认是 `127.0.0.1:5433`），并通过 `flock /tmp/atlas-migrate.lock` 避免并发迁移。
+
 | 路径 | 说明 |
 | --- | --- |
 | `compose/prod/compose.yml` | PostgreSQL + 后端服务 |

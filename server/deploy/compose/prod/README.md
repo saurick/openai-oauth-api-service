@@ -73,6 +73,22 @@ NODE_USE_ENV_PROXY=1
 
 管理员账号默认保持 `admin/adminadmin`。只有维护者明确要求改密时，才设置 `OAUTH_API_ADMIN_PASSWORD` 并重启 `app-server`；部署过程不要擅自生成随机管理员密码。
 
+## 线上迁移
+
+低配服务器上 Atlas 作为宿主机运维工具预装在 `/usr/local/bin/atlas`，不要用 `arigaio/atlas:*` 临时容器执行 migration，也不要把 Atlas 服务写进 `compose.yml`。
+
+```bash
+cd /data/openai-oauth-api-service/releases/<release>
+
+atlas version
+flock /tmp/atlas-migrate.lock \
+  /usr/local/bin/atlas migrate status \
+  --dir "file://$PWD/migrate" \
+  --url 'postgres://postgres:***@127.0.0.1:5433/openai_oauth_api_service?sslmode=disable'
+```
+
+正式 apply 前先执行 `migrate status` 和 dry-run；如果 release 里没有 schema 变更，记录 status 即可，不需要拉取额外镜像。
+
 如启用管理员 OAuth 登录，OAuth provider 回调固定登记后端 `/auth/oauth/callback`。本地为 `http://localhost:8400/auth/oauth/callback`；当前个人部署为 `https://oauth-api.saurick.me/auth/oauth/callback`。前端后台域名通过 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` allowlist 控制，避免授权完成后跳到未登记来源。
 
 ## 可选容器化 Nginx
