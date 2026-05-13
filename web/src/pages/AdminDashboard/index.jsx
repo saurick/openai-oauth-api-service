@@ -4,6 +4,11 @@ import SurfacePanel from '@/common/components/layout/SurfacePanel'
 import { AUTH_SCOPE } from '@/common/auth/auth'
 import { ADMIN_BASE_PATH } from '@/common/utils/adminRpc'
 import { getActionErrorMessage } from '@/common/utils/errorMessage'
+import {
+  gatewayErrorTypeLabel,
+  gatewayErrorTypeTitle,
+  GATEWAY_ERROR_TYPE_HELP,
+} from '@/common/utils/gatewayErrorTypes'
 import { JsonRpc } from '@/common/utils/jsonRpc'
 
 const PAGE_SIZE = 12
@@ -378,6 +383,20 @@ function HeaderWithHelp({ children, help }) {
   )
 }
 
+function ErrorTypeCell({ value }) {
+  const code = String(value || '').trim()
+  if (!code) return '-'
+  const label = gatewayErrorTypeLabel(code)
+  return (
+    <div className="max-w-[240px]" title={gatewayErrorTypeTitle(code)}>
+      <div className="break-all font-mono text-xs leading-5">{code}</div>
+      {label ? (
+        <div className="mt-1 text-xs leading-5 text-[#7b8780]">{label}</div>
+      ) : null}
+    </div>
+  )
+}
+
 function apiKeyRemark(item) {
   return item?.api_key_name || item?.name || '无备注'
 }
@@ -653,7 +672,9 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
                     字节
                   </HeaderWithHelp>
                 </th>
-                <th className={thClass}>错误</th>
+                <th className={thClass}>
+                  <HeaderWithHelp help={GATEWAY_ERROR_TYPE_HELP}>错误</HeaderWithHelp>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e7efe9] bg-white">
@@ -731,7 +752,9 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
                         响应 {fmtNumber(item.response_bytes)}
                       </div>
                     </td>
-                    <td className={tdClass}>{item.error_type || '-'}</td>
+                    <td className={tdClass}>
+                      <ErrorTypeCell value={item.error_type} />
+                    </td>
                   </tr>
                 ))
               ) : (

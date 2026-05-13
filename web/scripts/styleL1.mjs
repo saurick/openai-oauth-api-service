@@ -1078,6 +1078,9 @@ async function assertUsageTableVisuals(page, scenarioName) {
       hasUpstreamFilter: Boolean(
         main?.querySelector('[role="combobox"][aria-label="实际执行上游"]')
       ),
+      hasUpstreamErrorFilter: Boolean(
+        main?.querySelector('[role="combobox"][aria-label="上游错误类型"]')
+      ),
       hasUpstreamStats: document.body.innerText.includes('上游分布'),
       hasUsageTabs: [
         '每日模型',
@@ -1096,6 +1099,7 @@ async function assertUsageTableVisuals(page, scenarioName) {
   assert(metrics.hasSidebarUsageNav, `${scenarioName} 缺少后台侧栏 usage 入口`)
   assert(metrics.hasTimeRangeFilter, `${scenarioName} 缺少 usage 时间范围筛选`)
   assert(metrics.hasUpstreamFilter, `${scenarioName} 缺少实际上游筛选`)
+  assert(metrics.hasUpstreamErrorFilter, `${scenarioName} 缺少上游错误类型筛选`)
   assert(metrics.hasUpstreamStats, `${scenarioName} 缺少上游分布统计`)
   assert(metrics.hasUsageTabs, `${scenarioName} 缺少 usage 分段视图`)
   assert(metrics.hasDailySummary, `${scenarioName} 缺少每日模型默认视图`)
@@ -1412,7 +1416,6 @@ async function assertUsagePaginationRequest(page, scenarioName) {
   )
 }
 
-
 async function assertClientConfigVisuals(page, scenarioName) {
   const metrics = await page.evaluate(() => {
     const main = document.querySelector('main')
@@ -1436,7 +1439,10 @@ async function assertClientConfigVisuals(page, scenarioName) {
         !text.includes('上传已有模板') && !text.includes('选择配置文件'),
       mainHeight: mainRect?.height || 0,
       previewBackground: preStyle.backgroundColor,
-      previewContrast: getContrastRatio(preStyle.color, preStyle.backgroundColor),
+      previewContrast: getContrastRatio(
+        preStyle.color,
+        preStyle.backgroundColor
+      ),
       previewHeight: preRect?.height || 0,
       previewTextColor: preStyle.color,
       previewWidth: preRect?.width || 0,
@@ -2758,6 +2764,15 @@ function getApiMockData(method, params = {}, state = {}) {
           total_tokens: 1080,
           upstream_configured_mode: 'codex_cli',
           upstream_error_type: 'codex_cli_upstream_failed',
+          diagnostic: {
+            backend_only: true,
+            fallback_blocked: true,
+            request_bytes: 2048,
+            response_bytes: 512,
+            upstream_body: 'codex cli exited with status 1',
+          },
+          diagnostic_summary:
+            'request=2048B, response=512B, backend-only, fallback-blocked',
           upstream_fallback: false,
           upstream_mode: 'codex_cli',
         },

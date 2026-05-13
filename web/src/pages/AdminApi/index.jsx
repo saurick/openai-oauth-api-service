@@ -4,6 +4,11 @@ import SurfacePanel from '@/common/components/layout/SurfacePanel'
 import { AUTH_SCOPE } from '@/common/auth/auth'
 import { ADMIN_BASE_PATH } from '@/common/utils/adminRpc'
 import { getActionErrorMessage } from '@/common/utils/errorMessage'
+import {
+  gatewayErrorTypeLabel,
+  gatewayErrorTypeTitle,
+  GATEWAY_ERROR_TYPE_HELP,
+} from '@/common/utils/gatewayErrorTypes'
 import { JsonRpc } from '@/common/utils/jsonRpc'
 import {
   getTableSelectionAfterClick,
@@ -94,6 +99,26 @@ const CODEX_UPSTREAM_STRATEGY_OPTIONS = [
 const USAGE_UPSTREAM_FILTER_OPTIONS = [
   { label: '全部上游', value: '' },
   ...CODEX_UPSTREAM_MODE_OPTIONS,
+]
+const USAGE_UPSTREAM_ERROR_FILTER_OPTIONS = [
+  { label: '全部错误类型', value: '' },
+  { label: 'Backend 鉴权失败', value: 'codex_backend_auth_failed' },
+  { label: 'Backend 限流', value: 'codex_backend_rate_limited' },
+  { label: 'Backend 5xx', value: 'codex_backend_http_5xx' },
+  { label: 'Backend 超时', value: 'codex_backend_timeout' },
+  { label: 'Backend response failed', value: 'codex_backend_response_failed' },
+  {
+    label: 'Backend response incomplete',
+    value: 'codex_backend_response_incomplete',
+  },
+  { label: 'Backend 流中断', value: 'codex_backend_stream_error' },
+  { label: 'Backend HTTP 错误', value: 'codex_backend_http_error' },
+  { label: 'Backend 未分类失败', value: 'codex_backend_upstream_failed' },
+  { label: 'CLI 超时', value: 'codex_cli_timeout' },
+  { label: 'CLI 不存在', value: 'codex_cli_not_found' },
+  { label: 'CLI 空输入', value: 'codex_cli_empty_prompt' },
+  { label: 'CLI 空回复', value: 'codex_cli_empty_answer' },
+  { label: 'CLI 未分类失败', value: 'codex_cli_upstream_failed' },
 ]
 const CODEX_REASONING_EFFORT_OPTIONS = [
   { label: 'Low', value: 'low' },
@@ -192,6 +217,7 @@ const INITIAL_USAGE_FILTERS = {
   reasoningEffort: '',
   success: '',
   upstreamMode: '',
+  upstreamErrorType: '',
   timeRange: DEFAULT_USAGE_TIME_RANGE,
 }
 
@@ -968,6 +994,62 @@ function HeaderWithHelp({ children, help }) {
   )
 }
 
+function ErrorTypeCell({ value }) {
+  const code = String(value || '').trim()
+  if (!code) return '-'
+  const label = gatewayErrorTypeLabel(code)
+  return (
+    <div className="max-w-[240px]" title={gatewayErrorTypeTitle(code)}>
+      <div className="break-all font-mono text-xs leading-5">{code}</div>
+      {label ? (
+        <div className="mt-1 text-xs leading-5 text-[#7b8780]">{label}</div>
+      ) : null}
+    </div>
+  )
+}
+
+function DiagnosticCell({ item }) {
+  const diagnostic = item?.diagnostic || {}
+  const summary = String(item?.diagnostic_summary || '').trim()
+  const chips = []
+  if (diagnostic.backend_only) chips.push('backend-only')
+  if (diagnostic.fallback_blocked) chips.push('fallback blocked')
+  else if (diagnostic.fallback_enabled) chips.push('fallback enabled')
+  if (diagnostic.upstream_http_status) {
+    chips.push(`上游 HTTP ${diagnostic.upstream_http_status}`)
+  }
+  const body = String(diagnostic.upstream_body || '').trim()
+
+  if (!summary && chips.length === 0 && !body) return '-'
+
+  return (
+    <div className="max-w-[280px] text-xs leading-5" title={summary || body}>
+      {chips.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {chips.map((chip) => (
+            <span
+              key={chip}
+              className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-700"
+            >
+              {chip}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <div className="mt-1 text-[#7b8780]">
+        请求 {fmtNumber(diagnostic.request_bytes ?? item?.request_bytes)}B
+        <span className="mx-1 text-[#c0c9c4]">/</span>
+        响应 {fmtNumber(diagnostic.response_bytes ?? item?.response_bytes)}B
+      </div>
+      {body ? (
+        <div className="mt-1 line-clamp-2 break-all font-mono text-[#9aa39e]">
+          {body}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function CopyButton({ value, label = '复制' }) {
   const [copied, setCopied] = useState(false)
 
@@ -1294,6 +1376,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     }
     if (filters.success) params.success = filters.success === 'true'
     if (filters.upstreamMode) params.upstream_mode = filters.upstreamMode
+    if (filters.upstreamErrorType) {
+      params.upstream_error_type = filters.upstreamErrorType
+    }
     return params
   }
 
@@ -1871,7 +1956,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     <div className={tableWrapClass}>
       <div className="overflow-auto">
         <table
-          className={`${tableClass} ${compact ? 'min-w-[900px]' : 'min-w-[1980px]'}`}
+          className={`${tableClass} ${compact ? 'min-w-[900px]' : 'min-w-[2180px]'}`}
         >
           <thead>
             <tr>
@@ -1916,7 +2001,20 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   </HeaderWithHelp>
                 </th>
               ) : null}
-              {!compact ? <th className={thClass}>错误</th> : null}
+              {!compact ? (
+                <th className={thClass}>
+                  <HeaderWithHelp help={GATEWAY_ERROR_TYPE_HELP}>
+                    错误
+                  </HeaderWithHelp>
+                </th>
+              ) : null}
+              {!compact ? (
+                <th className={thClass}>
+                  <HeaderWithHelp help="诊断字段只保存请求 / 响应大小、fallback 状态、backend-only 标记和脱敏上游摘要，不保存 prompt 或模型输出正文。">
+                    诊断
+                  </HeaderWithHelp>
+                </th>
+              ) : null}
             </tr>
           </thead>
           <tbody className="divide-y divide-[#e7efe9] bg-white">
@@ -2015,14 +2113,21 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     </td>
                   ) : null}
                   {!compact ? (
-                    <td className={tdClass}>{item.error_type || '-'}</td>
+                    <td className={tdClass}>
+                      <ErrorTypeCell value={item.error_type} />
+                    </td>
+                  ) : null}
+                  {!compact ? (
+                    <td className={tdClass}>
+                      <DiagnosticCell item={item} />
+                    </td>
                   ) : null}
                 </tr>
               ))
             ) : (
               <tr>
                 <td
-                  colSpan={compact ? 6 : 14}
+                  colSpan={compact ? 6 : 15}
                   className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                 >
                   {loading ? '加载中...' : '暂无调用记录'}
@@ -3109,7 +3214,11 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                       <th className={thClass}>Token</th>
                       <th className={thClass}>费用估算</th>
                       <th className={thClass}>耗时</th>
-                      <th className={thClass}>错误</th>
+                      <th className={thClass}>
+                        <HeaderWithHelp help={GATEWAY_ERROR_TYPE_HELP}>
+                          错误
+                        </HeaderWithHelp>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#e7efe9] bg-white">
@@ -3163,7 +3272,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                           <td className={tdClass}>
                             {fmtNumber(item.duration_ms)} ms
                           </td>
-                          <td className={tdClass}>{item.error_type || '-'}</td>
+                          <td className={tdClass}>
+                            <ErrorTypeCell value={item.error_type} />
+                          </td>
                         </tr>
                       ))
                     ) : (
@@ -3635,6 +3746,21 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     ariaLabel="实际执行上游"
                     options={USAGE_UPSTREAM_FILTER_OPTIONS}
                     placeholder="输入实际上游"
+                  />
+                </label>
+                <label className={fieldClass}>
+                  错误类型
+                  <SearchableSelect
+                    value={usageFilters.upstreamErrorType}
+                    onChange={(nextValue) =>
+                      setUsageFilters((current) => ({
+                        ...current,
+                        upstreamErrorType: nextValue,
+                      }))
+                    }
+                    ariaLabel="上游错误类型"
+                    options={USAGE_UPSTREAM_ERROR_FILTER_OPTIONS}
+                    placeholder="输入错误类型"
                   />
                 </label>
               </div>

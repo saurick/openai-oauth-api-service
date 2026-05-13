@@ -2,6 +2,18 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-13 OpenCode stream terminate 排查
+- 发现：截图中的 `request_id=435ee41334021f2bd599110ad1044d26` 是 `/v1/chat/completions`、`stream=true`、`reasoning_effort=high` 请求，usage 记录 `HTTP 502`、`duration_ms≈125s`、`request_bytes=167189`、`backend_only=true`，诊断为 `upstream_body=context canceled`；本机 OpenCode 日志同类长请求出现 `ECONNRESET` 和 Cloudflare `524 A timeout occurred`。
+- 结论：最小 `chat.completions stream` 与 `/v1/responses stream` 线上均能返回 `HTTP 200` 和 `OK`，不是流式格式整体不可用；问题集中在大上下文 / 工具历史等 backend-only 长请求。当前服务只在流开始时发一次首包，随后等待 Codex backend 完整结束，长时间无输出会被 Cloudflare / 客户端 / 代理断开，导致上游 context 被取消，OpenCode UI 表现为 shell `terminated`。
+- 修复：`stream=true` 请求等待上游期间新增周期性 SSE keepalive，默认 15 秒，可通过 `GATEWAY_STREAM_HEARTBEAT_SECONDS` 调整；补充 `chat.completions` 慢上游回归，确保结果返回前会持续发送 keepalive。
+- 补充修复：Codex 自定义 provider 使用 `/v1/responses` 时可能忽略 SSE comment 级 keepalive；`/v1/responses` 等待上游期间改为发送标准 `response.in_progress` 保活事件，`chat.completions` 仍保留 comment keepalive。
+- 补充修复：下游请求上下文取消时记录 `client_canceled`，usage 状态码记为 `499`，不再把客户端 / 入口代理主动断开误归类为 `codex_backend_upstream_failed` 或 Backend 502。
+- 验证通过：线上最小 `/v1/chat/completions stream=true`、非流式 chat 和 `/v1/responses stream=true` 均返回 `HTTP 200` / `OK`；本地 `cd server && go test -count=1 ./...`、`git diff --check`、`cd server && make migrate_status` 通过。
+- OpenCode 验证：本地服务恢复到当前代码并监听 `127.0.0.1:8400`；使用 `oauth-api-service-local/gpt-5.5`、`--pure`、`low` 执行受控长任务，实际运行约 94 秒，工具命令 `sleep 70 && printf OPENCODE_LONG_OK` 成功，最终输出 `OPENCODE_LONG_OK`，日志未出现 `terminated`、`ECONNRESET`、`AI_APICallError`、`server_is_overloaded` 或 `response.failed`。
+- 环境处理：本地开发库应用待执行 migration `20260512130053` 后，usage 查询恢复可用；该 migration 是本轮前已有的 schema 变更，用于支持 `gateway_usage_logs.diagnostic`。
+- 下一步：部署后复测长上下文 OpenCode 会话；若仍有 502，需要继续看新 usage 的 `upstream_error_type` / `diagnostic.upstream_body`，区分上游真实 `response.failed/incomplete`、账号限流、模型超上下文、网络断流和客户端主动取消。
+- 阻塞/风险：本轮只修复客户端 / Cloudflare 空闲超时导致的断流，不改变 backend-only 请求不能 fallback 到 CLI 的策略；如果 Codex backend 自身在大工具历史上返回失败，仍会按真实上游错误记录为 502。若部署后仍出现 125s 左右取消，下一步应改为实时转发 / 转换 Codex backend 上游 SSE，而不是继续只在等待结果期间做合成保活。
+
 
 ## 2026-05-12 线上 502 排查
 - 完成：公网 `/healthz`、`/readyz` 均返回正常，最小 `/v1/responses` 非流式请求返回 `OK`，说明 Cloudflare、入口层、app-server 与 Codex 登录态主路径当前可用。
@@ -408,3 +420,57 @@
 - 部署：按低配服务器发布约定在本机构建镜像 `oauth-api-service-server:20260512T184202-8957746e`，上传到 `8.218.4.199` 后仅执行 `docker load` 和 `docker compose up -d app-server`，未在服务器构建。
 - 线上验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260512T184202-8957746e`；容器内与公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；`/admin-client-config` 已返回新前端资源 `index.DYXQUfGa.js`；管理员 `admin/adminadmin` 登录、`summary` 和 `usage_list` 携带 `key_ids` 请求均返回 `code=0`。
 - 清理：部署前记录远端 `/` 使用率 48%、Docker images 4.71GB；执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260512T143300-bc28db5-local`，回收 347.6MB；清理后 `/` 使用率 47%、Docker images 4.007GB；已删除远端和本地本轮镜像 tar 包。
+
+## 2026-05-12 Codex stream 首字节与 summary 能力声明收敛
+- 完成：`/v1/responses` 的 `stream=true` 请求现在进入上游 Codex backend/CLI 前先返回并 flush `response.created`，避免 Cloudflare / 客户端在长时间首字节空窗中误判上游失败；首字节后上游失败时改为在 SSE 内返回 `response.failed` 和 `[DONE]`。
+- 完成：`/v1/chat/completions` 的流式请求也会先发送 SSE comment keepalive，降低纯聊天流的首字节等待风险；后续仍保持原有最终 chunk 输出方式。
+- 完成：模型元数据将 `supports_reasoning_summaries` 收敛为 `false`，明确当前自定义 provider 不承诺 Codex reasoning summary 过程事件透传，避免客户端误判能力。
+- 文档：同步更新 `server/docs/api.md`，说明 stream 首字节、SSE 内错误和 reasoning summary 能力边界。
+- 验证通过：`cd server && go test ./internal/server ./internal/biz`、`cd server && go test ./internal/server ./internal/biz ./internal/data`、`git diff --check`。本轮不做完整 reasoning summary 事件透传，过程展示仍不是目标能力。
+
+
+## 2026-05-12 Codex 上游错误类型与日志补充
+- 完成：上游失败时按 backend / CLI 细分 `upstream_error_type`，覆盖 backend 鉴权、限流、HTTP 5xx、超时、response failed / incomplete、流错误，以及 CLI 超时、二进制缺失、空回复等场景，失败 usage 不再只落 `codex_backend_upstream_failed` / `codex_cli_upstream_failed` 粗粒度类型。
+- 完成：网关在上游失败时写入包含 request_id、mode、endpoint、model、error_type 的 warn 日志，便于直接关联 usage 与服务日志；stream 已发首字节后仍在 SSE 内返回细分错误码。
+- 文档：同步更新 `server/docs/api.md` 的 usage 记录说明，列出常见上游错误类型。
+- 验证通过：`cd server && go test ./internal/server ./internal/biz ./internal/data`、`git diff --check`。
+
+## 2026-05-12 Codex stream 与错误类型部署验证
+- 补充修复：发现自定义 HTTP 观测包装器 `statusCapturingResponseWriter` 未透传 `http.Flusher`，会导致 `/v1/responses` 虽然写了 `Flush()` 但到 app-server 实际响应仍带 `Content-Length` 并被缓冲；已为 wrapper 增加 `Flush()` 透传并补测试，确保 SSE handler 能拿到 flusher。
+- 验证通过：本地执行 `cd server && go test ./internal/server ./internal/biz ./internal/data`、`cd web && pnpm test`、`cd web && pnpm style:l1`、`cd web && pnpm build`、`git diff --check`。
+- 部署：按低配服务器发布约定，本机构建镜像 `oauth-api-service-server:20260512T201859-5eb24e4d-local`，上传到 `8.218.4.199` 后仅执行 `docker load` 与 `docker compose up -d app-server`，未在服务器构建。
+- 线上验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260512T201859-5eb24e4d-local`；公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；管理员 `admin/adminadmin` 登录与 `api.summary` 返回 `code=0`；`/v1/models` 的所有 Codex 模型均返回 `supports_reasoning_summaries=false`。
+- 线上验证通过：直连 app-server `http://8.218.4.199:8400/v1/responses stream=true` 首行 56ms 返回 `response.created`，响应头无 `Content-Length`，随后包含 `response.completed`、`[DONE]` 和 `OK`；公网 Cloudflare 入口也返回 `response.created` / `response.completed` / `[DONE]` / `OK`。
+- 日志检查：部署后 5 分钟内 `docker logs` 未发现 `ERROR` / `WARN` / `panic` / `fatal`。
+- 清理：部署前记录远端 `/` 使用率 51%、Docker images 5.413GB；执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未被容器使用的旧镜像 `20260512T184202-8957746e` 与中间测试镜像 `20260512T195841-5eb24e4d-local`，回收 695.3MB；清理后 `/` 使用率 47%、Docker images 4.007GB；已删除远端 release image tar 包。
+
+## 2026-05-12 usage 错误类型说明补充
+- 完成：后台最近请求、用量明细和会话请求明细的“错误”列保留原始 `error_type`，并对已知 Codex backend / CLI 错误码展示简短中文说明；表头新增说明，提示该字段来自 usage 错误类型。
+- 完成：新增前端共享 `gatewayErrorTypes` 说明映射，避免多个表格分散维护错误码文案。
+- 文档：`server/docs/api.md` 新增“上游错误类型”表，列出 backend 鉴权、限流、5xx、超时、response failed / incomplete、流中断，以及 CLI 超时、二进制缺失、空输入、空回复等错误码含义。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm style:l1`、`cd web && pnpm build`。`git diff --check` 待最终差异整理后执行。
+
+## 2026-05-12 上游失败诊断与异常筛选
+- 完成：为失败 usage 增加 `diagnostic` 元数据，记录请求 / 响应字节、backend-only、fallback enabled / blocked、reasoning effort、上游 HTTP 状态和脱敏上游错误摘要；不保存 prompt、response body 或模型输出正文。
+- 完成：`api.usage_list` 支持 `upstream_error_type` 筛选并返回 `diagnostic` / `diagnostic_summary`；`gateway_usage_logs` 新增 `diagnostic` JSONB 字段和 `upstream_error_type + created_at` 索引，迁移文件为 `20260512130053_migrate.sql`。
+- 完成：后台「用量日志」增加「上游错误类型」筛选和「诊断」列，异常请求页可直接查看 backend-only / fallback 阻断 / 上游 HTTP 状态 / 错误摘要，减少排查时必须 SSH 翻日志的次数。
+- 文档：同步更新 `server/docs/api.md` 与 `web/README.md`，明确诊断字段边界与筛选参数。
+- 下一步：部署前需执行 Atlas migration；当前实现仍只保存脱敏摘要，若要保存更详细采样必须单独设计开关、TTL 与脱敏策略。
+- 验证通过：`cd server && go test ./internal/server ./internal/biz ./internal/data`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs src/common/utils/gatewayErrorTypes.js && node --check scripts/styleL1.mjs && pnpm test -- --run`、`cd web && pnpm css && pnpm build && STYLE_L1_PORT=4324 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
+
+## 2026-05-12 usage 错误说明与诊断部署
+- 修复：部署前补齐 `diagnostic` RPC 映射为普通 map，避免 `structpb.NewStruct` 不能直接序列化 Go struct，`cd server && go test ./internal/server ./internal/biz ./internal/data` 已通过。
+- 验证通过：本地执行 `cd server && go test ./internal/server ./internal/biz ./internal/data`、`cd web && pnpm test`、`cd web && pnpm style:l1`、`cd web && pnpm build`、`git diff --check`。
+- 部署：按低配服务器发布约定在本机构建镜像 `oauth-api-service-server:20260512T211049-5eb24e4d-local`，上传到 `8.218.4.199` 后仅执行 `docker load`、Atlas migration 和 `docker compose up -d app-server`，未在服务器构建。
+- 迁移：远端 Atlas 从 `20260511033926` 应用到 `20260512130053`，新增 `gateway_usage_logs.diagnostic` JSONB 字段与 `upstream_error_type, created_at` 索引；迁移后状态 `OK`、待执行 `0`。
+- 线上验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260512T211049-5eb24e4d-local`；容器内与公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；`/admin-api` 返回新前端资源 `index.Br-LtUh6.js`；管理员 `admin/adminadmin` 登录、`api.summary` 和带 `upstream_error_type` 的 `api.usage_list` 均返回 `code=0`。
+- 日志检查：部署后 5 分钟内 `docker logs` 未发现 `ERROR` / `WARN` / `panic` / `fatal`；仅有本轮验证用 JSON-RPC info 日志。
+- 清理：部署前记录远端 `/` 使用率 47%、Docker images 4.007GB；迁移拉取临时 Atlas 镜像后清理前 `/` 使用率 49%、Docker images 4.885GB；执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未使用旧 app 镜像 `20260512T201859-5eb24e4d-local` 与临时 `arigaio/atlas:latest`，回收 386.1MB；清理后 `/` 使用率 46%、Docker images 4.007GB；已删除远端和本地本轮镜像 / migration tar 包。
+
+## 2026-05-12 上游失败诊断部署验证
+- 部署：按低配服务器发布约定，本机构建镜像 `oauth-api-service-server:20260512T212250-5eb24e4d-local` 并上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260512T212250-5eb24e4d-local/`；远端只执行 `docker load`、Atlas migration、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d app-server`，未在服务器构建。
+- migration：已同步本地 `server/internal/data/model/migrate/` 到远端 `/data/openai-oauth-api-service/migrate/` 并通过 Atlas 容器执行，状态为 `Current Version: 20260512130053`、`Pending Files: 0`；生产库 `gateway_usage_logs.diagnostic` 字段存在且类型为 `jsonb`。
+- 线上验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260512T212250-5eb24e4d-local`，启动日志 service.version 为 `5eb24e4de4e3210a227a1f2109c56024de0dfa4e-local`；远端本机与公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；公网 `/admin-login` 返回 `HTTP 200` 且前端资源为 `assets/index.CE7ihMBu.js`。
+- 线上验证通过：管理员 `admin/adminadmin` 本机 RPC 登录成功；`api.usage_list` 携带 `upstream_error_type=codex_backend_http_5xx` 返回 `code=0`；真实创建临时 key `diagnostictmp` 后调用 `/v1/chat/completions` 返回 `HTTP 200`，随后 `usage_list key_id=13` 返回 `diagnostic` 与 `diagnostic_summary` 字段，临时 key 已删除。
+- 清理：部署前记录远端 `/` 使用率 48%、Docker images 4.885GB；已删除远端 release tar 包，执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260512T211049-5eb24e4d-local` 和临时 Atlas 镜像，回收 386.2MB；清理后 `/` 使用率 46%、Docker images 4.007GB，未执行 volume prune。
+- 日志检查：最终健康检查后 2 分钟内未发现 `ERROR` / `WARN` / `panic` / `fatal`。较早验证期间存在一次手工传参错误产生的 `bad param` WARN，已确认不是新镜像启动或主链路异常。

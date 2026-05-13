@@ -1,6 +1,7 @@
 package data
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -70,8 +71,9 @@ func TestMapGatewayAPIKeyForRPCCanHidePlainKey(t *testing.T) {
 
 func TestGatewayUsageFilterFromParamsSupportsKeyIDs(t *testing.T) {
 	filter := gatewayUsageFilterFromParams(map[string]any{
-		"key_id":  1,
-		"key_ids": []any{2, float64(3), "4", 0, "bad"},
+		"key_id":              1,
+		"key_ids":             []any{2, float64(3), "4", 0, "bad"},
+		"upstream_error_type": "codex_backend_http_5xx",
 	})
 
 	if filter.KeyID != 1 {
@@ -82,6 +84,9 @@ func TestGatewayUsageFilterFromParamsSupportsKeyIDs(t *testing.T) {
 		filter.KeyIDs[1] != 3 ||
 		filter.KeyIDs[2] != 4 {
 		t.Fatalf("KeyIDs = %#v, want [2 3 4]", filter.KeyIDs)
+	}
+	if filter.UpstreamErrorType != "codex_backend_http_5xx" {
+		t.Fatalf("UpstreamErrorType = %q, want codex_backend_http_5xx", filter.UpstreamErrorType)
 	}
 }
 
@@ -161,11 +166,20 @@ func TestMapGatewayUsageForRPCIncludesKeyName(t *testing.T) {
 		APIKeyPrefix:    "ogw_test",
 		APIKeyName:      "production",
 		ReasoningEffort: "high",
-		CreatedAt:       time.Unix(1778000000, 0),
-		InputTokens:     100,
-		CachedTokens:    40,
-		OutputTokens:    20,
-		TotalTokens:     120,
+		Diagnostic: biz.GatewayUsageDiagnostic{
+			RequestBytes:       4096,
+			BackendOnly:        true,
+			FallbackEnabled:    true,
+			FallbackBlocked:    true,
+			ReasoningEffort:    "high",
+			UpstreamHTTPStatus: 502,
+			UpstreamBody:       "bad gateway",
+		},
+		CreatedAt:    time.Unix(1778000000, 0),
+		InputTokens:  100,
+		CachedTokens: 40,
+		OutputTokens: 20,
+		TotalTokens:  120,
 	}
 
 	data := mapGatewayUsageForRPC(item)
@@ -180,6 +194,13 @@ func TestMapGatewayUsageForRPCIncludesKeyName(t *testing.T) {
 		got["api_key_name"] != "production" ||
 		got["reasoning_effort"] != "high" {
 		t.Fatalf("unexpected key fields: %#v", got)
+	}
+	diagnostic, ok := got["diagnostic"].(map[string]any)
+	if !ok || diagnostic["backend_only"] != true || diagnostic["upstream_http_status"] != float64(502) {
+		t.Fatalf("unexpected diagnostic: %#v", got["diagnostic"])
+	}
+	if summary, _ := got["diagnostic_summary"].(string); !strings.Contains(summary, "backend-only") || !strings.Contains(summary, "upstream_http=502") {
+		t.Fatalf("unexpected diagnostic_summary: %#v", got["diagnostic_summary"])
 	}
 }
 

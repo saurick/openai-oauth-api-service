@@ -699,13 +699,13 @@ func init() {
 	// gatewayusagelog.UpstreamErrorTypeValidator is a validator for the "upstream_error_type" field. It is called by the builders before save.
 	gatewayusagelog.UpstreamErrorTypeValidator = gatewayusagelogDescUpstreamErrorType.Validators[0].(func(string) error)
 	// gatewayusagelogDescErrorType is the schema descriptor for error_type field.
-	gatewayusagelogDescErrorType := gatewayusagelogFields[24].Descriptor()
+	gatewayusagelogDescErrorType := gatewayusagelogFields[25].Descriptor()
 	// gatewayusagelog.DefaultErrorType holds the default value on creation for the error_type field.
 	gatewayusagelog.DefaultErrorType = gatewayusagelogDescErrorType.Default.(string)
 	// gatewayusagelog.ErrorTypeValidator is a validator for the "error_type" field. It is called by the builders before save.
 	gatewayusagelog.ErrorTypeValidator = gatewayusagelogDescErrorType.Validators[0].(func(string) error)
 	// gatewayusagelogDescCreatedAt is the schema descriptor for created_at field.
-	gatewayusagelogDescCreatedAt := gatewayusagelogFields[25].Descriptor()
+	gatewayusagelogDescCreatedAt := gatewayusagelogFields[26].Descriptor()
 	// gatewayusagelog.DefaultCreatedAt holds the default value on creation for the created_at field.
 	gatewayusagelog.DefaultCreatedAt = gatewayusagelogDescCreatedAt.Default.(func() time.Time)
 	userFields := schema.User{}.Fields()

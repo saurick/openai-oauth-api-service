@@ -74,6 +74,8 @@ func (GatewayUsageLog) Fields() []ent.Field {
 		field.String("upstream_error_type").
 			Default("").
 			MaxLen(128),
+		field.JSON("diagnostic", map[string]any{}).
+			Optional(),
 		field.String("error_type").
 			Default("").
 			MaxLen(128),
@@ -93,6 +95,7 @@ func (GatewayUsageLog) Indexes() []ent.Index {
 		index.Fields("endpoint", "created_at"),
 		index.Fields("upstream_mode", "created_at"),
 		index.Fields("upstream_fallback", "created_at"),
+		index.Fields("upstream_error_type", "created_at"),
 		index.Fields("success", "created_at"),
 	}
 }

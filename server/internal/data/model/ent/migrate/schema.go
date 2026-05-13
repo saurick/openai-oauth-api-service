@@ -332,6 +332,7 @@ var (
 		{Name: "upstream_mode", Type: field.TypeString, Size: 32, Default: ""},
 		{Name: "upstream_fallback", Type: field.TypeBool, Default: false},
 		{Name: "upstream_error_type", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "diagnostic", Type: field.TypeJSON, Nullable: true},
 		{Name: "error_type", Type: field.TypeString, Size: 128, Default: ""},
 		{Name: "created_at", Type: field.TypeTime},
 	}
@@ -344,47 +345,52 @@ var (
 			{
 				Name:    "gatewayusagelog_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{GatewayUsageLogsColumns[26]},
+				Columns: []*schema.Column{GatewayUsageLogsColumns[27]},
 			},
 			{
 				Name:    "gatewayusagelog_api_key_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{GatewayUsageLogsColumns[1], GatewayUsageLogsColumns[26]},
+				Columns: []*schema.Column{GatewayUsageLogsColumns[1], GatewayUsageLogsColumns[27]},
 			},
 			{
 				Name:    "gatewayusagelog_session_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{GatewayUsageLogsColumns[3], GatewayUsageLogsColumns[26]},
+				Columns: []*schema.Column{GatewayUsageLogsColumns[3], GatewayUsageLogsColumns[27]},
 			},
 			{
 				Name:    "gatewayusagelog_model_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{GatewayUsageLogsColumns[8], GatewayUsageLogsColumns[26]},
+				Columns: []*schema.Column{GatewayUsageLogsColumns[8], GatewayUsageLogsColumns[27]},
 			},
 			{
 				Name:    "gatewayusagelog_reasoning_effort_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{GatewayUsageLogsColumns[9], GatewayUsageLogsColumns[26]},
+				Columns: []*schema.Column{GatewayUsageLogsColumns[9], GatewayUsageLogsColumns[27]},
 			},
 			{
 				Name:    "gatewayusagelog_endpoint_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{GatewayUsageLogsColumns[7], GatewayUsageLogsColumns[26]},
+				Columns: []*schema.Column{GatewayUsageLogsColumns[7], GatewayUsageLogsColumns[27]},
 			},
 			{
 				Name:    "gatewayusagelog_upstream_mode_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{GatewayUsageLogsColumns[22], GatewayUsageLogsColumns[26]},
+				Columns: []*schema.Column{GatewayUsageLogsColumns[22], GatewayUsageLogsColumns[27]},
 			},
 			{
 				Name:    "gatewayusagelog_upstream_fallback_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{GatewayUsageLogsColumns[23], GatewayUsageLogsColumns[26]},
+				Columns: []*schema.Column{GatewayUsageLogsColumns[23], GatewayUsageLogsColumns[27]},
+			},
+			{
+				Name:    "gatewayusagelog_upstream_error_type_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{GatewayUsageLogsColumns[24], GatewayUsageLogsColumns[27]},
 			},
 			{
 				Name:    "gatewayusagelog_success_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{GatewayUsageLogsColumns[11], GatewayUsageLogsColumns[26]},
+				Columns: []*schema.Column{GatewayUsageLogsColumns[11], GatewayUsageLogsColumns[27]},
 			},
 		},
 	}

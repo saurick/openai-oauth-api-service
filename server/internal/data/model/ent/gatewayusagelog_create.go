@@ -340,6 +340,12 @@ func (_c *GatewayUsageLogCreate) SetNillableUpstreamErrorType(v *string) *Gatewa
 	return _c
 }
 
+// SetDiagnostic sets the "diagnostic" field.
+func (_c *GatewayUsageLogCreate) SetDiagnostic(v map[string]interface{}) *GatewayUsageLogCreate {
+	_c.mutation.SetDiagnostic(v)
+	return _c
+}
+
 // SetErrorType sets the "error_type" field.
 func (_c *GatewayUsageLogCreate) SetErrorType(v string) *GatewayUsageLogCreate {
 	_c.mutation.SetErrorType(v)
@@ -755,6 +761,10 @@ func (_c *GatewayUsageLogCreate) createSpec() (*GatewayUsageLog, *sqlgraph.Creat
 	if value, ok := _c.mutation.UpstreamErrorType(); ok {
 		_spec.SetField(gatewayusagelog.FieldUpstreamErrorType, field.TypeString, value)
 		_node.UpstreamErrorType = value
+	}
+	if value, ok := _c.mutation.Diagnostic(); ok {
+		_spec.SetField(gatewayusagelog.FieldDiagnostic, field.TypeJSON, value)
+		_node.Diagnostic = value
 	}
 	if value, ok := _c.mutation.ErrorType(); ok {
 		_spec.SetField(gatewayusagelog.FieldErrorType, field.TypeString, value)
