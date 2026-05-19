@@ -7,8 +7,12 @@
 - 完成：`api.key_create` / `api.key_update` / `api.key_list` 接入 `upstream_strategy`；后台 `/admin-keys` 列表新增“上游策略”列，凭据新建 / 编辑弹窗新增“继承全局默认 / Backend 直连 / Backend + CLI 兜底 / 强制 CLI”选择器；`/admin-upstream` 继续只负责全局默认策略。
 - 完成：同步更新 `server/docs/api.md`、`web/README.md` 和 `style:l1` mock/断言，覆盖 key 级策略列表展示、弹窗新建态、编辑态回显、暗色模式和桌面/移动端盒模型。
 - 验证通过：`cd server && make data`、`cd server && go test ./internal/biz ./internal/data ./internal/server`、`cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4325 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
-- 下一步：部署前需先应用 Atlas migration `20260519093313_migrate.sql`，再重启服务；历史 key 默认继承当前全局策略，不改变历史 usage。
-- 阻塞/风险：本轮没有改 usage schema 来单独记录“策略来源=全局/key”，排障时可从当前 key 配置和 usage 的最终 `upstream_configured_mode` / `upstream_mode` 判断；如后续需要审计策略来源，应单独扩展 usage 字段。
+- 提交：已提交并推送 `48640da6`（`支持 API key 级上游策略`）。
+- 部署：本地构建镜像 `oauth-api-service-server:20260519T174003-48640da6`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260519T174003-48640da6/`；远端仅执行 `docker load`、宿主机 Atlas migration、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 迁移：远端 Atlas 从 `20260518092411` 应用到 `20260519093313`，新增 `gateway_api_keys.upstream_strategy`；迁移后状态 `OK`、待执行 `0`。
+- 部署验证：远端当前运行镜像为 `oauth-api-service-server:20260519T174003-48640da6`，容器内 `GIT_SHA_SHORT=48640da6`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；公网管理员 `admin/adminadmin` 登录返回 `code=0`，`api.key_list` 返回 `code=0 total=10` 且 `items[].upstream_strategy` 字段存在；使用现有 key 调用公网 `/v1/models` 返回 `HTTP 200` 和 6 个模型。
+- 清理：清理前远端 `/` 使用率 52%、Docker images 4.73GB；执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260519T172757-fb7d27d1`，回收 348.3MB；清理后 `/` 使用率 50%、Docker images 4.026GB；已删除远端本轮 release image tar 包，未执行 volume prune。
+- 阻塞/风险：本轮没有改 usage schema 来单独记录“策略来源=全局/key”，排障时可从当前 key 配置和 usage 的最终 `upstream_configured_mode` / `upstream_mode` 判断；如后续需要审计策略来源，应单独扩展 usage 字段。首次远端重建时 shell 中旧 `APP_IMAGE` 覆盖 `.env`，容器仍使用旧镜像；已用显式 `APP_IMAGE=oauth-api-service-server:20260519T174003-48640da6` 重新重建并复核通过。
 
 ## 2026-05-19 FontAwesome npm token 暴露处理
 - 完成：扫描当前工作区和 Git 历史，未发现 OpenAI / ChatGPT `refresh_token` 或 `auth.json` 明文入库；发现 FontAwesome npm auth token 曾以字面量写入 `web/.npmrc` 和 `web/.yarnrc.yml`。
