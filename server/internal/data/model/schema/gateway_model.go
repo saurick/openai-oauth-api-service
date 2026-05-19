@@ -27,6 +27,24 @@ func (GatewayModel) Fields() []ent.Field {
 		field.String("source").
 			Default("manual").
 			MaxLen(32),
+		field.Int64("context_window_tokens").
+			Default(0).
+			NonNegative(),
+		field.Int64("context_compact_tokens").
+			Default(0).
+			NonNegative(),
+		field.Int64("context_hard_tokens").
+			Default(0).
+			NonNegative(),
+		field.Int64("context_compact_bytes").
+			Default(0).
+			NonNegative(),
+		field.Int64("context_hard_bytes").
+			Default(0).
+			NonNegative(),
+		field.Int("context_keep_items").
+			Default(0).
+			NonNegative(),
 		field.Time("last_seen_at").
 			Optional().
 			Nillable(),

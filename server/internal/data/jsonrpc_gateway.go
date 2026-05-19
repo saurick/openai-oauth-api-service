@@ -309,6 +309,24 @@ func (d *JsonrpcData) handleGateway(
 			"enabled": enabled,
 		}), nil
 
+	case "model_context_update":
+		modelID := getInt(pm, "id", 0)
+		item, err := d.gatewayUC.UpdateModelContextPolicy(ctx, modelID, biz.GatewayModelContextPolicy{
+			ContextWindowTokens:  getContextQuantityInt64(pm, "context_window_tokens", 0),
+			ContextCompactTokens: getContextQuantityInt64(pm, "context_compact_tokens", 0),
+			ContextHardTokens:    getContextQuantityInt64(pm, "context_hard_tokens", 0),
+			ContextCompactBytes:  getContextQuantityInt64(pm, "context_compact_bytes", 0),
+			ContextHardBytes:     getContextQuantityInt64(pm, "context_hard_bytes", 0),
+			ContextKeepItems:     getContextPlainInt(pm, "context_keep_items", 0),
+		})
+		if err != nil {
+			return id, d.mapGatewayError(ctx, err), nil
+		}
+		d.auditGateway(ctx, "api.model_context_update", "api_model", fmt.Sprint(modelID), map[string]any{
+			"model_id": item.ModelID,
+		})
+		return id, okResult("更新模型上下文策略成功", mapGatewayModelForRPC(item)), nil
+
 	case "model_delete":
 		return id, d.mapGatewayError(ctx, biz.ErrGatewayModelCatalogFixed), nil
 
@@ -494,6 +512,8 @@ func (d *JsonrpcData) mapGatewayError(ctx context.Context, err error) *v1.Jsonrp
 		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "导出时间范围过大"}
 	case errors.Is(err, biz.ErrGatewayUpstreamModeInvalid):
 		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "Codex 上游策略参数错误"}
+	case errors.Is(err, biz.ErrGatewayModelContextInvalid):
+		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "模型上下文策略参数错误"}
 	case errors.Is(err, biz.ErrGatewayAPIKeyRemarkInvalid):
 		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "备注只能包含字母和数字"}
 	default:
@@ -678,6 +698,66 @@ func getIntList(m map[string]any, key string) []int {
 	}
 }
 
+func getContextQuantityInt64(m map[string]any, key string, def int64) int64 {
+	raw, ok := m[key]
+	if !ok || raw == nil {
+		return def
+	}
+	if value, ok := parseContextQuantity(raw, true); ok {
+		return value
+	}
+	return def
+}
+
+func getContextPlainInt(m map[string]any, key string, def int) int {
+	raw, ok := m[key]
+	if !ok || raw == nil {
+		return def
+	}
+	if value, ok := parseContextQuantity(raw, false); ok {
+		return int(value)
+	}
+	return def
+}
+
+func parseContextQuantity(raw any, allowUnit bool) (int64, bool) {
+	switch v := raw.(type) {
+	case int:
+		return int64(v), true
+	case int64:
+		return v, true
+	case float64:
+		return int64(v), true
+	case string:
+		text := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(v), " ", ""))
+		if text == "" {
+			return 0, true
+		}
+		multiplier := float64(1)
+		switch {
+		case strings.HasSuffix(text, "k"):
+			if !allowUnit {
+				return 0, false
+			}
+			multiplier = 1_000
+			text = strings.TrimSuffix(text, "k")
+		case strings.HasSuffix(text, "m"):
+			if !allowUnit {
+				return 0, false
+			}
+			multiplier = 1_000_000
+			text = strings.TrimSuffix(text, "m")
+		}
+		value, err := strconv.ParseFloat(text, 64)
+		if err != nil {
+			return 0, false
+		}
+		return int64(value * multiplier), true
+	default:
+		return 0, false
+	}
+}
+
 func intFromAny(v any) int {
 	switch x := v.(type) {
 	case int:
@@ -743,15 +823,28 @@ func mapGatewayModelForRPC(item *biz.GatewayModel) map[string]any {
 		return map[string]any{}
 	}
 	data := map[string]any{
-		"id":           item.ID,
-		"model_id":     item.ModelID,
-		"owned_by":     item.OwnedBy,
-		"created_unix": item.CreatedUnix,
-		"enabled":      item.Enabled,
-		"source":       item.Source,
-		"created_at":   item.CreatedAt.Unix(),
-		"updated_at":   item.UpdatedAt.Unix(),
+		"id":                     item.ID,
+		"model_id":               item.ModelID,
+		"owned_by":               item.OwnedBy,
+		"created_unix":           item.CreatedUnix,
+		"enabled":                item.Enabled,
+		"source":                 item.Source,
+		"context_window_tokens":  item.ContextWindowTokens,
+		"context_compact_tokens": item.ContextCompactTokens,
+		"context_hard_tokens":    item.ContextHardTokens,
+		"context_compact_bytes":  item.ContextCompactBytes,
+		"context_hard_bytes":     item.ContextHardBytes,
+		"context_keep_items":     item.ContextKeepItems,
+		"created_at":             item.CreatedAt.Unix(),
+		"updated_at":             item.UpdatedAt.Unix(),
 	}
+	effective := biz.EffectiveGatewayModelContextPolicy(item, biz.GatewayContextFallbackPolicyFromEnv())
+	data["effective_context_window_tokens"] = effective.ContextWindowTokens
+	data["effective_context_compact_tokens"] = effective.ContextCompactTokens
+	data["effective_context_hard_tokens"] = effective.ContextHardTokens
+	data["effective_context_compact_bytes"] = effective.ContextCompactBytes
+	data["effective_context_hard_bytes"] = effective.ContextHardBytes
+	data["effective_context_keep_items"] = effective.ContextKeepItems
 	if item.LastSeenAt != nil {
 		data["last_seen_at"] = item.LastSeenAt.Unix()
 	}
@@ -854,6 +947,24 @@ func mapGatewayUsageDiagnosticForRPC(item biz.GatewayUsageDiagnostic) map[string
 	}
 	if item.ContextCompactedEstimatedTokens > 0 {
 		out["context_compacted_estimated_tokens"] = item.ContextCompactedEstimatedTokens
+	}
+	if item.ContextWindowTokens > 0 {
+		out["context_window_tokens"] = item.ContextWindowTokens
+	}
+	if item.ContextCompactTokenLimit > 0 {
+		out["context_compact_token_limit"] = item.ContextCompactTokenLimit
+	}
+	if item.ContextHardTokenLimit > 0 {
+		out["context_hard_token_limit"] = item.ContextHardTokenLimit
+	}
+	if item.ContextCompactByteLimit > 0 {
+		out["context_compact_byte_limit"] = item.ContextCompactByteLimit
+	}
+	if item.ContextHardByteLimit > 0 {
+		out["context_hard_byte_limit"] = item.ContextHardByteLimit
+	}
+	if item.ContextKeepItems > 0 {
+		out["context_keep_items"] = item.ContextKeepItems
 	}
 	return out
 }

@@ -2,6 +2,7 @@ package biz
 
 import (
 	"context"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -351,6 +352,52 @@ func TestGatewayUsecaseEffectiveCodexUpstreamStrategyUsesAPIKeyOverride(t *testi
 	}
 }
 
+func TestGatewayUsecaseUpdateModelContextPolicyValidation(t *testing.T) {
+	uc := NewGatewayUsecase(&gatewayPolicyTestRepo{}, log.NewStdLogger(io.Discard), nil)
+	if _, err := uc.UpdateModelContextPolicy(context.Background(), 1, GatewayModelContextPolicy{
+		ContextCompactTokens: 300_000,
+		ContextHardTokens:    390_000,
+		ContextCompactBytes:  1_200_000,
+		ContextHardBytes:     1_600_000,
+		ContextKeepItems:     8,
+	}); err != nil {
+		t.Fatalf("UpdateModelContextPolicy(valid) error = %v", err)
+	}
+	if _, err := uc.UpdateModelContextPolicy(context.Background(), 1, GatewayModelContextPolicy{
+		ContextCompactTokens: 390_000,
+		ContextHardTokens:    300_000,
+	}); err != ErrGatewayModelContextInvalid {
+		t.Fatalf("UpdateModelContextPolicy(invalid tokens) error = %v, want ErrGatewayModelContextInvalid", err)
+	}
+	if _, err := uc.UpdateModelContextPolicy(context.Background(), 1, GatewayModelContextPolicy{
+		ContextKeepItems: 1,
+	}); err != ErrGatewayModelContextInvalid {
+		t.Fatalf("UpdateModelContextPolicy(invalid keep items) error = %v, want ErrGatewayModelContextInvalid", err)
+	}
+}
+
+func TestEffectiveGatewayModelContextPolicyUsesModelOverride(t *testing.T) {
+	fallback := GatewayModelContextPolicy{
+		ContextCompactTokens: 180_000,
+		ContextHardTokens:    255_000,
+		ContextCompactBytes:  850_000,
+		ContextHardBytes:     1_050_000,
+		ContextKeepItems:     8,
+	}
+	policy := EffectiveGatewayModelContextPolicy(&GatewayModel{
+		ModelID:              "gpt-5.3-codex",
+		ContextWindowTokens:  400_000,
+		ContextCompactTokens: 300_000,
+		ContextHardTokens:    380_000,
+		ContextCompactBytes:  1_600_000,
+		ContextHardBytes:     2_000_000,
+		ContextKeepItems:     10,
+	}, fallback)
+	if policy.ContextCompactTokens != 300_000 || policy.ContextHardTokens != 380_000 || policy.ContextKeepItems != 10 {
+		t.Fatalf("policy did not use model override: %+v", policy)
+	}
+}
+
 type testWriter struct{}
 
 func (testWriter) Write(p []byte) (int, error) { return len(p), nil }
@@ -489,7 +536,19 @@ func (r *gatewayPolicyTestRepo) UpsertSyncedModel(context.Context, GatewayModel)
 	return nil, nil
 }
 func (r *gatewayPolicyTestRepo) SetModelEnabled(context.Context, int, bool) error { return nil }
-func (r *gatewayPolicyTestRepo) DeleteModel(context.Context, int) error           { return nil }
+func (r *gatewayPolicyTestRepo) UpdateModelContextPolicy(_ context.Context, id int, policy GatewayModelContextPolicy) (*GatewayModel, error) {
+	return &GatewayModel{
+		ID:                   id,
+		ModelID:              DefaultCodexModelID,
+		ContextWindowTokens:  policy.ContextWindowTokens,
+		ContextCompactTokens: policy.ContextCompactTokens,
+		ContextHardTokens:    policy.ContextHardTokens,
+		ContextCompactBytes:  policy.ContextCompactBytes,
+		ContextHardBytes:     policy.ContextHardBytes,
+		ContextKeepItems:     policy.ContextKeepItems,
+	}, nil
+}
+func (r *gatewayPolicyTestRepo) DeleteModel(context.Context, int) error { return nil }
 func (r *gatewayPolicyTestRepo) GetModelByID(context.Context, string) (*GatewayModel, error) {
 	return nil, nil
 }

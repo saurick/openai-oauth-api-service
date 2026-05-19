@@ -61,6 +61,7 @@ HTTP 路由：
 - `model_list`
 - `official_model_price_list`
 - `model_set_enabled`
+- `model_context_update`
 - `policy_list`
 - `policy_upsert`
 - `policy_delete`
@@ -77,9 +78,9 @@ HTTP 路由：
 - `user_usage_summary`
 - `user_usage_list`
 
-用途：管理员管理下游 API key、组织用户归属、key+model 策略、key 级上游策略覆盖、固定官方模型列表启停、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；若创建参数 `name` 非空，备注必须只包含字母和数字，并会生成 `ogw_<name>_<random>` 形式的明文 key。数据库保存 `plain_key` 用于后台展示，同时保存 `key_hash` 用于鉴权匹配，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
+用途：管理员管理下游 API key、组织用户归属、key+model 策略、key 级上游策略覆盖、固定官方模型列表启停、模型级上下文压缩策略、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；若创建参数 `name` 非空，备注必须只包含字母和数字，并会生成 `ogw_<name>_<random>` 形式的明文 key。数据库保存 `plain_key` 用于后台展示，同时保存 `key_hash` 用于鉴权匹配，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
 
-模型目录以服务端代码中的官方 Codex 列表为真源，管理端只允许读取和启停；`model_upsert` / `model_delete` 不作为正式管理接口开放。
+模型目录以服务端代码中的官方 Codex 列表为真源，管理端只允许读取、启停和调整上下文压缩策略；`model_upsert` / `model_delete` 不作为正式管理接口开放。`api.model_context_update` 支持按模型保存 `context_window_tokens`、`context_compact_tokens`、`context_hard_tokens`、`context_compact_bytes`、`context_hard_bytes` 和 `context_keep_items`，阈值字段可传整数或 `260K` / `0.38M` 这类字符串，`K=1000`、`M=1000000`；`0` 表示使用服务端推荐 / 运维覆盖值；保存后仅影响后续请求，不改写历史 usage。内置推荐按 Codex 使用体验控制在 `400K` 上下文窗口内，默认 `260K` 开始压缩、`380K` 硬拦截，避免默认进入 API long-context 高消耗区间。
 
 普通组织用户只允许调用 `api.user_key_list`、`api.user_usage_summary` 和 `api.user_usage_list`，并且后端按当前登录用户过滤 `owner_user_id`，不返回其他用户 key。
 
@@ -114,10 +115,10 @@ usage 记录：
 - direct backend 模式会把 `system` / `developer` 消息合并为 `instructions`；若请求没有这类消息，会补一个最小默认 instructions，因为 Codex backend 要求该字段非空
 - direct backend 模式会透传 OpenAI-compatible `tools` / `tool_choice`，并在 chat messages 与 Responses input 之间转换 assistant `tool_calls`、`function_call` 和 `function_call_output`，上游返回 function call 时再映射回 Chat Completions `tool_calls` 或 Responses `function_call`；Codex CLI fallback 默认关闭，打开后也只支持纯文本响应，不支持工具调用回传，因此这类请求在 backend 失败时会直接返回上游错误，避免错误转为服务端 `codex exec`
 - direct backend 会在转发 Responses `function_call` 历史前规范化 item `id`，避免客户端回传空字符串或非法字符时触发上游 `input[n].id` 校验错误
-- `/v1/chat/completions` 和 `/v1/responses` 在请求体接近上下文窗口时会先做网关侧压缩预检：保留系统 / developer 指令、最近消息和最近完整工具闭环，较早历史压缩为工程摘要；如果客户端传入 `session_id`，摘要会按 session 保存并在后台会话聚合展示压缩次数、摘要、压缩前后体积和粗估 token。
+- `/v1/chat/completions` 和 `/v1/responses` 在请求体接近上下文窗口时会先做网关侧压缩预检：阈值按模型级配置、环境变量运维覆盖、内置模型推荐值和旧默认兜底依次决定；压缩会保留系统 / developer 指令、最近消息和最近完整工具闭环，较早历史压缩为工程摘要；如果客户端传入 `session_id`，摘要会按 session 保存并在后台会话聚合展示压缩次数、摘要、压缩前后体积、粗估 token 和本次生效阈值。
 - 上下文压缩后仍超过硬阈值，或 Codex backend 明确返回 `context_length_exceeded` 时，usage 会记录 `upstream_error_type=context_length_exceeded`，避免继续显示成普通 `codex_backend_response_failed` / 502；非流式预检拦截返回 HTTP `413`，流式已开始后会在 SSE 内返回 `response.failed`。
 - `/v1/chat/completions` 和 `/v1/responses` 的 `stream=true` 会先返回并 flush 首包，等待 Codex backend/CLI 结果期间按 `GATEWAY_STREAM_HEARTBEAT_SECONDS` 输出保活事件，避免 Codex / OpenCode / Cloudflare / 代理在长请求无输出时断开连接。`/v1/responses` 首包为 `response.created`，等待期间继续输出标准 `response.in_progress`，随后输出 `response.output_item.added`、`response.content_part.added`、`response.output_text.delta` 和 `response.completed`，用于兼容 Codex CLI 自定义 `wire_api="responses"` provider；如果上游在首字节后失败，会在 SSE 内返回 `response.failed` 与 `[DONE]`，不再尝试把已开始的流改写成 HTTP 502。下游客户端主动断开会按 `client_canceled` 记录，不再归类为 Backend 上游 502。
-- `/v1/models` 除 OpenAI 标准 `data` 外还返回 Codex CLI 读取的 `models` 元数据，包括 reasoning levels、shell type、context window 和输入模态等字段，用于兼容自定义 provider 的模型刷新；当前网关不透传 Codex reasoning summary 过程事件，因此模型元数据声明 `supports_reasoning_summaries=false`
+- `/v1/models` 除 OpenAI 标准 `data` 外还返回 Codex CLI 读取的 `models` 元数据，包括 reasoning levels、shell type、context window 和输入模态等字段，用于兼容自定义 provider 的模型刷新；context window 使用当前模型的生效上下文窗口，`effective_context_window_percent` 使用硬拦截阈值占窗口比例；当前网关不透传 Codex reasoning summary 过程事件，因此模型元数据声明 `supports_reasoning_summaries=false`
 - OpenAI-compatible 图片输入支持 data URL 形式的 `image_url` / `input_image`；CLI 模式会临时落盘并通过 Codex CLI `--image` 附加到本次请求，direct backend 模式会直接传入 `/responses` 内容；单次最多 4 张、单张最大 16 MiB
 - OpenAI-compatible PDF 输入支持 `input_file` / `file` 的 `application/pdf` data URL，或带 `mimeType=application/pdf` / `media_type=application/pdf` 的 base64 文件数据；PDF 仅支持 direct backend 模式，单次最多 4 个、单个最大 16 MiB。`txt` / `md` / 代码等文本类附件由客户端读取成文本后按普通 `text` 输入转发；`doc` / `docx` / `xls` / `xlsx` 暂不声明为原生模态，后续如需支持应先增加明确的服务端转换链路。
 - 默认不保存 prompt、response body 或正文采样

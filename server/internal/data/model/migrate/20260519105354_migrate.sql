@@ -1,0 +1,2 @@
+-- Modify "gateway_models" table
+ALTER TABLE "gateway_models" ADD COLUMN "context_window_tokens" bigint NOT NULL DEFAULT 0, ADD COLUMN "context_compact_tokens" bigint NOT NULL DEFAULT 0, ADD COLUMN "context_hard_tokens" bigint NOT NULL DEFAULT 0, ADD COLUMN "context_compact_bytes" bigint NOT NULL DEFAULT 0, ADD COLUMN "context_hard_bytes" bigint NOT NULL DEFAULT 0, ADD COLUMN "context_keep_items" bigint NOT NULL DEFAULT 0;

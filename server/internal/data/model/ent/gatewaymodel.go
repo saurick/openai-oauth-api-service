@@ -27,6 +27,18 @@ type GatewayModel struct {
 	Enabled bool `json:"enabled,omitempty"`
 	// Source holds the value of the "source" field.
 	Source string `json:"source,omitempty"`
+	// ContextWindowTokens holds the value of the "context_window_tokens" field.
+	ContextWindowTokens int64 `json:"context_window_tokens,omitempty"`
+	// ContextCompactTokens holds the value of the "context_compact_tokens" field.
+	ContextCompactTokens int64 `json:"context_compact_tokens,omitempty"`
+	// ContextHardTokens holds the value of the "context_hard_tokens" field.
+	ContextHardTokens int64 `json:"context_hard_tokens,omitempty"`
+	// ContextCompactBytes holds the value of the "context_compact_bytes" field.
+	ContextCompactBytes int64 `json:"context_compact_bytes,omitempty"`
+	// ContextHardBytes holds the value of the "context_hard_bytes" field.
+	ContextHardBytes int64 `json:"context_hard_bytes,omitempty"`
+	// ContextKeepItems holds the value of the "context_keep_items" field.
+	ContextKeepItems int `json:"context_keep_items,omitempty"`
 	// LastSeenAt holds the value of the "last_seen_at" field.
 	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -43,7 +55,7 @@ func (*GatewayModel) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case gatewaymodel.FieldEnabled:
 			values[i] = new(sql.NullBool)
-		case gatewaymodel.FieldID, gatewaymodel.FieldCreatedUnix:
+		case gatewaymodel.FieldID, gatewaymodel.FieldCreatedUnix, gatewaymodel.FieldContextWindowTokens, gatewaymodel.FieldContextCompactTokens, gatewaymodel.FieldContextHardTokens, gatewaymodel.FieldContextCompactBytes, gatewaymodel.FieldContextHardBytes, gatewaymodel.FieldContextKeepItems:
 			values[i] = new(sql.NullInt64)
 		case gatewaymodel.FieldModelID, gatewaymodel.FieldOwnedBy, gatewaymodel.FieldSource:
 			values[i] = new(sql.NullString)
@@ -99,6 +111,42 @@ func (_m *GatewayModel) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field source", values[i])
 			} else if value.Valid {
 				_m.Source = value.String
+			}
+		case gatewaymodel.FieldContextWindowTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field context_window_tokens", values[i])
+			} else if value.Valid {
+				_m.ContextWindowTokens = value.Int64
+			}
+		case gatewaymodel.FieldContextCompactTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field context_compact_tokens", values[i])
+			} else if value.Valid {
+				_m.ContextCompactTokens = value.Int64
+			}
+		case gatewaymodel.FieldContextHardTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field context_hard_tokens", values[i])
+			} else if value.Valid {
+				_m.ContextHardTokens = value.Int64
+			}
+		case gatewaymodel.FieldContextCompactBytes:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field context_compact_bytes", values[i])
+			} else if value.Valid {
+				_m.ContextCompactBytes = value.Int64
+			}
+		case gatewaymodel.FieldContextHardBytes:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field context_hard_bytes", values[i])
+			} else if value.Valid {
+				_m.ContextHardBytes = value.Int64
+			}
+		case gatewaymodel.FieldContextKeepItems:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field context_keep_items", values[i])
+			} else if value.Valid {
+				_m.ContextKeepItems = int(value.Int64)
 			}
 		case gatewaymodel.FieldLastSeenAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -169,6 +217,24 @@ func (_m *GatewayModel) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("source=")
 	builder.WriteString(_m.Source)
+	builder.WriteString(", ")
+	builder.WriteString("context_window_tokens=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ContextWindowTokens))
+	builder.WriteString(", ")
+	builder.WriteString("context_compact_tokens=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ContextCompactTokens))
+	builder.WriteString(", ")
+	builder.WriteString("context_hard_tokens=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ContextHardTokens))
+	builder.WriteString(", ")
+	builder.WriteString("context_compact_bytes=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ContextCompactBytes))
+	builder.WriteString(", ")
+	builder.WriteString("context_hard_bytes=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ContextHardBytes))
+	builder.WriteString(", ")
+	builder.WriteString("context_keep_items=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ContextKeepItems))
 	builder.WriteString(", ")
 	if v := _m.LastSeenAt; v != nil {
 		builder.WriteString("last_seen_at=")

@@ -6695,22 +6695,34 @@ func (m *GatewayContextSummaryMutation) ResetEdge(name string) error {
 // GatewayModelMutation represents an operation that mutates the GatewayModel nodes in the graph.
 type GatewayModelMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *int
-	model_id        *string
-	owned_by        *string
-	created_unix    *int64
-	addcreated_unix *int64
-	enabled         *bool
-	source          *string
-	last_seen_at    *time.Time
-	created_at      *time.Time
-	updated_at      *time.Time
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*GatewayModel, error)
-	predicates      []predicate.GatewayModel
+	op                        Op
+	typ                       string
+	id                        *int
+	model_id                  *string
+	owned_by                  *string
+	created_unix              *int64
+	addcreated_unix           *int64
+	enabled                   *bool
+	source                    *string
+	context_window_tokens     *int64
+	addcontext_window_tokens  *int64
+	context_compact_tokens    *int64
+	addcontext_compact_tokens *int64
+	context_hard_tokens       *int64
+	addcontext_hard_tokens    *int64
+	context_compact_bytes     *int64
+	addcontext_compact_bytes  *int64
+	context_hard_bytes        *int64
+	addcontext_hard_bytes     *int64
+	context_keep_items        *int
+	addcontext_keep_items     *int
+	last_seen_at              *time.Time
+	created_at                *time.Time
+	updated_at                *time.Time
+	clearedFields             map[string]struct{}
+	done                      bool
+	oldValue                  func(context.Context) (*GatewayModel, error)
+	predicates                []predicate.GatewayModel
 }
 
 var _ ent.Mutation = (*GatewayModelMutation)(nil)
@@ -7011,6 +7023,342 @@ func (m *GatewayModelMutation) ResetSource() {
 	m.source = nil
 }
 
+// SetContextWindowTokens sets the "context_window_tokens" field.
+func (m *GatewayModelMutation) SetContextWindowTokens(i int64) {
+	m.context_window_tokens = &i
+	m.addcontext_window_tokens = nil
+}
+
+// ContextWindowTokens returns the value of the "context_window_tokens" field in the mutation.
+func (m *GatewayModelMutation) ContextWindowTokens() (r int64, exists bool) {
+	v := m.context_window_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContextWindowTokens returns the old "context_window_tokens" field's value of the GatewayModel entity.
+// If the GatewayModel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayModelMutation) OldContextWindowTokens(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContextWindowTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContextWindowTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContextWindowTokens: %w", err)
+	}
+	return oldValue.ContextWindowTokens, nil
+}
+
+// AddContextWindowTokens adds i to the "context_window_tokens" field.
+func (m *GatewayModelMutation) AddContextWindowTokens(i int64) {
+	if m.addcontext_window_tokens != nil {
+		*m.addcontext_window_tokens += i
+	} else {
+		m.addcontext_window_tokens = &i
+	}
+}
+
+// AddedContextWindowTokens returns the value that was added to the "context_window_tokens" field in this mutation.
+func (m *GatewayModelMutation) AddedContextWindowTokens() (r int64, exists bool) {
+	v := m.addcontext_window_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetContextWindowTokens resets all changes to the "context_window_tokens" field.
+func (m *GatewayModelMutation) ResetContextWindowTokens() {
+	m.context_window_tokens = nil
+	m.addcontext_window_tokens = nil
+}
+
+// SetContextCompactTokens sets the "context_compact_tokens" field.
+func (m *GatewayModelMutation) SetContextCompactTokens(i int64) {
+	m.context_compact_tokens = &i
+	m.addcontext_compact_tokens = nil
+}
+
+// ContextCompactTokens returns the value of the "context_compact_tokens" field in the mutation.
+func (m *GatewayModelMutation) ContextCompactTokens() (r int64, exists bool) {
+	v := m.context_compact_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContextCompactTokens returns the old "context_compact_tokens" field's value of the GatewayModel entity.
+// If the GatewayModel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayModelMutation) OldContextCompactTokens(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContextCompactTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContextCompactTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContextCompactTokens: %w", err)
+	}
+	return oldValue.ContextCompactTokens, nil
+}
+
+// AddContextCompactTokens adds i to the "context_compact_tokens" field.
+func (m *GatewayModelMutation) AddContextCompactTokens(i int64) {
+	if m.addcontext_compact_tokens != nil {
+		*m.addcontext_compact_tokens += i
+	} else {
+		m.addcontext_compact_tokens = &i
+	}
+}
+
+// AddedContextCompactTokens returns the value that was added to the "context_compact_tokens" field in this mutation.
+func (m *GatewayModelMutation) AddedContextCompactTokens() (r int64, exists bool) {
+	v := m.addcontext_compact_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetContextCompactTokens resets all changes to the "context_compact_tokens" field.
+func (m *GatewayModelMutation) ResetContextCompactTokens() {
+	m.context_compact_tokens = nil
+	m.addcontext_compact_tokens = nil
+}
+
+// SetContextHardTokens sets the "context_hard_tokens" field.
+func (m *GatewayModelMutation) SetContextHardTokens(i int64) {
+	m.context_hard_tokens = &i
+	m.addcontext_hard_tokens = nil
+}
+
+// ContextHardTokens returns the value of the "context_hard_tokens" field in the mutation.
+func (m *GatewayModelMutation) ContextHardTokens() (r int64, exists bool) {
+	v := m.context_hard_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContextHardTokens returns the old "context_hard_tokens" field's value of the GatewayModel entity.
+// If the GatewayModel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayModelMutation) OldContextHardTokens(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContextHardTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContextHardTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContextHardTokens: %w", err)
+	}
+	return oldValue.ContextHardTokens, nil
+}
+
+// AddContextHardTokens adds i to the "context_hard_tokens" field.
+func (m *GatewayModelMutation) AddContextHardTokens(i int64) {
+	if m.addcontext_hard_tokens != nil {
+		*m.addcontext_hard_tokens += i
+	} else {
+		m.addcontext_hard_tokens = &i
+	}
+}
+
+// AddedContextHardTokens returns the value that was added to the "context_hard_tokens" field in this mutation.
+func (m *GatewayModelMutation) AddedContextHardTokens() (r int64, exists bool) {
+	v := m.addcontext_hard_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetContextHardTokens resets all changes to the "context_hard_tokens" field.
+func (m *GatewayModelMutation) ResetContextHardTokens() {
+	m.context_hard_tokens = nil
+	m.addcontext_hard_tokens = nil
+}
+
+// SetContextCompactBytes sets the "context_compact_bytes" field.
+func (m *GatewayModelMutation) SetContextCompactBytes(i int64) {
+	m.context_compact_bytes = &i
+	m.addcontext_compact_bytes = nil
+}
+
+// ContextCompactBytes returns the value of the "context_compact_bytes" field in the mutation.
+func (m *GatewayModelMutation) ContextCompactBytes() (r int64, exists bool) {
+	v := m.context_compact_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContextCompactBytes returns the old "context_compact_bytes" field's value of the GatewayModel entity.
+// If the GatewayModel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayModelMutation) OldContextCompactBytes(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContextCompactBytes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContextCompactBytes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContextCompactBytes: %w", err)
+	}
+	return oldValue.ContextCompactBytes, nil
+}
+
+// AddContextCompactBytes adds i to the "context_compact_bytes" field.
+func (m *GatewayModelMutation) AddContextCompactBytes(i int64) {
+	if m.addcontext_compact_bytes != nil {
+		*m.addcontext_compact_bytes += i
+	} else {
+		m.addcontext_compact_bytes = &i
+	}
+}
+
+// AddedContextCompactBytes returns the value that was added to the "context_compact_bytes" field in this mutation.
+func (m *GatewayModelMutation) AddedContextCompactBytes() (r int64, exists bool) {
+	v := m.addcontext_compact_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetContextCompactBytes resets all changes to the "context_compact_bytes" field.
+func (m *GatewayModelMutation) ResetContextCompactBytes() {
+	m.context_compact_bytes = nil
+	m.addcontext_compact_bytes = nil
+}
+
+// SetContextHardBytes sets the "context_hard_bytes" field.
+func (m *GatewayModelMutation) SetContextHardBytes(i int64) {
+	m.context_hard_bytes = &i
+	m.addcontext_hard_bytes = nil
+}
+
+// ContextHardBytes returns the value of the "context_hard_bytes" field in the mutation.
+func (m *GatewayModelMutation) ContextHardBytes() (r int64, exists bool) {
+	v := m.context_hard_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContextHardBytes returns the old "context_hard_bytes" field's value of the GatewayModel entity.
+// If the GatewayModel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayModelMutation) OldContextHardBytes(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContextHardBytes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContextHardBytes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContextHardBytes: %w", err)
+	}
+	return oldValue.ContextHardBytes, nil
+}
+
+// AddContextHardBytes adds i to the "context_hard_bytes" field.
+func (m *GatewayModelMutation) AddContextHardBytes(i int64) {
+	if m.addcontext_hard_bytes != nil {
+		*m.addcontext_hard_bytes += i
+	} else {
+		m.addcontext_hard_bytes = &i
+	}
+}
+
+// AddedContextHardBytes returns the value that was added to the "context_hard_bytes" field in this mutation.
+func (m *GatewayModelMutation) AddedContextHardBytes() (r int64, exists bool) {
+	v := m.addcontext_hard_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetContextHardBytes resets all changes to the "context_hard_bytes" field.
+func (m *GatewayModelMutation) ResetContextHardBytes() {
+	m.context_hard_bytes = nil
+	m.addcontext_hard_bytes = nil
+}
+
+// SetContextKeepItems sets the "context_keep_items" field.
+func (m *GatewayModelMutation) SetContextKeepItems(i int) {
+	m.context_keep_items = &i
+	m.addcontext_keep_items = nil
+}
+
+// ContextKeepItems returns the value of the "context_keep_items" field in the mutation.
+func (m *GatewayModelMutation) ContextKeepItems() (r int, exists bool) {
+	v := m.context_keep_items
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContextKeepItems returns the old "context_keep_items" field's value of the GatewayModel entity.
+// If the GatewayModel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayModelMutation) OldContextKeepItems(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContextKeepItems is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContextKeepItems requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContextKeepItems: %w", err)
+	}
+	return oldValue.ContextKeepItems, nil
+}
+
+// AddContextKeepItems adds i to the "context_keep_items" field.
+func (m *GatewayModelMutation) AddContextKeepItems(i int) {
+	if m.addcontext_keep_items != nil {
+		*m.addcontext_keep_items += i
+	} else {
+		m.addcontext_keep_items = &i
+	}
+}
+
+// AddedContextKeepItems returns the value that was added to the "context_keep_items" field in this mutation.
+func (m *GatewayModelMutation) AddedContextKeepItems() (r int, exists bool) {
+	v := m.addcontext_keep_items
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetContextKeepItems resets all changes to the "context_keep_items" field.
+func (m *GatewayModelMutation) ResetContextKeepItems() {
+	m.context_keep_items = nil
+	m.addcontext_keep_items = nil
+}
+
 // SetLastSeenAt sets the "last_seen_at" field.
 func (m *GatewayModelMutation) SetLastSeenAt(t time.Time) {
 	m.last_seen_at = &t
@@ -7166,7 +7514,7 @@ func (m *GatewayModelMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GatewayModelMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 14)
 	if m.model_id != nil {
 		fields = append(fields, gatewaymodel.FieldModelID)
 	}
@@ -7181,6 +7529,24 @@ func (m *GatewayModelMutation) Fields() []string {
 	}
 	if m.source != nil {
 		fields = append(fields, gatewaymodel.FieldSource)
+	}
+	if m.context_window_tokens != nil {
+		fields = append(fields, gatewaymodel.FieldContextWindowTokens)
+	}
+	if m.context_compact_tokens != nil {
+		fields = append(fields, gatewaymodel.FieldContextCompactTokens)
+	}
+	if m.context_hard_tokens != nil {
+		fields = append(fields, gatewaymodel.FieldContextHardTokens)
+	}
+	if m.context_compact_bytes != nil {
+		fields = append(fields, gatewaymodel.FieldContextCompactBytes)
+	}
+	if m.context_hard_bytes != nil {
+		fields = append(fields, gatewaymodel.FieldContextHardBytes)
+	}
+	if m.context_keep_items != nil {
+		fields = append(fields, gatewaymodel.FieldContextKeepItems)
 	}
 	if m.last_seen_at != nil {
 		fields = append(fields, gatewaymodel.FieldLastSeenAt)
@@ -7209,6 +7575,18 @@ func (m *GatewayModelMutation) Field(name string) (ent.Value, bool) {
 		return m.Enabled()
 	case gatewaymodel.FieldSource:
 		return m.Source()
+	case gatewaymodel.FieldContextWindowTokens:
+		return m.ContextWindowTokens()
+	case gatewaymodel.FieldContextCompactTokens:
+		return m.ContextCompactTokens()
+	case gatewaymodel.FieldContextHardTokens:
+		return m.ContextHardTokens()
+	case gatewaymodel.FieldContextCompactBytes:
+		return m.ContextCompactBytes()
+	case gatewaymodel.FieldContextHardBytes:
+		return m.ContextHardBytes()
+	case gatewaymodel.FieldContextKeepItems:
+		return m.ContextKeepItems()
 	case gatewaymodel.FieldLastSeenAt:
 		return m.LastSeenAt()
 	case gatewaymodel.FieldCreatedAt:
@@ -7234,6 +7612,18 @@ func (m *GatewayModelMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldEnabled(ctx)
 	case gatewaymodel.FieldSource:
 		return m.OldSource(ctx)
+	case gatewaymodel.FieldContextWindowTokens:
+		return m.OldContextWindowTokens(ctx)
+	case gatewaymodel.FieldContextCompactTokens:
+		return m.OldContextCompactTokens(ctx)
+	case gatewaymodel.FieldContextHardTokens:
+		return m.OldContextHardTokens(ctx)
+	case gatewaymodel.FieldContextCompactBytes:
+		return m.OldContextCompactBytes(ctx)
+	case gatewaymodel.FieldContextHardBytes:
+		return m.OldContextHardBytes(ctx)
+	case gatewaymodel.FieldContextKeepItems:
+		return m.OldContextKeepItems(ctx)
 	case gatewaymodel.FieldLastSeenAt:
 		return m.OldLastSeenAt(ctx)
 	case gatewaymodel.FieldCreatedAt:
@@ -7284,6 +7674,48 @@ func (m *GatewayModelMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSource(v)
 		return nil
+	case gatewaymodel.FieldContextWindowTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContextWindowTokens(v)
+		return nil
+	case gatewaymodel.FieldContextCompactTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContextCompactTokens(v)
+		return nil
+	case gatewaymodel.FieldContextHardTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContextHardTokens(v)
+		return nil
+	case gatewaymodel.FieldContextCompactBytes:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContextCompactBytes(v)
+		return nil
+	case gatewaymodel.FieldContextHardBytes:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContextHardBytes(v)
+		return nil
+	case gatewaymodel.FieldContextKeepItems:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContextKeepItems(v)
+		return nil
 	case gatewaymodel.FieldLastSeenAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -7316,6 +7748,24 @@ func (m *GatewayModelMutation) AddedFields() []string {
 	if m.addcreated_unix != nil {
 		fields = append(fields, gatewaymodel.FieldCreatedUnix)
 	}
+	if m.addcontext_window_tokens != nil {
+		fields = append(fields, gatewaymodel.FieldContextWindowTokens)
+	}
+	if m.addcontext_compact_tokens != nil {
+		fields = append(fields, gatewaymodel.FieldContextCompactTokens)
+	}
+	if m.addcontext_hard_tokens != nil {
+		fields = append(fields, gatewaymodel.FieldContextHardTokens)
+	}
+	if m.addcontext_compact_bytes != nil {
+		fields = append(fields, gatewaymodel.FieldContextCompactBytes)
+	}
+	if m.addcontext_hard_bytes != nil {
+		fields = append(fields, gatewaymodel.FieldContextHardBytes)
+	}
+	if m.addcontext_keep_items != nil {
+		fields = append(fields, gatewaymodel.FieldContextKeepItems)
+	}
 	return fields
 }
 
@@ -7326,6 +7776,18 @@ func (m *GatewayModelMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case gatewaymodel.FieldCreatedUnix:
 		return m.AddedCreatedUnix()
+	case gatewaymodel.FieldContextWindowTokens:
+		return m.AddedContextWindowTokens()
+	case gatewaymodel.FieldContextCompactTokens:
+		return m.AddedContextCompactTokens()
+	case gatewaymodel.FieldContextHardTokens:
+		return m.AddedContextHardTokens()
+	case gatewaymodel.FieldContextCompactBytes:
+		return m.AddedContextCompactBytes()
+	case gatewaymodel.FieldContextHardBytes:
+		return m.AddedContextHardBytes()
+	case gatewaymodel.FieldContextKeepItems:
+		return m.AddedContextKeepItems()
 	}
 	return nil, false
 }
@@ -7341,6 +7803,48 @@ func (m *GatewayModelMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddCreatedUnix(v)
+		return nil
+	case gatewaymodel.FieldContextWindowTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddContextWindowTokens(v)
+		return nil
+	case gatewaymodel.FieldContextCompactTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddContextCompactTokens(v)
+		return nil
+	case gatewaymodel.FieldContextHardTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddContextHardTokens(v)
+		return nil
+	case gatewaymodel.FieldContextCompactBytes:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddContextCompactBytes(v)
+		return nil
+	case gatewaymodel.FieldContextHardBytes:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddContextHardBytes(v)
+		return nil
+	case gatewaymodel.FieldContextKeepItems:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddContextKeepItems(v)
 		return nil
 	}
 	return fmt.Errorf("unknown GatewayModel numeric field %s", name)
@@ -7392,6 +7896,24 @@ func (m *GatewayModelMutation) ResetField(name string) error {
 		return nil
 	case gatewaymodel.FieldSource:
 		m.ResetSource()
+		return nil
+	case gatewaymodel.FieldContextWindowTokens:
+		m.ResetContextWindowTokens()
+		return nil
+	case gatewaymodel.FieldContextCompactTokens:
+		m.ResetContextCompactTokens()
+		return nil
+	case gatewaymodel.FieldContextHardTokens:
+		m.ResetContextHardTokens()
+		return nil
+	case gatewaymodel.FieldContextCompactBytes:
+		m.ResetContextCompactBytes()
+		return nil
+	case gatewaymodel.FieldContextHardBytes:
+		m.ResetContextHardBytes()
+		return nil
+	case gatewaymodel.FieldContextKeepItems:
+		m.ResetContextKeepItems()
 		return nil
 	case gatewaymodel.FieldLastSeenAt:
 		m.ResetLastSeenAt()

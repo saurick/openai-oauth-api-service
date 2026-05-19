@@ -100,11 +100,11 @@
 - `CODEX_BACKEND_RETRY_ATTEMPTS`：direct backend 瞬时失败重试次数，默认 `2`；仅对 HTTP `429` / `5xx`、上游 `response.failed` / `response.incomplete` 和连接类错误生效。
 - `CODEX_BACKEND_USER_AGENT`：direct backend 请求 `User-Agent`，默认 `codex-cli`。
 - `GATEWAY_STREAM_HEARTBEAT_SECONDS`：`stream=true` 请求等待上游期间的 SSE keepalive 间隔，默认 `15` 秒；用于避免 OpenCode / Cloudflare / 代理在长请求无输出时断开连接。
-- `GATEWAY_CONTEXT_COMPACT_BYTES`：请求体达到该字节数时触发网关上下文压缩预检，默认 `850000`。
-- `GATEWAY_CONTEXT_HARD_BYTES`：压缩后请求体仍达到该字节数时直接返回 `context_length_exceeded`，默认 `1050000`。
-- `GATEWAY_CONTEXT_COMPACT_TOKENS`：按请求文本粗估 token 达到该值时触发上下文压缩预检，默认 `180000`。
-- `GATEWAY_CONTEXT_HARD_TOKENS`：压缩后粗估 token 仍达到该值时直接返回 `context_length_exceeded`，默认 `255000`。
-- `GATEWAY_CONTEXT_KEEP_ITEMS`：压缩时保留最近消息 / Responses input item 的数量，默认 `8`；工具输出和 function_call_output 会向前扩展边界，避免拆断最近工具闭环。
+- `GATEWAY_CONTEXT_COMPACT_BYTES`：模型未配置字节阈值时的全局运维覆盖；留空时按模型推荐值生效。默认部署模板不再给旧固定值，避免覆盖后台模型推荐。
+- `GATEWAY_CONTEXT_HARD_BYTES`：模型未配置硬字节阈值时的全局运维覆盖；留空时按模型推荐值生效。
+- `GATEWAY_CONTEXT_COMPACT_TOKENS`：模型未配置 token 阈值时的全局运维覆盖；留空时按模型推荐值生效。
+- `GATEWAY_CONTEXT_HARD_TOKENS`：模型未配置硬 token 阈值时的全局运维覆盖；留空时按模型推荐值生效。
+- `GATEWAY_CONTEXT_KEEP_ITEMS`：模型未配置最近保留条数时的全局运维覆盖；留空时默认 `8`。工具输出和 function_call_output 会向前扩展边界，避免拆断最近工具闭环。
 - `CODEX_AUTH_FILE`：可选，显式指定 Codex `auth.json`；默认读取 `CODEX_HOME/auth.json`。
 - `CODEX_REFRESH_TOKEN_URL_OVERRIDE`：可选，覆盖 ChatGPT OAuth refresh token 端点，默认 `https://auth.openai.com/oauth/token`。
 - `HTTP_PROXY` / `HTTPS_PROXY` / `WS_PROXY` / `WSS_PROXY` / `ALL_PROXY` 及对应小写变量：可选 Codex CLI 出站代理。
@@ -113,7 +113,7 @@
 
 `codex_backend` 模式复用同一个 app-server 进程直接请求 `https://chatgpt.com/backend-api/codex/responses`，从 `auth.json` 读取 access token，并在 access token 过期或上游返回 401 时用 refresh token 刷新后写回 `auth.json`；该模式适合高频 OpenCode 调用。默认策略是 Backend 直连，backend 请求失败时直接返回上游错误，避免把客户端本机工具错误降级为服务端 `codex exec`。确需临时救急时可在后台选择 Backend + CLI 兜底，或设置 `CODEX_UPSTREAM_FALLBACK_ENABLED=true` 作为初始环境口径，仅允许 CLI 能忠实处理的纯文本 / 图片请求 fallback；带工具调用、工具历史或文件输入的请求始终只允许走 backend。`codex_cli` 模式会为每次 `/v1/chat/completions` 或 `/v1/responses` 启动一次 Codex CLI，并串行执行上游请求，稳定但首包和单次延迟较高。usage 记录会同时保存配置模式、实际执行模式、fallback 状态、上下文压缩前后体积和压缩摘要，后台统计表可按上游模式筛选并展示两种模式的请求数。
 
-网关上下文压缩只保存工程摘要，不保存完整 prompt 或模型输出正文。压缩会尽量保留系统 / developer 指令、最近若干轮未压缩消息和最近完整工具闭环；较早历史会收口为带文件路径、错误线索、命令 / 测试线索和片段摘要的工程摘要。若压缩后仍超过硬阈值，网关会在转发前返回 `context_length_exceeded`，避免 Codex CLI 对同一超长请求连续重试。
+网关上下文压缩只保存工程摘要，不保存完整 prompt 或模型输出正文。压缩会尽量保留系统 / developer 指令、最近若干轮未压缩消息和最近完整工具闭环；较早历史会收口为带文件路径、错误线索、命令 / 测试线索和片段摘要的工程摘要。压缩阈值按“模型级配置 > 环境变量运维覆盖 > 内置模型推荐值 > 旧默认兜底”的顺序生效；模型级配置在后台模型管理页保存后立即影响后续请求，不需要重启服务。内置推荐按 Codex 使用体验控制在 `400K` 上下文窗口内，默认 `260K` 开始压缩、`380K` 硬拦截，字节阈值默认 `1.04M` / `1.9M`；如果确实要使用 API 模型更大的长上下文窗口，应在后台按模型显式覆盖，并接受更高 token 消耗和 long-context 价格档。后台阈值输入支持整数、`K` 和 `M` 单位，例如 `260K` 表示 260000，`0.38M` 表示 380000；保留条数只接受普通整数。若压缩后仍超过硬阈值，网关会在转发前返回 `context_length_exceeded`，避免 Codex CLI 对同一超长请求连续重试。
 
 两种模式下客户端都只保存 `ogw_...` 下游 key，服务端统一使用服务器 Codex 登录态，并继续记录 usage。direct backend 模式不会启动 `codex exec`，因此也不会注入 Codex CLI 自身的大量 agent 上下文；token usage 更接近客户端实际请求体。
 

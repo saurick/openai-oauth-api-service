@@ -11,6 +11,15 @@ var CodexModelIDs = []string{
 	"gpt-5.2",
 }
 
+var OfficialModelContextWindows = map[string]int64{
+	DefaultCodexModelID:   400_000,
+	"gpt-5.4":             400_000,
+	"gpt-5.4-mini":        400_000,
+	"gpt-5.3-codex":       400_000,
+	"gpt-5.3-codex-spark": 400_000,
+	"gpt-5.2":             400_000,
+}
+
 // OfficialModelPrices keeps Codex picker model prices that have published API token rates.
 // Sources: OpenAI API model docs and Codex rate card, checked 2026-05-09.
 var OfficialModelPrices = []*GatewayModelPrice{
@@ -32,6 +41,83 @@ func CodexModelIDSet() map[string]bool {
 			continue
 		}
 		out[modelID] = true
+	}
+	return out
+}
+
+func OfficialModelContextWindowTokens(modelID string) int64 {
+	return OfficialModelContextWindows[modelID]
+}
+
+func RecommendedGatewayContextPolicyForModel(modelID string) GatewayModelContextPolicy {
+	window := OfficialModelContextWindowTokens(modelID)
+	if window <= 0 {
+		return GatewayModelContextPolicy{}
+	}
+	compactTokens := window * 65 / 100
+	hardTokens := window * 95 / 100
+	if window >= 400_000 {
+		compactTokens = 260_000
+		hardTokens = 380_000
+	}
+	return GatewayModelContextPolicy{
+		ContextWindowTokens:  window,
+		ContextCompactTokens: compactTokens,
+		ContextHardTokens:    hardTokens,
+		ContextCompactBytes:  compactTokens * 4,
+		ContextHardBytes:     hardTokens * 5,
+		ContextKeepItems:     8,
+	}
+}
+
+func EffectiveGatewayModelContextPolicy(model *GatewayModel, fallback GatewayModelContextPolicy) GatewayModelContextPolicy {
+	modelID := ""
+	if model != nil {
+		modelID = model.ModelID
+	}
+	recommended := RecommendedGatewayContextPolicyForModel(modelID)
+	out := recommended
+	if fallback.ContextWindowTokens > 0 {
+		out.ContextWindowTokens = fallback.ContextWindowTokens
+	}
+	if fallback.ContextCompactTokens > 0 {
+		out.ContextCompactTokens = fallback.ContextCompactTokens
+	}
+	if fallback.ContextHardTokens > 0 {
+		out.ContextHardTokens = fallback.ContextHardTokens
+	}
+	if fallback.ContextCompactBytes > 0 {
+		out.ContextCompactBytes = fallback.ContextCompactBytes
+	}
+	if fallback.ContextHardBytes > 0 {
+		out.ContextHardBytes = fallback.ContextHardBytes
+	}
+	if fallback.ContextKeepItems > 0 {
+		out.ContextKeepItems = fallback.ContextKeepItems
+	}
+	if recommended.ContextWindowTokens > 0 {
+		out.ContextWindowTokens = recommended.ContextWindowTokens
+	}
+	if model == nil {
+		return out
+	}
+	if model.ContextWindowTokens > 0 {
+		out.ContextWindowTokens = model.ContextWindowTokens
+	}
+	if model.ContextCompactTokens > 0 {
+		out.ContextCompactTokens = model.ContextCompactTokens
+	}
+	if model.ContextHardTokens > 0 {
+		out.ContextHardTokens = model.ContextHardTokens
+	}
+	if model.ContextCompactBytes > 0 {
+		out.ContextCompactBytes = model.ContextCompactBytes
+	}
+	if model.ContextHardBytes > 0 {
+		out.ContextHardBytes = model.ContextHardBytes
+	}
+	if model.ContextKeepItems > 0 {
+		out.ContextKeepItems = model.ContextKeepItems
 	}
 	return out
 }

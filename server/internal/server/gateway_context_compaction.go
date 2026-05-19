@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -42,12 +40,19 @@ type gatewayContextCompaction struct {
 	Changed         bool
 }
 
-func (h *openAIGatewayHandler) prepareGatewayContext(ctx context.Context, key *biz.GatewayAPIKey, requestID string, sessionID string, path string, body []byte, reasoningEffort string) (gatewayContextPreparation, error) {
+func (h *openAIGatewayHandler) prepareGatewayContext(ctx context.Context, key *biz.GatewayAPIKey, requestID string, sessionID string, path string, body []byte, requestModel string, reasoningEffort string) (gatewayContextPreparation, error) {
 	diagnostic := gatewayUsageDiagnosticForRequest(path, body, reasoningEffort)
+	policy := h.effectiveGatewayContextPolicy(ctx, requestModel)
 	diagnostic.ContextOriginalBytes = int64(len(body))
 	diagnostic.ContextOriginalEstimatedTokens = estimateGatewayRequestTokens(path, body)
+	diagnostic.ContextWindowTokens = policy.ContextWindowTokens
+	diagnostic.ContextCompactTokenLimit = policy.ContextCompactTokens
+	diagnostic.ContextHardTokenLimit = policy.ContextHardTokens
+	diagnostic.ContextCompactByteLimit = policy.ContextCompactBytes
+	diagnostic.ContextHardByteLimit = policy.ContextHardBytes
+	diagnostic.ContextKeepItems = policy.ContextKeepItems
 
-	if !gatewayContextNeedsCompaction(len(body), diagnostic.ContextOriginalEstimatedTokens) {
+	if !gatewayContextNeedsCompaction(len(body), diagnostic.ContextOriginalEstimatedTokens, policy) {
 		return gatewayContextPreparation{Body: body, Diagnostic: diagnostic}, nil
 	}
 
@@ -62,7 +67,7 @@ func (h *openAIGatewayHandler) prepareGatewayContext(ctx context.Context, key *b
 		}
 	}
 
-	compacted, err := compactGatewayContextRequest(path, body, previousSummary)
+	compacted, err := compactGatewayContextRequest(path, body, previousSummary, policy.ContextKeepItems)
 	if err != nil {
 		diagnostic.ContextCompactionReason = "parse_failed"
 		diagnostic.UpstreamBody = summarizeErrorForUsage(err)
@@ -105,50 +110,60 @@ func (h *openAIGatewayHandler) prepareGatewayContext(ctx context.Context, key *b
 		}
 	}
 
-	if gatewayContextExceedsHardLimit(len(compacted.Body), compacted.CompactedTokens) {
+	if gatewayContextExceedsHardLimit(len(compacted.Body), compacted.CompactedTokens, policy) {
 		return gatewayContextPreparation{Body: compacted.Body, Diagnostic: diagnostic}, errGatewayContextLengthExceeded
 	}
 	return gatewayContextPreparation{Body: compacted.Body, Diagnostic: diagnostic}, nil
 }
 
-func gatewayContextNeedsCompaction(bytes int, tokens int64) bool {
-	return bytes >= gatewayContextCompactBytes() || tokens >= int64FromEnv("GATEWAY_CONTEXT_COMPACT_TOKENS", defaultGatewayContextCompactTokens)
-}
-
-func gatewayContextExceedsHardLimit(bytes int, tokens int64) bool {
-	return bytes >= gatewayContextHardBytes() || tokens >= int64FromEnv("GATEWAY_CONTEXT_HARD_TOKENS", defaultGatewayContextHardTokens)
-}
-
-func gatewayContextCompactBytes() int {
-	return intFromEnv("GATEWAY_CONTEXT_COMPACT_BYTES", defaultGatewayContextCompactBytes)
-}
-
-func gatewayContextHardBytes() int {
-	return intFromEnv("GATEWAY_CONTEXT_HARD_BYTES", defaultGatewayContextHardBytes)
-}
-
-func intFromEnv(key string, fallback int) int {
-	raw := strings.TrimSpace(os.Getenv(key))
-	if raw == "" {
-		return fallback
+func (h *openAIGatewayHandler) effectiveGatewayContextPolicy(ctx context.Context, modelID string) biz.GatewayModelContextPolicy {
+	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		modelID = biz.DefaultCodexModelID
 	}
-	value, err := strconv.Atoi(raw)
-	if err != nil || value <= 0 {
-		return fallback
+	var model *biz.GatewayModel
+	if h != nil && h.gatewayUC != nil {
+		item, err := h.gatewayUC.GetModelByID(ctx, modelID)
+		if err == nil {
+			model = item
+		} else if h.log != nil {
+			h.log.WithContext(ctx).Warnf("get gateway model context policy failed model=%s err=%v", modelID, err)
+		}
 	}
-	return value
+	if model == nil {
+		model = &biz.GatewayModel{ModelID: modelID}
+	}
+	return normalizeGatewayContextPolicy(biz.EffectiveGatewayModelContextPolicy(model, biz.GatewayContextFallbackPolicyFromEnv()))
 }
 
-func int64FromEnv(key string, fallback int64) int64 {
-	raw := strings.TrimSpace(os.Getenv(key))
-	if raw == "" {
-		return fallback
+func normalizeGatewayContextPolicy(policy biz.GatewayModelContextPolicy) biz.GatewayModelContextPolicy {
+	if policy.ContextCompactTokens <= 0 {
+		policy.ContextCompactTokens = defaultGatewayContextCompactTokens
 	}
-	value, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || value <= 0 {
-		return fallback
+	if policy.ContextHardTokens <= 0 {
+		policy.ContextHardTokens = defaultGatewayContextHardTokens
 	}
-	return value
+	if policy.ContextCompactBytes <= 0 {
+		policy.ContextCompactBytes = defaultGatewayContextCompactBytes
+	}
+	if policy.ContextHardBytes <= 0 {
+		policy.ContextHardBytes = defaultGatewayContextHardBytes
+	}
+	if policy.ContextKeepItems <= 0 {
+		policy.ContextKeepItems = defaultGatewayContextKeepItems
+	}
+	if policy.ContextKeepItems < 2 {
+		policy.ContextKeepItems = 2
+	}
+	return policy
+}
+
+func gatewayContextNeedsCompaction(bytes int, tokens int64, policy biz.GatewayModelContextPolicy) bool {
+	return int64(bytes) >= policy.ContextCompactBytes || tokens >= policy.ContextCompactTokens
+}
+
+func gatewayContextExceedsHardLimit(bytes int, tokens int64, policy biz.GatewayModelContextPolicy) bool {
+	return int64(bytes) >= policy.ContextHardBytes || tokens >= policy.ContextHardTokens
 }
 
 func estimateGatewayRequestTokens(path string, body []byte) int64 {
@@ -159,14 +174,13 @@ func estimateGatewayRequestTokens(path string, body []byte) int64 {
 	return estimateTokenCount(text)
 }
 
-func compactGatewayContextRequest(path string, body []byte, previousSummary string) (gatewayContextCompaction, error) {
+func compactGatewayContextRequest(path string, body []byte, previousSummary string, keepItems int) (gatewayContextCompaction, error) {
 	var payload map[string]any
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return gatewayContextCompaction{}, err
 	}
 	originalTokens := estimateGatewayRequestTokens(path, body)
 	originalBytes := int64(len(body))
-	keepItems := intFromEnv("GATEWAY_CONTEXT_KEEP_ITEMS", defaultGatewayContextKeepItems)
 	if keepItems < 2 {
 		keepItems = 2
 	}

@@ -79,6 +79,36 @@ func Source(v string) predicate.GatewayModel {
 	return predicate.GatewayModel(sql.FieldEQ(FieldSource, v))
 }
 
+// ContextWindowTokens applies equality check predicate on the "context_window_tokens" field. It's identical to ContextWindowTokensEQ.
+func ContextWindowTokens(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldEQ(FieldContextWindowTokens, v))
+}
+
+// ContextCompactTokens applies equality check predicate on the "context_compact_tokens" field. It's identical to ContextCompactTokensEQ.
+func ContextCompactTokens(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldEQ(FieldContextCompactTokens, v))
+}
+
+// ContextHardTokens applies equality check predicate on the "context_hard_tokens" field. It's identical to ContextHardTokensEQ.
+func ContextHardTokens(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldEQ(FieldContextHardTokens, v))
+}
+
+// ContextCompactBytes applies equality check predicate on the "context_compact_bytes" field. It's identical to ContextCompactBytesEQ.
+func ContextCompactBytes(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldEQ(FieldContextCompactBytes, v))
+}
+
+// ContextHardBytes applies equality check predicate on the "context_hard_bytes" field. It's identical to ContextHardBytesEQ.
+func ContextHardBytes(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldEQ(FieldContextHardBytes, v))
+}
+
+// ContextKeepItems applies equality check predicate on the "context_keep_items" field. It's identical to ContextKeepItemsEQ.
+func ContextKeepItems(v int) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldEQ(FieldContextKeepItems, v))
+}
+
 // LastSeenAt applies equality check predicate on the "last_seen_at" field. It's identical to LastSeenAtEQ.
 func LastSeenAt(v time.Time) predicate.GatewayModel {
 	return predicate.GatewayModel(sql.FieldEQ(FieldLastSeenAt, v))
@@ -337,6 +367,246 @@ func SourceEqualFold(v string) predicate.GatewayModel {
 // SourceContainsFold applies the ContainsFold predicate on the "source" field.
 func SourceContainsFold(v string) predicate.GatewayModel {
 	return predicate.GatewayModel(sql.FieldContainsFold(FieldSource, v))
+}
+
+// ContextWindowTokensEQ applies the EQ predicate on the "context_window_tokens" field.
+func ContextWindowTokensEQ(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldEQ(FieldContextWindowTokens, v))
+}
+
+// ContextWindowTokensNEQ applies the NEQ predicate on the "context_window_tokens" field.
+func ContextWindowTokensNEQ(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldNEQ(FieldContextWindowTokens, v))
+}
+
+// ContextWindowTokensIn applies the In predicate on the "context_window_tokens" field.
+func ContextWindowTokensIn(vs ...int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldIn(FieldContextWindowTokens, vs...))
+}
+
+// ContextWindowTokensNotIn applies the NotIn predicate on the "context_window_tokens" field.
+func ContextWindowTokensNotIn(vs ...int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldNotIn(FieldContextWindowTokens, vs...))
+}
+
+// ContextWindowTokensGT applies the GT predicate on the "context_window_tokens" field.
+func ContextWindowTokensGT(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldGT(FieldContextWindowTokens, v))
+}
+
+// ContextWindowTokensGTE applies the GTE predicate on the "context_window_tokens" field.
+func ContextWindowTokensGTE(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldGTE(FieldContextWindowTokens, v))
+}
+
+// ContextWindowTokensLT applies the LT predicate on the "context_window_tokens" field.
+func ContextWindowTokensLT(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldLT(FieldContextWindowTokens, v))
+}
+
+// ContextWindowTokensLTE applies the LTE predicate on the "context_window_tokens" field.
+func ContextWindowTokensLTE(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldLTE(FieldContextWindowTokens, v))
+}
+
+// ContextCompactTokensEQ applies the EQ predicate on the "context_compact_tokens" field.
+func ContextCompactTokensEQ(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldEQ(FieldContextCompactTokens, v))
+}
+
+// ContextCompactTokensNEQ applies the NEQ predicate on the "context_compact_tokens" field.
+func ContextCompactTokensNEQ(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldNEQ(FieldContextCompactTokens, v))
+}
+
+// ContextCompactTokensIn applies the In predicate on the "context_compact_tokens" field.
+func ContextCompactTokensIn(vs ...int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldIn(FieldContextCompactTokens, vs...))
+}
+
+// ContextCompactTokensNotIn applies the NotIn predicate on the "context_compact_tokens" field.
+func ContextCompactTokensNotIn(vs ...int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldNotIn(FieldContextCompactTokens, vs...))
+}
+
+// ContextCompactTokensGT applies the GT predicate on the "context_compact_tokens" field.
+func ContextCompactTokensGT(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldGT(FieldContextCompactTokens, v))
+}
+
+// ContextCompactTokensGTE applies the GTE predicate on the "context_compact_tokens" field.
+func ContextCompactTokensGTE(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldGTE(FieldContextCompactTokens, v))
+}
+
+// ContextCompactTokensLT applies the LT predicate on the "context_compact_tokens" field.
+func ContextCompactTokensLT(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldLT(FieldContextCompactTokens, v))
+}
+
+// ContextCompactTokensLTE applies the LTE predicate on the "context_compact_tokens" field.
+func ContextCompactTokensLTE(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldLTE(FieldContextCompactTokens, v))
+}
+
+// ContextHardTokensEQ applies the EQ predicate on the "context_hard_tokens" field.
+func ContextHardTokensEQ(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldEQ(FieldContextHardTokens, v))
+}
+
+// ContextHardTokensNEQ applies the NEQ predicate on the "context_hard_tokens" field.
+func ContextHardTokensNEQ(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldNEQ(FieldContextHardTokens, v))
+}
+
+// ContextHardTokensIn applies the In predicate on the "context_hard_tokens" field.
+func ContextHardTokensIn(vs ...int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldIn(FieldContextHardTokens, vs...))
+}
+
+// ContextHardTokensNotIn applies the NotIn predicate on the "context_hard_tokens" field.
+func ContextHardTokensNotIn(vs ...int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldNotIn(FieldContextHardTokens, vs...))
+}
+
+// ContextHardTokensGT applies the GT predicate on the "context_hard_tokens" field.
+func ContextHardTokensGT(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldGT(FieldContextHardTokens, v))
+}
+
+// ContextHardTokensGTE applies the GTE predicate on the "context_hard_tokens" field.
+func ContextHardTokensGTE(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldGTE(FieldContextHardTokens, v))
+}
+
+// ContextHardTokensLT applies the LT predicate on the "context_hard_tokens" field.
+func ContextHardTokensLT(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldLT(FieldContextHardTokens, v))
+}
+
+// ContextHardTokensLTE applies the LTE predicate on the "context_hard_tokens" field.
+func ContextHardTokensLTE(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldLTE(FieldContextHardTokens, v))
+}
+
+// ContextCompactBytesEQ applies the EQ predicate on the "context_compact_bytes" field.
+func ContextCompactBytesEQ(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldEQ(FieldContextCompactBytes, v))
+}
+
+// ContextCompactBytesNEQ applies the NEQ predicate on the "context_compact_bytes" field.
+func ContextCompactBytesNEQ(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldNEQ(FieldContextCompactBytes, v))
+}
+
+// ContextCompactBytesIn applies the In predicate on the "context_compact_bytes" field.
+func ContextCompactBytesIn(vs ...int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldIn(FieldContextCompactBytes, vs...))
+}
+
+// ContextCompactBytesNotIn applies the NotIn predicate on the "context_compact_bytes" field.
+func ContextCompactBytesNotIn(vs ...int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldNotIn(FieldContextCompactBytes, vs...))
+}
+
+// ContextCompactBytesGT applies the GT predicate on the "context_compact_bytes" field.
+func ContextCompactBytesGT(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldGT(FieldContextCompactBytes, v))
+}
+
+// ContextCompactBytesGTE applies the GTE predicate on the "context_compact_bytes" field.
+func ContextCompactBytesGTE(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldGTE(FieldContextCompactBytes, v))
+}
+
+// ContextCompactBytesLT applies the LT predicate on the "context_compact_bytes" field.
+func ContextCompactBytesLT(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldLT(FieldContextCompactBytes, v))
+}
+
+// ContextCompactBytesLTE applies the LTE predicate on the "context_compact_bytes" field.
+func ContextCompactBytesLTE(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldLTE(FieldContextCompactBytes, v))
+}
+
+// ContextHardBytesEQ applies the EQ predicate on the "context_hard_bytes" field.
+func ContextHardBytesEQ(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldEQ(FieldContextHardBytes, v))
+}
+
+// ContextHardBytesNEQ applies the NEQ predicate on the "context_hard_bytes" field.
+func ContextHardBytesNEQ(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldNEQ(FieldContextHardBytes, v))
+}
+
+// ContextHardBytesIn applies the In predicate on the "context_hard_bytes" field.
+func ContextHardBytesIn(vs ...int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldIn(FieldContextHardBytes, vs...))
+}
+
+// ContextHardBytesNotIn applies the NotIn predicate on the "context_hard_bytes" field.
+func ContextHardBytesNotIn(vs ...int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldNotIn(FieldContextHardBytes, vs...))
+}
+
+// ContextHardBytesGT applies the GT predicate on the "context_hard_bytes" field.
+func ContextHardBytesGT(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldGT(FieldContextHardBytes, v))
+}
+
+// ContextHardBytesGTE applies the GTE predicate on the "context_hard_bytes" field.
+func ContextHardBytesGTE(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldGTE(FieldContextHardBytes, v))
+}
+
+// ContextHardBytesLT applies the LT predicate on the "context_hard_bytes" field.
+func ContextHardBytesLT(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldLT(FieldContextHardBytes, v))
+}
+
+// ContextHardBytesLTE applies the LTE predicate on the "context_hard_bytes" field.
+func ContextHardBytesLTE(v int64) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldLTE(FieldContextHardBytes, v))
+}
+
+// ContextKeepItemsEQ applies the EQ predicate on the "context_keep_items" field.
+func ContextKeepItemsEQ(v int) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldEQ(FieldContextKeepItems, v))
+}
+
+// ContextKeepItemsNEQ applies the NEQ predicate on the "context_keep_items" field.
+func ContextKeepItemsNEQ(v int) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldNEQ(FieldContextKeepItems, v))
+}
+
+// ContextKeepItemsIn applies the In predicate on the "context_keep_items" field.
+func ContextKeepItemsIn(vs ...int) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldIn(FieldContextKeepItems, vs...))
+}
+
+// ContextKeepItemsNotIn applies the NotIn predicate on the "context_keep_items" field.
+func ContextKeepItemsNotIn(vs ...int) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldNotIn(FieldContextKeepItems, vs...))
+}
+
+// ContextKeepItemsGT applies the GT predicate on the "context_keep_items" field.
+func ContextKeepItemsGT(v int) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldGT(FieldContextKeepItems, v))
+}
+
+// ContextKeepItemsGTE applies the GTE predicate on the "context_keep_items" field.
+func ContextKeepItemsGTE(v int) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldGTE(FieldContextKeepItems, v))
+}
+
+// ContextKeepItemsLT applies the LT predicate on the "context_keep_items" field.
+func ContextKeepItemsLT(v int) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldLT(FieldContextKeepItems, v))
+}
+
+// ContextKeepItemsLTE applies the LTE predicate on the "context_keep_items" field.
+func ContextKeepItemsLTE(v int) predicate.GatewayModel {
+	return predicate.GatewayModel(sql.FieldLTE(FieldContextKeepItems, v))
 }
 
 // LastSeenAtEQ applies the EQ predicate on the "last_seen_at" field.

@@ -501,12 +501,48 @@ func init() {
 	gatewaymodel.DefaultSource = gatewaymodelDescSource.Default.(string)
 	// gatewaymodel.SourceValidator is a validator for the "source" field. It is called by the builders before save.
 	gatewaymodel.SourceValidator = gatewaymodelDescSource.Validators[0].(func(string) error)
+	// gatewaymodelDescContextWindowTokens is the schema descriptor for context_window_tokens field.
+	gatewaymodelDescContextWindowTokens := gatewaymodelFields[5].Descriptor()
+	// gatewaymodel.DefaultContextWindowTokens holds the default value on creation for the context_window_tokens field.
+	gatewaymodel.DefaultContextWindowTokens = gatewaymodelDescContextWindowTokens.Default.(int64)
+	// gatewaymodel.ContextWindowTokensValidator is a validator for the "context_window_tokens" field. It is called by the builders before save.
+	gatewaymodel.ContextWindowTokensValidator = gatewaymodelDescContextWindowTokens.Validators[0].(func(int64) error)
+	// gatewaymodelDescContextCompactTokens is the schema descriptor for context_compact_tokens field.
+	gatewaymodelDescContextCompactTokens := gatewaymodelFields[6].Descriptor()
+	// gatewaymodel.DefaultContextCompactTokens holds the default value on creation for the context_compact_tokens field.
+	gatewaymodel.DefaultContextCompactTokens = gatewaymodelDescContextCompactTokens.Default.(int64)
+	// gatewaymodel.ContextCompactTokensValidator is a validator for the "context_compact_tokens" field. It is called by the builders before save.
+	gatewaymodel.ContextCompactTokensValidator = gatewaymodelDescContextCompactTokens.Validators[0].(func(int64) error)
+	// gatewaymodelDescContextHardTokens is the schema descriptor for context_hard_tokens field.
+	gatewaymodelDescContextHardTokens := gatewaymodelFields[7].Descriptor()
+	// gatewaymodel.DefaultContextHardTokens holds the default value on creation for the context_hard_tokens field.
+	gatewaymodel.DefaultContextHardTokens = gatewaymodelDescContextHardTokens.Default.(int64)
+	// gatewaymodel.ContextHardTokensValidator is a validator for the "context_hard_tokens" field. It is called by the builders before save.
+	gatewaymodel.ContextHardTokensValidator = gatewaymodelDescContextHardTokens.Validators[0].(func(int64) error)
+	// gatewaymodelDescContextCompactBytes is the schema descriptor for context_compact_bytes field.
+	gatewaymodelDescContextCompactBytes := gatewaymodelFields[8].Descriptor()
+	// gatewaymodel.DefaultContextCompactBytes holds the default value on creation for the context_compact_bytes field.
+	gatewaymodel.DefaultContextCompactBytes = gatewaymodelDescContextCompactBytes.Default.(int64)
+	// gatewaymodel.ContextCompactBytesValidator is a validator for the "context_compact_bytes" field. It is called by the builders before save.
+	gatewaymodel.ContextCompactBytesValidator = gatewaymodelDescContextCompactBytes.Validators[0].(func(int64) error)
+	// gatewaymodelDescContextHardBytes is the schema descriptor for context_hard_bytes field.
+	gatewaymodelDescContextHardBytes := gatewaymodelFields[9].Descriptor()
+	// gatewaymodel.DefaultContextHardBytes holds the default value on creation for the context_hard_bytes field.
+	gatewaymodel.DefaultContextHardBytes = gatewaymodelDescContextHardBytes.Default.(int64)
+	// gatewaymodel.ContextHardBytesValidator is a validator for the "context_hard_bytes" field. It is called by the builders before save.
+	gatewaymodel.ContextHardBytesValidator = gatewaymodelDescContextHardBytes.Validators[0].(func(int64) error)
+	// gatewaymodelDescContextKeepItems is the schema descriptor for context_keep_items field.
+	gatewaymodelDescContextKeepItems := gatewaymodelFields[10].Descriptor()
+	// gatewaymodel.DefaultContextKeepItems holds the default value on creation for the context_keep_items field.
+	gatewaymodel.DefaultContextKeepItems = gatewaymodelDescContextKeepItems.Default.(int)
+	// gatewaymodel.ContextKeepItemsValidator is a validator for the "context_keep_items" field. It is called by the builders before save.
+	gatewaymodel.ContextKeepItemsValidator = gatewaymodelDescContextKeepItems.Validators[0].(func(int) error)
 	// gatewaymodelDescCreatedAt is the schema descriptor for created_at field.
-	gatewaymodelDescCreatedAt := gatewaymodelFields[6].Descriptor()
+	gatewaymodelDescCreatedAt := gatewaymodelFields[12].Descriptor()
 	// gatewaymodel.DefaultCreatedAt holds the default value on creation for the created_at field.
 	gatewaymodel.DefaultCreatedAt = gatewaymodelDescCreatedAt.Default.(func() time.Time)
 	// gatewaymodelDescUpdatedAt is the schema descriptor for updated_at field.
-	gatewaymodelDescUpdatedAt := gatewaymodelFields[7].Descriptor()
+	gatewaymodelDescUpdatedAt := gatewaymodelFields[13].Descriptor()
 	// gatewaymodel.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	gatewaymodel.DefaultUpdatedAt = gatewaymodelDescUpdatedAt.Default.(func() time.Time)
 	// gatewaymodel.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

@@ -104,6 +104,18 @@ const KEY_UPSTREAM_STRATEGY_OPTIONS = [
   },
   ...CODEX_UPSTREAM_STRATEGY_OPTIONS,
 ]
+const MODEL_CONTEXT_HELP = {
+  window:
+    '表格显示当前生效值；弹窗保存的是模型覆盖值。上下文窗口是客户端可看到的模型窗口，默认按 Codex 使用体验取 400K；留空或 0 表示继承，不是无限制。',
+  compact:
+    '表格显示当前生效值；弹窗保存的是模型覆盖值。开始压缩是转发前先摘要历史；硬拦截是压缩后仍过大则返回 413。留空或 0 表示继承默认 260K / 380K，不是关闭压缩。',
+  bytes:
+    '表格显示当前生效值；弹窗保存的是模型覆盖值。字节阈值用于兜底 JSON、工具输出和附件文本导致的超大请求。留空或 0 表示继承，不是无限制；它不是计费 token。',
+  keep:
+    '表格显示当前生效值；弹窗保存的是模型覆盖值。保留条数是压缩时至少保留的最近 messages / input items 数；留空或 0 表示继承默认值。',
+  units:
+    '阈值可填整数、K 或 M，例如 260K、0.38M；保留条数只能填整数。留空或 0 表示不写模型覆盖，继续走运维覆盖或内置推荐，不代表无限制。',
+}
 const USAGE_UPSTREAM_FILTER_OPTIONS = [
   { label: '全部上游', value: '' },
   ...CODEX_UPSTREAM_MODE_OPTIONS,
@@ -214,6 +226,14 @@ const INITIAL_KEY_FORM = {
   dailyBillableInputTokenLimit: '',
   weeklyBillableInputTokenLimit: '',
 }
+const INITIAL_MODEL_CONTEXT_FORM = {
+  contextWindowTokens: '',
+  contextCompactTokens: '',
+  contextHardTokens: '',
+  contextCompactBytes: '',
+  contextHardBytes: '',
+  contextKeepItems: '',
+}
 
 function normalizeKeyRemarkInput(value) {
   return String(value || '')
@@ -274,6 +294,44 @@ function asInt(v, fallback = 0) {
 
 function fmtNumber(v) {
   return new Intl.NumberFormat().format(asInt(v, 0))
+}
+
+function fmtOptionalNumber(v) {
+  const n = asInt(v, 0)
+  return n > 0 ? fmtNumber(n) : '未配置'
+}
+
+function fmtEffectiveContextValue(item, key, suffix = '') {
+  const n = asInt(item?.[key], 0)
+  if (n <= 0) return '未配置'
+  return `${fmtNumber(n)}${suffix ? ` ${suffix}` : ''}`
+}
+
+function fmtContextInputValue(value, { allowUnit = true } = {}) {
+  const n = asInt(value, 0)
+  if (n <= 0) return ''
+  if (!allowUnit) return String(n)
+  if (n >= 1_000_000 && n % 10_000 === 0) {
+    return `${Number((n / 1_000_000).toFixed(2))}M`
+  }
+  if (n >= 1_000 && n % 1_000 === 0) {
+    return `${n / 1_000}K`
+  }
+  return String(n)
+}
+
+function limitInputToNumber(value, { allowUnit = true } = {}) {
+  const raw = String(value || '').trim()
+  if (!raw) return 0
+  const normalized = raw.replace(/\s+/g, '').toLowerCase()
+  const match = normalized.match(/^(\d+(?:\.\d+)?)([km])?$/)
+  if (!match) return null
+  if (match[2] && !allowUnit) return null
+  const multiplier =
+    match[2] === 'm' ? 1_000_000 : match[2] === 'k' ? 1_000 : 1
+  const n = Number(match[1]) * multiplier
+  if (!Number.isFinite(n)) return null
+  return Math.trunc(n)
 }
 
 function billableInputTokens(item) {
@@ -551,6 +609,29 @@ function fmtPricePerMillion(value) {
   return `$${new Intl.NumberFormat(undefined, {
     maximumFractionDigits: 4,
   }).format(n)}`
+}
+
+function modelContextFormFromItem(item) {
+  return {
+    contextWindowTokens: String(
+      asInt(item?.context_window_tokens, 0) || ''
+    ),
+    contextCompactTokens: String(
+      asInt(item?.context_compact_tokens, 0) || ''
+    ),
+    contextHardTokens: String(
+      asInt(item?.context_hard_tokens, 0) || ''
+    ),
+    contextCompactBytes: String(
+      asInt(item?.context_compact_bytes, 0) || ''
+    ),
+    contextHardBytes: String(
+      asInt(item?.context_hard_bytes, 0) || ''
+    ),
+    contextKeepItems: String(
+      asInt(item?.context_keep_items, 0) || ''
+    ),
+  }
 }
 
 function fmtPriceTriplet(price) {
@@ -1002,7 +1083,7 @@ function HeaderWithHelp({ children, help }) {
       <button
         type="button"
         className="admin-th-help"
-        aria-label={`${children}说明：${help}`}
+        aria-label={`说明：${help}`}
         data-tooltip={help}
       >
         ?
@@ -1279,6 +1360,11 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   )
   const [modelPagination, setModelPagination] = useState(
     createInitialPagination
+  )
+  const [modelContextModalOpen, setModelContextModalOpen] = useState(false)
+  const [editingModelContext, setEditingModelContext] = useState(null)
+  const [modelContextForm, setModelContextForm] = useState(
+    INITIAL_MODEL_CONTEXT_FORM
   )
   const [usagePagination, setUsagePagination] = useState(
     createInitialPagination
@@ -1899,6 +1985,51 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       await loadAll()
     } catch (err) {
       setErrMsg(getActionErrorMessage(err, '更新模型状态'))
+    }
+  }
+
+  const openModelContextModal = (item) => {
+    setErrMsg('')
+    setEditingModelContext(item)
+    setModelContextForm(modelContextFormFromItem(item))
+    setModelContextModalOpen(true)
+  }
+
+  const saveModelContext = async (e) => {
+    e.preventDefault()
+    if (!editingModelContext?.id) return
+    const payload = {
+      context_window_tokens: limitInputToNumber(
+        modelContextForm.contextWindowTokens
+      ),
+      context_compact_tokens: limitInputToNumber(
+        modelContextForm.contextCompactTokens
+      ),
+      context_hard_tokens: limitInputToNumber(modelContextForm.contextHardTokens),
+      context_compact_bytes: limitInputToNumber(
+        modelContextForm.contextCompactBytes
+      ),
+      context_hard_bytes: limitInputToNumber(modelContextForm.contextHardBytes),
+      context_keep_items: limitInputToNumber(modelContextForm.contextKeepItems, {
+        allowUnit: false,
+      }),
+    }
+    if (Object.values(payload).some((value) => value == null)) {
+      setErrMsg('上下文策略只支持数字，阈值可使用 K / M 单位，保留条数只能填整数。')
+      return
+    }
+    setErrMsg('')
+    try {
+      await apiRpc.call('model_context_update', {
+        id: editingModelContext.id,
+        ...payload,
+      })
+      setModelContextModalOpen(false)
+      setEditingModelContext(null)
+      setModelContextForm(INITIAL_MODEL_CONTEXT_FORM)
+      await loadAll()
+    } catch (err) {
+      setErrMsg(getActionErrorMessage(err, '更新模型上下文策略'))
     }
   }
 
@@ -2709,7 +2840,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             <div className={selectionBlockClass}>
               <span className="font-semibold text-[#1f2d25]">模型操作</span>
               <span className={selectionTagClass}>
-                模型列表随代码固定维护，此页只控制启停
+                模型列表随代码固定维护；上下文策略保存后立即影响后续请求
               </span>
             </div>
           </div>
@@ -2717,7 +2848,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
         <div className={tableWrapClass}>
           <div className="overflow-auto">
-            <table className={`${tableClass} min-w-[980px]`}>
+            <table className={`${tableClass} min-w-[1380px]`}>
               <thead>
                 <tr>
                   <th className={thClass}>模型</th>
@@ -2725,6 +2856,26 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   <th className={thClass}>输入 $/1M</th>
                   <th className={thClass}>缓存输入 $/1M</th>
                   <th className={thClass}>输出 $/1M</th>
+                  <th className={thClass}>
+                    <HeaderWithHelp help={MODEL_CONTEXT_HELP.window}>
+                      上下文窗口
+                    </HeaderWithHelp>
+                  </th>
+                  <th className={thClass}>
+                    <HeaderWithHelp help={MODEL_CONTEXT_HELP.compact}>
+                      压缩阈值
+                    </HeaderWithHelp>
+                  </th>
+                  <th className={thClass}>
+                    <HeaderWithHelp help={MODEL_CONTEXT_HELP.bytes}>
+                      字节阈值
+                    </HeaderWithHelp>
+                  </th>
+                  <th className={thClass}>
+                    <HeaderWithHelp help={MODEL_CONTEXT_HELP.keep}>
+                      保留
+                    </HeaderWithHelp>
+                  </th>
                   <th className={thClass}>状态</th>
                   <th className={thClass}>操作</th>
                 </tr>
@@ -2754,6 +2905,37 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                           {fmtPricePerMillion(price?.output_usd_per_million)}
                         </td>
                         <td className={tdClass}>
+                          {fmtOptionalNumber(
+                            item.effective_context_window_tokens
+                          )}{' '}
+                          tokens
+                        </td>
+                        <td className={tdClass}>
+                          <div className="whitespace-nowrap">
+                            {fmtOptionalNumber(
+                              item.effective_context_compact_tokens
+                            )}
+                            {' / '}
+                            {fmtOptionalNumber(
+                              item.effective_context_hard_tokens
+                            )}
+                          </div>
+                        </td>
+                        <td className={tdClass}>
+                          <div className="whitespace-nowrap">
+                            {fmtOptionalNumber(
+                              item.effective_context_compact_bytes
+                            )}
+                            {' / '}
+                            {fmtOptionalNumber(
+                              item.effective_context_hard_bytes
+                            )}
+                          </div>
+                        </td>
+                        <td className={tdClass}>
+                          {fmtOptionalNumber(item.effective_context_keep_items)}
+                        </td>
+                        <td className={tdClass}>
                           <StatusBadge
                             active={!!item.enabled}
                             trueText="启用"
@@ -2762,6 +2944,14 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                         </td>
                         <td className={tdClass}>
                           <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openModelContextModal(item)}
+                              disabled={loading}
+                              className={tableActionButtonClass}
+                            >
+                              上下文
+                            </button>
                             <button
                               type="button"
                               onClick={() =>
@@ -2784,7 +2974,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 ) : (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={11}
                       className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                     >
                       暂无模型
@@ -3004,6 +3194,228 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 className={primaryButtonClass}
               >
                 {editingKeyId ? '保存凭据' : '生成 API 凭据'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  const renderModelContextInput = (
+    name,
+    label,
+    hint,
+    help,
+    effectiveKey,
+    {
+      effectiveSuffix = '',
+      placeholder = '留空=继承',
+      allowUnit = true,
+    } = {}
+  ) => {
+    const effectiveRawValue = asInt(editingModelContext?.[effectiveKey], 0)
+    const effectiveValue = fmtEffectiveContextValue(
+      editingModelContext,
+      effectiveKey,
+      effectiveSuffix
+    )
+    const fillEffectiveValue = () => {
+      const nextValue = fmtContextInputValue(effectiveRawValue, { allowUnit })
+      if (!nextValue) return
+      setModelContextForm((current) => ({
+        ...current,
+        [name]: nextValue,
+      }))
+    }
+    return (
+      <div className="admin-model-context-field">
+        <div className="admin-model-context-field-head">
+          <span className="admin-model-context-field-title">
+            <HeaderWithHelp help={help}>{label}</HeaderWithHelp>
+          </span>
+          <button
+            type="button"
+            className="admin-button admin-button-compact admin-model-context-fill"
+            onClick={fillEffectiveValue}
+            disabled={effectiveRawValue <= 0}
+          >
+            填入当前值
+          </button>
+        </div>
+        <input
+          type="text"
+          aria-label={label}
+          inputMode="decimal"
+          value={modelContextForm[name]}
+          onChange={(e) =>
+            setModelContextForm((current) => ({
+              ...current,
+              [name]: e.target.value,
+            }))
+          }
+          className={inputClass}
+          placeholder={placeholder}
+        />
+        <span className={fieldHintClass}>{hint}</span>
+        <span className={fieldHintClass}>
+          当前生效：{effectiveValue}；输入框留空或填 0 表示继承该值，不是无限制。
+        </span>
+      </div>
+    )
+  }
+
+  const closeModelContextModal = () => {
+    setModelContextModalOpen(false)
+    setEditingModelContext(null)
+    setModelContextForm(INITIAL_MODEL_CONTEXT_FORM)
+  }
+
+  const renderModelContextModal = () => {
+    if (!modelContextModalOpen || !editingModelContext) return null
+
+    return (
+      <div className="admin-modal-backdrop">
+        <button
+          type="button"
+          className="admin-modal-overlay"
+          aria-label="关闭模型上下文策略"
+          onClick={closeModelContextModal}
+        />
+        <div
+          className="admin-modal-panel admin-model-context-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="model-context-modal-title"
+        >
+          <div className="admin-modal-header">
+            <div>
+              <h2 id="model-context-modal-title" className="admin-modal-title">
+                模型上下文策略
+              </h2>
+              <p className="admin-modal-description">
+                {editingModelContext.model_id} 的压缩阈值；保存后仅影响后续请求。留空或 0 表示继承当前生效值，不是无限制。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={closeModelContextModal}
+              className="admin-modal-close"
+              aria-label="关闭弹窗"
+            >
+              ×
+            </button>
+          </div>
+          <form
+            onSubmit={saveModelContext}
+            className="admin-modal-form"
+            noValidate
+          >
+            <div className="admin-model-context-section">
+              <div>
+                <div className="admin-model-context-section-title">
+                  Token 阈值
+                </div>
+                <div className={fieldHintClass}>
+                  硬拦截必须大于开始压缩；0 使用推荐值；支持 K / M 单位。默认按 Codex 体验控制在 400K 窗口内。
+                </div>
+              </div>
+              <div className="admin-model-context-grid">
+                {renderModelContextInput(
+                  'contextWindowTokens',
+                  '上下文窗口 tokens',
+                  '用于 /v1/models 元数据和硬阈值比例展示。',
+                  MODEL_CONTEXT_HELP.window,
+                  'effective_context_window_tokens',
+                  {
+                    effectiveSuffix: 'tokens',
+                    placeholder: '留空=继承，如需覆盖填 400K',
+                  }
+                )}
+                {renderModelContextInput(
+                  'contextCompactTokens',
+                  '开始压缩 tokens',
+                  '请求粗估 token 达到该值时压缩。',
+                  MODEL_CONTEXT_HELP.compact,
+                  'effective_context_compact_tokens',
+                  {
+                    effectiveSuffix: 'tokens',
+                    placeholder: '留空=继承，如需覆盖填 260K',
+                  }
+                )}
+                {renderModelContextInput(
+                  'contextHardTokens',
+                  '硬拦截 tokens',
+                  '压缩后仍达到该值时返回 413。',
+                  MODEL_CONTEXT_HELP.compact,
+                  'effective_context_hard_tokens',
+                  {
+                    effectiveSuffix: 'tokens',
+                    placeholder: '留空=继承，如需覆盖填 380K',
+                  }
+                )}
+              </div>
+            </div>
+            <div className="admin-model-context-section">
+              <div>
+                <div className="admin-model-context-section-title">
+                  字节阈值
+                </div>
+                <div className={fieldHintClass}>
+                  用于保护 JSON、工具输出和附件文本导致的超大请求体；支持 K / M 单位，不等同于计费 token。
+                </div>
+              </div>
+              <div className="admin-model-context-grid">
+                {renderModelContextInput(
+                  'contextCompactBytes',
+                  '开始压缩 bytes',
+                  '请求体达到该字节数时压缩。',
+                  MODEL_CONTEXT_HELP.bytes,
+                  'effective_context_compact_bytes',
+                  {
+                    effectiveSuffix: 'bytes',
+                    placeholder: '留空=继承，如需覆盖填 1.04M',
+                  }
+                )}
+                {renderModelContextInput(
+                  'contextHardBytes',
+                  '硬拦截 bytes',
+                  '压缩后仍达到该字节数时返回 413。',
+                  MODEL_CONTEXT_HELP.bytes,
+                  'effective_context_hard_bytes',
+                  {
+                    effectiveSuffix: 'bytes',
+                    placeholder: '留空=继承，如需覆盖填 1.9M',
+                  }
+                )}
+                {renderModelContextInput(
+                  'contextKeepItems',
+                  '保留最近条数',
+                  '压缩时保留最近 messages / input items。',
+                  MODEL_CONTEXT_HELP.keep,
+                  'effective_context_keep_items',
+                  {
+                    effectiveSuffix: '条',
+                    placeholder: '留空=继承，如需覆盖填 8',
+                    allowUnit: false,
+                  }
+                )}
+              </div>
+            </div>
+            <div className="admin-modal-footer">
+              <button
+                type="button"
+                onClick={closeModelContextModal}
+                className={secondaryButtonClass}
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className={primaryButtonClass}
+              >
+                保存策略
               </button>
             </div>
           </form>
@@ -3974,6 +4386,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         {currentView === 'usage' ? renderUsage() : null}
       </div>
       {currentView === 'keys' ? renderKeyModal() : null}
+      {currentView === 'models' ? renderModelContextModal() : null}
       {renderUsageBucketDetailModal()}
       {renderUsageSessionDetailModal()}
     </AdminFrame>

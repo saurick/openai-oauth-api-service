@@ -838,6 +838,76 @@
   overflow: hidden;
 }
 
+.admin-model-context-modal {
+  width: min(980px, 100%);
+  max-width: calc(100vw - 32px);
+}
+
+.admin-model-context-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-surface-soft);
+}
+
+.admin-model-context-section-title {
+  color: var(--admin-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.admin-model-context-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.admin-model-context-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--admin-muted-strong);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.admin-model-context-field-head {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-model-context-field-title {
+  min-width: 0;
+  color: var(--admin-text);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.admin-model-context-field-title .admin-th-help-wrap {
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+.admin-model-context-fill {
+  flex: 0 0 auto;
+}
+
+.admin-model-context-field input {
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-model-context-field .text-xs {
+  overflow-wrap: anywhere;
+}
+
 .admin-usage-day-model-header {
   border-bottom: 1px solid var(--admin-border);
 }
@@ -1269,6 +1339,15 @@
 
   .admin-usage-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .admin-model-context-field-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-model-context-fill {
+    width: 100%;
   }
 
   .admin-table-pagination,

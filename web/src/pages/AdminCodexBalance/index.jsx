@@ -146,14 +146,24 @@ export default function AdminCodexBalancePage() {
       title="Codex 余额"
       description="查看当前服务器 Codex 登录态对应的额度余额、5 小时窗口和每周窗口；数据来自公开余额接口，不展示账号邮箱或 token。"
       actions={
-        <button
-          type="button"
-          className="admin-button admin-button-primary"
-          disabled={loading}
-          onClick={() => loadBalance()}
-        >
-          {loading ? '刷新中' : '刷新'}
-        </button>
+        <>
+          <a
+            className="admin-button"
+            href={BALANCE_ENDPOINT}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            打开公开接口
+          </a>
+          <button
+            type="button"
+            className="admin-button admin-button-primary"
+            disabled={loading}
+            onClick={() => loadBalance()}
+          >
+            {loading ? '刷新中' : '刷新'}
+          </button>
+        </>
       }
     >
       {error ? (
@@ -194,7 +204,10 @@ export default function AdminCodexBalancePage() {
       {limits.length > 0 ? (
         <div className="grid gap-5 xl:grid-cols-2">
           {limits.map((item) => (
-            <LimitCard key={item.limit_id || rateLimitTitle(item)} item={item} />
+            <LimitCard
+              key={item.limit_id || rateLimitTitle(item)}
+              item={item}
+            />
           ))}
         </div>
       ) : null}

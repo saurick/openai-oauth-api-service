@@ -232,6 +232,44 @@ const scenarios = [
     },
   },
   {
+    name: 'admin-codex-balance-desktop',
+    path: '/admin-codex-balance',
+    viewport: { width: 1440, height: 900 },
+    adminAuth: true,
+    mockCodexBalance: true,
+    verify: async (page) => {
+      await expectText(page, 'Codex 余额')
+      await expectRole(page, 'link', '打开公开接口')
+      await expectRole(page, 'button', '刷新')
+      await expectText(page, '接口状态')
+      await expectText(page, '正常')
+      await expectText(page, 'Credits remaining')
+      await assertAdminChrome(page, 'admin-codex-balance-desktop')
+      await assertThemeToggle(
+        page,
+        'admin-codex-balance-desktop',
+        '.admin-frame'
+      )
+      await assertCodexBalanceVisuals(page, 'admin-codex-balance-desktop')
+    },
+  },
+  {
+    name: 'admin-codex-balance-mobile',
+    path: '/admin-codex-balance',
+    viewport: { width: 390, height: 844 },
+    adminAuth: true,
+    mockCodexBalance: true,
+    verify: async (page) => {
+      await expectText(page, 'Codex 余额')
+      await expectRole(page, 'link', '打开公开接口')
+      await expectRole(page, 'button', '刷新')
+      await expectText(page, '5 小时额度')
+      await expectText(page, '每周额度')
+      await assertAdminChrome(page, 'admin-codex-balance-mobile')
+      await assertCodexBalanceVisuals(page, 'admin-codex-balance-mobile')
+    },
+  },
+  {
     name: 'admin-keys-desktop',
     path: '/admin-keys',
     viewport: { width: 1440, height: 900 },
@@ -267,6 +305,61 @@ const scenarios = [
       await expectText(page, '模型管理')
       await assertAdminChrome(page, 'admin-models-desktop')
       await assertModelTableVisuals(page, 'admin-models-desktop')
+      await page.getByRole('button', { name: '浅色', exact: true }).click()
+      await page.waitForFunction(
+        () => document.documentElement.dataset.adminTheme === 'light'
+      )
+      await page
+        .getByRole('button', { name: '上下文', exact: true })
+        .first()
+        .click()
+      await expectText(page, '模型上下文策略')
+      await expectText(page, '开始压缩 tokens')
+      await expectText(page, '支持 K / M 单位')
+      await expectText(page, '当前生效：260,000 tokens')
+      await expectText(page, '不是无限制')
+      await expectText(page, '填入当前值')
+      await assertModelContextModalLayout(
+        page,
+        'admin-models-desktop-light'
+      )
+      await page.getByRole('button', { name: '关闭弹窗' }).click()
+      await page.getByRole('button', { name: '暗色', exact: true }).click()
+      await page.waitForFunction(
+        () => document.documentElement.dataset.adminTheme === 'dark'
+      )
+      await page
+        .getByRole('button', { name: '上下文', exact: true })
+        .first()
+        .click()
+      await assertModelContextModalLayout(page, 'admin-models-desktop-dark')
+      await page.getByRole('button', { name: '填入当前值' }).nth(1).click()
+      assert.equal(
+        await page.getByLabel('开始压缩 tokens').inputValue(),
+        '260K'
+      )
+      await page.getByLabel('开始压缩 tokens').fill('260K')
+      await page.getByLabel('硬拦截 tokens').fill('0.38M')
+      await page.getByLabel('开始压缩 bytes').fill('1.04M')
+      await page.getByLabel('硬拦截 bytes').fill('1.9M')
+      await page.getByRole('button', { name: '保存策略' }).click()
+      await waitForApiRpcCall(
+        page,
+        'model_context_update',
+        (params) =>
+          params.context_compact_tokens === 260000 &&
+          params.context_hard_tokens === 380000 &&
+          params.context_compact_bytes === 1040000 &&
+          params.context_hard_bytes === 1900000
+      )
+      await page
+        .getByRole('button', { name: '上下文', exact: true })
+        .first()
+        .click()
+      await page.getByLabel('保留最近条数').fill('8K')
+      await page.getByRole('button', { name: '保存策略' }).click()
+      await expectText(page, '保留条数只能填整数')
+      await page.getByRole('button', { name: '关闭弹窗' }).click()
     },
   },
   {
@@ -503,6 +596,10 @@ async function runScenario(browser, scenario) {
       await installApiRpcMock(page)
     }
 
+    if (scenario.mockCodexBalance) {
+      await installCodexBalanceMock(page)
+    }
+
     await page.goto(new URL(scenario.path, `${baseURL}/`).toString(), {
       waitUntil: 'domcontentloaded',
     })
@@ -559,6 +656,24 @@ async function expectNoText(page, text) {
     text
   )
   assert(!hasText, `页面不应出现文案: ${text}`)
+}
+
+async function waitForApiRpcCall(page, method, predicate) {
+  const deadline = Date.now() + 10_000
+  while (Date.now() < deadline) {
+    const matched = (page.__styleL1ApiRpcCalls || []).some(
+      (call) => call.method === method && predicate(call.params || {})
+    )
+    if (matched) {
+      return
+    }
+    await delay(100)
+  }
+  assert.fail(
+    `未捕获符合条件的 ${method} 调用: ${JSON.stringify(
+      page.__styleL1ApiRpcCalls || []
+    )}`
+  )
 }
 
 async function assertNoHorizontalOverflow(page, scenarioName) {
@@ -1566,6 +1681,140 @@ async function assertClientConfigVisuals(page, scenarioName) {
   )
 }
 
+async function assertCodexBalanceVisuals(page, scenarioName) {
+  const metrics = await page.evaluate(() => {
+    const main = document.querySelector('main')
+    const link = document.querySelector('a[href="/public/codex/balance"]')
+    const refreshButton = Array.from(document.querySelectorAll('button')).find(
+      (node) => node.textContent.trim() === '刷新'
+    )
+    const panels = Array.from(
+      main?.querySelectorAll('.admin-surface-panel') || []
+    )
+    const progressBars = Array.from(
+      main?.querySelectorAll('[style*="width"]') || []
+    )
+    const linkRect = link?.getBoundingClientRect()
+    const buttonRect = refreshButton?.getBoundingClientRect()
+    return {
+      buttonHeight: buttonRect?.height || 0,
+      buttonWidth: buttonRect?.width || 0,
+      hasCodexCard: document.body.innerText.includes('codex · prolite'),
+      hasCreditsZero:
+        document.body.innerText.includes('Credits remaining') &&
+        document.body.innerText.includes('0'),
+      hasNoError: !document.body.innerText.includes('Codex 余额查询失败'),
+      hasSparkCard: document.body.innerText.includes('GPT-5.3-Codex-Spark'),
+      linkHeight: linkRect?.height || 0,
+      linkRel: link?.getAttribute('rel') || '',
+      linkTarget: link?.getAttribute('target') || '',
+      linkWidth: linkRect?.width || 0,
+      panelCount: panels.length,
+      progressBarWidths: progressBars.map(
+        (node) => node.getBoundingClientRect().width
+      ),
+    }
+  })
+
+  assert.equal(
+    metrics.linkTarget,
+    '_blank',
+    `${scenarioName} 公开接口链接未新窗口打开`
+  )
+  assert(
+    metrics.linkRel.includes('noreferrer') &&
+      metrics.linkRel.includes('noopener'),
+    `${scenarioName} 公开接口链接 rel 不完整: ${metrics.linkRel}`
+  )
+  assert(
+    metrics.linkWidth > 0 && metrics.linkHeight > 0,
+    `${scenarioName} 公开接口按钮尺寸异常`
+  )
+  assert(
+    metrics.buttonWidth > 0 && metrics.buttonHeight > 0,
+    `${scenarioName} 刷新按钮尺寸异常`
+  )
+  assert(metrics.hasNoError, `${scenarioName} mock 余额接口不应显示失败提示`)
+  assert(metrics.hasCreditsZero, `${scenarioName} 余额概览未显示 credits`)
+  assert(metrics.hasCodexCard, `${scenarioName} 缺少 Codex 限额卡`)
+  assert(metrics.hasSparkCard, `${scenarioName} 缺少 Spark 限额卡`)
+  assert(
+    metrics.panelCount >= 3,
+    `${scenarioName} 余额页卡片数量异常: ${metrics.panelCount}`
+  )
+  assert(
+    metrics.progressBarWidths.length >= 4 &&
+      metrics.progressBarWidths.every((width) => width >= 0),
+    `${scenarioName} 限额进度条渲染异常: ${JSON.stringify(metrics.progressBarWidths)}`
+  )
+
+  await page.locator('[data-admin-theme-option="dark"]').click()
+  await page.waitForFunction(
+    () => document.documentElement.dataset.adminTheme === 'dark'
+  )
+  const darkMetrics = await page.evaluate(() => {
+    const panel = document.querySelector('.admin-surface-panel')
+    const link = document.querySelector('a[href="/public/codex/balance"]')
+    const text = document.querySelector('main h1, main h2') || panel
+    const panelStyle = window.getComputedStyle(panel)
+    const linkStyle = window.getComputedStyle(link)
+    const textStyle = window.getComputedStyle(text)
+    return {
+      linkContrast: getContrastRatio(
+        linkStyle.color,
+        linkStyle.backgroundColor
+      ),
+      panelLuminance: luminance(panelStyle.backgroundColor),
+      textLuminance: luminance(textStyle.color),
+    }
+
+    function luminance(color) {
+      const channels = color
+        .match(/\d+(\.\d+)?/gu)
+        ?.slice(0, 3)
+        .map(Number)
+      if (!channels || channels.length < 3) return 0
+      return channels[0] * 0.299 + channels[1] * 0.587 + channels[2] * 0.114
+    }
+
+    function getContrastRatio(foreground, background) {
+      const fg = getRelativeLuminance(foreground)
+      const bg = getRelativeLuminance(background)
+      const lighter = Math.max(fg, bg)
+      const darker = Math.min(fg, bg)
+      return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    function getRelativeLuminance(color) {
+      const channels = color
+        .match(/\d+(\.\d+)?/gu)
+        ?.slice(0, 3)
+        .map(Number)
+      if (!channels || channels.length < 3) return 0
+      const [r, g, b] = channels.map((channel) => {
+        const value = channel / 255
+        return value <= 0.03928
+          ? value / 12.92
+          : ((value + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+  })
+  assert(
+    darkMetrics.panelLuminance < 60 &&
+      darkMetrics.textLuminance > darkMetrics.panelLuminance + 80,
+    `${scenarioName} 暗色模式余额页文字对比异常: ${JSON.stringify(darkMetrics)}`
+  )
+  assert(
+    darkMetrics.linkContrast >= 4.5,
+    `${scenarioName} 暗色模式公开接口按钮对比度不足: ${JSON.stringify(darkMetrics)}`
+  )
+  await page.locator('[data-admin-theme-option="system"]').click()
+  await page.waitForFunction(
+    () => document.documentElement.dataset.adminThemeMode === 'system'
+  )
+}
+
 async function assertKeyTableVisuals(page, scenarioName) {
   const metrics = await page.evaluate(() => {
     const main = document.querySelector('main')
@@ -2420,6 +2669,17 @@ async function assertModelTableVisuals(page, scenarioName) {
         document.body.innerText.includes('$1.75') &&
         document.body.innerText.includes('$0.175') &&
         document.body.innerText.includes('$14'),
+      hasContextHeaders:
+        document.body.innerText.includes('上下文窗口') &&
+        document.body.innerText.includes('压缩阈值') &&
+        document.body.innerText.includes('字节阈值'),
+      hasContextValues:
+        document.body.innerText.includes('400,000 tokens') &&
+        document.body.innerText.includes('260,000 / 380,000') &&
+        document.body.innerText.includes('1,040,000 / 1,900,000'),
+      hasContextButton: Array.from(main?.querySelectorAll('button') || []).some(
+        (node) => node.textContent.trim() === '上下文'
+      ),
       hasSidebarModelNav: document.body.innerText.includes('模型管理'),
       mainHeight: mainRect?.height || 0,
       tableHeight: tableRect?.height || 0,
@@ -2437,10 +2697,108 @@ async function assertModelTableVisuals(page, scenarioName) {
   assert(!metrics.hasNonCodexModel, `${scenarioName} 不应展示非 Codex 模型`)
   assert(metrics.hasPriceHeaders, `${scenarioName} 缺少模型费用列`)
   assert(metrics.hasPriceValues, `${scenarioName} 缺少模型官方费用展示`)
+  assert(metrics.hasContextHeaders, `${scenarioName} 缺少上下文策略列`)
+  assert(metrics.hasContextValues, `${scenarioName} 缺少上下文策略数值`)
+  assert(metrics.hasContextButton, `${scenarioName} 缺少上下文策略操作`)
   assert(metrics.hasDisableButton, `${scenarioName} 缺少模型启停操作`)
   assert(metrics.mainHeight > 0, `${scenarioName} 后台内容区高度异常`)
   assert(metrics.tableHeight > 0, `${scenarioName} 模型表格高度异常`)
   assert(metrics.tableWidth > 0, `${scenarioName} 模型表格宽度异常`)
+}
+
+async function assertModelContextModalLayout(page, scenarioName) {
+  const metrics = await page.evaluate(() => {
+    const panel = document.querySelector('.admin-model-context-modal')
+    const panelRect = panel?.getBoundingClientRect()
+    const sections = Array.from(
+      panel?.querySelectorAll('.admin-model-context-section') || []
+    )
+    const fields = Array.from(
+      panel?.querySelectorAll('.admin-model-context-field') || []
+    ).map((field) => {
+      const rect = field.getBoundingClientRect()
+      const head = field.querySelector('.admin-model-context-field-head')
+      const headRect = head?.getBoundingClientRect()
+      const input = field.querySelector('input')
+      const inputRect = input?.getBoundingClientRect()
+      const fill = field.querySelector('.admin-model-context-fill')
+      const fillRect = fill?.getBoundingClientRect()
+      return {
+        fillBottom: Math.round(fillRect?.bottom || 0),
+        fillRight: Math.round(fillRect?.right || 0),
+        fillWidth: Math.round(fillRect?.width || 0),
+        headBottom: Math.round(headRect?.bottom || 0),
+        headClientWidth: head?.clientWidth || 0,
+        headScrollWidth: head?.scrollWidth || 0,
+        inputLeft: Math.round(inputRect?.left || 0),
+        inputRight: Math.round(inputRect?.right || 0),
+        inputTop: Math.round(inputRect?.top || 0),
+        inputWidth: Math.round(inputRect?.width || 0),
+        label: input?.getAttribute('aria-label') || '',
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        width: Math.round(rect.width),
+        clientWidth: field.clientWidth,
+        scrollWidth: field.scrollWidth,
+      }
+    })
+    const panelStyle = panel ? window.getComputedStyle(panel) : null
+    const firstSectionStyle = sections[0]
+      ? window.getComputedStyle(sections[0])
+      : null
+    return {
+      bodyScrollWidth: document.body.scrollWidth,
+      docScrollWidth: document.documentElement.scrollWidth,
+      fieldCount: fields.length,
+      fields,
+      panelBackground: panelStyle?.backgroundColor || '',
+      panelClientWidth: panel?.clientWidth || 0,
+      panelRect: panelRect
+        ? {
+            height: Math.round(panelRect.height),
+            left: Math.round(panelRect.left),
+            right: Math.round(panelRect.right),
+            width: Math.round(panelRect.width),
+          }
+        : null,
+      panelScrollWidth: panel?.scrollWidth || 0,
+      sectionBackground: firstSectionStyle?.backgroundColor || '',
+      sectionCount: sections.length,
+      viewportWidth: window.innerWidth,
+    }
+  })
+
+  assert(metrics.panelRect, `${scenarioName} 缺少模型上下文弹窗`)
+  assert.equal(metrics.sectionCount, 2, `${scenarioName} 阈值分组数量异常`)
+  assert.equal(metrics.fieldCount, 6, `${scenarioName} 阈值字段数量异常`)
+  assert(
+    metrics.bodyScrollWidth <= metrics.viewportWidth + 2 &&
+      metrics.docScrollWidth <= metrics.viewportWidth + 2,
+    `${scenarioName} 页面出现横向溢出: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.panelRect.width <= metrics.viewportWidth - 32 + 2 &&
+      metrics.panelScrollWidth <= metrics.panelClientWidth + 2,
+    `${scenarioName} 弹窗面板横向溢出: ${JSON.stringify(metrics)}`
+  )
+  for (const field of metrics.fields) {
+    assert(
+      field.scrollWidth <= field.clientWidth + 2 &&
+        field.inputWidth > 0 &&
+        field.fillWidth > 0 &&
+        field.inputLeft >= field.left - 1 &&
+        field.inputRight <= field.right + 1 &&
+        field.inputTop >= field.headBottom - 1 &&
+        field.fillRight <= field.right + 1 &&
+        field.fillBottom <= field.inputTop + 1 &&
+        field.headScrollWidth <= field.headClientWidth + 2,
+      `${scenarioName} 字段盒模型异常: ${JSON.stringify(field)}`
+    )
+  }
+  assert(
+    metrics.panelBackground && metrics.sectionBackground,
+    `${scenarioName} 弹窗浅色/暗色背景未正常计算: ${JSON.stringify(metrics)}`
+  )
 }
 
 function createFakeAdminToken() {
@@ -2507,6 +2865,92 @@ async function installAuthConfigMock(page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ enabled: false, provider: '' }),
+    })
+  })
+}
+
+async function installCodexBalanceMock(page) {
+  await page.route('**/public/codex/balance', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ok',
+        fetched_at: '2026-05-19T12:00:00Z',
+        credits: {
+          hasCredits: false,
+          unlimited: false,
+          balance: '0',
+        },
+        rate_limits: {
+          limit_id: 'codex',
+          limit_name: null,
+          plan_type: 'prolite',
+          credits: {
+            hasCredits: false,
+            unlimited: false,
+            balance: '0',
+          },
+          primary: {
+            used_percent: 16,
+            remaining_percent: 84,
+            window_duration_mins: 300,
+            resets_at_time: '2026-05-19T17:00:00Z',
+          },
+          secondary: {
+            used_percent: 8,
+            remaining_percent: 92,
+            window_duration_mins: 10080,
+            resets_at_time: '2026-05-26T12:00:00Z',
+          },
+        },
+        rate_limits_by_limit_id: {
+          codex: {
+            limit_id: 'codex',
+            limit_name: null,
+            plan_type: 'prolite',
+            credits: {
+              hasCredits: false,
+              unlimited: false,
+              balance: '0',
+            },
+            primary: {
+              used_percent: 16,
+              remaining_percent: 84,
+              window_duration_mins: 300,
+              resets_at_time: '2026-05-19T17:00:00Z',
+            },
+            secondary: {
+              used_percent: 8,
+              remaining_percent: 92,
+              window_duration_mins: 10080,
+              resets_at_time: '2026-05-26T12:00:00Z',
+            },
+          },
+          'gpt-5.3-codex-spark': {
+            limit_id: 'gpt-5.3-codex-spark',
+            limit_name: 'GPT-5.3-Codex-Spark',
+            plan_type: 'prolite',
+            credits: {
+              hasCredits: false,
+              unlimited: false,
+              balance: '0',
+            },
+            primary: {
+              used_percent: 36,
+              remaining_percent: 64,
+              window_duration_mins: 300,
+              resets_at_time: '2026-05-19T16:30:00Z',
+            },
+            secondary: {
+              used_percent: 24,
+              remaining_percent: 76,
+              window_duration_mins: 10080,
+              resets_at_time: '2026-05-26T12:00:00Z',
+            },
+          },
+        },
+      }),
     })
   })
 }
@@ -2643,8 +3087,7 @@ function getApiMockData(method, params = {}, state = {}) {
         last_used_at: 1777990000 - index * 100,
         name: `extraapikey${id}`,
         plain_key: `ogw_extraapikey${id}_x${id}`,
-        upstream_strategy:
-          index % 2 === 0 ? 'backend_only' : 'codex_cli',
+        upstream_strategy: index % 2 === 0 ? 'backend_only' : 'codex_cli',
         quota_daily_billable_input_tokens: 0,
         quota_daily_input_tokens: 0,
         quota_daily_output_tokens: 0,
@@ -2662,6 +3105,16 @@ function getApiMockData(method, params = {}, state = {}) {
   }
 
   if (method === 'model_list') {
+    const contextByModel = {
+      'gpt-5.5': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
+      'gpt-5.4': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
+      'gpt-5.4-mini': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
+      'gpt-5.3-codex': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
+      'gpt-5.3-codex-spark': [
+        400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8,
+      ],
+      'gpt-5.2': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
+    }
     const baseModels = [
       'gpt-5.5',
       'gpt-5.4',
@@ -2676,11 +3129,30 @@ function getApiMockData(method, params = {}, state = {}) {
       model_id: modelID,
       owned_by: 'openai',
       source: modelID === 'gpt-5.5-pro' ? 'stale' : 'seed',
+      effective_context_window_tokens: contextByModel[modelID]?.[0] || 0,
+      effective_context_compact_tokens: contextByModel[modelID]?.[1] || 0,
+      effective_context_hard_tokens: contextByModel[modelID]?.[2] || 0,
+      effective_context_compact_bytes: contextByModel[modelID]?.[3] || 0,
+      effective_context_hard_bytes: contextByModel[modelID]?.[4] || 0,
+      effective_context_keep_items: contextByModel[modelID]?.[5] || 0,
     }))
     const extraModels = []
     return {
       items: [...baseModels, ...extraModels],
       total: baseModels.length + extraModels.length,
+    }
+  }
+
+  if (method === 'model_context_update') {
+    return {
+      id: params.id,
+      model_id: 'gpt-5.5',
+      context_window_tokens: params.context_window_tokens || 0,
+      context_compact_tokens: params.context_compact_tokens || 0,
+      context_hard_tokens: params.context_hard_tokens || 0,
+      context_compact_bytes: params.context_compact_bytes || 0,
+      context_hard_bytes: params.context_hard_bytes || 0,
+      context_keep_items: params.context_keep_items || 0,
     }
   }
 

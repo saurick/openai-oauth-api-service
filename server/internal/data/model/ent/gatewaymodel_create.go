@@ -82,6 +82,90 @@ func (_c *GatewayModelCreate) SetNillableSource(v *string) *GatewayModelCreate {
 	return _c
 }
 
+// SetContextWindowTokens sets the "context_window_tokens" field.
+func (_c *GatewayModelCreate) SetContextWindowTokens(v int64) *GatewayModelCreate {
+	_c.mutation.SetContextWindowTokens(v)
+	return _c
+}
+
+// SetNillableContextWindowTokens sets the "context_window_tokens" field if the given value is not nil.
+func (_c *GatewayModelCreate) SetNillableContextWindowTokens(v *int64) *GatewayModelCreate {
+	if v != nil {
+		_c.SetContextWindowTokens(*v)
+	}
+	return _c
+}
+
+// SetContextCompactTokens sets the "context_compact_tokens" field.
+func (_c *GatewayModelCreate) SetContextCompactTokens(v int64) *GatewayModelCreate {
+	_c.mutation.SetContextCompactTokens(v)
+	return _c
+}
+
+// SetNillableContextCompactTokens sets the "context_compact_tokens" field if the given value is not nil.
+func (_c *GatewayModelCreate) SetNillableContextCompactTokens(v *int64) *GatewayModelCreate {
+	if v != nil {
+		_c.SetContextCompactTokens(*v)
+	}
+	return _c
+}
+
+// SetContextHardTokens sets the "context_hard_tokens" field.
+func (_c *GatewayModelCreate) SetContextHardTokens(v int64) *GatewayModelCreate {
+	_c.mutation.SetContextHardTokens(v)
+	return _c
+}
+
+// SetNillableContextHardTokens sets the "context_hard_tokens" field if the given value is not nil.
+func (_c *GatewayModelCreate) SetNillableContextHardTokens(v *int64) *GatewayModelCreate {
+	if v != nil {
+		_c.SetContextHardTokens(*v)
+	}
+	return _c
+}
+
+// SetContextCompactBytes sets the "context_compact_bytes" field.
+func (_c *GatewayModelCreate) SetContextCompactBytes(v int64) *GatewayModelCreate {
+	_c.mutation.SetContextCompactBytes(v)
+	return _c
+}
+
+// SetNillableContextCompactBytes sets the "context_compact_bytes" field if the given value is not nil.
+func (_c *GatewayModelCreate) SetNillableContextCompactBytes(v *int64) *GatewayModelCreate {
+	if v != nil {
+		_c.SetContextCompactBytes(*v)
+	}
+	return _c
+}
+
+// SetContextHardBytes sets the "context_hard_bytes" field.
+func (_c *GatewayModelCreate) SetContextHardBytes(v int64) *GatewayModelCreate {
+	_c.mutation.SetContextHardBytes(v)
+	return _c
+}
+
+// SetNillableContextHardBytes sets the "context_hard_bytes" field if the given value is not nil.
+func (_c *GatewayModelCreate) SetNillableContextHardBytes(v *int64) *GatewayModelCreate {
+	if v != nil {
+		_c.SetContextHardBytes(*v)
+	}
+	return _c
+}
+
+// SetContextKeepItems sets the "context_keep_items" field.
+func (_c *GatewayModelCreate) SetContextKeepItems(v int) *GatewayModelCreate {
+	_c.mutation.SetContextKeepItems(v)
+	return _c
+}
+
+// SetNillableContextKeepItems sets the "context_keep_items" field if the given value is not nil.
+func (_c *GatewayModelCreate) SetNillableContextKeepItems(v *int) *GatewayModelCreate {
+	if v != nil {
+		_c.SetContextKeepItems(*v)
+	}
+	return _c
+}
+
 // SetLastSeenAt sets the "last_seen_at" field.
 func (_c *GatewayModelCreate) SetLastSeenAt(v time.Time) *GatewayModelCreate {
 	_c.mutation.SetLastSeenAt(v)
@@ -175,6 +259,30 @@ func (_c *GatewayModelCreate) defaults() {
 		v := gatewaymodel.DefaultSource
 		_c.mutation.SetSource(v)
 	}
+	if _, ok := _c.mutation.ContextWindowTokens(); !ok {
+		v := gatewaymodel.DefaultContextWindowTokens
+		_c.mutation.SetContextWindowTokens(v)
+	}
+	if _, ok := _c.mutation.ContextCompactTokens(); !ok {
+		v := gatewaymodel.DefaultContextCompactTokens
+		_c.mutation.SetContextCompactTokens(v)
+	}
+	if _, ok := _c.mutation.ContextHardTokens(); !ok {
+		v := gatewaymodel.DefaultContextHardTokens
+		_c.mutation.SetContextHardTokens(v)
+	}
+	if _, ok := _c.mutation.ContextCompactBytes(); !ok {
+		v := gatewaymodel.DefaultContextCompactBytes
+		_c.mutation.SetContextCompactBytes(v)
+	}
+	if _, ok := _c.mutation.ContextHardBytes(); !ok {
+		v := gatewaymodel.DefaultContextHardBytes
+		_c.mutation.SetContextHardBytes(v)
+	}
+	if _, ok := _c.mutation.ContextKeepItems(); !ok {
+		v := gatewaymodel.DefaultContextKeepItems
+		_c.mutation.SetContextKeepItems(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := gatewaymodel.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -215,6 +323,54 @@ func (_c *GatewayModelCreate) check() error {
 	if v, ok := _c.mutation.Source(); ok {
 		if err := gatewaymodel.SourceValidator(v); err != nil {
 			return &ValidationError{Name: "source", err: fmt.Errorf(`ent: validator failed for field "GatewayModel.source": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ContextWindowTokens(); !ok {
+		return &ValidationError{Name: "context_window_tokens", err: errors.New(`ent: missing required field "GatewayModel.context_window_tokens"`)}
+	}
+	if v, ok := _c.mutation.ContextWindowTokens(); ok {
+		if err := gatewaymodel.ContextWindowTokensValidator(v); err != nil {
+			return &ValidationError{Name: "context_window_tokens", err: fmt.Errorf(`ent: validator failed for field "GatewayModel.context_window_tokens": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ContextCompactTokens(); !ok {
+		return &ValidationError{Name: "context_compact_tokens", err: errors.New(`ent: missing required field "GatewayModel.context_compact_tokens"`)}
+	}
+	if v, ok := _c.mutation.ContextCompactTokens(); ok {
+		if err := gatewaymodel.ContextCompactTokensValidator(v); err != nil {
+			return &ValidationError{Name: "context_compact_tokens", err: fmt.Errorf(`ent: validator failed for field "GatewayModel.context_compact_tokens": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ContextHardTokens(); !ok {
+		return &ValidationError{Name: "context_hard_tokens", err: errors.New(`ent: missing required field "GatewayModel.context_hard_tokens"`)}
+	}
+	if v, ok := _c.mutation.ContextHardTokens(); ok {
+		if err := gatewaymodel.ContextHardTokensValidator(v); err != nil {
+			return &ValidationError{Name: "context_hard_tokens", err: fmt.Errorf(`ent: validator failed for field "GatewayModel.context_hard_tokens": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ContextCompactBytes(); !ok {
+		return &ValidationError{Name: "context_compact_bytes", err: errors.New(`ent: missing required field "GatewayModel.context_compact_bytes"`)}
+	}
+	if v, ok := _c.mutation.ContextCompactBytes(); ok {
+		if err := gatewaymodel.ContextCompactBytesValidator(v); err != nil {
+			return &ValidationError{Name: "context_compact_bytes", err: fmt.Errorf(`ent: validator failed for field "GatewayModel.context_compact_bytes": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ContextHardBytes(); !ok {
+		return &ValidationError{Name: "context_hard_bytes", err: errors.New(`ent: missing required field "GatewayModel.context_hard_bytes"`)}
+	}
+	if v, ok := _c.mutation.ContextHardBytes(); ok {
+		if err := gatewaymodel.ContextHardBytesValidator(v); err != nil {
+			return &ValidationError{Name: "context_hard_bytes", err: fmt.Errorf(`ent: validator failed for field "GatewayModel.context_hard_bytes": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ContextKeepItems(); !ok {
+		return &ValidationError{Name: "context_keep_items", err: errors.New(`ent: missing required field "GatewayModel.context_keep_items"`)}
+	}
+	if v, ok := _c.mutation.ContextKeepItems(); ok {
+		if err := gatewaymodel.ContextKeepItemsValidator(v); err != nil {
+			return &ValidationError{Name: "context_keep_items", err: fmt.Errorf(`ent: validator failed for field "GatewayModel.context_keep_items": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
@@ -268,6 +424,30 @@ func (_c *GatewayModelCreate) createSpec() (*GatewayModel, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.Source(); ok {
 		_spec.SetField(gatewaymodel.FieldSource, field.TypeString, value)
 		_node.Source = value
+	}
+	if value, ok := _c.mutation.ContextWindowTokens(); ok {
+		_spec.SetField(gatewaymodel.FieldContextWindowTokens, field.TypeInt64, value)
+		_node.ContextWindowTokens = value
+	}
+	if value, ok := _c.mutation.ContextCompactTokens(); ok {
+		_spec.SetField(gatewaymodel.FieldContextCompactTokens, field.TypeInt64, value)
+		_node.ContextCompactTokens = value
+	}
+	if value, ok := _c.mutation.ContextHardTokens(); ok {
+		_spec.SetField(gatewaymodel.FieldContextHardTokens, field.TypeInt64, value)
+		_node.ContextHardTokens = value
+	}
+	if value, ok := _c.mutation.ContextCompactBytes(); ok {
+		_spec.SetField(gatewaymodel.FieldContextCompactBytes, field.TypeInt64, value)
+		_node.ContextCompactBytes = value
+	}
+	if value, ok := _c.mutation.ContextHardBytes(); ok {
+		_spec.SetField(gatewaymodel.FieldContextHardBytes, field.TypeInt64, value)
+		_node.ContextHardBytes = value
+	}
+	if value, ok := _c.mutation.ContextKeepItems(); ok {
+		_spec.SetField(gatewaymodel.FieldContextKeepItems, field.TypeInt, value)
+		_node.ContextKeepItems = value
 	}
 	if value, ok := _c.mutation.LastSeenAt(); ok {
 		_spec.SetField(gatewaymodel.FieldLastSeenAt, field.TypeTime, value)

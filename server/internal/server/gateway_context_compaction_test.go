@@ -21,7 +21,7 @@ func TestCompactGatewayContextChatPreservesRecentMessages(t *testing.T) {
 		`{"role":"assistant","content":"latest answer"}` +
 		`]}`)
 
-	compacted, err := compactGatewayContextRequest("/v1/chat/completions", body, "")
+	compacted, err := compactGatewayContextRequest("/v1/chat/completions", body, "", 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestCompactGatewayContextResponsesString(t *testing.T) {
 	oldText := strings.Repeat("tool output line with 502 and stream heartbeat\n", 300)
 	body := []byte(`{"model":"gpt-5.5","stream":true,"input":` + mustJSONQuote(oldText) + `}`)
 
-	compacted, err := compactGatewayContextRequest("/v1/responses", body, "previous summary")
+	compacted, err := compactGatewayContextRequest("/v1/responses", body, "previous summary", 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestCompactGatewayContextSingleLargeChatMessageIncludesSummary(t *testing.T
 	oldText := strings.Repeat("single huge prompt with /workspace/app/main.go and context_length_exceeded\n", 200)
 	body := []byte(`{"model":"gpt-5.5","messages":[{"role":"user","content":` + mustJSONQuote(oldText+"reply FINAL_OK") + `}]}`)
 
-	compacted, err := compactGatewayContextRequest("/v1/chat/completions", body, "")
+	compacted, err := compactGatewayContextRequest("/v1/chat/completions", body, "", 8)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,6 +112,7 @@ func TestPrepareGatewayContextCompactsBeforeUpstream(t *testing.T) {
 		"session_test",
 		"/v1/chat/completions",
 		body,
+		"unknown-test-model",
 		"xhigh",
 	)
 	if err != nil {
@@ -142,6 +143,7 @@ func TestPrepareGatewayContextBlocksUncompactableOversizedRequest(t *testing.T) 
 		"session_test",
 		"/v1/chat/completions",
 		body,
+		"unknown-test-model",
 		"xhigh",
 	)
 	if !errors.Is(err, errGatewayContextLengthExceeded) {
@@ -152,6 +154,23 @@ func TestPrepareGatewayContextBlocksUncompactableOversizedRequest(t *testing.T) 
 	}
 	if prepared.Diagnostic.ContextCompacted {
 		t.Fatal("uncompactable request must not be marked compacted")
+	}
+}
+
+func TestEffectiveGatewayContextPolicyUsesOfficialModelRecommendation(t *testing.T) {
+	t.Setenv("GATEWAY_CONTEXT_COMPACT_TOKENS", "")
+	t.Setenv("GATEWAY_CONTEXT_HARD_TOKENS", "")
+	t.Setenv("GATEWAY_CONTEXT_COMPACT_BYTES", "")
+	t.Setenv("GATEWAY_CONTEXT_HARD_BYTES", "")
+	policy := (&openAIGatewayHandler{}).effectiveGatewayContextPolicy(context.Background(), "gpt-5.3-codex")
+	if policy.ContextWindowTokens != 400_000 {
+		t.Fatalf("window = %d, want 400000", policy.ContextWindowTokens)
+	}
+	if policy.ContextCompactTokens != 260_000 || policy.ContextHardTokens != 380_000 {
+		t.Fatalf("token thresholds = %d/%d, want 260000/380000", policy.ContextCompactTokens, policy.ContextHardTokens)
+	}
+	if policy.ContextCompactBytes != 1_040_000 || policy.ContextHardBytes != 1_900_000 {
+		t.Fatalf("byte thresholds = %d/%d, want 1040000/1900000", policy.ContextCompactBytes, policy.ContextHardBytes)
 	}
 }
 

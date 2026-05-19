@@ -42,6 +42,7 @@ var (
 	ErrGatewayExportRange         = errors.New("gateway export range too large")
 	ErrGatewayUpstreamModeInvalid = errors.New("gateway upstream mode invalid")
 	ErrGatewayAPIKeyRemarkInvalid = errors.New("gateway api key remark invalid")
+	ErrGatewayModelContextInvalid = errors.New("gateway model context invalid")
 )
 
 type GatewayAPIKey struct {
@@ -75,15 +76,30 @@ type CreatedGatewayAPIKey struct {
 }
 
 type GatewayModel struct {
-	ID          int
-	ModelID     string
-	OwnedBy     string
-	CreatedUnix int64
-	Enabled     bool
-	Source      string
-	LastSeenAt  *time.Time
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID                   int
+	ModelID              string
+	OwnedBy              string
+	CreatedUnix          int64
+	Enabled              bool
+	Source               string
+	ContextWindowTokens  int64
+	ContextCompactTokens int64
+	ContextHardTokens    int64
+	ContextCompactBytes  int64
+	ContextHardBytes     int64
+	ContextKeepItems     int
+	LastSeenAt           *time.Time
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+type GatewayModelContextPolicy struct {
+	ContextWindowTokens  int64
+	ContextCompactTokens int64
+	ContextHardTokens    int64
+	ContextCompactBytes  int64
+	ContextHardBytes     int64
+	ContextKeepItems     int
 }
 
 type GatewayUsageDiagnostic struct {
@@ -103,6 +119,12 @@ type GatewayUsageDiagnostic struct {
 	ContextCompactedBytes           int64  `json:"context_compacted_bytes"`
 	ContextOriginalEstimatedTokens  int64  `json:"context_original_estimated_tokens"`
 	ContextCompactedEstimatedTokens int64  `json:"context_compacted_estimated_tokens"`
+	ContextWindowTokens             int64  `json:"context_window_tokens"`
+	ContextCompactTokenLimit        int64  `json:"context_compact_token_limit"`
+	ContextHardTokenLimit           int64  `json:"context_hard_token_limit"`
+	ContextCompactByteLimit         int64  `json:"context_compact_byte_limit"`
+	ContextHardByteLimit            int64  `json:"context_hard_byte_limit"`
+	ContextKeepItems                int    `json:"context_keep_items"`
 }
 
 func (d GatewayUsageDiagnostic) Summary() string {
@@ -143,6 +165,9 @@ func (d GatewayUsageDiagnostic) Summary() string {
 		}
 		if d.ContextCompactionReason != "" {
 			parts = append(parts, "compact_reason="+d.ContextCompactionReason)
+		}
+		if d.ContextCompactTokenLimit > 0 || d.ContextHardTokenLimit > 0 {
+			parts = append(parts, fmt.Sprintf("context_token_limits=%d/%d", d.ContextCompactTokenLimit, d.ContextHardTokenLimit))
 		}
 	}
 	return strings.Join(parts, ", ")
@@ -454,6 +479,7 @@ type GatewayRepo interface {
 	UpsertModel(ctx context.Context, model GatewayModel) (*GatewayModel, error)
 	UpsertSyncedModel(ctx context.Context, model GatewayModel) (*GatewayModel, error)
 	SetModelEnabled(ctx context.Context, id int, enabled bool) error
+	UpdateModelContextPolicy(ctx context.Context, id int, policy GatewayModelContextPolicy) (*GatewayModel, error)
 	DeleteModel(ctx context.Context, id int) error
 	GetModelByID(ctx context.Context, modelID string) (*GatewayModel, error)
 	EnsureDefaultModels(ctx context.Context) error
@@ -668,7 +694,7 @@ func (uc *GatewayUsecase) CreateAPIKey(ctx context.Context, input CreateGatewayA
 		return nil, err
 	}
 	if input.Name == "" {
-		input.Name = "key" + secret.KeyLast4
+		input.Name = "key" + secret.KeyHash[:8]
 		secret, err = RebuildGatewayAPIKeySecretWithRemark(secret.PlainKey, input.Name)
 		if err != nil {
 			return nil, err
@@ -1343,6 +1369,34 @@ func (uc *GatewayUsecase) SetModelEnabled(ctx context.Context, id int, enabled b
 	return uc.repo.SetModelEnabled(ctx, id, enabled)
 }
 
+func (uc *GatewayUsecase) GetModelByID(ctx context.Context, modelID string) (*GatewayModel, error) {
+	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		return nil, ErrBadParam
+	}
+	return uc.repo.GetModelByID(ctx, modelID)
+}
+
+func (uc *GatewayUsecase) UpdateModelContextPolicy(ctx context.Context, id int, policy GatewayModelContextPolicy) (*GatewayModel, error) {
+	if id <= 0 {
+		return nil, ErrBadParam
+	}
+	if err := validateGatewayModelContextPolicy(policy); err != nil {
+		return nil, err
+	}
+	return uc.repo.UpdateModelContextPolicy(ctx, id, policy)
+}
+
+func GatewayContextFallbackPolicyFromEnv() GatewayModelContextPolicy {
+	return GatewayModelContextPolicy{
+		ContextCompactTokens: int64FromEnvOptional("GATEWAY_CONTEXT_COMPACT_TOKENS"),
+		ContextHardTokens:    int64FromEnvOptional("GATEWAY_CONTEXT_HARD_TOKENS"),
+		ContextCompactBytes:  int64FromEnvOptional("GATEWAY_CONTEXT_COMPACT_BYTES"),
+		ContextHardBytes:     int64FromEnvOptional("GATEWAY_CONTEXT_HARD_BYTES"),
+		ContextKeepItems:     intFromEnvOptional("GATEWAY_CONTEXT_KEEP_ITEMS"),
+	}
+}
+
 func (uc *GatewayUsecase) DeleteModel(ctx context.Context, id int) error {
 	if id <= 0 {
 		return ErrBadParam
@@ -1352,6 +1406,30 @@ func (uc *GatewayUsecase) DeleteModel(ctx context.Context, id int) error {
 
 func (uc *GatewayUsecase) EnsureDefaultModels(ctx context.Context) error {
 	return uc.repo.EnsureDefaultModels(ctx)
+}
+
+func intFromEnvOptional(key string) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return 0
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return 0
+	}
+	return value
+}
+
+func int64FromEnvOptional(key string) int64 {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return 0
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value <= 0 {
+		return 0
+	}
+	return value
 }
 
 func normalizeLimit(limit int) int {
@@ -1369,6 +1447,44 @@ func normalizeOffset(offset int) int {
 		return 0
 	}
 	return offset
+}
+
+func validateGatewayModelContextPolicy(policy GatewayModelContextPolicy) error {
+	const maxTokens = int64(2_000_000)
+	const maxBytes = int64(32 << 20)
+	if policy.ContextWindowTokens < 0 ||
+		policy.ContextCompactTokens < 0 ||
+		policy.ContextHardTokens < 0 ||
+		policy.ContextCompactBytes < 0 ||
+		policy.ContextHardBytes < 0 ||
+		policy.ContextKeepItems < 0 {
+		return ErrGatewayModelContextInvalid
+	}
+	for _, value := range []int64{policy.ContextWindowTokens, policy.ContextCompactTokens, policy.ContextHardTokens} {
+		if value > maxTokens {
+			return ErrGatewayModelContextInvalid
+		}
+	}
+	for _, value := range []int64{policy.ContextCompactBytes, policy.ContextHardBytes} {
+		if value > maxBytes {
+			return ErrGatewayModelContextInvalid
+		}
+	}
+	if policy.ContextCompactTokens > 0 && policy.ContextHardTokens > 0 && policy.ContextHardTokens <= policy.ContextCompactTokens {
+		return ErrGatewayModelContextInvalid
+	}
+	if policy.ContextCompactBytes > 0 && policy.ContextHardBytes > 0 && policy.ContextHardBytes <= policy.ContextCompactBytes {
+		return ErrGatewayModelContextInvalid
+	}
+	if policy.ContextWindowTokens > 0 {
+		if policy.ContextCompactTokens > policy.ContextWindowTokens || policy.ContextHardTokens > policy.ContextWindowTokens {
+			return ErrGatewayModelContextInvalid
+		}
+	}
+	if policy.ContextKeepItems > 0 && (policy.ContextKeepItems < 2 || policy.ContextKeepItems > 50) {
+		return ErrGatewayModelContextInvalid
+	}
+	return nil
 }
 
 func normalizeNonNegativeInt64(value int64) int64 {

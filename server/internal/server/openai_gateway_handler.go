@@ -159,9 +159,14 @@ func (h *openAIGatewayHandler) handleModels(w stdhttp.ResponseWriter, r *stdhttp
 		items := make([]map[string]any, 0, len(models))
 		codexModels := make([]map[string]any, 0, len(models))
 		for _, item := range models {
+			contextPolicy := normalizeGatewayContextPolicy(biz.EffectiveGatewayModelContextPolicy(item, biz.GatewayContextFallbackPolicyFromEnv()))
 			created := item.CreatedUnix
 			if created == 0 {
 				created = item.CreatedAt.Unix()
+			}
+			effectiveContextPercent := 95
+			if contextPolicy.ContextWindowTokens > 0 && contextPolicy.ContextHardTokens > 0 {
+				effectiveContextPercent = int(contextPolicy.ContextHardTokens * 100 / contextPolicy.ContextWindowTokens)
 			}
 			modelItem := map[string]any{
 				"id":       item.ModelID,
@@ -200,9 +205,9 @@ func (h *openAIGatewayHandler) handleModels(w stdhttp.ResponseWriter, r *stdhttp
 				"truncation_policy":                map[string]any{"mode": "tokens", "limit": 10000},
 				"supports_parallel_tool_calls":     true,
 				"supports_image_detail_original":   true,
-				"context_window":                   272000,
-				"max_context_window":               272000,
-				"effective_context_window_percent": 95,
+				"context_window":                   contextPolicy.ContextWindowTokens,
+				"max_context_window":               contextPolicy.ContextWindowTokens,
+				"effective_context_window_percent": effectiveContextPercent,
 				"experimental_supported_tools":     []string{},
 				"input_modalities":                 []string{"text", "image"},
 				"supports_search_tool":             true,
@@ -388,7 +393,7 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 	}
 
 	_, upstreamMode, _ := h.effectiveCodexUpstream(r.Context(), key)
-	prepared, prepareErr := h.prepareGatewayContext(r.Context(), key, requestID, sessionID, r.URL.Path, body, reasoningEffort)
+	prepared, prepareErr := h.prepareGatewayContext(r.Context(), key, requestID, sessionID, r.URL.Path, body, requestModel, reasoningEffort)
 	if prepareErr != nil {
 		status := stdhttp.StatusRequestEntityTooLarge
 		errorType := gatewayContextErrorType

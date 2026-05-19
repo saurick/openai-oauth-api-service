@@ -2,6 +2,52 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-19 模型上下文弹窗布局修复
+- 完成：模型上下文策略弹窗改为专用宽度与响应式字段网格，字段内部增加 `min-width: 0`、输入框满宽、说明文字可换行，避免“填入当前值”、placeholder 和当前生效说明互相挤压、溢出或遮挡。
+- 完成：`style:l1` 的模型管理桌面场景新增该弹窗浅色 / 暗色盒模型断言，覆盖面板横向溢出、字段数量、输入框边界、填值按钮边界和字段头部滚动宽度。
+- 验证通过：`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm css`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4335 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminApi/index.jsx web/src/tailwind.css web/scripts/styleL1.mjs progress.md`。
+- 浏览器回归：本地 Vite `127.0.0.1:4334` 登录 `/admin-models` 后打开模型上下文弹窗，桌面暗色 1280x720 量测面板宽 `980px`、字段宽 `296px`、面板与字段均无横向 scroll；移动浅色 390x844 量测面板宽 `358px`、字段宽 `290px`、body/document 均无横向溢出。
+- 阻塞/风险：暂未部署；本次只修复后台模型上下文弹窗，不改变服务端上下文策略语义。
+
+## 2026-05-19 Codex 余额公开接口入口
+- 完成：`/admin-codex-balance` 顶部新增「打开公开接口」次级按钮，使用相对路径 `/public/codex/balance`、新标签页打开，并保留原「刷新」主操作；不在前端写死生产域名。
+- 完成：`style:l1` 新增 Codex 余额桌面 / 移动端场景，mock 公开余额接口，覆盖按钮链接属性、余额卡片、进度条、暗色模式可读性和横向溢出检查。
+- 验证通过：`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminCodexBalance/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && STYLE_L1_PORT=4332 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`cd web && pnpm build`、`git diff --check -- web/src/pages/AdminCodexBalance/index.jsx web/scripts/styleL1.mjs progress.md`。
+- 浏览器回归：本地 Vite `127.0.0.1:4333` 通过 mock 后端打开 `/admin-codex-balance`，确认页面可见「打开公开接口」、链接 `href=/public/codex/balance`、`target=_blank`、`rel=noreferrer noopener`，点击刷新后仍显示「正常」且无横向溢出。
+- 远端修复：为 `8.218.4.199` 的 `/etc/systemd/system/mihomo.service.d/docker-bridge.conf` 增加 `Wants=docker.service`、`After=network-online.target docker.service`，并在 `ExecStartPre` 中等待 `172.19.0.1/16` Docker bridge 出现后再启动；未切换代理节点或代理组。
+- 远端验证：重启 `mihomo.service` 后 `172.19.0.1:7890` 已监听；宿主机经 `172.19.0.1:7890` 访问 `https://chatgpt.com/backend-api/wham/usage` 返回 `HTTP 405` 而非连接失败；容器内 Node fetch 同样返回 `status 405`；远端本机和公网 `/public/codex/balance` 均返回 `HTTP 200 status=ok`。
+- 阻塞/风险：前端「打开公开接口」按钮代码已完成本地实现和验证，但本轮尚未构建并部署新的前端镜像到线上；生产后台是否能看到该按钮取决于后续部署。
+
+## 2026-05-19 模型级上下文压缩策略
+- 完成：为 `gateway_models` 新增上下文窗口、开始压缩 token / bytes、硬拦截 token / bytes 和压缩保留条数字段；后台模型页展示每个模型当前生效阈值，并提供“上下文”弹窗按模型保存显式覆盖，留空或 `0` 继续使用环境变量运维覆盖、内置模型推荐值或旧默认兜底。
+- 完成：后台上下文阈值输入支持纯数字与 `K` / `M` 单位，例如 `260K`、`0.38M`；服务端 JSON-RPC 同步支持相同解析，`context_keep_items` 保持整数条数，避免把保留消息数误写成 token 单位。
+- 完成：网关 `/v1/chat/completions` 与 `/v1/responses` 的压缩预检改为按请求模型读取实时策略；`/v1/models` 的 Codex 模型元数据使用当前生效 context window 和硬阈值比例；usage diagnostic 补充本次生效的窗口、压缩阈值、硬阈值和保留条数，便于排查。
+- 完成：内置 Codex 模型推荐统一按 `400000` 上下文窗口生效，默认 `260000` 开始压缩、`380000` 硬拦截，字节阈值默认 `1040000` / `1900000`；大于 API 模型最大窗口的用法需要后台按模型显式覆盖，避免默认进入 long-context 高消耗区间。
+- 顺手修复：默认 API key 备注不再取随机明文 key 的 last4，改用 key hash 前 8 位生成 `key<hex>`，避免 base64url 中 `_` / `-` 触发备注校验导致测试和创建偶发失败。
+- 验证通过：`cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4326 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
+- 客户端验证通过：本地开发库已应用 migration `20260519105354`；本地 OpenCode 使用 `oauth-api-service-local/gpt-5.5` 长输入触发压缩并返回 `LOCAL_OPENCODE_COMPRESS_OK`，usage 显示 `/v1/chat/completions` `compacted=true`，本次阈值按后台保存的 `2K` / `0.8M` 生效。
+- 客户端验证通过：Windows `192.168.0.45` 上 Codex 0.125.0 通过临时 provider 指向本机开发服务，长输入返回 `WIN_CODEX_LOCAL_PROFILE_OK`，usage 显示 `/v1/responses` `compacted=true`；Windows OpenCode 1.14.48 临时切到本机开发服务后返回 `WIN_OPENCODE_COMPRESS_OK`，usage 显示 `/v1/chat/completions` `compacted=true`，测试后已恢复 Windows OpenCode 配置。
+- 部署：本地构建镜像 `oauth-api-service-server:20260519T192827-5dc73aaf-local-model-context`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260519T192827-5dc73aaf-local-model-context/`；远端仅执行 `docker load`、宿主机 Atlas migration、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 迁移：远端重启后确认无残留 `atlas` / `flock` 进程，用服务器本机脚本读取 `.env` 并 URL-encode 数据库密码后执行 Atlas；远端 Atlas 从 `20260519093313` 应用到 `20260519105354`，新增 `gateway_models` 上下文字段；迁移后状态 `OK`、待执行 `0`。
+- 部署验证：远端当前运行镜像为 `oauth-api-service-server:20260519T192827-5dc73aaf-local-model-context`，容器内 `GIT_SHA_SHORT=5dc73aaf-local`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；公网管理员 `admin/adminadmin` 登录返回成功，`model_list` 返回上下文配置字段和生效字段。
+- 清理：清理前远端 `/` 使用率 52%、Docker images 4.73GB；执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260519T174003-48640da6`，回收 348.3MB；清理后 `/` 使用率 50%、Docker images 4.026GB，未执行 volume prune。
+- 阻塞/风险：首次远端发布命令中 DSN 曾被本地 shell 提前展开为空密码，导致 Atlas 状态检查阶段卡住并需要重启服务器；已改为远端脚本本机读取 `.env` 构造 DSN。现有生产 `.env` 若仍设置 `GATEWAY_CONTEXT_*`，会作为未显式配置模型字段的运维覆盖继续生效，后台模型字段显式保存后则无需重启即可覆盖。
+- 补充调整：确认 `2,000 / 800,000` 属于本地测试 K/M 输入留下的模型级显式覆盖，不是默认推荐；已清空本地开发库模型上下文覆盖字段。默认推荐改为 Codex 侧保守 `400K` 窗口、`260K` 开始压缩、`380K` 硬拦截、`1.04M` / `1.9M` 字节阈值；部署模板移除旧 `GATEWAY_CONTEXT_*` 默认值，避免环境变量继续压过后台推荐。
+- 补充调整：模型表「上下文窗口 / 压缩阈值 / 字节阈值 / 保留」和上下文弹窗字段均增加问号说明，明确字段含义、`0` 的继承行为、`K` / `M` 单位、字节阈值不是计费 token。
+- 补充验证：`cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4327 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check` 通过。
+- 补充部署：本地构建镜像 `oauth-api-service-server:20260519T202200-5dc73aaf-local` 并上传远端；远端同步新的 `compose.yml`，备份并更新 `.env`，删除旧 `GATEWAY_CONTEXT_*` 显式覆盖，`APP_IMAGE` 切到新镜像后重建 `app-server`；Atlas 状态仍为 `OK`、待执行 `0`。
+- 补充部署验证：远端当前运行镜像 `oauth-api-service-server:20260519T202200-5dc73aaf-local`；本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；公网 `model_list` 回归确认 Codex 模型默认生效字段为 `400000 / 260000 / 380000 / 1040000 / 1900000 / 8`。
+- 补充清理：清理前远端 `/` 使用率 52%、Docker images 4.73GB；执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260519T192827-5dc73aaf-local-model-context`，回收 348.4MB；清理后 `/` 使用率 50%、Docker images 4.026GB，未执行 volume prune；本地镜像 tar 已移入废纸篓。
+- 说明优化：模型上下文弹窗顶部、字段 placeholder 和每个输入项下方均明确“留空或 0 表示继承当前生效值，不是无限制”，并展示当前生效值，避免把数据库覆盖值 `0` 误解成关闭限制。
+- 说明优化验证：`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4328 NODE_USE_ENV_PROXY=0 pnpm style:l1` 通过。
+- 说明优化部署：本地构建镜像 `oauth-api-service-server:20260519T204053-5dc73aaf-local` 并上传远端；远端 `docker load` 后更新 `APP_IMAGE` 并重建 `app-server`，Atlas 状态 `OK`、待执行 `0`；公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`。
+- 说明优化部署验证：远端 `model_list` 回归确认模型覆盖字段均为 `0`，生效字段仍为 `400000 / 260000 / 380000 / 1040000 / 1900000 / 8`；发现并清理了生产库 `gpt-5.2.context_keep_items=8` 的历史残值，使所有模型覆盖字段重新回到 `0`。
+- 说明优化清理：清理前远端 `/` 使用率 52%、Docker images 4.73GB；执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260519T202200-5dc73aaf-local`，回收 348.4MB；清理后 `/` 使用率 50%、Docker images 4.026GB，未执行 volume prune；本地镜像 tar 已移入废纸篓。
+- 填值交互：模型上下文弹窗保持输入框默认空值表示继承，不自动写入表格生效值；每个字段新增“填入当前值”按钮，用户明确点击后才把当前生效值填进输入框，避免误把推荐值固化成数据库覆盖。
+- 填值交互验证：`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4329 NODE_USE_ENV_PROXY=0 pnpm style:l1` 通过；首次 `style:l1` 在 `/register` 重定向处偶发失败，原命令重跑通过 26 个场景。
+- 填值交互部署：本地 Docker / OrbStack 曾短暂不可用，重启 OrbStack 后本地构建镜像 `oauth-api-service-server:20260519T215756-5dc73aaf-local` 并上传远端；远端 `docker load`、更新 `APP_IMAGE`、重建 `app-server`，Atlas 状态 `OK`、待执行 `0`，公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`。
+- 填值交互清理：清理前远端 `/` 使用率 52%、Docker images 4.73GB；执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260519T204053-5dc73aaf-local`，回收 348.4MB；清理后 `/` 使用率 50%、Docker images 4.026GB，未执行 volume prune；本地镜像 tar 已移入废纸篓。
+
 ## 2026-05-19 API key 级上游策略覆盖
 - 完成：新增 `gateway_api_keys.upstream_strategy`，空值表示继承全局默认；可按单个 API key 覆盖为 `backend_only`、`backend_with_cli_fallback` 或 `codex_cli`。后端转发链路改为先取 key 级覆盖，再回退全局默认，上下文预检失败和 usage 记录沿用最终生效模式。
 - 完成：`api.key_create` / `api.key_update` / `api.key_list` 接入 `upstream_strategy`；后台 `/admin-keys` 列表新增“上游策略”列，凭据新建 / 编辑弹窗新增“继承全局默认 / Backend 直连 / Backend + CLI 兜底 / 强制 CLI”选择器；`/admin-upstream` 继续只负责全局默认策略。

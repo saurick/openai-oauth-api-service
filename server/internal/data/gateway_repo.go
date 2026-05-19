@@ -1055,6 +1055,12 @@ func (r *gatewayRepo) UpsertModel(ctx context.Context, model biz.GatewayModel) (
 			SetCreatedUnix(model.CreatedUnix).
 			SetEnabled(model.Enabled).
 			SetSource(model.Source).
+			SetContextWindowTokens(model.ContextWindowTokens).
+			SetContextCompactTokens(model.ContextCompactTokens).
+			SetContextHardTokens(model.ContextHardTokens).
+			SetContextCompactBytes(model.ContextCompactBytes).
+			SetContextHardBytes(model.ContextHardBytes).
+			SetContextKeepItems(model.ContextKeepItems).
 			SetLastSeenAt(now).
 			Save(ctx)
 		if err != nil {
@@ -1068,6 +1074,12 @@ func (r *gatewayRepo) UpsertModel(ctx context.Context, model biz.GatewayModel) (
 		SetCreatedUnix(model.CreatedUnix).
 		SetEnabled(model.Enabled).
 		SetSource(model.Source).
+		SetContextWindowTokens(model.ContextWindowTokens).
+		SetContextCompactTokens(model.ContextCompactTokens).
+		SetContextHardTokens(model.ContextHardTokens).
+		SetContextCompactBytes(model.ContextCompactBytes).
+		SetContextHardBytes(model.ContextHardBytes).
+		SetContextKeepItems(model.ContextKeepItems).
 		SetLastSeenAt(now).
 		Save(ctx)
 	if err != nil {
@@ -1092,6 +1104,12 @@ func (r *gatewayRepo) UpsertSyncedModel(ctx context.Context, model biz.GatewayMo
 			SetCreatedUnix(model.CreatedUnix).
 			SetEnabled(false).
 			SetSource("upstream").
+			SetContextWindowTokens(model.ContextWindowTokens).
+			SetContextCompactTokens(model.ContextCompactTokens).
+			SetContextHardTokens(model.ContextHardTokens).
+			SetContextCompactBytes(model.ContextCompactBytes).
+			SetContextHardBytes(model.ContextHardBytes).
+			SetContextKeepItems(model.ContextKeepItems).
 			SetLastSeenAt(now).
 			Save(ctx)
 		if err != nil {
@@ -1116,6 +1134,21 @@ func (r *gatewayRepo) SetModelEnabled(ctx context.Context, id int, enabled bool)
 	return r.data.postgres.GatewayModel.UpdateOneID(id).
 		SetEnabled(enabled).
 		Exec(ctx)
+}
+
+func (r *gatewayRepo) UpdateModelContextPolicy(ctx context.Context, id int, policy biz.GatewayModelContextPolicy) (*biz.GatewayModel, error) {
+	item, err := r.data.postgres.GatewayModel.UpdateOneID(id).
+		SetContextWindowTokens(policy.ContextWindowTokens).
+		SetContextCompactTokens(policy.ContextCompactTokens).
+		SetContextHardTokens(policy.ContextHardTokens).
+		SetContextCompactBytes(policy.ContextCompactBytes).
+		SetContextHardBytes(policy.ContextHardBytes).
+		SetContextKeepItems(policy.ContextKeepItems).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return mapGatewayModel(item), nil
 }
 
 func (r *gatewayRepo) DeleteModel(ctx context.Context, id int) error {
@@ -1726,15 +1759,21 @@ func mapGatewayModel(item *ent.GatewayModel) *biz.GatewayModel {
 		return nil
 	}
 	return &biz.GatewayModel{
-		ID:          item.ID,
-		ModelID:     item.ModelID,
-		OwnedBy:     item.OwnedBy,
-		CreatedUnix: item.CreatedUnix,
-		Enabled:     item.Enabled,
-		Source:      item.Source,
-		LastSeenAt:  item.LastSeenAt,
-		CreatedAt:   item.CreatedAt,
-		UpdatedAt:   item.UpdatedAt,
+		ID:                   item.ID,
+		ModelID:              item.ModelID,
+		OwnedBy:              item.OwnedBy,
+		CreatedUnix:          item.CreatedUnix,
+		Enabled:              item.Enabled,
+		Source:               item.Source,
+		ContextWindowTokens:  item.ContextWindowTokens,
+		ContextCompactTokens: item.ContextCompactTokens,
+		ContextHardTokens:    item.ContextHardTokens,
+		ContextCompactBytes:  item.ContextCompactBytes,
+		ContextHardBytes:     item.ContextHardBytes,
+		ContextKeepItems:     item.ContextKeepItems,
+		LastSeenAt:           item.LastSeenAt,
+		CreatedAt:            item.CreatedAt,
+		UpdatedAt:            item.UpdatedAt,
 	}
 }
 
@@ -1855,6 +1894,24 @@ func mapGatewayUsageDiagnosticForDB(item biz.GatewayUsageDiagnostic) map[string]
 	if item.ContextCompactedEstimatedTokens > 0 {
 		out["context_compacted_estimated_tokens"] = item.ContextCompactedEstimatedTokens
 	}
+	if item.ContextWindowTokens > 0 {
+		out["context_window_tokens"] = item.ContextWindowTokens
+	}
+	if item.ContextCompactTokenLimit > 0 {
+		out["context_compact_token_limit"] = item.ContextCompactTokenLimit
+	}
+	if item.ContextHardTokenLimit > 0 {
+		out["context_hard_token_limit"] = item.ContextHardTokenLimit
+	}
+	if item.ContextCompactByteLimit > 0 {
+		out["context_compact_byte_limit"] = item.ContextCompactByteLimit
+	}
+	if item.ContextHardByteLimit > 0 {
+		out["context_hard_byte_limit"] = item.ContextHardByteLimit
+	}
+	if item.ContextKeepItems > 0 {
+		out["context_keep_items"] = item.ContextKeepItems
+	}
 	return out
 }
 
@@ -1879,6 +1936,12 @@ func mapGatewayUsageDiagnosticFromDB(raw map[string]any) biz.GatewayUsageDiagnos
 		ContextCompactedBytes:           diagnosticInt64(raw["context_compacted_bytes"]),
 		ContextOriginalEstimatedTokens:  diagnosticInt64(raw["context_original_estimated_tokens"]),
 		ContextCompactedEstimatedTokens: diagnosticInt64(raw["context_compacted_estimated_tokens"]),
+		ContextWindowTokens:             diagnosticInt64(raw["context_window_tokens"]),
+		ContextCompactTokenLimit:        diagnosticInt64(raw["context_compact_token_limit"]),
+		ContextHardTokenLimit:           diagnosticInt64(raw["context_hard_token_limit"]),
+		ContextCompactByteLimit:         diagnosticInt64(raw["context_compact_byte_limit"]),
+		ContextHardByteLimit:            diagnosticInt64(raw["context_hard_byte_limit"]),
+		ContextKeepItems:                int(diagnosticInt64(raw["context_keep_items"])),
 	}
 }
 

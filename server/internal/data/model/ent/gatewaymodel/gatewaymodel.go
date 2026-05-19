@@ -23,6 +23,18 @@ const (
 	FieldEnabled = "enabled"
 	// FieldSource holds the string denoting the source field in the database.
 	FieldSource = "source"
+	// FieldContextWindowTokens holds the string denoting the context_window_tokens field in the database.
+	FieldContextWindowTokens = "context_window_tokens"
+	// FieldContextCompactTokens holds the string denoting the context_compact_tokens field in the database.
+	FieldContextCompactTokens = "context_compact_tokens"
+	// FieldContextHardTokens holds the string denoting the context_hard_tokens field in the database.
+	FieldContextHardTokens = "context_hard_tokens"
+	// FieldContextCompactBytes holds the string denoting the context_compact_bytes field in the database.
+	FieldContextCompactBytes = "context_compact_bytes"
+	// FieldContextHardBytes holds the string denoting the context_hard_bytes field in the database.
+	FieldContextHardBytes = "context_hard_bytes"
+	// FieldContextKeepItems holds the string denoting the context_keep_items field in the database.
+	FieldContextKeepItems = "context_keep_items"
 	// FieldLastSeenAt holds the string denoting the last_seen_at field in the database.
 	FieldLastSeenAt = "last_seen_at"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -41,6 +53,12 @@ var Columns = []string{
 	FieldCreatedUnix,
 	FieldEnabled,
 	FieldSource,
+	FieldContextWindowTokens,
+	FieldContextCompactTokens,
+	FieldContextHardTokens,
+	FieldContextCompactBytes,
+	FieldContextHardBytes,
+	FieldContextKeepItems,
 	FieldLastSeenAt,
 	FieldCreatedAt,
 	FieldUpdatedAt,
@@ -71,6 +89,30 @@ var (
 	DefaultSource string
 	// SourceValidator is a validator for the "source" field. It is called by the builders before save.
 	SourceValidator func(string) error
+	// DefaultContextWindowTokens holds the default value on creation for the "context_window_tokens" field.
+	DefaultContextWindowTokens int64
+	// ContextWindowTokensValidator is a validator for the "context_window_tokens" field. It is called by the builders before save.
+	ContextWindowTokensValidator func(int64) error
+	// DefaultContextCompactTokens holds the default value on creation for the "context_compact_tokens" field.
+	DefaultContextCompactTokens int64
+	// ContextCompactTokensValidator is a validator for the "context_compact_tokens" field. It is called by the builders before save.
+	ContextCompactTokensValidator func(int64) error
+	// DefaultContextHardTokens holds the default value on creation for the "context_hard_tokens" field.
+	DefaultContextHardTokens int64
+	// ContextHardTokensValidator is a validator for the "context_hard_tokens" field. It is called by the builders before save.
+	ContextHardTokensValidator func(int64) error
+	// DefaultContextCompactBytes holds the default value on creation for the "context_compact_bytes" field.
+	DefaultContextCompactBytes int64
+	// ContextCompactBytesValidator is a validator for the "context_compact_bytes" field. It is called by the builders before save.
+	ContextCompactBytesValidator func(int64) error
+	// DefaultContextHardBytes holds the default value on creation for the "context_hard_bytes" field.
+	DefaultContextHardBytes int64
+	// ContextHardBytesValidator is a validator for the "context_hard_bytes" field. It is called by the builders before save.
+	ContextHardBytesValidator func(int64) error
+	// DefaultContextKeepItems holds the default value on creation for the "context_keep_items" field.
+	DefaultContextKeepItems int
+	// ContextKeepItemsValidator is a validator for the "context_keep_items" field. It is called by the builders before save.
+	ContextKeepItemsValidator func(int) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -110,6 +152,36 @@ func ByEnabled(opts ...sql.OrderTermOption) OrderOption {
 // BySource orders the results by the source field.
 func BySource(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSource, opts...).ToFunc()
+}
+
+// ByContextWindowTokens orders the results by the context_window_tokens field.
+func ByContextWindowTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContextWindowTokens, opts...).ToFunc()
+}
+
+// ByContextCompactTokens orders the results by the context_compact_tokens field.
+func ByContextCompactTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContextCompactTokens, opts...).ToFunc()
+}
+
+// ByContextHardTokens orders the results by the context_hard_tokens field.
+func ByContextHardTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContextHardTokens, opts...).ToFunc()
+}
+
+// ByContextCompactBytes orders the results by the context_compact_bytes field.
+func ByContextCompactBytes(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContextCompactBytes, opts...).ToFunc()
+}
+
+// ByContextHardBytes orders the results by the context_hard_bytes field.
+func ByContextHardBytes(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContextHardBytes, opts...).ToFunc()
+}
+
+// ByContextKeepItems orders the results by the context_keep_items field.
+func ByContextKeepItems(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContextKeepItems, opts...).ToFunc()
 }
 
 // ByLastSeenAt orders the results by the last_seen_at field.
