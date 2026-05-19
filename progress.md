@@ -7,7 +7,12 @@
 - 完成：`style:l1` 的模型管理桌面场景新增该弹窗浅色 / 暗色盒模型断言，覆盖面板横向溢出、字段数量、输入框边界、填值按钮边界和字段头部滚动宽度。
 - 验证通过：`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm css`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4335 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminApi/index.jsx web/src/tailwind.css web/scripts/styleL1.mjs progress.md`。
 - 浏览器回归：本地 Vite `127.0.0.1:4334` 登录 `/admin-models` 后打开模型上下文弹窗，桌面暗色 1280x720 量测面板宽 `980px`、字段宽 `296px`、面板与字段均无横向 scroll；移动浅色 390x844 量测面板宽 `358px`、字段宽 `290px`、body/document 均无横向溢出。
-- 阻塞/风险：暂未部署；本次只修复后台模型上下文弹窗，不改变服务端上下文策略语义。
+- 提交推送：已提交并推送 `9052e9d`（完善模型上下文策略与后台展示）到 `origin/main`。
+- 部署：本地构建 amd64 镜像 `oauth-api-service-server:20260519T231421-9052e9d0`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260519T231421-9052e9d0/`；远端仅执行 `docker load`、宿主机 Atlas migration、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 迁移：首次 release migration tar 带出 macOS `._*` 资源叉文件导致 Atlas checksum mismatch；服务尚未重建，清理 release `migrate/._*` 后重跑 Atlas。最终状态 `OK`、当前版本 `20260519105354`、待执行 `0`。
+- 部署验证：远端容器运行镜像 `oauth-api-service-server:20260519T231421-9052e9d0`，容器环境 `GIT_SHA_SHORT=9052e9d0`；远端本机 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；公网 `https://oauth-api.saurick.me/healthz`、`/readyz`、`/public/codex/balance` 均返回 200，管理员 `admin/adminadmin` 登录成功，`model_list` 返回 6 个 Codex 模型且首条生效阈值为 `400000 / 260000 / 380000 / 1040000 / 1900000 / 8`。
+- 清理：清理前远端 `/` 使用率 52%、Docker images 4.73GB；删除本轮远端 release 镜像 tar 后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260519T215756-5dc73aaf-local`，回收 348.4MB；清理后 `/` 使用率 50%、Docker images 4.026GB，未执行 volume prune；本地镜像 tar 和 migration tar 已移入废纸篓。
+- 阻塞/风险：本次只修复后台模型上下文弹窗并部署当前工作区，不改变管理员密码；release 目录保留 migration tar 和已清理资源叉后的 `migrate/` 目录用于追溯。
 
 ## 2026-05-19 Codex 余额公开接口入口
 - 完成：`/admin-codex-balance` 顶部新增「打开公开接口」次级按钮，使用相对路径 `/public/codex/balance`、新标签页打开，并保留原「刷新」主操作；不在前端写死生产域名。
