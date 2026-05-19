@@ -102,6 +102,10 @@ export default defineConfig(({ command, mode }) => {
           target: apiProxyTarget,
           changeOrigin: true,
         },
+        '/public': {
+          target: apiProxyTarget,
+          changeOrigin: true,
+        },
       },
       // 如果挂 NAS / WSL / Docker 卷，再打开下面这个
       // watch: {

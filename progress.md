@@ -5,6 +5,7 @@
 ## 2026-05-19 FontAwesome npm token 暴露处理
 - 完成：扫描当前工作区和 Git 历史，未发现 OpenAI / ChatGPT `refresh_token` 或 `auth.json` 明文入库；发现 FontAwesome npm auth token 曾以字面量写入 `web/.npmrc` 和 `web/.yarnrc.yml`。
 - 完成：当前工作区已将 FontAwesome npm auth token 改为 `FONTAWESOME_NPM_AUTH_TOKEN` 环境变量引用，避免后续提交继续携带明文 token。
+- 完成：项目级 `AGENTS.md` 已补充包管理器、CLI、SDK 和第三方服务配置不得写入字面量 token 的规则，要求相关文件只使用环境变量或示例占位符，并在提交前做当前文件树 secrets 扫描。
 - 完成：已在临时 mirror clone 中改写历史并验证 `gitleaks detect --source <mirror> --redact` 无命中；当前主工作区和远端尚未切换到改写后的提交链。
 - 下一步：按当前决策暂不处理远端历史，只保证当前文件树和后续提交不再携带明文 token；如旧 token 曾可用，仍建议在 FontAwesome / npm 侧撤销或轮换。
 - 阻塞/风险：本轮未执行 force push；远端旧提交历史如已公开，仍可能保留旧明文，历史风险只能通过 token 失效来真正止血。
@@ -536,3 +537,25 @@
 - 线上验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260519T081406-86bd2f65-local`，容器环境 `GIT_SHA=86bd2f65c86c4f93bcf3820587997018ec0fe059`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；公网 `/admin-usage` 返回 `HTTP 200`；管理员 `admin/adminadmin` 登录后，`api.usage_list` 返回 `code=0`、`total=28`、`items=8`，`api.usage_session_summaries` 返回 `code=0`、`total=1`、`items=1`。
 - 清理：部署前记录远端 `/` 使用率 51%、Docker images 4.73GB；执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260518T175802-ace0afcc-local`，回收 348.2MB；清理后 `/` 使用率 49%、Docker images 4.025GB，未执行 volume prune。
 - 下一步：远端 release 目录仍保留本轮镜像 tar 和 migration 文件，便于短期回溯；如确认无需保留，可后续只删除该 release 下的 tar 包。
+
+## 2026-05-19 Codex 余额公开查询接口
+- 完成：新增 `GET /public/codex/balance`，不要求管理员登录或下游 `ogw_` key；服务端按请求启动 Codex app-server，调用 `account/rateLimits/read` 后只返回限额窗口、剩余百分比、重置时间、plan type 和 credits，不返回账号邮箱或 token。
+- 完成：新增 `CODEX_APP_SERVER_BIN`、`CODEX_BALANCE_TIMEOUT_SECONDS` 与 `CODEX_BALANCE_CACHE_SECONDS` 配置；公开接口默认 30 秒内存缓存，避免无登录查询反复拉起 Codex app-server 子进程。Compose `.env.example` / `compose.yml`、README、`server/docs/api.md` 和 `server/docs/config.md` 已同步说明公开查询边界。
+- 下一步：如线上不希望任何人看到余额 / 限额百分比，应在 Nginx / Cloudflare 层给 `/public/codex/balance` 加 IP allowlist 或独立查询 token；本轮按需求保持应用层免登录。
+- 阻塞/风险：该接口依赖服务器 Codex CLI 的 `app-server` 子命令和服务器 Codex 登录态；如果容器内未安装支持 app-server 的 Codex CLI，或 `auth.json` 失效，接口会返回 `codex_balance_query_failed`。
+
+## 2026-05-19 Codex 余额公开查询部署中断
+- 已完成：本地构建镜像 `oauth-api-service-server:20260519T164255-6f72a8ec-balance-local`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260519T164255-6f72a8ec-balance-local/`，远端执行 `docker load`、宿主机 Atlas status 和 compose 配置更新；Atlas 状态为 `Current Version: 20260518092411`、`Pending Files: 0`，无 schema 变更。
+- 已发现并处理：首次 `docker compose up -d --no-deps --force-recreate app-server` 后容器仍运行旧镜像 `oauth-api-service-server:20260519T081406-86bd2f65-local`，导致 `/public/codex/balance` 返回前端 HTML；随后重新上传镜像包、重新 `docker load`，删除旧 `app-server` 容器并由 compose 重新创建，新容器曾通过远端本机 `/readyz`。
+- 当前阻塞：重新创建新容器后，SSH 与 HTTP 端口均能建立 TCP 连接，但 SSH 在 banner 前超时，`http://8.218.4.199:8400/healthz` 连接后无响应；因此未能完成运行镜像确认、公开 `/public/codex/balance` 验证、部署后日志检查和最终镜像清理。
+- 下一步：恢复 SSH 后优先检查宿主机负载、Docker daemon、`openai-oauth-api-service-server` 容器状态和日志；若新容器异常，应回滚到 `oauth-api-service-server:20260519T081406-86bd2f65-local` 后再重新发布。
+
+## 2026-05-19 本地公开接口代理补齐
+- 完成：Vite 本地开发代理新增 `/public` 到后端 `apiProxyTarget`，避免访问 `http://localhost:5176/public/codex/balance` 时被前端 dev server 当作静态 / SPA 路径处理。
+- 验证：本地后端 `http://localhost:8400/public/codex/balance` 已返回 Codex 余额 JSON；当前 5176 端口未监听，需要启动前端 dev server 后再通过 5176 代理验证。
+
+## 2026-05-19 Codex 余额后台可视化
+- 完成：新增后台页面 `/admin-codex-balance` 和侧边栏「用量统计 / Codex 余额」入口，登录管理员可查看接口状态、credits、更新时间、Codex 与 GPT-5.3-Codex-Spark 的 5 小时 / 每周剩余额度进度条，并支持手动刷新。
+- 完成：页面直接读取 `/public/codex/balance`，只展示服务端裁剪后的余额与限额信息；不新增后台 RPC 和数据库字段。
+- 验证通过：`pnpm exec eslint --ext .js --ext .jsx src/pages/AdminCodexBalance/index.jsx src/App.jsx src/common/components/layout/AdminFrame.jsx`、`pnpm test`、`pnpm build`、`git diff --check`。
+- 浏览器回归：本地 `http://localhost:5176/admin-codex-balance` 通过 Playwright 验证桌面 1440x900、移动 390x844、暗色模式；页面渲染正常、4 条进度条可见、无横向溢出。控制台仅有项目既存 React Router v7 future warning。

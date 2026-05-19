@@ -10,6 +10,7 @@ import AdminLoginPage from '@/pages/AdminLogin'
 import AdminApiPage from '@/pages/AdminApi'
 import AdminDashboardPage from '@/pages/AdminDashboard'
 import AdminClientConfigPage from '@/pages/AdminClientConfig'
+import AdminCodexBalancePage from '@/pages/AdminCodexBalance'
 import OAuthCallbackPage from '@/pages/OAuthCallback'
 
 import 'normalize.css/normalize.css'
@@ -127,6 +128,14 @@ const App = () => {
             element={
               <AuthGuard requireAdmin>
                 <AdminApiPage view="usage" />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin-codex-balance"
+            element={
+              <AuthGuard requireAdmin>
+                <AdminCodexBalancePage />
               </AuthGuard>
             }
           />

@@ -91,6 +91,9 @@
 - `CODEX_UPSTREAM_MODE`：启动默认上游模式，默认 `codex_backend`；需要初始强制旧路径时设为 `codex_cli`。
 - `CODEX_UPSTREAM_FALLBACK_ENABLED`：是否允许 `codex_backend` 失败后 fallback 到 `codex_cli`，默认 `false`；只建议临时救急打开，工具调用、工具历史和文件输入始终不会 fallback。
 - `CODEX_CLI_BIN`：Codex CLI 可执行文件，默认 `codex`。
+- `CODEX_APP_SERVER_BIN`：公开余额查询使用的 Codex app-server 可执行文件，默认复用 `CODEX_CLI_BIN`，再回退到 `codex`。
+- `CODEX_BALANCE_TIMEOUT_SECONDS`：`GET /public/codex/balance` 启动 Codex app-server 并读取 `account/rateLimits/read` 的超时，默认 `15` 秒。
+- `CODEX_BALANCE_CACHE_SECONDS`：公开余额查询的内存缓存时间，默认 `30` 秒；设为 `0` 可关闭缓存。
 - `CODEX_CLI_TIMEOUT_SECONDS`：单次 Codex CLI upstream 超时，默认 `600` 秒。
 - `CODEX_BACKEND_BASE_URL`：direct backend 基础地址，默认 `https://chatgpt.com/backend-api/codex`。
 - `CODEX_BACKEND_TIMEOUT_SECONDS`：direct backend 单次请求超时，默认 `600` 秒。
@@ -113,6 +116,8 @@
 网关上下文压缩只保存工程摘要，不保存完整 prompt 或模型输出正文。压缩会尽量保留系统 / developer 指令、最近若干轮未压缩消息和最近完整工具闭环；较早历史会收口为带文件路径、错误线索、命令 / 测试线索和片段摘要的工程摘要。若压缩后仍超过硬阈值，网关会在转发前返回 `context_length_exceeded`，避免 Codex CLI 对同一超长请求连续重试。
 
 两种模式下客户端都只保存 `ogw_...` 下游 key，服务端统一使用服务器 Codex 登录态，并继续记录 usage。direct backend 模式不会启动 `codex exec`，因此也不会注入 Codex CLI 自身的大量 agent 上下文；token usage 更接近客户端实际请求体。
+
+公开余额查询路径 `GET /public/codex/balance` 不走 `/v1` 下游 key，也不要求管理员登录。它会按请求启动 Codex app-server，读取 `account/rateLimits/read`，再返回裁剪后的限额窗口、剩余百分比、重置时间和 credits 余额。该路径不会返回账号邮箱或 token；若线上不希望公开展示余额 / 限额百分比，应在 Nginx / Cloudflare 层限制访问。
 
 如果宿主机通过 mihomo / Clash 提供代理，优先让代理只监听 Docker bridge 网关地址，并在 Compose `.env` 中显式注入代理环境变量。例如 app-server 所在网络网关为 `172.19.0.1` 时，可使用 `http://172.19.0.1:7890`。不要为了 app-server 默认启用全局 TUN，除非已经确认整机路由、Docker bridge 和回滚方式都可控。
 

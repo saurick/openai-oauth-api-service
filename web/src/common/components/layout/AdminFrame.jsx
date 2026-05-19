@@ -24,6 +24,7 @@ const NAV_GROUPS = [
     label: '用量统计',
     items: [
       { to: '/admin-usage', label: '用量日志', icon: ChartIcon },
+      { to: '/admin-codex-balance', label: 'Codex 余额', icon: BalanceIcon },
     ],
   },
 ]
@@ -227,6 +228,21 @@ function ChartIcon() {
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"
+        strokeWidth="2"
+      />
+    </svg>
+  )
+}
+
+function BalanceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M4 7h16M6 7v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7M8 13h8"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
         strokeWidth="2"
       />
     </svg>
