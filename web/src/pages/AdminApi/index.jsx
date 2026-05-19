@@ -96,6 +96,14 @@ const CODEX_UPSTREAM_STRATEGY_OPTIONS = [
     description: '每次都走服务端 codex exec',
   },
 ]
+const KEY_UPSTREAM_STRATEGY_OPTIONS = [
+  {
+    label: '继承全局默认',
+    value: '',
+    description: '跟随上游策略页当前配置',
+  },
+  ...CODEX_UPSTREAM_STRATEGY_OPTIONS,
+]
 const USAGE_UPSTREAM_FILTER_OPTIONS = [
   { label: '全部上游', value: '' },
   ...CODEX_UPSTREAM_MODE_OPTIONS,
@@ -196,6 +204,7 @@ const CODEX_MODEL_IDS = new Set(
 const INITIAL_KEY_FORM = {
   remark: '',
   allowedModels: '',
+  upstreamStrategy: '',
   dailyTokenLimit: '',
   weeklyTokenLimit: '',
   dailyInputTokenLimit: '',
@@ -348,6 +357,13 @@ function upstreamModeLabel(value) {
     (option) => option.value === value
   )
   return item?.label || '未记录'
+}
+
+function upstreamStrategyLabel(value) {
+  const item = KEY_UPSTREAM_STRATEGY_OPTIONS.find(
+    (option) => option.value === String(value || '')
+  )
+  return item?.label || '继承全局默认'
 }
 
 function reasoningEffortLabel(value) {
@@ -1682,6 +1698,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             keyForm.weeklyBillableInputTokenLimit
           ),
           allowed_models: splitModels(keyForm.allowedModels),
+          upstream_strategy: keyForm.upstreamStrategy,
           disabled: !!currentKey?.disabled,
         })
       } else {
@@ -1710,6 +1727,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             keyForm.weeklyBillableInputTokenLimit
           ),
           allowed_models: splitModels(keyForm.allowedModels),
+          upstream_strategy: keyForm.upstreamStrategy,
         })
         setNewKey(result?.data || null)
       }
@@ -1747,6 +1765,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         allowedModel && officialModelPriceByID.has(allowedModel)
           ? allowedModel
           : '',
+      upstreamStrategy: item.upstream_strategy || '',
       dailyTokenLimit: tokenLimitTokensToInput(item.quota_daily_tokens),
       weeklyTokenLimit: tokenLimitTokensToInput(item.quota_weekly_tokens),
       dailyInputTokenLimit: tokenLimitTokensToInput(
@@ -2483,7 +2502,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
           <div className={tableWrapClass}>
             <div className="overflow-auto">
-              <table className={`${tableClass} min-w-[1240px]`}>
+              <table className={`${tableClass} min-w-[1360px]`}>
                 <thead>
                   <tr>
                     <th className={selectionThClass}>选择</th>
@@ -2492,6 +2511,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     <th className={thClass}>更新时间</th>
                     <th className={thClass}>完整凭据</th>
                     <th className={thClass}>模型限制</th>
+                    <th className={thClass}>上游策略</th>
                     <th className={thClass}>Token 日 / 周限制（百万）</th>
                     <th className={thClass}>状态</th>
                   </tr>
@@ -2558,6 +2578,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                               ? item.allowed_models.join(', ')
                               : '不限'}
                           </td>
+                          <td className={`${tdClass} whitespace-nowrap`}>
+                            {upstreamStrategyLabel(item.upstream_strategy)}
+                          </td>
                           <td className={tdClass}>
                             <div className="grid gap-1 text-sm">
                               {renderTokenLimitPair(
@@ -2599,7 +2622,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   ) : (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={9}
                         className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                       >
                         {hasActiveKeyFilters
@@ -2826,7 +2849,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 {editingKeyId ? '编辑 API 凭据' : '新建 API 凭据'}
               </h2>
               <p className="admin-modal-description">
-                设置备注、模型限制和 token 日 / 周额度。
+                设置备注、模型限制、上游策略和 token 日 / 周额度。
               </p>
             </div>
             <button
@@ -2882,6 +2905,24 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               />
               <span className={fieldHintClass}>
                 选项来自模型管理页，避免填入不存在的模型。
+              </span>
+            </label>
+            <label className={fieldClass}>
+              上游策略
+              <SearchableSelect
+                value={keyForm.upstreamStrategy}
+                onChange={(nextValue) =>
+                  setKeyForm((current) => ({
+                    ...current,
+                    upstreamStrategy: nextValue,
+                  }))
+                }
+                ariaLabel="上游策略"
+                options={KEY_UPSTREAM_STRATEGY_OPTIONS}
+                placeholder="输入上游策略"
+              />
+              <span className={fieldHintClass}>
+                默认继承全局；仅对该 API 凭据后续请求生效。
               </span>
             </label>
             <div className="grid gap-3 rounded-lg border border-[#e4ece6] bg-[#f7fbf8] p-3">

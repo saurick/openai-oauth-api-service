@@ -105,6 +105,7 @@ func (d *JsonrpcData) handleGateway(
 			QuotaDailyBillableInputTokens:  getInt64(pm, "quota_daily_billable_input_tokens", 0),
 			QuotaWeeklyBillableInputTokens: getInt64(pm, "quota_weekly_billable_input_tokens", 0),
 			AllowedModels:                  getStringList(pm, "allowed_models"),
+			UpstreamStrategy:               getString(pm, "upstream_strategy"),
 		})
 		if err != nil {
 			return id, d.mapGatewayError(ctx, err), nil
@@ -134,6 +135,7 @@ func (d *JsonrpcData) handleGateway(
 			QuotaWeeklyBillableInputTokens: getInt64(pm, "quota_weekly_billable_input_tokens", 0),
 			AllowedModels:                  getStringList(pm, "allowed_models"),
 			Disabled:                       getBool(pm, "disabled", false),
+			UpstreamStrategy:               getString(pm, "upstream_strategy"),
 		})
 		if err != nil {
 			return id, d.mapGatewayError(ctx, err), nil
@@ -704,6 +706,7 @@ func mapGatewayAPIKeyForRPC(item *biz.GatewayAPIKey, includePlainKey bool) map[s
 		"key_prefix":                         item.KeyPrefix,
 		"key_last4":                          item.KeyLast4,
 		"disabled":                           item.Disabled,
+		"upstream_strategy":                  item.UpstreamStrategy,
 		"quota_requests":                     item.QuotaRequests,
 		"quota_total_tokens":                 item.QuotaTotalTokens,
 		"quota_daily_tokens":                 item.QuotaDailyTokens,

@@ -27,6 +27,8 @@ const (
 	FieldKeyLast4 = "key_last4"
 	// FieldDisabled holds the string denoting the disabled field in the database.
 	FieldDisabled = "disabled"
+	// FieldUpstreamStrategy holds the string denoting the upstream_strategy field in the database.
+	FieldUpstreamStrategy = "upstream_strategy"
 	// FieldQuotaRequests holds the string denoting the quota_requests field in the database.
 	FieldQuotaRequests = "quota_requests"
 	// FieldQuotaTotalTokens holds the string denoting the quota_total_tokens field in the database.
@@ -69,6 +71,7 @@ var Columns = []string{
 	FieldKeyPrefix,
 	FieldKeyLast4,
 	FieldDisabled,
+	FieldUpstreamStrategy,
 	FieldQuotaRequests,
 	FieldQuotaTotalTokens,
 	FieldQuotaDailyTokens,
@@ -110,6 +113,10 @@ var (
 	KeyLast4Validator func(string) error
 	// DefaultDisabled holds the default value on creation for the "disabled" field.
 	DefaultDisabled bool
+	// DefaultUpstreamStrategy holds the default value on creation for the "upstream_strategy" field.
+	DefaultUpstreamStrategy string
+	// UpstreamStrategyValidator is a validator for the "upstream_strategy" field. It is called by the builders before save.
+	UpstreamStrategyValidator func(string) error
 	// DefaultQuotaRequests holds the default value on creation for the "quota_requests" field.
 	DefaultQuotaRequests int64
 	// DefaultQuotaTotalTokens holds the default value on creation for the "quota_total_tokens" field.
@@ -179,6 +186,11 @@ func ByKeyLast4(opts ...sql.OrderTermOption) OrderOption {
 // ByDisabled orders the results by the disabled field.
 func ByDisabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDisabled, opts...).ToFunc()
+}
+
+// ByUpstreamStrategy orders the results by the upstream_strategy field.
+func ByUpstreamStrategy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpstreamStrategy, opts...).ToFunc()
 }
 
 // ByQuotaRequests orders the results by the quota_requests field.

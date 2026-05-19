@@ -387,6 +387,7 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		}
 	}
 
+	_, upstreamMode, _ := h.effectiveCodexUpstream(r.Context(), key)
 	prepared, prepareErr := h.prepareGatewayContext(r.Context(), key, requestID, sessionID, r.URL.Path, body, reasoningEffort)
 	if prepareErr != nil {
 		status := stdhttp.StatusRequestEntityTooLarge
@@ -407,8 +408,8 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 			Stream:                 stream,
 			RequestBytes:           int64(len(body)),
 			DurationMS:             time.Since(start).Milliseconds(),
-			UpstreamConfiguredMode: h.configuredCodexUpstreamMode(r.Context()),
-			UpstreamMode:           h.configuredCodexUpstreamMode(r.Context()),
+			UpstreamConfiguredMode: upstreamMode,
+			UpstreamMode:           upstreamMode,
 			UpstreamErrorType:      errorType,
 			ErrorType:              errorType,
 			Diagnostic:             prepared.Diagnostic,
@@ -442,13 +443,13 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 	start time.Time,
 	requestDiagnostic biz.GatewayUsageDiagnostic,
 ) {
-	upstreamMode := h.configuredCodexUpstreamMode(r.Context())
+	_, upstreamMode, fallbackEnabled := h.effectiveCodexUpstream(r.Context(), key)
 	var streamWriter *gatewayStreamWriter
 	if stream {
 		streamWriter = newGatewayStreamWriter(w, r.URL.Path, requestModel)
 	}
 
-	result, err := h.runCodexUpstreamWithStreamHeartbeat(r, streamWriter, upstreamMode, body, requestModel, reasoningEffort)
+	result, err := h.runCodexUpstreamWithStreamHeartbeat(r, streamWriter, upstreamMode, fallbackEnabled, body, requestModel, reasoningEffort)
 	if err != nil {
 		status := stdhttp.StatusBadGateway
 		errorType := result.UpstreamErrorType
@@ -609,7 +610,29 @@ func (h *openAIGatewayHandler) configuredCodexUpstreamMode(ctx context.Context) 
 	return mode
 }
 
-func (h *openAIGatewayHandler) runCodexUpstream(ctx context.Context, upstreamMode string, path string, body []byte, requestModel string, reasoningEffort string) (codexUpstreamCallResult, error) {
+func (h *openAIGatewayHandler) effectiveCodexUpstream(ctx context.Context, key *biz.GatewayAPIKey) (string, string, bool) {
+	if h.gatewayUC == nil {
+		mode := codexUpstreamMode()
+		return biz.GatewayUpstreamStrategy(mode, codexUpstreamFallbackEnabled()), mode, codexUpstreamFallbackEnabled()
+	}
+	strategy, mode, fallbackEnabled, err := h.gatewayUC.GetEffectiveCodexUpstreamStrategy(ctx, key)
+	if err != nil {
+		if h.log != nil {
+			h.log.WithContext(ctx).Warnf("get effective codex upstream strategy failed: %v", err)
+		}
+		mode := codexUpstreamMode()
+		return biz.GatewayUpstreamStrategy(mode, codexUpstreamFallbackEnabled()), mode, codexUpstreamFallbackEnabled()
+	}
+	if mode == "" {
+		mode = codexUpstreamMode()
+	}
+	if strategy == "" {
+		strategy = biz.GatewayUpstreamStrategy(mode, fallbackEnabled)
+	}
+	return strategy, mode, fallbackEnabled
+}
+
+func (h *openAIGatewayHandler) runCodexUpstream(ctx context.Context, upstreamMode string, fallbackEnabled bool, path string, body []byte, requestModel string, reasoningEffort string) (codexUpstreamCallResult, error) {
 	upstreamMode = biz.NormalizeGatewayUpstreamMode(upstreamMode)
 	if upstreamMode == "" {
 		upstreamMode = codexUpstreamMode()
@@ -629,7 +652,6 @@ func (h *openAIGatewayHandler) runCodexUpstream(ctx context.Context, upstreamMod
 			h.log.WithContext(ctx).Warnf("codex backend upstream failed before fallback: %v", err)
 		}
 		errorType := upstreamErrorType(err, codexUpstreamModeBackend)
-		fallbackEnabled := h.configuredCodexUpstreamFallbackEnabled(ctx)
 		diagnostic := gatewayUsageDiagnosticForUpstreamFailure(path, body, reasoningEffort, err, fallbackEnabled)
 		if !fallbackEnabled {
 			return codexUpstreamCallResult{ActualMode: codexUpstreamModeBackend, UpstreamErrorType: errorType, Diagnostic: diagnostic}, fmt.Errorf("codex backend upstream failed: %w", err)
@@ -674,17 +696,18 @@ func (h *openAIGatewayHandler) runCodexUpstreamWithStreamHeartbeat(
 	r *stdhttp.Request,
 	streamWriter *gatewayStreamWriter,
 	upstreamMode string,
+	fallbackEnabled bool,
 	body []byte,
 	requestModel string,
 	reasoningEffort string,
 ) (codexUpstreamCallResult, error) {
 	if streamWriter == nil {
-		return h.runCodexUpstream(r.Context(), upstreamMode, r.URL.Path, body, requestModel, reasoningEffort)
+		return h.runCodexUpstream(r.Context(), upstreamMode, fallbackEnabled, r.URL.Path, body, requestModel, reasoningEffort)
 	}
 
 	done := make(chan codexUpstreamAsyncResult, 1)
 	go func() {
-		result, err := h.runCodexUpstream(r.Context(), upstreamMode, r.URL.Path, body, requestModel, reasoningEffort)
+		result, err := h.runCodexUpstream(r.Context(), upstreamMode, fallbackEnabled, r.URL.Path, body, requestModel, reasoningEffort)
 		done <- codexUpstreamAsyncResult{result: result, err: err}
 	}()
 

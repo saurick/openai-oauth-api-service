@@ -923,6 +923,7 @@ echo '{"type":"turn.completed","usage":{"input_tokens":20,"output_tokens":1,"tot
 	result, err := (&openAIGatewayHandler{}).runCodexUpstream(
 		context.Background(),
 		codexUpstreamModeBackend,
+		true,
 		"/v1/chat/completions",
 		[]byte(`{"messages":[{"role":"user","content":"Reply OK"}]}`),
 		"gpt-5.5",
@@ -957,6 +958,7 @@ echo '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","tex
 	_, err := (&openAIGatewayHandler{}).runCodexUpstream(
 		context.Background(),
 		codexUpstreamModeBackend,
+		false,
 		"/v1/chat/completions",
 		[]byte(`{"messages":[{"role":"user","content":"Reply OK"}]}`),
 		"gpt-5.5",
@@ -994,6 +996,7 @@ echo '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","tex
 	_, err := (&openAIGatewayHandler{}).runCodexUpstream(
 		context.Background(),
 		codexUpstreamModeBackend,
+		true,
 		"/v1/chat/completions",
 		[]byte(`{
 			"tools": [{"type":"function","function":{"name":"shell","parameters":{"type":"object"}}}],

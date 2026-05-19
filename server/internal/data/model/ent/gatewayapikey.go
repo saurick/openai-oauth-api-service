@@ -32,6 +32,8 @@ type GatewayAPIKey struct {
 	KeyLast4 string `json:"key_last4,omitempty"`
 	// Disabled holds the value of the "disabled" field.
 	Disabled bool `json:"disabled,omitempty"`
+	// UpstreamStrategy holds the value of the "upstream_strategy" field.
+	UpstreamStrategy string `json:"upstream_strategy,omitempty"`
 	// QuotaRequests holds the value of the "quota_requests" field.
 	QuotaRequests int64 `json:"quota_requests,omitempty"`
 	// QuotaTotalTokens holds the value of the "quota_total_tokens" field.
@@ -74,7 +76,7 @@ func (*GatewayAPIKey) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case gatewayapikey.FieldID, gatewayapikey.FieldOwnerUserID, gatewayapikey.FieldQuotaRequests, gatewayapikey.FieldQuotaTotalTokens, gatewayapikey.FieldQuotaDailyTokens, gatewayapikey.FieldQuotaWeeklyTokens, gatewayapikey.FieldQuotaDailyInputTokens, gatewayapikey.FieldQuotaWeeklyInputTokens, gatewayapikey.FieldQuotaDailyOutputTokens, gatewayapikey.FieldQuotaWeeklyOutputTokens, gatewayapikey.FieldQuotaDailyBillableInputTokens, gatewayapikey.FieldQuotaWeeklyBillableInputTokens:
 			values[i] = new(sql.NullInt64)
-		case gatewayapikey.FieldName, gatewayapikey.FieldKeyHash, gatewayapikey.FieldPlainKey, gatewayapikey.FieldKeyPrefix, gatewayapikey.FieldKeyLast4:
+		case gatewayapikey.FieldName, gatewayapikey.FieldKeyHash, gatewayapikey.FieldPlainKey, gatewayapikey.FieldKeyPrefix, gatewayapikey.FieldKeyLast4, gatewayapikey.FieldUpstreamStrategy:
 			values[i] = new(sql.NullString)
 		case gatewayapikey.FieldLastUsedAt, gatewayapikey.FieldCreatedAt, gatewayapikey.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -141,6 +143,12 @@ func (_m *GatewayAPIKey) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field disabled", values[i])
 			} else if value.Valid {
 				_m.Disabled = value.Bool
+			}
+		case gatewayapikey.FieldUpstreamStrategy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field upstream_strategy", values[i])
+			} else if value.Valid {
+				_m.UpstreamStrategy = value.String
 			}
 		case gatewayapikey.FieldQuotaRequests:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -285,6 +293,9 @@ func (_m *GatewayAPIKey) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("disabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Disabled))
+	builder.WriteString(", ")
+	builder.WriteString("upstream_strategy=")
+	builder.WriteString(_m.UpstreamStrategy)
 	builder.WriteString(", ")
 	builder.WriteString("quota_requests=")
 	builder.WriteString(fmt.Sprintf("%v", _m.QuotaRequests))

@@ -89,6 +89,11 @@ func Disabled(v bool) predicate.GatewayAPIKey {
 	return predicate.GatewayAPIKey(sql.FieldEQ(FieldDisabled, v))
 }
 
+// UpstreamStrategy applies equality check predicate on the "upstream_strategy" field. It's identical to UpstreamStrategyEQ.
+func UpstreamStrategy(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldUpstreamStrategy, v))
+}
+
 // QuotaRequests applies equality check predicate on the "quota_requests" field. It's identical to QuotaRequestsEQ.
 func QuotaRequests(v int64) predicate.GatewayAPIKey {
 	return predicate.GatewayAPIKey(sql.FieldEQ(FieldQuotaRequests, v))
@@ -537,6 +542,71 @@ func DisabledEQ(v bool) predicate.GatewayAPIKey {
 // DisabledNEQ applies the NEQ predicate on the "disabled" field.
 func DisabledNEQ(v bool) predicate.GatewayAPIKey {
 	return predicate.GatewayAPIKey(sql.FieldNEQ(FieldDisabled, v))
+}
+
+// UpstreamStrategyEQ applies the EQ predicate on the "upstream_strategy" field.
+func UpstreamStrategyEQ(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldUpstreamStrategy, v))
+}
+
+// UpstreamStrategyNEQ applies the NEQ predicate on the "upstream_strategy" field.
+func UpstreamStrategyNEQ(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNEQ(FieldUpstreamStrategy, v))
+}
+
+// UpstreamStrategyIn applies the In predicate on the "upstream_strategy" field.
+func UpstreamStrategyIn(vs ...string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldIn(FieldUpstreamStrategy, vs...))
+}
+
+// UpstreamStrategyNotIn applies the NotIn predicate on the "upstream_strategy" field.
+func UpstreamStrategyNotIn(vs ...string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNotIn(FieldUpstreamStrategy, vs...))
+}
+
+// UpstreamStrategyGT applies the GT predicate on the "upstream_strategy" field.
+func UpstreamStrategyGT(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGT(FieldUpstreamStrategy, v))
+}
+
+// UpstreamStrategyGTE applies the GTE predicate on the "upstream_strategy" field.
+func UpstreamStrategyGTE(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGTE(FieldUpstreamStrategy, v))
+}
+
+// UpstreamStrategyLT applies the LT predicate on the "upstream_strategy" field.
+func UpstreamStrategyLT(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLT(FieldUpstreamStrategy, v))
+}
+
+// UpstreamStrategyLTE applies the LTE predicate on the "upstream_strategy" field.
+func UpstreamStrategyLTE(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLTE(FieldUpstreamStrategy, v))
+}
+
+// UpstreamStrategyContains applies the Contains predicate on the "upstream_strategy" field.
+func UpstreamStrategyContains(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldContains(FieldUpstreamStrategy, v))
+}
+
+// UpstreamStrategyHasPrefix applies the HasPrefix predicate on the "upstream_strategy" field.
+func UpstreamStrategyHasPrefix(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldHasPrefix(FieldUpstreamStrategy, v))
+}
+
+// UpstreamStrategyHasSuffix applies the HasSuffix predicate on the "upstream_strategy" field.
+func UpstreamStrategyHasSuffix(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldHasSuffix(FieldUpstreamStrategy, v))
+}
+
+// UpstreamStrategyEqualFold applies the EqualFold predicate on the "upstream_strategy" field.
+func UpstreamStrategyEqualFold(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEqualFold(FieldUpstreamStrategy, v))
+}
+
+// UpstreamStrategyContainsFold applies the ContainsFold predicate on the "upstream_strategy" field.
+func UpstreamStrategyContainsFold(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldContainsFold(FieldUpstreamStrategy, v))
 }
 
 // QuotaRequestsEQ applies the EQ predicate on the "quota_requests" field.

@@ -52,6 +52,7 @@ type GatewayAPIKey struct {
 	KeyPrefix                      string
 	KeyLast4                       string
 	Disabled                       bool
+	UpstreamStrategy               string
 	QuotaRequests                  int64
 	QuotaTotalTokens               int64
 	QuotaDailyTokens               int64
@@ -317,6 +318,7 @@ type CreateGatewayAPIKeyInput struct {
 	QuotaDailyBillableInputTokens  int64
 	QuotaWeeklyBillableInputTokens int64
 	AllowedModels                  []string
+	UpstreamStrategy               string
 }
 
 type UpdateGatewayAPIKeyInput struct {
@@ -336,6 +338,7 @@ type UpdateGatewayAPIKeyInput struct {
 	QuotaWeeklyBillableInputTokens int64
 	AllowedModels                  []string
 	Disabled                       bool
+	UpstreamStrategy               string
 }
 
 type GatewayPolicy struct {
@@ -596,6 +599,13 @@ func NormalizeGatewayUpstreamStrategy(strategy string) string {
 	}
 }
 
+func NormalizeGatewayAPIKeyUpstreamStrategy(strategy string) string {
+	if strings.TrimSpace(strategy) == "" {
+		return ""
+	}
+	return NormalizeGatewayUpstreamStrategy(strategy)
+}
+
 func GatewayUpstreamStrategy(mode string, fallbackEnabled bool) string {
 	mode = NormalizeGatewayUpstreamMode(mode)
 	if mode == GatewayUpstreamModeCodexCLI {
@@ -642,6 +652,11 @@ func (uc *GatewayUsecase) CreateAPIKey(ctx context.Context, input CreateGatewayA
 	input.QuotaWeeklyOutputTokens = normalizeNonNegativeInt64(input.QuotaWeeklyOutputTokens)
 	input.QuotaDailyBillableInputTokens = normalizeNonNegativeInt64(input.QuotaDailyBillableInputTokens)
 	input.QuotaWeeklyBillableInputTokens = normalizeNonNegativeInt64(input.QuotaWeeklyBillableInputTokens)
+	rawUpstreamStrategy := strings.TrimSpace(input.UpstreamStrategy)
+	input.UpstreamStrategy = NormalizeGatewayAPIKeyUpstreamStrategy(input.UpstreamStrategy)
+	if rawUpstreamStrategy != "" && input.UpstreamStrategy == "" {
+		return nil, ErrGatewayUpstreamModeInvalid
+	}
 	allowedModels, err := normalizeAllowedCodexModels(input.AllowedModels)
 	if err != nil {
 		return nil, err
@@ -696,6 +711,11 @@ func (uc *GatewayUsecase) UpdateAPIKey(ctx context.Context, input UpdateGatewayA
 	input.QuotaWeeklyOutputTokens = normalizeNonNegativeInt64(input.QuotaWeeklyOutputTokens)
 	input.QuotaDailyBillableInputTokens = normalizeNonNegativeInt64(input.QuotaDailyBillableInputTokens)
 	input.QuotaWeeklyBillableInputTokens = normalizeNonNegativeInt64(input.QuotaWeeklyBillableInputTokens)
+	rawUpstreamStrategy := strings.TrimSpace(input.UpstreamStrategy)
+	input.UpstreamStrategy = NormalizeGatewayAPIKeyUpstreamStrategy(input.UpstreamStrategy)
+	if rawUpstreamStrategy != "" && input.UpstreamStrategy == "" {
+		return nil, ErrGatewayUpstreamModeInvalid
+	}
 	allowedModels, err := normalizeAllowedCodexModels(input.AllowedModels)
 	if err != nil {
 		return nil, err
@@ -1104,6 +1124,20 @@ func (uc *GatewayUsecase) GetCodexUpstreamStrategy(ctx context.Context) (string,
 		return "", "", false, err
 	}
 	return GatewayUpstreamStrategy(mode, fallbackEnabled), mode, fallbackEnabled, nil
+}
+
+func (uc *GatewayUsecase) GetEffectiveCodexUpstreamStrategy(ctx context.Context, key *GatewayAPIKey) (string, string, bool, error) {
+	if key != nil {
+		switch NormalizeGatewayAPIKeyUpstreamStrategy(key.UpstreamStrategy) {
+		case GatewayUpstreamStrategyBackendOnly:
+			return GatewayUpstreamStrategyBackendOnly, GatewayUpstreamModeCodexBackend, false, nil
+		case GatewayUpstreamStrategyBackendWithFallback:
+			return GatewayUpstreamStrategyBackendWithFallback, GatewayUpstreamModeCodexBackend, true, nil
+		case GatewayUpstreamStrategyCodexCLI:
+			return GatewayUpstreamStrategyCodexCLI, GatewayUpstreamModeCodexCLI, false, nil
+		}
+	}
+	return uc.GetCodexUpstreamStrategy(ctx)
 }
 
 func (uc *GatewayUsecase) SetCodexUpstreamMode(ctx context.Context, mode string) (string, error) {

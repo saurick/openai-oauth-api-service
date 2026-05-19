@@ -973,6 +973,7 @@ type GatewayAPIKeyMutation struct {
 	key_prefix                            *string
 	key_last4                             *string
 	disabled                              *bool
+	upstream_strategy                     *string
 	quota_requests                        *int64
 	addquota_requests                     *int64
 	quota_total_tokens                    *int64
@@ -1386,6 +1387,42 @@ func (m *GatewayAPIKeyMutation) OldDisabled(ctx context.Context) (v bool, err er
 // ResetDisabled resets all changes to the "disabled" field.
 func (m *GatewayAPIKeyMutation) ResetDisabled() {
 	m.disabled = nil
+}
+
+// SetUpstreamStrategy sets the "upstream_strategy" field.
+func (m *GatewayAPIKeyMutation) SetUpstreamStrategy(s string) {
+	m.upstream_strategy = &s
+}
+
+// UpstreamStrategy returns the value of the "upstream_strategy" field in the mutation.
+func (m *GatewayAPIKeyMutation) UpstreamStrategy() (r string, exists bool) {
+	v := m.upstream_strategy
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamStrategy returns the old "upstream_strategy" field's value of the GatewayAPIKey entity.
+// If the GatewayAPIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayAPIKeyMutation) OldUpstreamStrategy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamStrategy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamStrategy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamStrategy: %w", err)
+	}
+	return oldValue.UpstreamStrategy, nil
+}
+
+// ResetUpstreamStrategy resets all changes to the "upstream_strategy" field.
+func (m *GatewayAPIKeyMutation) ResetUpstreamStrategy() {
+	m.upstream_strategy = nil
 }
 
 // SetQuotaRequests sets the "quota_requests" field.
@@ -2168,7 +2205,7 @@ func (m *GatewayAPIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GatewayAPIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 22)
 	if m.owner_user_id != nil {
 		fields = append(fields, gatewayapikey.FieldOwnerUserID)
 	}
@@ -2189,6 +2226,9 @@ func (m *GatewayAPIKeyMutation) Fields() []string {
 	}
 	if m.disabled != nil {
 		fields = append(fields, gatewayapikey.FieldDisabled)
+	}
+	if m.upstream_strategy != nil {
+		fields = append(fields, gatewayapikey.FieldUpstreamStrategy)
 	}
 	if m.quota_requests != nil {
 		fields = append(fields, gatewayapikey.FieldQuotaRequests)
@@ -2254,6 +2294,8 @@ func (m *GatewayAPIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.KeyLast4()
 	case gatewayapikey.FieldDisabled:
 		return m.Disabled()
+	case gatewayapikey.FieldUpstreamStrategy:
+		return m.UpstreamStrategy()
 	case gatewayapikey.FieldQuotaRequests:
 		return m.QuotaRequests()
 	case gatewayapikey.FieldQuotaTotalTokens:
@@ -2305,6 +2347,8 @@ func (m *GatewayAPIKeyMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldKeyLast4(ctx)
 	case gatewayapikey.FieldDisabled:
 		return m.OldDisabled(ctx)
+	case gatewayapikey.FieldUpstreamStrategy:
+		return m.OldUpstreamStrategy(ctx)
 	case gatewayapikey.FieldQuotaRequests:
 		return m.OldQuotaRequests(ctx)
 	case gatewayapikey.FieldQuotaTotalTokens:
@@ -2390,6 +2434,13 @@ func (m *GatewayAPIKeyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDisabled(v)
+		return nil
+	case gatewayapikey.FieldUpstreamStrategy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamStrategy(v)
 		return nil
 	case gatewayapikey.FieldQuotaRequests:
 		v, ok := value.(int64)
@@ -2714,6 +2765,9 @@ func (m *GatewayAPIKeyMutation) ResetField(name string) error {
 		return nil
 	case gatewayapikey.FieldDisabled:
 		m.ResetDisabled()
+		return nil
+	case gatewayapikey.FieldUpstreamStrategy:
+		m.ResetUpstreamStrategy()
 		return nil
 	case gatewayapikey.FieldQuotaRequests:
 		m.ResetQuotaRequests()

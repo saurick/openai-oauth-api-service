@@ -36,6 +36,9 @@ func (GatewayAPIKey) Fields() []ent.Field {
 			MaxLen(8),
 		field.Bool("disabled").
 			Default(false),
+		field.String("upstream_strategy").
+			Default("").
+			MaxLen(64),
 		field.Int64("quota_requests").
 			Default(0),
 		field.Int64("quota_total_tokens").

@@ -2,6 +2,14 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-19 API key 级上游策略覆盖
+- 完成：新增 `gateway_api_keys.upstream_strategy`，空值表示继承全局默认；可按单个 API key 覆盖为 `backend_only`、`backend_with_cli_fallback` 或 `codex_cli`。后端转发链路改为先取 key 级覆盖，再回退全局默认，上下文预检失败和 usage 记录沿用最终生效模式。
+- 完成：`api.key_create` / `api.key_update` / `api.key_list` 接入 `upstream_strategy`；后台 `/admin-keys` 列表新增“上游策略”列，凭据新建 / 编辑弹窗新增“继承全局默认 / Backend 直连 / Backend + CLI 兜底 / 强制 CLI”选择器；`/admin-upstream` 继续只负责全局默认策略。
+- 完成：同步更新 `server/docs/api.md`、`web/README.md` 和 `style:l1` mock/断言，覆盖 key 级策略列表展示、弹窗新建态、编辑态回显、暗色模式和桌面/移动端盒模型。
+- 验证通过：`cd server && make data`、`cd server && go test ./internal/biz ./internal/data ./internal/server`、`cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4325 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
+- 下一步：部署前需先应用 Atlas migration `20260519093313_migrate.sql`，再重启服务；历史 key 默认继承当前全局策略，不改变历史 usage。
+- 阻塞/风险：本轮没有改 usage schema 来单独记录“策略来源=全局/key”，排障时可从当前 key 配置和 usage 的最终 `upstream_configured_mode` / `upstream_mode` 判断；如后续需要审计策略来源，应单独扩展 usage 字段。
+
 ## 2026-05-19 FontAwesome npm token 暴露处理
 - 完成：扫描当前工作区和 Git 历史，未发现 OpenAI / ChatGPT `refresh_token` 或 `auth.json` 明文入库；发现 FontAwesome npm auth token 曾以字面量写入 `web/.npmrc` 和 `web/.yarnrc.yml`。
 - 完成：当前工作区已将 FontAwesome npm auth token 改为 `FONTAWESOME_NPM_AUTH_TOKEN` 环境变量引用，避免后续提交继续携带明文 token。

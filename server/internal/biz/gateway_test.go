@@ -323,6 +323,34 @@ func TestGatewayUsecaseCodexUpstreamStrategyPersistsModeAndFallback(t *testing.T
 	}
 }
 
+func TestGatewayUsecaseEffectiveCodexUpstreamStrategyUsesAPIKeyOverride(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+	ctx := context.Background()
+
+	if _, _, _, err := uc.SetCodexUpstreamStrategy(ctx, GatewayUpstreamStrategyBackendOnly); err != nil {
+		t.Fatalf("SetCodexUpstreamStrategy() error = %v", err)
+	}
+	strategy, mode, fallbackEnabled, err := uc.GetEffectiveCodexUpstreamStrategy(ctx, &GatewayAPIKey{
+		ID:               9,
+		UpstreamStrategy: GatewayUpstreamStrategyBackendWithFallback,
+	})
+	if err != nil {
+		t.Fatalf("GetEffectiveCodexUpstreamStrategy() error = %v", err)
+	}
+	if strategy != GatewayUpstreamStrategyBackendWithFallback || mode != GatewayUpstreamModeCodexBackend || !fallbackEnabled {
+		t.Fatalf("unexpected key override strategy: strategy=%q mode=%q fallback=%v", strategy, mode, fallbackEnabled)
+	}
+
+	strategy, mode, fallbackEnabled, err = uc.GetEffectiveCodexUpstreamStrategy(ctx, &GatewayAPIKey{ID: 9})
+	if err != nil {
+		t.Fatalf("GetEffectiveCodexUpstreamStrategy(inherit) error = %v", err)
+	}
+	if strategy != GatewayUpstreamStrategyBackendOnly || mode != GatewayUpstreamModeCodexBackend || fallbackEnabled {
+		t.Fatalf("unexpected inherited strategy: strategy=%q mode=%q fallback=%v", strategy, mode, fallbackEnabled)
+	}
+}
+
 type testWriter struct{}
 
 func (testWriter) Write(p []byte) (int, error) { return len(p), nil }

@@ -77,7 +77,7 @@ HTTP 路由：
 - `user_usage_summary`
 - `user_usage_list`
 
-用途：管理员管理下游 API key、组织用户归属、key+model 策略、固定官方模型列表启停、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；若创建参数 `name` 非空，备注必须只包含字母和数字，并会生成 `ogw_<name>_<random>` 形式的明文 key。数据库保存 `plain_key` 用于后台展示，同时保存 `key_hash` 用于鉴权匹配，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
+用途：管理员管理下游 API key、组织用户归属、key+model 策略、key 级上游策略覆盖、固定官方模型列表启停、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；若创建参数 `name` 非空，备注必须只包含字母和数字，并会生成 `ogw_<name>_<random>` 形式的明文 key。数据库保存 `plain_key` 用于后台展示，同时保存 `key_hash` 用于鉴权匹配，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
 
 模型目录以服务端代码中的官方 Codex 列表为真源，管理端只允许读取和启停；`model_upsert` / `model_delete` 不作为正式管理接口开放。
 
@@ -107,7 +107,7 @@ usage 记录：
 
 - 成功和失败请求都会记录 usage log
 - 默认记录 endpoint、model、reasoning_effort、可选 session_id、HTTP 状态、耗时、请求/响应字节数和 token usage；未传 reasoning effort 或历史旧数据保持空值，不按 token 反推
-- 上游策略可在管理后台「上游策略」页通过 `api.gateway_upstream_get` / `api.gateway_upstream_set` 读取和切换；未保存运行时设置时，默认 Backend 直连。`codex_backend` 会直接请求 Codex backend `/responses`，backend 失败时默认直接返回上游错误；只有显式选择 Backend + CLI 兜底策略时，纯文本 / 图片请求才允许 fallback 到 `codex_cli`。带工具调用、工具历史或文件输入的 backend-only 请求始终不会 fallback 到 CLI；显式切到强制 CLI 时只走 CLI。
+- 上游策略可在管理后台「上游策略」页通过 `api.gateway_upstream_get` / `api.gateway_upstream_set` 读取和切换全局默认；单个 API key 可通过 `upstream_strategy` 覆盖全局默认，空值表示继承全局。未保存运行时设置时，默认 Backend 直连。`codex_backend` 会直接请求 Codex backend `/responses`，backend 失败时默认直接返回上游错误；只有显式选择 Backend + CLI 兜底策略时，纯文本 / 图片请求才允许 fallback 到 `codex_cli`。带工具调用、工具历史或文件输入的 backend-only 请求始终不会 fallback 到 CLI；显式切到强制 CLI 时只走 CLI。
 - `codex_cli` 模式 token 优先读取 Codex JSON 事件里的 usage，没有事件时才退回字符数估算；`codex_backend` 模式优先读取 Responses SSE `response.completed.usage`
 - usage log 会记录 `upstream_configured_mode`、`upstream_mode`、`upstream_fallback` 和细分 `upstream_error_type`，用于区分配置模式、实际执行模式、fallback 情况和失败类型；后台表格会保留原始错误码并展示简短中文说明，完整含义见下方“上游错误类型”。
 - OpenAI-compatible 请求体支持 `reasoning_effort`、`reasoningEffort` 和 `reasoning.effort`，可选值为 `low`、`medium`、`high`、`xhigh`；direct backend 会转为 OpenAI Responses 口径的 `reasoning.effort`，CLI 模式会转为 Codex CLI `model_reasoning_effort`
@@ -222,6 +222,7 @@ HTTP 路由：
 - `key_last4`
 - `plain_key`
 - `allowed_models`
+- `upstream_strategy`：空值表示继承全局默认；可选 `backend_only`、`backend_with_cli_fallback`、`codex_cli`
 - `quota_requests`
 - `quota_daily_tokens`
 - `quota_weekly_tokens`
@@ -267,7 +268,7 @@ HTTP 路由：
 - `default_strategy` / `default_mode`：未保存设置时的默认策略与模式
 - `options[]`：前端开关可展示的策略列表
 
-`api.gateway_upstream_set` 参数优先使用 `strategy`。为兼容旧前端，仍接受旧的 `mode` 与 `fallback_enabled` 参数并转换为对应策略。保存后立即影响后续 `/v1/chat/completions` 与 `/v1/responses` 请求；历史 usage 不会改写。
+`api.gateway_upstream_set` 参数优先使用 `strategy`。为兼容旧前端，仍接受旧的 `mode` 与 `fallback_enabled` 参数并转换为对应策略。保存后立即影响未设置 key 级覆盖的后续 `/v1/chat/completions` 与 `/v1/responses` 请求；历史 usage 不会改写。
 
 ### `api.usage_list`
 

@@ -1586,6 +1586,10 @@ async function assertKeyTableVisuals(page, scenarioName) {
       hasRemarkHeader: document.body.innerText.includes('备注'),
       hasCreatedAtHeader: document.body.innerText.includes('创建时间'),
       hasUpdatedAtHeader: document.body.innerText.includes('更新时间'),
+      hasUpstreamStrategyHeader: document.body.innerText.includes('上游策略'),
+      hasUpstreamStrategyValue:
+        document.body.innerText.includes('Backend + CLI 兜底') &&
+        document.body.innerText.includes('继承全局默认'),
       hasOperationHeader: Array.from(
         table?.querySelectorAll('thead th') || []
       ).some((node) => node.textContent.trim() === '操作'),
@@ -1639,7 +1643,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
       }),
       statusCells: Array.from(table?.querySelectorAll('tbody tr') || []).map(
         (row) => {
-          const cell = row.children[7]
+          const cell = row.children[8]
           const badge = cell?.querySelector('span')
           const cellRect = cell?.getBoundingClientRect()
           const badgeRect = badge?.getBoundingClientRect()
@@ -1661,6 +1665,11 @@ async function assertKeyTableVisuals(page, scenarioName) {
   assert(metrics.hasRemarkHeader, `${scenarioName} 缺少备注列表列`)
   assert(metrics.hasCreatedAtHeader, `${scenarioName} 缺少创建时间列`)
   assert(metrics.hasUpdatedAtHeader, `${scenarioName} 缺少更新时间列`)
+  assert(metrics.hasUpstreamStrategyHeader, `${scenarioName} 缺少上游策略列`)
+  assert(
+    metrics.hasUpstreamStrategyValue,
+    `${scenarioName} 缺少 key 级上游策略展示`
+  )
   assert(
     !metrics.hasOperationHeader,
     `${scenarioName} API 凭据表格不应再展示行内操作列`
@@ -1821,6 +1830,12 @@ async function assertKeyCreateModal(page, scenarioName) {
         node.innerText.includes('每日输入 Token（百万）') &&
         node.innerText.includes('每日非缓存输入（百万）') &&
         node.innerText.includes('每日输出 Token（百万）'),
+      hasUpstreamStrategySelect: Boolean(
+        node.querySelector('[role="combobox"][aria-label="上游策略"]')
+      ),
+      hasUpstreamStrategyHint:
+        node.innerText.includes('默认继承全局') &&
+        node.innerText.includes('仅对该 API 凭据后续请求生效'),
       tokenLimitInputCount: node.querySelectorAll(
         'input[placeholder="0 表示不限，1 = 100 万 token"]'
       ).length,
@@ -1852,6 +1867,14 @@ async function assertKeyCreateModal(page, scenarioName) {
   assert(
     metrics.hasDetailedTokenLabels,
     `${scenarioName} 新建弹窗缺少细分 token 标签`
+  )
+  assert(
+    metrics.hasUpstreamStrategySelect,
+    `${scenarioName} 新建弹窗缺少 key 级上游策略选择`
+  )
+  assert(
+    metrics.hasUpstreamStrategyHint,
+    `${scenarioName} 新建弹窗缺少 key 级上游策略提示`
   )
   assert(
     metrics.tokenLimitInputCount >= 8,
@@ -2100,6 +2123,13 @@ async function assertKeyDoubleClickEdit(page, scenarioName) {
     value,
     'productionapikey',
     `${scenarioName} 双击 key 行未打开对应编辑弹窗`
+  )
+  const strategyValue = await dialog
+    .getByRole('combobox', { name: '上游策略' })
+    .inputValue()
+  assert(
+    strategyValue.includes('Backend + CLI 兜底'),
+    `${scenarioName} 编辑弹窗未回显 key 级上游策略: ${strategyValue}`
   )
   await dialog.getByRole('button', { name: '取消' }).click()
   await dialog.waitFor({ state: 'hidden' })
@@ -2568,6 +2598,7 @@ function getApiMockData(method, params = {}, state = {}) {
         last_used_at: 1778000000,
         name: 'productionapikey',
         plain_key: 'ogw_productionapikey_8a2c',
+        upstream_strategy: 'backend_with_cli_fallback',
         quota_daily_billable_input_tokens: 450_000,
         quota_daily_input_tokens: 800_000,
         quota_daily_output_tokens: 200_000,
@@ -2588,6 +2619,7 @@ function getApiMockData(method, params = {}, state = {}) {
         last_used_at: 0,
         name: 'stagingkeylongnameforoverflowcheck',
         plain_key: 'ogw_stagingkeylongname_3f9d',
+        upstream_strategy: '',
         quota_daily_billable_input_tokens: 0,
         quota_daily_input_tokens: 0,
         quota_daily_output_tokens: 0,
@@ -2611,6 +2643,8 @@ function getApiMockData(method, params = {}, state = {}) {
         last_used_at: 1777990000 - index * 100,
         name: `extraapikey${id}`,
         plain_key: `ogw_extraapikey${id}_x${id}`,
+        upstream_strategy:
+          index % 2 === 0 ? 'backend_only' : 'codex_cli',
         quota_daily_billable_input_tokens: 0,
         quota_daily_input_tokens: 0,
         quota_daily_output_tokens: 0,

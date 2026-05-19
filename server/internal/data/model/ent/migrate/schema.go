@@ -50,6 +50,7 @@ var (
 		{Name: "key_prefix", Type: field.TypeString, Size: 16},
 		{Name: "key_last4", Type: field.TypeString, Size: 8},
 		{Name: "disabled", Type: field.TypeBool, Default: false},
+		{Name: "upstream_strategy", Type: field.TypeString, Size: 64, Default: ""},
 		{Name: "quota_requests", Type: field.TypeInt64, Default: 0},
 		{Name: "quota_total_tokens", Type: field.TypeInt64, Default: 0},
 		{Name: "quota_daily_tokens", Type: field.TypeInt64, Default: 0},

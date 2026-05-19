@@ -86,6 +86,20 @@ func (_c *GatewayAPIKeyCreate) SetNillableDisabled(v *bool) *GatewayAPIKeyCreate
 	return _c
 }
 
+// SetUpstreamStrategy sets the "upstream_strategy" field.
+func (_c *GatewayAPIKeyCreate) SetUpstreamStrategy(v string) *GatewayAPIKeyCreate {
+	_c.mutation.SetUpstreamStrategy(v)
+	return _c
+}
+
+// SetNillableUpstreamStrategy sets the "upstream_strategy" field if the given value is not nil.
+func (_c *GatewayAPIKeyCreate) SetNillableUpstreamStrategy(v *string) *GatewayAPIKeyCreate {
+	if v != nil {
+		_c.SetUpstreamStrategy(*v)
+	}
+	return _c
+}
+
 // SetQuotaRequests sets the "quota_requests" field.
 func (_c *GatewayAPIKeyCreate) SetQuotaRequests(v int64) *GatewayAPIKeyCreate {
 	_c.mutation.SetQuotaRequests(v)
@@ -317,6 +331,10 @@ func (_c *GatewayAPIKeyCreate) defaults() {
 		v := gatewayapikey.DefaultDisabled
 		_c.mutation.SetDisabled(v)
 	}
+	if _, ok := _c.mutation.UpstreamStrategy(); !ok {
+		v := gatewayapikey.DefaultUpstreamStrategy
+		_c.mutation.SetUpstreamStrategy(v)
+	}
 	if _, ok := _c.mutation.QuotaRequests(); !ok {
 		v := gatewayapikey.DefaultQuotaRequests
 		_c.mutation.SetQuotaRequests(v)
@@ -412,6 +430,14 @@ func (_c *GatewayAPIKeyCreate) check() error {
 	if _, ok := _c.mutation.Disabled(); !ok {
 		return &ValidationError{Name: "disabled", err: errors.New(`ent: missing required field "GatewayAPIKey.disabled"`)}
 	}
+	if _, ok := _c.mutation.UpstreamStrategy(); !ok {
+		return &ValidationError{Name: "upstream_strategy", err: errors.New(`ent: missing required field "GatewayAPIKey.upstream_strategy"`)}
+	}
+	if v, ok := _c.mutation.UpstreamStrategy(); ok {
+		if err := gatewayapikey.UpstreamStrategyValidator(v); err != nil {
+			return &ValidationError{Name: "upstream_strategy", err: fmt.Errorf(`ent: validator failed for field "GatewayAPIKey.upstream_strategy": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.QuotaRequests(); !ok {
 		return &ValidationError{Name: "quota_requests", err: errors.New(`ent: missing required field "GatewayAPIKey.quota_requests"`)}
 	}
@@ -501,6 +527,10 @@ func (_c *GatewayAPIKeyCreate) createSpec() (*GatewayAPIKey, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.Disabled(); ok {
 		_spec.SetField(gatewayapikey.FieldDisabled, field.TypeBool, value)
 		_node.Disabled = value
+	}
+	if value, ok := _c.mutation.UpstreamStrategy(); ok {
+		_spec.SetField(gatewayapikey.FieldUpstreamStrategy, field.TypeString, value)
+		_node.UpstreamStrategy = value
 	}
 	if value, ok := _c.mutation.QuotaRequests(); ok {
 		_spec.SetField(gatewayapikey.FieldQuotaRequests, field.TypeInt64, value)
