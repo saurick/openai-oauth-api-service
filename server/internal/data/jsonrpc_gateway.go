@@ -828,6 +828,30 @@ func mapGatewayUsageDiagnosticForRPC(item biz.GatewayUsageDiagnostic) map[string
 	if item.UpstreamBody != "" {
 		out["upstream_body"] = item.UpstreamBody
 	}
+	if item.ContextCompacted {
+		out["context_compacted"] = true
+	}
+	if item.ContextCompactionReason != "" {
+		out["context_compaction_reason"] = item.ContextCompactionReason
+	}
+	if item.ContextCompactionSummary != "" {
+		out["context_compaction_summary"] = item.ContextCompactionSummary
+	}
+	if item.ContextCompactionCount > 0 {
+		out["context_compaction_count"] = item.ContextCompactionCount
+	}
+	if item.ContextOriginalBytes > 0 {
+		out["context_original_bytes"] = item.ContextOriginalBytes
+	}
+	if item.ContextCompactedBytes > 0 {
+		out["context_compacted_bytes"] = item.ContextCompactedBytes
+	}
+	if item.ContextOriginalEstimatedTokens > 0 {
+		out["context_original_estimated_tokens"] = item.ContextOriginalEstimatedTokens
+	}
+	if item.ContextCompactedEstimatedTokens > 0 {
+		out["context_compacted_estimated_tokens"] = item.ContextCompactedEstimatedTokens
+	}
 	return out
 }
 
@@ -983,26 +1007,35 @@ func mapGatewayUsageSessionSummaryForRPC(item *biz.GatewayUsageSessionSummary) m
 	}
 	billableInputTokens := gatewayBillableInputTokens(item.InputTokens, item.CachedTokens)
 	data := map[string]any{
-		"session_id":            item.SessionID,
-		"api_key_id":            item.APIKeyID,
-		"api_key_prefix":        item.APIKeyPrefix,
-		"api_key_name":          item.APIKeyName,
-		"total_requests":        item.TotalRequests,
-		"success_requests":      item.SuccessRequests,
-		"failed_requests":       item.FailedRequests,
-		"total_tokens":          item.TotalTokens,
-		"input_tokens":          item.InputTokens,
-		"output_tokens":         item.OutputTokens,
-		"cached_tokens":         item.CachedTokens,
-		"cached_input_tokens":   item.CachedTokens,
-		"billable_input_tokens": billableInputTokens,
-		"reasoning_tokens":      item.ReasoningTokens,
-		"average_duration_ms":   item.AverageDurationMS,
-		"backend_requests":      item.BackendRequests,
-		"cli_requests":          item.CLIRequests,
-		"fallback_requests":     item.FallbackRequests,
-		"first_seen_at":         item.FirstSeenAt.Unix(),
-		"last_seen_at":          item.LastSeenAt.Unix(),
+		"session_id":               item.SessionID,
+		"api_key_id":               item.APIKeyID,
+		"api_key_prefix":           item.APIKeyPrefix,
+		"api_key_name":             item.APIKeyName,
+		"total_requests":           item.TotalRequests,
+		"success_requests":         item.SuccessRequests,
+		"failed_requests":          item.FailedRequests,
+		"total_tokens":             item.TotalTokens,
+		"input_tokens":             item.InputTokens,
+		"output_tokens":            item.OutputTokens,
+		"cached_tokens":            item.CachedTokens,
+		"cached_input_tokens":      item.CachedTokens,
+		"billable_input_tokens":    billableInputTokens,
+		"reasoning_tokens":         item.ReasoningTokens,
+		"average_duration_ms":      item.AverageDurationMS,
+		"backend_requests":         item.BackendRequests,
+		"cli_requests":             item.CLIRequests,
+		"fallback_requests":        item.FallbackRequests,
+		"first_seen_at":            item.FirstSeenAt.Unix(),
+		"last_seen_at":             item.LastSeenAt.Unix(),
+		"context_compaction_count": item.ContextCompactionCount,
+		"context_summary":          item.ContextSummary,
+		"context_original_bytes":   item.ContextOriginalBytes,
+		"context_compacted_bytes":  item.ContextCompactedBytes,
+		"context_original_tokens":  item.ContextOriginalTokens,
+		"context_compacted_tokens": item.ContextCompactedTokens,
+	}
+	if item.ContextCompactedAt != nil {
+		data["context_compacted_at"] = item.ContextCompactedAt.Unix()
 	}
 	if item.EstimatedCostUSD != nil {
 		data["estimated_cost_usd"] = *item.EstimatedCostUSD

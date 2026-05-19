@@ -86,14 +86,22 @@ type GatewayModel struct {
 }
 
 type GatewayUsageDiagnostic struct {
-	RequestBytes       int64  `json:"request_bytes"`
-	ResponseBytes      int64  `json:"response_bytes"`
-	BackendOnly        bool   `json:"backend_only"`
-	FallbackEnabled    bool   `json:"fallback_enabled"`
-	FallbackBlocked    bool   `json:"fallback_blocked"`
-	ReasoningEffort    string `json:"reasoning_effort"`
-	UpstreamHTTPStatus int    `json:"upstream_http_status"`
-	UpstreamBody       string `json:"upstream_body"`
+	RequestBytes                    int64  `json:"request_bytes"`
+	ResponseBytes                   int64  `json:"response_bytes"`
+	BackendOnly                     bool   `json:"backend_only"`
+	FallbackEnabled                 bool   `json:"fallback_enabled"`
+	FallbackBlocked                 bool   `json:"fallback_blocked"`
+	ReasoningEffort                 string `json:"reasoning_effort"`
+	UpstreamHTTPStatus              int    `json:"upstream_http_status"`
+	UpstreamBody                    string `json:"upstream_body"`
+	ContextCompacted                bool   `json:"context_compacted"`
+	ContextCompactionReason         string `json:"context_compaction_reason"`
+	ContextCompactionSummary        string `json:"context_compaction_summary"`
+	ContextCompactionCount          int    `json:"context_compaction_count"`
+	ContextOriginalBytes            int64  `json:"context_original_bytes"`
+	ContextCompactedBytes           int64  `json:"context_compacted_bytes"`
+	ContextOriginalEstimatedTokens  int64  `json:"context_original_estimated_tokens"`
+	ContextCompactedEstimatedTokens int64  `json:"context_compacted_estimated_tokens"`
 }
 
 func (d GatewayUsageDiagnostic) Summary() string {
@@ -120,6 +128,21 @@ func (d GatewayUsageDiagnostic) Summary() string {
 	}
 	if d.UpstreamBody != "" {
 		parts = append(parts, "upstream_body="+d.UpstreamBody)
+	}
+	if d.ContextCompacted {
+		parts = append(parts, "context-compacted")
+		if d.ContextCompactionCount > 0 {
+			parts = append(parts, fmt.Sprintf("compact_count=%d", d.ContextCompactionCount))
+		}
+		if d.ContextOriginalBytes > 0 || d.ContextCompactedBytes > 0 {
+			parts = append(parts, fmt.Sprintf("context_bytes=%d->%d", d.ContextOriginalBytes, d.ContextCompactedBytes))
+		}
+		if d.ContextOriginalEstimatedTokens > 0 || d.ContextCompactedEstimatedTokens > 0 {
+			parts = append(parts, fmt.Sprintf("context_tokens=%d->%d", d.ContextOriginalEstimatedTokens, d.ContextCompactedEstimatedTokens))
+		}
+		if d.ContextCompactionReason != "" {
+			parts = append(parts, "compact_reason="+d.ContextCompactionReason)
+		}
 	}
 	return strings.Join(parts, ", ")
 }
@@ -234,25 +257,50 @@ type GatewayUsageKeySummary struct {
 }
 
 type GatewayUsageSessionSummary struct {
-	SessionID         string
-	APIKeyID          int
-	APIKeyPrefix      string
-	APIKeyName        string
-	TotalRequests     int64
-	SuccessRequests   int64
-	FailedRequests    int64
-	TotalTokens       int64
-	InputTokens       int64
-	OutputTokens      int64
-	CachedTokens      int64
-	ReasoningTokens   int64
-	AverageDurationMS int64
-	BackendRequests   int64
-	CLIRequests       int64
-	FallbackRequests  int64
-	FirstSeenAt       time.Time
-	LastSeenAt        time.Time
-	EstimatedCostUSD  *float64
+	SessionID              string
+	APIKeyID               int
+	APIKeyPrefix           string
+	APIKeyName             string
+	TotalRequests          int64
+	SuccessRequests        int64
+	FailedRequests         int64
+	TotalTokens            int64
+	InputTokens            int64
+	OutputTokens           int64
+	CachedTokens           int64
+	ReasoningTokens        int64
+	AverageDurationMS      int64
+	BackendRequests        int64
+	CLIRequests            int64
+	FallbackRequests       int64
+	FirstSeenAt            time.Time
+	LastSeenAt             time.Time
+	EstimatedCostUSD       *float64
+	ContextCompactionCount int
+	ContextSummary         string
+	ContextOriginalBytes   int64
+	ContextCompactedBytes  int64
+	ContextOriginalTokens  int64
+	ContextCompactedTokens int64
+	ContextCompactedAt     *time.Time
+}
+
+type GatewayContextSummary struct {
+	SessionID           string
+	APIKeyID            int
+	APIKeyPrefix        string
+	Summary             string
+	SummaryTokens       int64
+	CompactionCount     int
+	LastRequestID       string
+	LastReason          string
+	LastOriginalBytes   int64
+	LastCompactedBytes  int64
+	LastOriginalTokens  int64
+	LastCompactedTokens int64
+	LastError           string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
 }
 
 type CreateGatewayAPIKeyInput struct {
@@ -376,6 +424,8 @@ type GatewayRepo interface {
 	ListUsageBuckets(ctx context.Context, filter GatewayUsageFilter, groupBy string) ([]*GatewayUsageBucket, error)
 	ListUsageKeySummaries(ctx context.Context, filter GatewayUsageFilter, limit int) ([]*GatewayUsageKeySummary, error)
 	ListUsageSessionSummaries(ctx context.Context, filter GatewayUsageFilter, limit, offset int) ([]*GatewayUsageSessionSummary, int, error)
+	GetContextSummary(ctx context.Context, sessionID string) (*GatewayContextSummary, error)
+	UpsertContextSummary(ctx context.Context, item GatewayContextSummary) error
 	GetGatewaySetting(ctx context.Context, key string) (string, error)
 	SetGatewaySetting(ctx context.Context, key, value string) error
 
@@ -995,6 +1045,30 @@ func (uc *GatewayUsecase) ListUsageKeySummaries(ctx context.Context, filter Gate
 func (uc *GatewayUsecase) ListUsageSessionSummaries(ctx context.Context, filter GatewayUsageFilter, limit, offset int) ([]*GatewayUsageSessionSummary, int, error) {
 	filter = normalizeUsageFilter(filter)
 	return uc.repo.ListUsageSessionSummaries(ctx, filter, normalizeLimit(limit), normalizeOffset(offset))
+}
+
+func (uc *GatewayUsecase) GetContextSummary(ctx context.Context, sessionID string) (*GatewayContextSummary, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, nil
+	}
+	return uc.repo.GetContextSummary(ctx, sessionID)
+}
+
+func (uc *GatewayUsecase) UpsertContextSummary(ctx context.Context, item GatewayContextSummary) error {
+	item.SessionID = strings.TrimSpace(item.SessionID)
+	item.APIKeyPrefix = strings.TrimSpace(item.APIKeyPrefix)
+	item.Summary = strings.TrimSpace(item.Summary)
+	item.LastRequestID = strings.TrimSpace(item.LastRequestID)
+	item.LastReason = strings.TrimSpace(item.LastReason)
+	item.LastError = strings.TrimSpace(item.LastError)
+	if item.SessionID == "" || item.Summary == "" {
+		return nil
+	}
+	if item.SummaryTokens <= 0 {
+		item.SummaryTokens = int64(len([]rune(item.Summary))+3) / 4
+	}
+	return uc.repo.UpsertContextSummary(ctx, item)
 }
 
 func (uc *GatewayUsecase) GetCodexUpstreamMode(ctx context.Context) (string, error) {

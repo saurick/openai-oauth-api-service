@@ -68,6 +68,18 @@ func (f GatewayAuditLogFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.GatewayAuditLogMutation", m)
 }
 
+// The GatewayContextSummaryFunc type is an adapter to allow the use of ordinary
+// function as GatewayContextSummary mutator.
+type GatewayContextSummaryFunc func(context.Context, *ent.GatewayContextSummaryMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f GatewayContextSummaryFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.GatewayContextSummaryMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.GatewayContextSummaryMutation", m)
+}
+
 // The GatewayModelFunc type is an adapter to allow the use of ordinary
 // function as GatewayModel mutator.
 type GatewayModelFunc func(context.Context, *ent.GatewayModelMutation) (ent.Value, error)

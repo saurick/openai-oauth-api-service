@@ -12,6 +12,7 @@ import (
 	"server/internal/data/model/ent/gatewayalertrule"
 	"server/internal/data/model/ent/gatewayapikey"
 	"server/internal/data/model/ent/gatewayauditlog"
+	"server/internal/data/model/ent/gatewaycontextsummary"
 	"server/internal/data/model/ent/gatewaymodel"
 	"server/internal/data/model/ent/gatewaymodelprice"
 	"server/internal/data/model/ent/gatewaypolicy"
@@ -83,17 +84,18 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			adminuser.Table:         adminuser.ValidColumn,
-			gatewayapikey.Table:     gatewayapikey.ValidColumn,
-			gatewayalertevent.Table: gatewayalertevent.ValidColumn,
-			gatewayalertrule.Table:  gatewayalertrule.ValidColumn,
-			gatewayauditlog.Table:   gatewayauditlog.ValidColumn,
-			gatewaymodel.Table:      gatewaymodel.ValidColumn,
-			gatewaymodelprice.Table: gatewaymodelprice.ValidColumn,
-			gatewaypolicy.Table:     gatewaypolicy.ValidColumn,
-			gatewaysetting.Table:    gatewaysetting.ValidColumn,
-			gatewayusagelog.Table:   gatewayusagelog.ValidColumn,
-			user.Table:              user.ValidColumn,
+			adminuser.Table:             adminuser.ValidColumn,
+			gatewayapikey.Table:         gatewayapikey.ValidColumn,
+			gatewayalertevent.Table:     gatewayalertevent.ValidColumn,
+			gatewayalertrule.Table:      gatewayalertrule.ValidColumn,
+			gatewayauditlog.Table:       gatewayauditlog.ValidColumn,
+			gatewaycontextsummary.Table: gatewaycontextsummary.ValidColumn,
+			gatewaymodel.Table:          gatewaymodel.ValidColumn,
+			gatewaymodelprice.Table:     gatewaymodelprice.ValidColumn,
+			gatewaypolicy.Table:         gatewaypolicy.ValidColumn,
+			gatewaysetting.Table:        gatewaysetting.ValidColumn,
+			gatewayusagelog.Table:       gatewayusagelog.ValidColumn,
+			user.Table:                  user.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

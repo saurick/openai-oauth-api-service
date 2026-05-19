@@ -22,6 +22,8 @@ type Tx struct {
 	GatewayAlertRule *GatewayAlertRuleClient
 	// GatewayAuditLog is the client for interacting with the GatewayAuditLog builders.
 	GatewayAuditLog *GatewayAuditLogClient
+	// GatewayContextSummary is the client for interacting with the GatewayContextSummary builders.
+	GatewayContextSummary *GatewayContextSummaryClient
 	// GatewayModel is the client for interacting with the GatewayModel builders.
 	GatewayModel *GatewayModelClient
 	// GatewayModelPrice is the client for interacting with the GatewayModelPrice builders.
@@ -170,6 +172,7 @@ func (tx *Tx) init() {
 	tx.GatewayAlertEvent = NewGatewayAlertEventClient(tx.config)
 	tx.GatewayAlertRule = NewGatewayAlertRuleClient(tx.config)
 	tx.GatewayAuditLog = NewGatewayAuditLogClient(tx.config)
+	tx.GatewayContextSummary = NewGatewayContextSummaryClient(tx.config)
 	tx.GatewayModel = NewGatewayModelClient(tx.config)
 	tx.GatewayModelPrice = NewGatewayModelPriceClient(tx.config)
 	tx.GatewayPolicy = NewGatewayPolicyClient(tx.config)

@@ -143,12 +143,13 @@ const USAGE_TIME_RANGE_OPTIONS = [
   { label: '5 年', value: '5y', seconds: 5 * 365 * DAY_SECONDS },
 ]
 const USAGE_TAB_OPTIONS = [
-  { key: 'daily', label: '每日模型' },
-  { key: 'keys', label: '凭据统计' },
-  { key: 'sessions', label: '会话聚合' },
   { key: 'details', label: '调用明细' },
   { key: 'errors', label: '异常请求' },
+  { key: 'sessions', label: '会话聚合' },
+  { key: 'keys', label: '凭据统计' },
+  { key: 'daily', label: '每日模型' },
 ]
+const DEFAULT_USAGE_TAB = 'details'
 const TOKEN_LIMIT_UNIT = 1_000_000
 const KEY_REMARK_MAX_LENGTH = 80
 const KEY_REMARK_PATTERN = '[A-Za-z0-9]*'
@@ -253,7 +254,7 @@ const VIEW_CONFIG = {
     section: '用量统计',
     title: '用量日志',
     description:
-      '统一查看每日模型、凭据统计、调用明细和异常请求，排查 Token、费用、耗时与错误类型。',
+      '优先查看调用明细、异常请求、会话聚合、凭据统计和每日模型，排查 Token、费用、耗时与错误类型。',
   },
 }
 
@@ -1015,15 +1016,17 @@ function DiagnosticCell({ item }) {
   if (diagnostic.backend_only) chips.push('backend-only')
   if (diagnostic.fallback_blocked) chips.push('fallback blocked')
   else if (diagnostic.fallback_enabled) chips.push('fallback enabled')
+  if (diagnostic.context_compacted) chips.push('context compacted')
   if (diagnostic.upstream_http_status) {
     chips.push(`上游 HTTP ${diagnostic.upstream_http_status}`)
   }
   const body = String(diagnostic.upstream_body || '').trim()
+  const compactSummary = String(diagnostic.context_compaction_summary || '').trim()
 
-  if (!summary && chips.length === 0 && !body) return '-'
+  if (!summary && chips.length === 0 && !body && !compactSummary) return '-'
 
   return (
-    <div className="max-w-[280px] text-xs leading-5" title={summary || body}>
+    <div className="max-w-[280px] text-xs leading-5" title={summary || body || compactSummary}>
       {chips.length > 0 ? (
         <div className="flex flex-wrap gap-1">
           {chips.map((chip) => (
@@ -1041,9 +1044,25 @@ function DiagnosticCell({ item }) {
         <span className="mx-1 text-[#c0c9c4]">/</span>
         响应 {fmtNumber(diagnostic.response_bytes ?? item?.response_bytes)}B
       </div>
+      {diagnostic.context_compacted ? (
+        <div className="mt-1 text-[#7b8780]">
+          压缩 {fmtNumber(diagnostic.context_original_estimated_tokens)}
+          {' -> '}
+          {fmtNumber(diagnostic.context_compacted_estimated_tokens)} tokens
+          <span className="mx-1 text-[#c0c9c4]">/</span>
+          {fmtNumber(diagnostic.context_original_bytes)}
+          {' -> '}
+          {fmtNumber(diagnostic.context_compacted_bytes)}B
+        </div>
+      ) : null}
       {body ? (
         <div className="mt-1 line-clamp-2 break-all font-mono text-[#9aa39e]">
           {body}
+        </div>
+      ) : null}
+      {compactSummary ? (
+        <div className="mt-1 line-clamp-2 break-all text-[#7b8780]">
+          {compactSummary}
         </div>
       ) : null}
     </div>
@@ -1218,7 +1237,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const [gatewayUpstreamStrategy, setGatewayUpstreamStrategy] =
     useState('backend_only')
   const [gatewayUpstreamSaving, setGatewayUpstreamSaving] = useState(false)
-  const [usageTab, setUsageTab] = useState('daily')
+  const [usageTab, setUsageTab] = useState(DEFAULT_USAGE_TAB)
   const [selectedUsageBucket, setSelectedUsageBucket] = useState(null)
   const [selectedUsageBucketItems, setSelectedUsageBucketItems] = useState([])
   const [selectedUsageBucketTotal, setSelectedUsageBucketTotal] = useState(0)
@@ -3497,7 +3516,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       </div>
       <div className={tableWrapClass}>
         <div className="overflow-auto">
-          <table className={`${tableClass} min-w-[1480px]`}>
+          <table className={`${tableClass} min-w-[1620px]`}>
             <thead>
               <tr>
                 <th className={thClass}>最近调用</th>
@@ -3506,6 +3525,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 <th className={thClass}>请求</th>
                 <th className={thClass}>上游</th>
                 <th className={thClass}>Token</th>
+                <th className={thClass}>上下文压缩</th>
                 <th className={thClass}>费用估算</th>
                 <th className={thClass}>平均耗时</th>
                 <th className={thClass}>详情</th>
@@ -3549,6 +3569,32 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                         非缓存 {fmtNumber(billableInputTokens(item))}
                       </div>
                     </td>
+                    <td className={`${tdClass} max-w-[260px]`}>
+                      {asInt(item.context_compaction_count, 0) > 0 ? (
+                        <div className="text-xs leading-5 text-[#7b8780]">
+                          <div className="font-semibold text-[#1f2d25]">
+                            {fmtNumber(item.context_compaction_count)} 次压缩
+                          </div>
+                          <div>
+                            {fmtNumber(item.context_original_tokens)}
+                            {' -> '}
+                            {fmtNumber(item.context_compacted_tokens)} tokens
+                          </div>
+                          <div>
+                            {fmtNumber(item.context_original_bytes)}
+                            {' -> '}
+                            {fmtNumber(item.context_compacted_bytes)}B
+                          </div>
+                          {item.context_summary ? (
+                            <div className="mt-1 line-clamp-2 break-all">
+                              {item.context_summary}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
                     <td className={`${tdClass} whitespace-nowrap`}>
                       {fmtCost(item.estimated_cost_usd)}
                     </td>
@@ -3569,7 +3615,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               ) : (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                   >
                     {loading ? '加载中...' : '暂无带 session_id 的会话记录'}

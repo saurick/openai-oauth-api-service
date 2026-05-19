@@ -21,6 +21,11 @@ const GATEWAY_ERROR_TYPES = {
     label: 'Backend response failed',
     description: '上游 SSE 返回 response.failed，表示本次 response 执行失败。',
   },
+  context_length_exceeded: {
+    label: '上下文超限',
+    description:
+      '请求历史超过模型上下文窗口；网关会先尝试压缩可压缩历史，仍超限时直接拦截，避免客户端反复重试。',
+  },
   codex_backend_response_incomplete: {
     label: 'Backend response incomplete',
     description:

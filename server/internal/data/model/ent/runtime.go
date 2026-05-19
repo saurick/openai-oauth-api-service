@@ -8,6 +8,7 @@ import (
 	"server/internal/data/model/ent/gatewayalertrule"
 	"server/internal/data/model/ent/gatewayapikey"
 	"server/internal/data/model/ent/gatewayauditlog"
+	"server/internal/data/model/ent/gatewaycontextsummary"
 	"server/internal/data/model/ent/gatewaymodel"
 	"server/internal/data/model/ent/gatewaymodelprice"
 	"server/internal/data/model/ent/gatewaypolicy"
@@ -372,6 +373,88 @@ func init() {
 	gatewayauditlogDescCreatedAt := gatewayauditlogFields[7].Descriptor()
 	// gatewayauditlog.DefaultCreatedAt holds the default value on creation for the created_at field.
 	gatewayauditlog.DefaultCreatedAt = gatewayauditlogDescCreatedAt.Default.(func() time.Time)
+	gatewaycontextsummaryFields := schema.GatewayContextSummary{}.Fields()
+	_ = gatewaycontextsummaryFields
+	// gatewaycontextsummaryDescSessionID is the schema descriptor for session_id field.
+	gatewaycontextsummaryDescSessionID := gatewaycontextsummaryFields[0].Descriptor()
+	// gatewaycontextsummary.SessionIDValidator is a validator for the "session_id" field. It is called by the builders before save.
+	gatewaycontextsummary.SessionIDValidator = func() func(string) error {
+		validators := gatewaycontextsummaryDescSessionID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(session_id string) error {
+			for _, fn := range fns {
+				if err := fn(session_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// gatewaycontextsummaryDescAPIKeyPrefix is the schema descriptor for api_key_prefix field.
+	gatewaycontextsummaryDescAPIKeyPrefix := gatewaycontextsummaryFields[2].Descriptor()
+	// gatewaycontextsummary.DefaultAPIKeyPrefix holds the default value on creation for the api_key_prefix field.
+	gatewaycontextsummary.DefaultAPIKeyPrefix = gatewaycontextsummaryDescAPIKeyPrefix.Default.(string)
+	// gatewaycontextsummary.APIKeyPrefixValidator is a validator for the "api_key_prefix" field. It is called by the builders before save.
+	gatewaycontextsummary.APIKeyPrefixValidator = gatewaycontextsummaryDescAPIKeyPrefix.Validators[0].(func(string) error)
+	// gatewaycontextsummaryDescSummary is the schema descriptor for summary field.
+	gatewaycontextsummaryDescSummary := gatewaycontextsummaryFields[3].Descriptor()
+	// gatewaycontextsummary.DefaultSummary holds the default value on creation for the summary field.
+	gatewaycontextsummary.DefaultSummary = gatewaycontextsummaryDescSummary.Default.(string)
+	// gatewaycontextsummaryDescSummaryTokens is the schema descriptor for summary_tokens field.
+	gatewaycontextsummaryDescSummaryTokens := gatewaycontextsummaryFields[4].Descriptor()
+	// gatewaycontextsummary.DefaultSummaryTokens holds the default value on creation for the summary_tokens field.
+	gatewaycontextsummary.DefaultSummaryTokens = gatewaycontextsummaryDescSummaryTokens.Default.(int64)
+	// gatewaycontextsummaryDescCompactionCount is the schema descriptor for compaction_count field.
+	gatewaycontextsummaryDescCompactionCount := gatewaycontextsummaryFields[5].Descriptor()
+	// gatewaycontextsummary.DefaultCompactionCount holds the default value on creation for the compaction_count field.
+	gatewaycontextsummary.DefaultCompactionCount = gatewaycontextsummaryDescCompactionCount.Default.(int)
+	// gatewaycontextsummaryDescLastRequestID is the schema descriptor for last_request_id field.
+	gatewaycontextsummaryDescLastRequestID := gatewaycontextsummaryFields[6].Descriptor()
+	// gatewaycontextsummary.DefaultLastRequestID holds the default value on creation for the last_request_id field.
+	gatewaycontextsummary.DefaultLastRequestID = gatewaycontextsummaryDescLastRequestID.Default.(string)
+	// gatewaycontextsummary.LastRequestIDValidator is a validator for the "last_request_id" field. It is called by the builders before save.
+	gatewaycontextsummary.LastRequestIDValidator = gatewaycontextsummaryDescLastRequestID.Validators[0].(func(string) error)
+	// gatewaycontextsummaryDescLastReason is the schema descriptor for last_reason field.
+	gatewaycontextsummaryDescLastReason := gatewaycontextsummaryFields[7].Descriptor()
+	// gatewaycontextsummary.DefaultLastReason holds the default value on creation for the last_reason field.
+	gatewaycontextsummary.DefaultLastReason = gatewaycontextsummaryDescLastReason.Default.(string)
+	// gatewaycontextsummary.LastReasonValidator is a validator for the "last_reason" field. It is called by the builders before save.
+	gatewaycontextsummary.LastReasonValidator = gatewaycontextsummaryDescLastReason.Validators[0].(func(string) error)
+	// gatewaycontextsummaryDescLastOriginalBytes is the schema descriptor for last_original_bytes field.
+	gatewaycontextsummaryDescLastOriginalBytes := gatewaycontextsummaryFields[8].Descriptor()
+	// gatewaycontextsummary.DefaultLastOriginalBytes holds the default value on creation for the last_original_bytes field.
+	gatewaycontextsummary.DefaultLastOriginalBytes = gatewaycontextsummaryDescLastOriginalBytes.Default.(int64)
+	// gatewaycontextsummaryDescLastCompactedBytes is the schema descriptor for last_compacted_bytes field.
+	gatewaycontextsummaryDescLastCompactedBytes := gatewaycontextsummaryFields[9].Descriptor()
+	// gatewaycontextsummary.DefaultLastCompactedBytes holds the default value on creation for the last_compacted_bytes field.
+	gatewaycontextsummary.DefaultLastCompactedBytes = gatewaycontextsummaryDescLastCompactedBytes.Default.(int64)
+	// gatewaycontextsummaryDescLastOriginalTokens is the schema descriptor for last_original_tokens field.
+	gatewaycontextsummaryDescLastOriginalTokens := gatewaycontextsummaryFields[10].Descriptor()
+	// gatewaycontextsummary.DefaultLastOriginalTokens holds the default value on creation for the last_original_tokens field.
+	gatewaycontextsummary.DefaultLastOriginalTokens = gatewaycontextsummaryDescLastOriginalTokens.Default.(int64)
+	// gatewaycontextsummaryDescLastCompactedTokens is the schema descriptor for last_compacted_tokens field.
+	gatewaycontextsummaryDescLastCompactedTokens := gatewaycontextsummaryFields[11].Descriptor()
+	// gatewaycontextsummary.DefaultLastCompactedTokens holds the default value on creation for the last_compacted_tokens field.
+	gatewaycontextsummary.DefaultLastCompactedTokens = gatewaycontextsummaryDescLastCompactedTokens.Default.(int64)
+	// gatewaycontextsummaryDescLastError is the schema descriptor for last_error field.
+	gatewaycontextsummaryDescLastError := gatewaycontextsummaryFields[12].Descriptor()
+	// gatewaycontextsummary.DefaultLastError holds the default value on creation for the last_error field.
+	gatewaycontextsummary.DefaultLastError = gatewaycontextsummaryDescLastError.Default.(string)
+	// gatewaycontextsummary.LastErrorValidator is a validator for the "last_error" field. It is called by the builders before save.
+	gatewaycontextsummary.LastErrorValidator = gatewaycontextsummaryDescLastError.Validators[0].(func(string) error)
+	// gatewaycontextsummaryDescCreatedAt is the schema descriptor for created_at field.
+	gatewaycontextsummaryDescCreatedAt := gatewaycontextsummaryFields[13].Descriptor()
+	// gatewaycontextsummary.DefaultCreatedAt holds the default value on creation for the created_at field.
+	gatewaycontextsummary.DefaultCreatedAt = gatewaycontextsummaryDescCreatedAt.Default.(func() time.Time)
+	// gatewaycontextsummaryDescUpdatedAt is the schema descriptor for updated_at field.
+	gatewaycontextsummaryDescUpdatedAt := gatewaycontextsummaryFields[14].Descriptor()
+	// gatewaycontextsummary.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	gatewaycontextsummary.DefaultUpdatedAt = gatewaycontextsummaryDescUpdatedAt.Default.(func() time.Time)
+	// gatewaycontextsummary.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	gatewaycontextsummary.UpdateDefaultUpdatedAt = gatewaycontextsummaryDescUpdatedAt.UpdateDefault.(func() time.Time)
 	gatewaymodelFields := schema.GatewayModel{}.Fields()
 	_ = gatewaymodelFields
 	// gatewaymodelDescModelID is the schema descriptor for model_id field.

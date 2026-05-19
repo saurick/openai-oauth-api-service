@@ -387,7 +387,38 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		}
 	}
 
-	h.handleCodexCLIProxy(w, r, key, requestID, sessionID, endpoint, requestModel, reasoningEffort, stream, body, start)
+	prepared, prepareErr := h.prepareGatewayContext(r.Context(), key, requestID, sessionID, r.URL.Path, body, reasoningEffort)
+	if prepareErr != nil {
+		status := stdhttp.StatusRequestEntityTooLarge
+		errorType := gatewayContextErrorType
+		h.writeGatewayError(w, status, prepareErr, errorType)
+		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+			APIKeyID:               key.ID,
+			APIKeyPrefix:           key.KeyPrefix,
+			SessionID:              sessionID,
+			RequestID:              requestID,
+			Method:                 r.Method,
+			Path:                   r.URL.Path,
+			Endpoint:               endpoint,
+			Model:                  requestModel,
+			ReasoningEffort:        reasoningEffort,
+			StatusCode:             status,
+			Success:                false,
+			Stream:                 stream,
+			RequestBytes:           int64(len(body)),
+			DurationMS:             time.Since(start).Milliseconds(),
+			UpstreamConfiguredMode: h.configuredCodexUpstreamMode(r.Context()),
+			UpstreamMode:           h.configuredCodexUpstreamMode(r.Context()),
+			UpstreamErrorType:      errorType,
+			ErrorType:              errorType,
+			Diagnostic:             prepared.Diagnostic,
+			CreatedAt:              time.Now(),
+		})
+		return
+	}
+	body = prepared.Body
+
+	h.handleCodexCLIProxy(w, r, key, requestID, sessionID, endpoint, requestModel, reasoningEffort, stream, body, start, prepared.Diagnostic)
 }
 
 func (h *openAIGatewayHandler) gatewayRateLimitEnabled() bool {
@@ -409,6 +440,7 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 	stream bool,
 	body []byte,
 	start time.Time,
+	requestDiagnostic biz.GatewayUsageDiagnostic,
 ) {
 	upstreamMode := h.configuredCodexUpstreamMode(r.Context())
 	var streamWriter *gatewayStreamWriter
@@ -416,7 +448,6 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 		streamWriter = newGatewayStreamWriter(w, r.URL.Path, requestModel)
 	}
 
-	requestDiagnostic := gatewayUsageDiagnosticForRequest(r.URL.Path, body, reasoningEffort)
 	result, err := h.runCodexUpstreamWithStreamHeartbeat(r, streamWriter, upstreamMode, body, requestModel, reasoningEffort)
 	if err != nil {
 		status := stdhttp.StatusBadGateway
@@ -510,6 +541,7 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 			UpstreamMode:           result.ActualMode,
 			UpstreamFallback:       result.Fallback,
 			UpstreamErrorType:      result.UpstreamErrorType,
+			Diagnostic:             requestDiagnostic,
 			CreatedAt:              time.Now(),
 		})
 		return
@@ -555,6 +587,7 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 		UpstreamMode:           result.ActualMode,
 		UpstreamFallback:       result.Fallback,
 		UpstreamErrorType:      result.UpstreamErrorType,
+		Diagnostic:             requestDiagnostic,
 		CreatedAt:              time.Now(),
 	})
 }
@@ -721,6 +754,9 @@ func isGatewayClientCanceled(err error) bool {
 func codexBackendErrorType(err error) string {
 	if err == nil {
 		return ""
+	}
+	if isCodexBackendContextLengthError(err) {
+		return gatewayContextErrorType
 	}
 	var httpErr codexBackendHTTPError
 	if errors.As(err, &httpErr) {

@@ -1,0 +1,14 @@
+name: openai-oauth-api-service-prod
+
+services:
+  certbot:
+    image: "${CERTBOT_IMAGE:-certbot/certbot:latest}"
+    container_name: "${PROJECT_SLUG:-openai-oauth-api-service}-certbot"
+    profiles: ["certbot"]
+    entrypoint: ["certbot"]
+    volumes:
+      - "${CERTBOT_CONFIG_DIR:-/data/openai-oauth-api-service/letsencrypt}:/etc/letsencrypt"
+      - "${CERTBOT_WORK_DIR:-/data/openai-oauth-api-service/certbot/work}:/var/lib/letsencrypt"
+      - "${CERTBOT_LOG_DIR:-/data/openai-oauth-api-service/certbot/logs}:/var/log/letsencrypt"
+      - "${NGINX_ACME_DIR:-/data/openai-oauth-api-service/nginx/acme}:/var/www/acme"
+    networks: {}

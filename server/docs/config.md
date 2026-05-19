@@ -97,13 +97,20 @@
 - `CODEX_BACKEND_RETRY_ATTEMPTS`：direct backend 瞬时失败重试次数，默认 `2`；仅对 HTTP `429` / `5xx`、上游 `response.failed` / `response.incomplete` 和连接类错误生效。
 - `CODEX_BACKEND_USER_AGENT`：direct backend 请求 `User-Agent`，默认 `codex-cli`。
 - `GATEWAY_STREAM_HEARTBEAT_SECONDS`：`stream=true` 请求等待上游期间的 SSE keepalive 间隔，默认 `15` 秒；用于避免 OpenCode / Cloudflare / 代理在长请求无输出时断开连接。
+- `GATEWAY_CONTEXT_COMPACT_BYTES`：请求体达到该字节数时触发网关上下文压缩预检，默认 `850000`。
+- `GATEWAY_CONTEXT_HARD_BYTES`：压缩后请求体仍达到该字节数时直接返回 `context_length_exceeded`，默认 `1050000`。
+- `GATEWAY_CONTEXT_COMPACT_TOKENS`：按请求文本粗估 token 达到该值时触发上下文压缩预检，默认 `180000`。
+- `GATEWAY_CONTEXT_HARD_TOKENS`：压缩后粗估 token 仍达到该值时直接返回 `context_length_exceeded`，默认 `255000`。
+- `GATEWAY_CONTEXT_KEEP_ITEMS`：压缩时保留最近消息 / Responses input item 的数量，默认 `8`；工具输出和 function_call_output 会向前扩展边界，避免拆断最近工具闭环。
 - `CODEX_AUTH_FILE`：可选，显式指定 Codex `auth.json`；默认读取 `CODEX_HOME/auth.json`。
 - `CODEX_REFRESH_TOKEN_URL_OVERRIDE`：可选，覆盖 ChatGPT OAuth refresh token 端点，默认 `https://auth.openai.com/oauth/token`。
 - `HTTP_PROXY` / `HTTPS_PROXY` / `WS_PROXY` / `WSS_PROXY` / `ALL_PROXY` 及对应小写变量：可选 Codex CLI 出站代理。
 - `NO_PROXY` / `no_proxy`：可选代理排除列表，至少应包含 `localhost,127.0.0.1,::1,postgres,openai-oauth-api-service-postgres`。
 - `NODE_USE_ENV_PROXY`：Node.js 代理环境开关；Codex CLI 需要跟随上述代理变量时设置为 `1`。
 
-`codex_backend` 模式复用同一个 app-server 进程直接请求 `https://chatgpt.com/backend-api/codex/responses`，从 `auth.json` 读取 access token，并在 access token 过期或上游返回 401 时用 refresh token 刷新后写回 `auth.json`；该模式适合高频 OpenCode 调用。默认策略是 Backend 直连，backend 请求失败时直接返回上游错误，避免把客户端本机工具错误降级为服务端 `codex exec`。确需临时救急时可在后台选择 Backend + CLI 兜底，或设置 `CODEX_UPSTREAM_FALLBACK_ENABLED=true` 作为初始环境口径，仅允许 CLI 能忠实处理的纯文本 / 图片请求 fallback；带工具调用、工具历史或文件输入的请求始终只允许走 backend。`codex_cli` 模式会为每次 `/v1/chat/completions` 或 `/v1/responses` 启动一次 Codex CLI，并串行执行上游请求，稳定但首包和单次延迟较高。usage 记录会同时保存配置模式、实际执行模式和 fallback 状态，后台统计表可按上游模式筛选并展示两种模式的请求数。
+`codex_backend` 模式复用同一个 app-server 进程直接请求 `https://chatgpt.com/backend-api/codex/responses`，从 `auth.json` 读取 access token，并在 access token 过期或上游返回 401 时用 refresh token 刷新后写回 `auth.json`；该模式适合高频 OpenCode 调用。默认策略是 Backend 直连，backend 请求失败时直接返回上游错误，避免把客户端本机工具错误降级为服务端 `codex exec`。确需临时救急时可在后台选择 Backend + CLI 兜底，或设置 `CODEX_UPSTREAM_FALLBACK_ENABLED=true` 作为初始环境口径，仅允许 CLI 能忠实处理的纯文本 / 图片请求 fallback；带工具调用、工具历史或文件输入的请求始终只允许走 backend。`codex_cli` 模式会为每次 `/v1/chat/completions` 或 `/v1/responses` 启动一次 Codex CLI，并串行执行上游请求，稳定但首包和单次延迟较高。usage 记录会同时保存配置模式、实际执行模式、fallback 状态、上下文压缩前后体积和压缩摘要，后台统计表可按上游模式筛选并展示两种模式的请求数。
+
+网关上下文压缩只保存工程摘要，不保存完整 prompt 或模型输出正文。压缩会尽量保留系统 / developer 指令、最近若干轮未压缩消息和最近完整工具闭环；较早历史会收口为带文件路径、错误线索、命令 / 测试线索和片段摘要的工程摘要。若压缩后仍超过硬阈值，网关会在转发前返回 `context_length_exceeded`，避免 Codex CLI 对同一超长请求连续重试。
 
 两种模式下客户端都只保存 `ogw_...` 下游 key，服务端统一使用服务器 Codex 登录态，并继续记录 usage。direct backend 模式不会启动 `codex exec`，因此也不会注入 Codex CLI 自身的大量 agent 上下文；token usage 更接近客户端实际请求体。
 

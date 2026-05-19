@@ -16,6 +16,7 @@ import (
 	"server/internal/data/model/ent/gatewayalertrule"
 	"server/internal/data/model/ent/gatewayapikey"
 	"server/internal/data/model/ent/gatewayauditlog"
+	"server/internal/data/model/ent/gatewaycontextsummary"
 	"server/internal/data/model/ent/gatewaymodel"
 	"server/internal/data/model/ent/gatewaymodelprice"
 	"server/internal/data/model/ent/gatewaypolicy"
@@ -43,6 +44,8 @@ type Client struct {
 	GatewayAlertRule *GatewayAlertRuleClient
 	// GatewayAuditLog is the client for interacting with the GatewayAuditLog builders.
 	GatewayAuditLog *GatewayAuditLogClient
+	// GatewayContextSummary is the client for interacting with the GatewayContextSummary builders.
+	GatewayContextSummary *GatewayContextSummaryClient
 	// GatewayModel is the client for interacting with the GatewayModel builders.
 	GatewayModel *GatewayModelClient
 	// GatewayModelPrice is the client for interacting with the GatewayModelPrice builders.
@@ -71,6 +74,7 @@ func (c *Client) init() {
 	c.GatewayAlertEvent = NewGatewayAlertEventClient(c.config)
 	c.GatewayAlertRule = NewGatewayAlertRuleClient(c.config)
 	c.GatewayAuditLog = NewGatewayAuditLogClient(c.config)
+	c.GatewayContextSummary = NewGatewayContextSummaryClient(c.config)
 	c.GatewayModel = NewGatewayModelClient(c.config)
 	c.GatewayModelPrice = NewGatewayModelPriceClient(c.config)
 	c.GatewayPolicy = NewGatewayPolicyClient(c.config)
@@ -167,19 +171,20 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:               ctx,
-		config:            cfg,
-		AdminUser:         NewAdminUserClient(cfg),
-		GatewayAPIKey:     NewGatewayAPIKeyClient(cfg),
-		GatewayAlertEvent: NewGatewayAlertEventClient(cfg),
-		GatewayAlertRule:  NewGatewayAlertRuleClient(cfg),
-		GatewayAuditLog:   NewGatewayAuditLogClient(cfg),
-		GatewayModel:      NewGatewayModelClient(cfg),
-		GatewayModelPrice: NewGatewayModelPriceClient(cfg),
-		GatewayPolicy:     NewGatewayPolicyClient(cfg),
-		GatewaySetting:    NewGatewaySettingClient(cfg),
-		GatewayUsageLog:   NewGatewayUsageLogClient(cfg),
-		User:              NewUserClient(cfg),
+		ctx:                   ctx,
+		config:                cfg,
+		AdminUser:             NewAdminUserClient(cfg),
+		GatewayAPIKey:         NewGatewayAPIKeyClient(cfg),
+		GatewayAlertEvent:     NewGatewayAlertEventClient(cfg),
+		GatewayAlertRule:      NewGatewayAlertRuleClient(cfg),
+		GatewayAuditLog:       NewGatewayAuditLogClient(cfg),
+		GatewayContextSummary: NewGatewayContextSummaryClient(cfg),
+		GatewayModel:          NewGatewayModelClient(cfg),
+		GatewayModelPrice:     NewGatewayModelPriceClient(cfg),
+		GatewayPolicy:         NewGatewayPolicyClient(cfg),
+		GatewaySetting:        NewGatewaySettingClient(cfg),
+		GatewayUsageLog:       NewGatewayUsageLogClient(cfg),
+		User:                  NewUserClient(cfg),
 	}, nil
 }
 
@@ -197,19 +202,20 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:               ctx,
-		config:            cfg,
-		AdminUser:         NewAdminUserClient(cfg),
-		GatewayAPIKey:     NewGatewayAPIKeyClient(cfg),
-		GatewayAlertEvent: NewGatewayAlertEventClient(cfg),
-		GatewayAlertRule:  NewGatewayAlertRuleClient(cfg),
-		GatewayAuditLog:   NewGatewayAuditLogClient(cfg),
-		GatewayModel:      NewGatewayModelClient(cfg),
-		GatewayModelPrice: NewGatewayModelPriceClient(cfg),
-		GatewayPolicy:     NewGatewayPolicyClient(cfg),
-		GatewaySetting:    NewGatewaySettingClient(cfg),
-		GatewayUsageLog:   NewGatewayUsageLogClient(cfg),
-		User:              NewUserClient(cfg),
+		ctx:                   ctx,
+		config:                cfg,
+		AdminUser:             NewAdminUserClient(cfg),
+		GatewayAPIKey:         NewGatewayAPIKeyClient(cfg),
+		GatewayAlertEvent:     NewGatewayAlertEventClient(cfg),
+		GatewayAlertRule:      NewGatewayAlertRuleClient(cfg),
+		GatewayAuditLog:       NewGatewayAuditLogClient(cfg),
+		GatewayContextSummary: NewGatewayContextSummaryClient(cfg),
+		GatewayModel:          NewGatewayModelClient(cfg),
+		GatewayModelPrice:     NewGatewayModelPriceClient(cfg),
+		GatewayPolicy:         NewGatewayPolicyClient(cfg),
+		GatewaySetting:        NewGatewaySettingClient(cfg),
+		GatewayUsageLog:       NewGatewayUsageLogClient(cfg),
+		User:                  NewUserClient(cfg),
 	}, nil
 }
 
@@ -240,8 +246,9 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AdminUser, c.GatewayAPIKey, c.GatewayAlertEvent, c.GatewayAlertRule,
-		c.GatewayAuditLog, c.GatewayModel, c.GatewayModelPrice, c.GatewayPolicy,
-		c.GatewaySetting, c.GatewayUsageLog, c.User,
+		c.GatewayAuditLog, c.GatewayContextSummary, c.GatewayModel,
+		c.GatewayModelPrice, c.GatewayPolicy, c.GatewaySetting, c.GatewayUsageLog,
+		c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -252,8 +259,9 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AdminUser, c.GatewayAPIKey, c.GatewayAlertEvent, c.GatewayAlertRule,
-		c.GatewayAuditLog, c.GatewayModel, c.GatewayModelPrice, c.GatewayPolicy,
-		c.GatewaySetting, c.GatewayUsageLog, c.User,
+		c.GatewayAuditLog, c.GatewayContextSummary, c.GatewayModel,
+		c.GatewayModelPrice, c.GatewayPolicy, c.GatewaySetting, c.GatewayUsageLog,
+		c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -272,6 +280,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.GatewayAlertRule.mutate(ctx, m)
 	case *GatewayAuditLogMutation:
 		return c.GatewayAuditLog.mutate(ctx, m)
+	case *GatewayContextSummaryMutation:
+		return c.GatewayContextSummary.mutate(ctx, m)
 	case *GatewayModelMutation:
 		return c.GatewayModel.mutate(ctx, m)
 	case *GatewayModelPriceMutation:
@@ -951,6 +961,139 @@ func (c *GatewayAuditLogClient) mutate(ctx context.Context, m *GatewayAuditLogMu
 		return (&GatewayAuditLogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown GatewayAuditLog mutation op: %q", m.Op())
+	}
+}
+
+// GatewayContextSummaryClient is a client for the GatewayContextSummary schema.
+type GatewayContextSummaryClient struct {
+	config
+}
+
+// NewGatewayContextSummaryClient returns a client for the GatewayContextSummary from the given config.
+func NewGatewayContextSummaryClient(c config) *GatewayContextSummaryClient {
+	return &GatewayContextSummaryClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `gatewaycontextsummary.Hooks(f(g(h())))`.
+func (c *GatewayContextSummaryClient) Use(hooks ...Hook) {
+	c.hooks.GatewayContextSummary = append(c.hooks.GatewayContextSummary, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `gatewaycontextsummary.Intercept(f(g(h())))`.
+func (c *GatewayContextSummaryClient) Intercept(interceptors ...Interceptor) {
+	c.inters.GatewayContextSummary = append(c.inters.GatewayContextSummary, interceptors...)
+}
+
+// Create returns a builder for creating a GatewayContextSummary entity.
+func (c *GatewayContextSummaryClient) Create() *GatewayContextSummaryCreate {
+	mutation := newGatewayContextSummaryMutation(c.config, OpCreate)
+	return &GatewayContextSummaryCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of GatewayContextSummary entities.
+func (c *GatewayContextSummaryClient) CreateBulk(builders ...*GatewayContextSummaryCreate) *GatewayContextSummaryCreateBulk {
+	return &GatewayContextSummaryCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *GatewayContextSummaryClient) MapCreateBulk(slice any, setFunc func(*GatewayContextSummaryCreate, int)) *GatewayContextSummaryCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &GatewayContextSummaryCreateBulk{err: fmt.Errorf("calling to GatewayContextSummaryClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*GatewayContextSummaryCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &GatewayContextSummaryCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for GatewayContextSummary.
+func (c *GatewayContextSummaryClient) Update() *GatewayContextSummaryUpdate {
+	mutation := newGatewayContextSummaryMutation(c.config, OpUpdate)
+	return &GatewayContextSummaryUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *GatewayContextSummaryClient) UpdateOne(_m *GatewayContextSummary) *GatewayContextSummaryUpdateOne {
+	mutation := newGatewayContextSummaryMutation(c.config, OpUpdateOne, withGatewayContextSummary(_m))
+	return &GatewayContextSummaryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *GatewayContextSummaryClient) UpdateOneID(id int) *GatewayContextSummaryUpdateOne {
+	mutation := newGatewayContextSummaryMutation(c.config, OpUpdateOne, withGatewayContextSummaryID(id))
+	return &GatewayContextSummaryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for GatewayContextSummary.
+func (c *GatewayContextSummaryClient) Delete() *GatewayContextSummaryDelete {
+	mutation := newGatewayContextSummaryMutation(c.config, OpDelete)
+	return &GatewayContextSummaryDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *GatewayContextSummaryClient) DeleteOne(_m *GatewayContextSummary) *GatewayContextSummaryDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *GatewayContextSummaryClient) DeleteOneID(id int) *GatewayContextSummaryDeleteOne {
+	builder := c.Delete().Where(gatewaycontextsummary.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &GatewayContextSummaryDeleteOne{builder}
+}
+
+// Query returns a query builder for GatewayContextSummary.
+func (c *GatewayContextSummaryClient) Query() *GatewayContextSummaryQuery {
+	return &GatewayContextSummaryQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeGatewayContextSummary},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a GatewayContextSummary entity by its id.
+func (c *GatewayContextSummaryClient) Get(ctx context.Context, id int) (*GatewayContextSummary, error) {
+	return c.Query().Where(gatewaycontextsummary.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *GatewayContextSummaryClient) GetX(ctx context.Context, id int) *GatewayContextSummary {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *GatewayContextSummaryClient) Hooks() []Hook {
+	return c.hooks.GatewayContextSummary
+}
+
+// Interceptors returns the client interceptors.
+func (c *GatewayContextSummaryClient) Interceptors() []Interceptor {
+	return c.inters.GatewayContextSummary
+}
+
+func (c *GatewayContextSummaryClient) mutate(ctx context.Context, m *GatewayContextSummaryMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&GatewayContextSummaryCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&GatewayContextSummaryUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&GatewayContextSummaryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&GatewayContextSummaryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown GatewayContextSummary mutation op: %q", m.Op())
 	}
 }
 
@@ -1756,12 +1899,12 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 type (
 	hooks struct {
 		AdminUser, GatewayAPIKey, GatewayAlertEvent, GatewayAlertRule, GatewayAuditLog,
-		GatewayModel, GatewayModelPrice, GatewayPolicy, GatewaySetting,
-		GatewayUsageLog, User []ent.Hook
+		GatewayContextSummary, GatewayModel, GatewayModelPrice, GatewayPolicy,
+		GatewaySetting, GatewayUsageLog, User []ent.Hook
 	}
 	inters struct {
 		AdminUser, GatewayAPIKey, GatewayAlertEvent, GatewayAlertRule, GatewayAuditLog,
-		GatewayModel, GatewayModelPrice, GatewayPolicy, GatewaySetting,
-		GatewayUsageLog, User []ent.Interceptor
+		GatewayContextSummary, GatewayModel, GatewayModelPrice, GatewayPolicy,
+		GatewaySetting, GatewayUsageLog, User []ent.Interceptor
 	}
 )

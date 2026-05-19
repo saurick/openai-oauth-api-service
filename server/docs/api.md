@@ -114,6 +114,8 @@ usage 记录：
 - direct backend 模式会把 `system` / `developer` 消息合并为 `instructions`；若请求没有这类消息，会补一个最小默认 instructions，因为 Codex backend 要求该字段非空
 - direct backend 模式会透传 OpenAI-compatible `tools` / `tool_choice`，并在 chat messages 与 Responses input 之间转换 assistant `tool_calls`、`function_call` 和 `function_call_output`，上游返回 function call 时再映射回 Chat Completions `tool_calls` 或 Responses `function_call`；Codex CLI fallback 默认关闭，打开后也只支持纯文本响应，不支持工具调用回传，因此这类请求在 backend 失败时会直接返回上游错误，避免错误转为服务端 `codex exec`
 - direct backend 会在转发 Responses `function_call` 历史前规范化 item `id`，避免客户端回传空字符串或非法字符时触发上游 `input[n].id` 校验错误
+- `/v1/chat/completions` 和 `/v1/responses` 在请求体接近上下文窗口时会先做网关侧压缩预检：保留系统 / developer 指令、最近消息和最近完整工具闭环，较早历史压缩为工程摘要；如果客户端传入 `session_id`，摘要会按 session 保存并在后台会话聚合展示压缩次数、摘要、压缩前后体积和粗估 token。
+- 上下文压缩后仍超过硬阈值，或 Codex backend 明确返回 `context_length_exceeded` 时，usage 会记录 `upstream_error_type=context_length_exceeded`，避免继续显示成普通 `codex_backend_response_failed` / 502；非流式预检拦截返回 HTTP `413`，流式已开始后会在 SSE 内返回 `response.failed`。
 - `/v1/chat/completions` 和 `/v1/responses` 的 `stream=true` 会先返回并 flush 首包，等待 Codex backend/CLI 结果期间按 `GATEWAY_STREAM_HEARTBEAT_SECONDS` 输出保活事件，避免 Codex / OpenCode / Cloudflare / 代理在长请求无输出时断开连接。`/v1/responses` 首包为 `response.created`，等待期间继续输出标准 `response.in_progress`，随后输出 `response.output_item.added`、`response.content_part.added`、`response.output_text.delta` 和 `response.completed`，用于兼容 Codex CLI 自定义 `wire_api="responses"` provider；如果上游在首字节后失败，会在 SSE 内返回 `response.failed` 与 `[DONE]`，不再尝试把已开始的流改写成 HTTP 502。下游客户端主动断开会按 `client_canceled` 记录，不再归类为 Backend 上游 502。
 - `/v1/models` 除 OpenAI 标准 `data` 外还返回 Codex CLI 读取的 `models` 元数据，包括 reasoning levels、shell type、context window 和输入模态等字段，用于兼容自定义 provider 的模型刷新；当前网关不透传 Codex reasoning summary 过程事件，因此模型元数据声明 `supports_reasoning_summaries=false`
 - OpenAI-compatible 图片输入支持 data URL 形式的 `image_url` / `input_image`；CLI 模式会临时落盘并通过 Codex CLI `--image` 附加到本次请求，direct backend 模式会直接传入 `/responses` 内容；单次最多 4 张、单张最大 16 MiB
@@ -223,6 +225,7 @@ usage 记录：
 | `codex_backend_http_5xx` | Backend 5xx | Codex backend 或其上游服务返回 5xx。 |
 | `codex_backend_timeout` | Backend 超时 | Codex backend 调用超过超时时间；常见于上游慢、网络慢或 `CODEX_BACKEND_TIMEOUT_SECONDS` 到期。 |
 | `codex_backend_response_failed` | Backend response failed | 上游 SSE 返回 `response.failed`，表示本次 response 执行失败。 |
+| `context_length_exceeded` | 上下文超限 | 请求历史超过模型上下文窗口；网关会先尝试压缩可压缩历史，仍超限时直接拦截，避免客户端反复重试。 |
 | `codex_backend_response_incomplete` | Backend response incomplete | 上游 SSE 返回 `response.incomplete`，可能因长度、上下文、策略、工具或内部中断。 |
 | `codex_backend_stream_error` | Backend 流中断 | SSE 流连接 reset、unexpected EOF、代理或网络断流。 |
 | `codex_backend_http_error` | Backend HTTP 错误 | backend 返回其他非 2xx HTTP 状态，且不属于鉴权、限流或 5xx。 |
@@ -347,6 +350,13 @@ usage 记录：
 - `items[].first_seen_at`
 - `items[].last_seen_at`
 - `items[].estimated_cost_usd`
+- `items[].context_compaction_count`
+- `items[].context_summary`
+- `items[].context_original_bytes`
+- `items[].context_compacted_bytes`
+- `items[].context_original_tokens`
+- `items[].context_compacted_tokens`
+- `items[].context_compacted_at`
 
 筛选条件与 `api.usage_list` 保持一致，包括 `key_ids` 多凭据过滤，并支持用 `session_id` 继续下钻请求级明细。`session_id` 来自客户端请求头 `X-Session-ID` / `X-Conversation-ID` / `X-Thread-ID`，或请求 JSON 顶层及 `metadata` 里的 `session_id` / `conversation_id` / `thread_id`。没有会话标识的历史记录不会伪造成会话聚合行。
 

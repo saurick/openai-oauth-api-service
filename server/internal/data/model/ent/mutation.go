@@ -11,6 +11,7 @@ import (
 	"server/internal/data/model/ent/gatewayalertrule"
 	"server/internal/data/model/ent/gatewayapikey"
 	"server/internal/data/model/ent/gatewayauditlog"
+	"server/internal/data/model/ent/gatewaycontextsummary"
 	"server/internal/data/model/ent/gatewaymodel"
 	"server/internal/data/model/ent/gatewaymodelprice"
 	"server/internal/data/model/ent/gatewaypolicy"
@@ -34,17 +35,18 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeAdminUser         = "AdminUser"
-	TypeGatewayAPIKey     = "GatewayAPIKey"
-	TypeGatewayAlertEvent = "GatewayAlertEvent"
-	TypeGatewayAlertRule  = "GatewayAlertRule"
-	TypeGatewayAuditLog   = "GatewayAuditLog"
-	TypeGatewayModel      = "GatewayModel"
-	TypeGatewayModelPrice = "GatewayModelPrice"
-	TypeGatewayPolicy     = "GatewayPolicy"
-	TypeGatewaySetting    = "GatewaySetting"
-	TypeGatewayUsageLog   = "GatewayUsageLog"
-	TypeUser              = "User"
+	TypeAdminUser             = "AdminUser"
+	TypeGatewayAPIKey         = "GatewayAPIKey"
+	TypeGatewayAlertEvent     = "GatewayAlertEvent"
+	TypeGatewayAlertRule      = "GatewayAlertRule"
+	TypeGatewayAuditLog       = "GatewayAuditLog"
+	TypeGatewayContextSummary = "GatewayContextSummary"
+	TypeGatewayModel          = "GatewayModel"
+	TypeGatewayModelPrice     = "GatewayModelPrice"
+	TypeGatewayPolicy         = "GatewayPolicy"
+	TypeGatewaySetting        = "GatewaySetting"
+	TypeGatewayUsageLog       = "GatewayUsageLog"
+	TypeUser                  = "User"
 )
 
 // AdminUserMutation represents an operation that mutates the AdminUser nodes in the graph.
@@ -5295,6 +5297,1345 @@ func (m *GatewayAuditLogMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *GatewayAuditLogMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown GatewayAuditLog edge %s", name)
+}
+
+// GatewayContextSummaryMutation represents an operation that mutates the GatewayContextSummary nodes in the graph.
+type GatewayContextSummaryMutation struct {
+	config
+	op                       Op
+	typ                      string
+	id                       *int
+	session_id               *string
+	api_key_id               *int
+	addapi_key_id            *int
+	api_key_prefix           *string
+	summary                  *string
+	summary_tokens           *int64
+	addsummary_tokens        *int64
+	compaction_count         *int
+	addcompaction_count      *int
+	last_request_id          *string
+	last_reason              *string
+	last_original_bytes      *int64
+	addlast_original_bytes   *int64
+	last_compacted_bytes     *int64
+	addlast_compacted_bytes  *int64
+	last_original_tokens     *int64
+	addlast_original_tokens  *int64
+	last_compacted_tokens    *int64
+	addlast_compacted_tokens *int64
+	last_error               *string
+	created_at               *time.Time
+	updated_at               *time.Time
+	clearedFields            map[string]struct{}
+	done                     bool
+	oldValue                 func(context.Context) (*GatewayContextSummary, error)
+	predicates               []predicate.GatewayContextSummary
+}
+
+var _ ent.Mutation = (*GatewayContextSummaryMutation)(nil)
+
+// gatewaycontextsummaryOption allows management of the mutation configuration using functional options.
+type gatewaycontextsummaryOption func(*GatewayContextSummaryMutation)
+
+// newGatewayContextSummaryMutation creates new mutation for the GatewayContextSummary entity.
+func newGatewayContextSummaryMutation(c config, op Op, opts ...gatewaycontextsummaryOption) *GatewayContextSummaryMutation {
+	m := &GatewayContextSummaryMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeGatewayContextSummary,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withGatewayContextSummaryID sets the ID field of the mutation.
+func withGatewayContextSummaryID(id int) gatewaycontextsummaryOption {
+	return func(m *GatewayContextSummaryMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *GatewayContextSummary
+		)
+		m.oldValue = func(ctx context.Context) (*GatewayContextSummary, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().GatewayContextSummary.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withGatewayContextSummary sets the old GatewayContextSummary of the mutation.
+func withGatewayContextSummary(node *GatewayContextSummary) gatewaycontextsummaryOption {
+	return func(m *GatewayContextSummaryMutation) {
+		m.oldValue = func(context.Context) (*GatewayContextSummary, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m GatewayContextSummaryMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m GatewayContextSummaryMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *GatewayContextSummaryMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *GatewayContextSummaryMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().GatewayContextSummary.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetSessionID sets the "session_id" field.
+func (m *GatewayContextSummaryMutation) SetSessionID(s string) {
+	m.session_id = &s
+}
+
+// SessionID returns the value of the "session_id" field in the mutation.
+func (m *GatewayContextSummaryMutation) SessionID() (r string, exists bool) {
+	v := m.session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionID returns the old "session_id" field's value of the GatewayContextSummary entity.
+// If the GatewayContextSummary object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayContextSummaryMutation) OldSessionID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionID: %w", err)
+	}
+	return oldValue.SessionID, nil
+}
+
+// ResetSessionID resets all changes to the "session_id" field.
+func (m *GatewayContextSummaryMutation) ResetSessionID() {
+	m.session_id = nil
+}
+
+// SetAPIKeyID sets the "api_key_id" field.
+func (m *GatewayContextSummaryMutation) SetAPIKeyID(i int) {
+	m.api_key_id = &i
+	m.addapi_key_id = nil
+}
+
+// APIKeyID returns the value of the "api_key_id" field in the mutation.
+func (m *GatewayContextSummaryMutation) APIKeyID() (r int, exists bool) {
+	v := m.api_key_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAPIKeyID returns the old "api_key_id" field's value of the GatewayContextSummary entity.
+// If the GatewayContextSummary object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayContextSummaryMutation) OldAPIKeyID(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAPIKeyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAPIKeyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAPIKeyID: %w", err)
+	}
+	return oldValue.APIKeyID, nil
+}
+
+// AddAPIKeyID adds i to the "api_key_id" field.
+func (m *GatewayContextSummaryMutation) AddAPIKeyID(i int) {
+	if m.addapi_key_id != nil {
+		*m.addapi_key_id += i
+	} else {
+		m.addapi_key_id = &i
+	}
+}
+
+// AddedAPIKeyID returns the value that was added to the "api_key_id" field in this mutation.
+func (m *GatewayContextSummaryMutation) AddedAPIKeyID() (r int, exists bool) {
+	v := m.addapi_key_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearAPIKeyID clears the value of the "api_key_id" field.
+func (m *GatewayContextSummaryMutation) ClearAPIKeyID() {
+	m.api_key_id = nil
+	m.addapi_key_id = nil
+	m.clearedFields[gatewaycontextsummary.FieldAPIKeyID] = struct{}{}
+}
+
+// APIKeyIDCleared returns if the "api_key_id" field was cleared in this mutation.
+func (m *GatewayContextSummaryMutation) APIKeyIDCleared() bool {
+	_, ok := m.clearedFields[gatewaycontextsummary.FieldAPIKeyID]
+	return ok
+}
+
+// ResetAPIKeyID resets all changes to the "api_key_id" field.
+func (m *GatewayContextSummaryMutation) ResetAPIKeyID() {
+	m.api_key_id = nil
+	m.addapi_key_id = nil
+	delete(m.clearedFields, gatewaycontextsummary.FieldAPIKeyID)
+}
+
+// SetAPIKeyPrefix sets the "api_key_prefix" field.
+func (m *GatewayContextSummaryMutation) SetAPIKeyPrefix(s string) {
+	m.api_key_prefix = &s
+}
+
+// APIKeyPrefix returns the value of the "api_key_prefix" field in the mutation.
+func (m *GatewayContextSummaryMutation) APIKeyPrefix() (r string, exists bool) {
+	v := m.api_key_prefix
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAPIKeyPrefix returns the old "api_key_prefix" field's value of the GatewayContextSummary entity.
+// If the GatewayContextSummary object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayContextSummaryMutation) OldAPIKeyPrefix(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAPIKeyPrefix is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAPIKeyPrefix requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAPIKeyPrefix: %w", err)
+	}
+	return oldValue.APIKeyPrefix, nil
+}
+
+// ResetAPIKeyPrefix resets all changes to the "api_key_prefix" field.
+func (m *GatewayContextSummaryMutation) ResetAPIKeyPrefix() {
+	m.api_key_prefix = nil
+}
+
+// SetSummary sets the "summary" field.
+func (m *GatewayContextSummaryMutation) SetSummary(s string) {
+	m.summary = &s
+}
+
+// Summary returns the value of the "summary" field in the mutation.
+func (m *GatewayContextSummaryMutation) Summary() (r string, exists bool) {
+	v := m.summary
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSummary returns the old "summary" field's value of the GatewayContextSummary entity.
+// If the GatewayContextSummary object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayContextSummaryMutation) OldSummary(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSummary is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSummary requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSummary: %w", err)
+	}
+	return oldValue.Summary, nil
+}
+
+// ResetSummary resets all changes to the "summary" field.
+func (m *GatewayContextSummaryMutation) ResetSummary() {
+	m.summary = nil
+}
+
+// SetSummaryTokens sets the "summary_tokens" field.
+func (m *GatewayContextSummaryMutation) SetSummaryTokens(i int64) {
+	m.summary_tokens = &i
+	m.addsummary_tokens = nil
+}
+
+// SummaryTokens returns the value of the "summary_tokens" field in the mutation.
+func (m *GatewayContextSummaryMutation) SummaryTokens() (r int64, exists bool) {
+	v := m.summary_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSummaryTokens returns the old "summary_tokens" field's value of the GatewayContextSummary entity.
+// If the GatewayContextSummary object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayContextSummaryMutation) OldSummaryTokens(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSummaryTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSummaryTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSummaryTokens: %w", err)
+	}
+	return oldValue.SummaryTokens, nil
+}
+
+// AddSummaryTokens adds i to the "summary_tokens" field.
+func (m *GatewayContextSummaryMutation) AddSummaryTokens(i int64) {
+	if m.addsummary_tokens != nil {
+		*m.addsummary_tokens += i
+	} else {
+		m.addsummary_tokens = &i
+	}
+}
+
+// AddedSummaryTokens returns the value that was added to the "summary_tokens" field in this mutation.
+func (m *GatewayContextSummaryMutation) AddedSummaryTokens() (r int64, exists bool) {
+	v := m.addsummary_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSummaryTokens resets all changes to the "summary_tokens" field.
+func (m *GatewayContextSummaryMutation) ResetSummaryTokens() {
+	m.summary_tokens = nil
+	m.addsummary_tokens = nil
+}
+
+// SetCompactionCount sets the "compaction_count" field.
+func (m *GatewayContextSummaryMutation) SetCompactionCount(i int) {
+	m.compaction_count = &i
+	m.addcompaction_count = nil
+}
+
+// CompactionCount returns the value of the "compaction_count" field in the mutation.
+func (m *GatewayContextSummaryMutation) CompactionCount() (r int, exists bool) {
+	v := m.compaction_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompactionCount returns the old "compaction_count" field's value of the GatewayContextSummary entity.
+// If the GatewayContextSummary object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayContextSummaryMutation) OldCompactionCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompactionCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompactionCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompactionCount: %w", err)
+	}
+	return oldValue.CompactionCount, nil
+}
+
+// AddCompactionCount adds i to the "compaction_count" field.
+func (m *GatewayContextSummaryMutation) AddCompactionCount(i int) {
+	if m.addcompaction_count != nil {
+		*m.addcompaction_count += i
+	} else {
+		m.addcompaction_count = &i
+	}
+}
+
+// AddedCompactionCount returns the value that was added to the "compaction_count" field in this mutation.
+func (m *GatewayContextSummaryMutation) AddedCompactionCount() (r int, exists bool) {
+	v := m.addcompaction_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCompactionCount resets all changes to the "compaction_count" field.
+func (m *GatewayContextSummaryMutation) ResetCompactionCount() {
+	m.compaction_count = nil
+	m.addcompaction_count = nil
+}
+
+// SetLastRequestID sets the "last_request_id" field.
+func (m *GatewayContextSummaryMutation) SetLastRequestID(s string) {
+	m.last_request_id = &s
+}
+
+// LastRequestID returns the value of the "last_request_id" field in the mutation.
+func (m *GatewayContextSummaryMutation) LastRequestID() (r string, exists bool) {
+	v := m.last_request_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastRequestID returns the old "last_request_id" field's value of the GatewayContextSummary entity.
+// If the GatewayContextSummary object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayContextSummaryMutation) OldLastRequestID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastRequestID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastRequestID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastRequestID: %w", err)
+	}
+	return oldValue.LastRequestID, nil
+}
+
+// ResetLastRequestID resets all changes to the "last_request_id" field.
+func (m *GatewayContextSummaryMutation) ResetLastRequestID() {
+	m.last_request_id = nil
+}
+
+// SetLastReason sets the "last_reason" field.
+func (m *GatewayContextSummaryMutation) SetLastReason(s string) {
+	m.last_reason = &s
+}
+
+// LastReason returns the value of the "last_reason" field in the mutation.
+func (m *GatewayContextSummaryMutation) LastReason() (r string, exists bool) {
+	v := m.last_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastReason returns the old "last_reason" field's value of the GatewayContextSummary entity.
+// If the GatewayContextSummary object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayContextSummaryMutation) OldLastReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastReason: %w", err)
+	}
+	return oldValue.LastReason, nil
+}
+
+// ResetLastReason resets all changes to the "last_reason" field.
+func (m *GatewayContextSummaryMutation) ResetLastReason() {
+	m.last_reason = nil
+}
+
+// SetLastOriginalBytes sets the "last_original_bytes" field.
+func (m *GatewayContextSummaryMutation) SetLastOriginalBytes(i int64) {
+	m.last_original_bytes = &i
+	m.addlast_original_bytes = nil
+}
+
+// LastOriginalBytes returns the value of the "last_original_bytes" field in the mutation.
+func (m *GatewayContextSummaryMutation) LastOriginalBytes() (r int64, exists bool) {
+	v := m.last_original_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastOriginalBytes returns the old "last_original_bytes" field's value of the GatewayContextSummary entity.
+// If the GatewayContextSummary object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayContextSummaryMutation) OldLastOriginalBytes(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastOriginalBytes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastOriginalBytes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastOriginalBytes: %w", err)
+	}
+	return oldValue.LastOriginalBytes, nil
+}
+
+// AddLastOriginalBytes adds i to the "last_original_bytes" field.
+func (m *GatewayContextSummaryMutation) AddLastOriginalBytes(i int64) {
+	if m.addlast_original_bytes != nil {
+		*m.addlast_original_bytes += i
+	} else {
+		m.addlast_original_bytes = &i
+	}
+}
+
+// AddedLastOriginalBytes returns the value that was added to the "last_original_bytes" field in this mutation.
+func (m *GatewayContextSummaryMutation) AddedLastOriginalBytes() (r int64, exists bool) {
+	v := m.addlast_original_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetLastOriginalBytes resets all changes to the "last_original_bytes" field.
+func (m *GatewayContextSummaryMutation) ResetLastOriginalBytes() {
+	m.last_original_bytes = nil
+	m.addlast_original_bytes = nil
+}
+
+// SetLastCompactedBytes sets the "last_compacted_bytes" field.
+func (m *GatewayContextSummaryMutation) SetLastCompactedBytes(i int64) {
+	m.last_compacted_bytes = &i
+	m.addlast_compacted_bytes = nil
+}
+
+// LastCompactedBytes returns the value of the "last_compacted_bytes" field in the mutation.
+func (m *GatewayContextSummaryMutation) LastCompactedBytes() (r int64, exists bool) {
+	v := m.last_compacted_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastCompactedBytes returns the old "last_compacted_bytes" field's value of the GatewayContextSummary entity.
+// If the GatewayContextSummary object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayContextSummaryMutation) OldLastCompactedBytes(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastCompactedBytes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastCompactedBytes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastCompactedBytes: %w", err)
+	}
+	return oldValue.LastCompactedBytes, nil
+}
+
+// AddLastCompactedBytes adds i to the "last_compacted_bytes" field.
+func (m *GatewayContextSummaryMutation) AddLastCompactedBytes(i int64) {
+	if m.addlast_compacted_bytes != nil {
+		*m.addlast_compacted_bytes += i
+	} else {
+		m.addlast_compacted_bytes = &i
+	}
+}
+
+// AddedLastCompactedBytes returns the value that was added to the "last_compacted_bytes" field in this mutation.
+func (m *GatewayContextSummaryMutation) AddedLastCompactedBytes() (r int64, exists bool) {
+	v := m.addlast_compacted_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetLastCompactedBytes resets all changes to the "last_compacted_bytes" field.
+func (m *GatewayContextSummaryMutation) ResetLastCompactedBytes() {
+	m.last_compacted_bytes = nil
+	m.addlast_compacted_bytes = nil
+}
+
+// SetLastOriginalTokens sets the "last_original_tokens" field.
+func (m *GatewayContextSummaryMutation) SetLastOriginalTokens(i int64) {
+	m.last_original_tokens = &i
+	m.addlast_original_tokens = nil
+}
+
+// LastOriginalTokens returns the value of the "last_original_tokens" field in the mutation.
+func (m *GatewayContextSummaryMutation) LastOriginalTokens() (r int64, exists bool) {
+	v := m.last_original_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastOriginalTokens returns the old "last_original_tokens" field's value of the GatewayContextSummary entity.
+// If the GatewayContextSummary object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayContextSummaryMutation) OldLastOriginalTokens(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastOriginalTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastOriginalTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastOriginalTokens: %w", err)
+	}
+	return oldValue.LastOriginalTokens, nil
+}
+
+// AddLastOriginalTokens adds i to the "last_original_tokens" field.
+func (m *GatewayContextSummaryMutation) AddLastOriginalTokens(i int64) {
+	if m.addlast_original_tokens != nil {
+		*m.addlast_original_tokens += i
+	} else {
+		m.addlast_original_tokens = &i
+	}
+}
+
+// AddedLastOriginalTokens returns the value that was added to the "last_original_tokens" field in this mutation.
+func (m *GatewayContextSummaryMutation) AddedLastOriginalTokens() (r int64, exists bool) {
+	v := m.addlast_original_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetLastOriginalTokens resets all changes to the "last_original_tokens" field.
+func (m *GatewayContextSummaryMutation) ResetLastOriginalTokens() {
+	m.last_original_tokens = nil
+	m.addlast_original_tokens = nil
+}
+
+// SetLastCompactedTokens sets the "last_compacted_tokens" field.
+func (m *GatewayContextSummaryMutation) SetLastCompactedTokens(i int64) {
+	m.last_compacted_tokens = &i
+	m.addlast_compacted_tokens = nil
+}
+
+// LastCompactedTokens returns the value of the "last_compacted_tokens" field in the mutation.
+func (m *GatewayContextSummaryMutation) LastCompactedTokens() (r int64, exists bool) {
+	v := m.last_compacted_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastCompactedTokens returns the old "last_compacted_tokens" field's value of the GatewayContextSummary entity.
+// If the GatewayContextSummary object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayContextSummaryMutation) OldLastCompactedTokens(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastCompactedTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastCompactedTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastCompactedTokens: %w", err)
+	}
+	return oldValue.LastCompactedTokens, nil
+}
+
+// AddLastCompactedTokens adds i to the "last_compacted_tokens" field.
+func (m *GatewayContextSummaryMutation) AddLastCompactedTokens(i int64) {
+	if m.addlast_compacted_tokens != nil {
+		*m.addlast_compacted_tokens += i
+	} else {
+		m.addlast_compacted_tokens = &i
+	}
+}
+
+// AddedLastCompactedTokens returns the value that was added to the "last_compacted_tokens" field in this mutation.
+func (m *GatewayContextSummaryMutation) AddedLastCompactedTokens() (r int64, exists bool) {
+	v := m.addlast_compacted_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetLastCompactedTokens resets all changes to the "last_compacted_tokens" field.
+func (m *GatewayContextSummaryMutation) ResetLastCompactedTokens() {
+	m.last_compacted_tokens = nil
+	m.addlast_compacted_tokens = nil
+}
+
+// SetLastError sets the "last_error" field.
+func (m *GatewayContextSummaryMutation) SetLastError(s string) {
+	m.last_error = &s
+}
+
+// LastError returns the value of the "last_error" field in the mutation.
+func (m *GatewayContextSummaryMutation) LastError() (r string, exists bool) {
+	v := m.last_error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastError returns the old "last_error" field's value of the GatewayContextSummary entity.
+// If the GatewayContextSummary object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayContextSummaryMutation) OldLastError(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastError: %w", err)
+	}
+	return oldValue.LastError, nil
+}
+
+// ResetLastError resets all changes to the "last_error" field.
+func (m *GatewayContextSummaryMutation) ResetLastError() {
+	m.last_error = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *GatewayContextSummaryMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *GatewayContextSummaryMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the GatewayContextSummary entity.
+// If the GatewayContextSummary object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayContextSummaryMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *GatewayContextSummaryMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *GatewayContextSummaryMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *GatewayContextSummaryMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the GatewayContextSummary entity.
+// If the GatewayContextSummary object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayContextSummaryMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *GatewayContextSummaryMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the GatewayContextSummaryMutation builder.
+func (m *GatewayContextSummaryMutation) Where(ps ...predicate.GatewayContextSummary) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the GatewayContextSummaryMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *GatewayContextSummaryMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.GatewayContextSummary, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *GatewayContextSummaryMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *GatewayContextSummaryMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (GatewayContextSummary).
+func (m *GatewayContextSummaryMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *GatewayContextSummaryMutation) Fields() []string {
+	fields := make([]string, 0, 15)
+	if m.session_id != nil {
+		fields = append(fields, gatewaycontextsummary.FieldSessionID)
+	}
+	if m.api_key_id != nil {
+		fields = append(fields, gatewaycontextsummary.FieldAPIKeyID)
+	}
+	if m.api_key_prefix != nil {
+		fields = append(fields, gatewaycontextsummary.FieldAPIKeyPrefix)
+	}
+	if m.summary != nil {
+		fields = append(fields, gatewaycontextsummary.FieldSummary)
+	}
+	if m.summary_tokens != nil {
+		fields = append(fields, gatewaycontextsummary.FieldSummaryTokens)
+	}
+	if m.compaction_count != nil {
+		fields = append(fields, gatewaycontextsummary.FieldCompactionCount)
+	}
+	if m.last_request_id != nil {
+		fields = append(fields, gatewaycontextsummary.FieldLastRequestID)
+	}
+	if m.last_reason != nil {
+		fields = append(fields, gatewaycontextsummary.FieldLastReason)
+	}
+	if m.last_original_bytes != nil {
+		fields = append(fields, gatewaycontextsummary.FieldLastOriginalBytes)
+	}
+	if m.last_compacted_bytes != nil {
+		fields = append(fields, gatewaycontextsummary.FieldLastCompactedBytes)
+	}
+	if m.last_original_tokens != nil {
+		fields = append(fields, gatewaycontextsummary.FieldLastOriginalTokens)
+	}
+	if m.last_compacted_tokens != nil {
+		fields = append(fields, gatewaycontextsummary.FieldLastCompactedTokens)
+	}
+	if m.last_error != nil {
+		fields = append(fields, gatewaycontextsummary.FieldLastError)
+	}
+	if m.created_at != nil {
+		fields = append(fields, gatewaycontextsummary.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, gatewaycontextsummary.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *GatewayContextSummaryMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case gatewaycontextsummary.FieldSessionID:
+		return m.SessionID()
+	case gatewaycontextsummary.FieldAPIKeyID:
+		return m.APIKeyID()
+	case gatewaycontextsummary.FieldAPIKeyPrefix:
+		return m.APIKeyPrefix()
+	case gatewaycontextsummary.FieldSummary:
+		return m.Summary()
+	case gatewaycontextsummary.FieldSummaryTokens:
+		return m.SummaryTokens()
+	case gatewaycontextsummary.FieldCompactionCount:
+		return m.CompactionCount()
+	case gatewaycontextsummary.FieldLastRequestID:
+		return m.LastRequestID()
+	case gatewaycontextsummary.FieldLastReason:
+		return m.LastReason()
+	case gatewaycontextsummary.FieldLastOriginalBytes:
+		return m.LastOriginalBytes()
+	case gatewaycontextsummary.FieldLastCompactedBytes:
+		return m.LastCompactedBytes()
+	case gatewaycontextsummary.FieldLastOriginalTokens:
+		return m.LastOriginalTokens()
+	case gatewaycontextsummary.FieldLastCompactedTokens:
+		return m.LastCompactedTokens()
+	case gatewaycontextsummary.FieldLastError:
+		return m.LastError()
+	case gatewaycontextsummary.FieldCreatedAt:
+		return m.CreatedAt()
+	case gatewaycontextsummary.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *GatewayContextSummaryMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case gatewaycontextsummary.FieldSessionID:
+		return m.OldSessionID(ctx)
+	case gatewaycontextsummary.FieldAPIKeyID:
+		return m.OldAPIKeyID(ctx)
+	case gatewaycontextsummary.FieldAPIKeyPrefix:
+		return m.OldAPIKeyPrefix(ctx)
+	case gatewaycontextsummary.FieldSummary:
+		return m.OldSummary(ctx)
+	case gatewaycontextsummary.FieldSummaryTokens:
+		return m.OldSummaryTokens(ctx)
+	case gatewaycontextsummary.FieldCompactionCount:
+		return m.OldCompactionCount(ctx)
+	case gatewaycontextsummary.FieldLastRequestID:
+		return m.OldLastRequestID(ctx)
+	case gatewaycontextsummary.FieldLastReason:
+		return m.OldLastReason(ctx)
+	case gatewaycontextsummary.FieldLastOriginalBytes:
+		return m.OldLastOriginalBytes(ctx)
+	case gatewaycontextsummary.FieldLastCompactedBytes:
+		return m.OldLastCompactedBytes(ctx)
+	case gatewaycontextsummary.FieldLastOriginalTokens:
+		return m.OldLastOriginalTokens(ctx)
+	case gatewaycontextsummary.FieldLastCompactedTokens:
+		return m.OldLastCompactedTokens(ctx)
+	case gatewaycontextsummary.FieldLastError:
+		return m.OldLastError(ctx)
+	case gatewaycontextsummary.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case gatewaycontextsummary.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown GatewayContextSummary field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *GatewayContextSummaryMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case gatewaycontextsummary.FieldSessionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionID(v)
+		return nil
+	case gatewaycontextsummary.FieldAPIKeyID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAPIKeyID(v)
+		return nil
+	case gatewaycontextsummary.FieldAPIKeyPrefix:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAPIKeyPrefix(v)
+		return nil
+	case gatewaycontextsummary.FieldSummary:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSummary(v)
+		return nil
+	case gatewaycontextsummary.FieldSummaryTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSummaryTokens(v)
+		return nil
+	case gatewaycontextsummary.FieldCompactionCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompactionCount(v)
+		return nil
+	case gatewaycontextsummary.FieldLastRequestID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastRequestID(v)
+		return nil
+	case gatewaycontextsummary.FieldLastReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastReason(v)
+		return nil
+	case gatewaycontextsummary.FieldLastOriginalBytes:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastOriginalBytes(v)
+		return nil
+	case gatewaycontextsummary.FieldLastCompactedBytes:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastCompactedBytes(v)
+		return nil
+	case gatewaycontextsummary.FieldLastOriginalTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastOriginalTokens(v)
+		return nil
+	case gatewaycontextsummary.FieldLastCompactedTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastCompactedTokens(v)
+		return nil
+	case gatewaycontextsummary.FieldLastError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastError(v)
+		return nil
+	case gatewaycontextsummary.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case gatewaycontextsummary.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown GatewayContextSummary field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *GatewayContextSummaryMutation) AddedFields() []string {
+	var fields []string
+	if m.addapi_key_id != nil {
+		fields = append(fields, gatewaycontextsummary.FieldAPIKeyID)
+	}
+	if m.addsummary_tokens != nil {
+		fields = append(fields, gatewaycontextsummary.FieldSummaryTokens)
+	}
+	if m.addcompaction_count != nil {
+		fields = append(fields, gatewaycontextsummary.FieldCompactionCount)
+	}
+	if m.addlast_original_bytes != nil {
+		fields = append(fields, gatewaycontextsummary.FieldLastOriginalBytes)
+	}
+	if m.addlast_compacted_bytes != nil {
+		fields = append(fields, gatewaycontextsummary.FieldLastCompactedBytes)
+	}
+	if m.addlast_original_tokens != nil {
+		fields = append(fields, gatewaycontextsummary.FieldLastOriginalTokens)
+	}
+	if m.addlast_compacted_tokens != nil {
+		fields = append(fields, gatewaycontextsummary.FieldLastCompactedTokens)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *GatewayContextSummaryMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case gatewaycontextsummary.FieldAPIKeyID:
+		return m.AddedAPIKeyID()
+	case gatewaycontextsummary.FieldSummaryTokens:
+		return m.AddedSummaryTokens()
+	case gatewaycontextsummary.FieldCompactionCount:
+		return m.AddedCompactionCount()
+	case gatewaycontextsummary.FieldLastOriginalBytes:
+		return m.AddedLastOriginalBytes()
+	case gatewaycontextsummary.FieldLastCompactedBytes:
+		return m.AddedLastCompactedBytes()
+	case gatewaycontextsummary.FieldLastOriginalTokens:
+		return m.AddedLastOriginalTokens()
+	case gatewaycontextsummary.FieldLastCompactedTokens:
+		return m.AddedLastCompactedTokens()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *GatewayContextSummaryMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case gatewaycontextsummary.FieldAPIKeyID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAPIKeyID(v)
+		return nil
+	case gatewaycontextsummary.FieldSummaryTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSummaryTokens(v)
+		return nil
+	case gatewaycontextsummary.FieldCompactionCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompactionCount(v)
+		return nil
+	case gatewaycontextsummary.FieldLastOriginalBytes:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddLastOriginalBytes(v)
+		return nil
+	case gatewaycontextsummary.FieldLastCompactedBytes:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddLastCompactedBytes(v)
+		return nil
+	case gatewaycontextsummary.FieldLastOriginalTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddLastOriginalTokens(v)
+		return nil
+	case gatewaycontextsummary.FieldLastCompactedTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddLastCompactedTokens(v)
+		return nil
+	}
+	return fmt.Errorf("unknown GatewayContextSummary numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *GatewayContextSummaryMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(gatewaycontextsummary.FieldAPIKeyID) {
+		fields = append(fields, gatewaycontextsummary.FieldAPIKeyID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *GatewayContextSummaryMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *GatewayContextSummaryMutation) ClearField(name string) error {
+	switch name {
+	case gatewaycontextsummary.FieldAPIKeyID:
+		m.ClearAPIKeyID()
+		return nil
+	}
+	return fmt.Errorf("unknown GatewayContextSummary nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *GatewayContextSummaryMutation) ResetField(name string) error {
+	switch name {
+	case gatewaycontextsummary.FieldSessionID:
+		m.ResetSessionID()
+		return nil
+	case gatewaycontextsummary.FieldAPIKeyID:
+		m.ResetAPIKeyID()
+		return nil
+	case gatewaycontextsummary.FieldAPIKeyPrefix:
+		m.ResetAPIKeyPrefix()
+		return nil
+	case gatewaycontextsummary.FieldSummary:
+		m.ResetSummary()
+		return nil
+	case gatewaycontextsummary.FieldSummaryTokens:
+		m.ResetSummaryTokens()
+		return nil
+	case gatewaycontextsummary.FieldCompactionCount:
+		m.ResetCompactionCount()
+		return nil
+	case gatewaycontextsummary.FieldLastRequestID:
+		m.ResetLastRequestID()
+		return nil
+	case gatewaycontextsummary.FieldLastReason:
+		m.ResetLastReason()
+		return nil
+	case gatewaycontextsummary.FieldLastOriginalBytes:
+		m.ResetLastOriginalBytes()
+		return nil
+	case gatewaycontextsummary.FieldLastCompactedBytes:
+		m.ResetLastCompactedBytes()
+		return nil
+	case gatewaycontextsummary.FieldLastOriginalTokens:
+		m.ResetLastOriginalTokens()
+		return nil
+	case gatewaycontextsummary.FieldLastCompactedTokens:
+		m.ResetLastCompactedTokens()
+		return nil
+	case gatewaycontextsummary.FieldLastError:
+		m.ResetLastError()
+		return nil
+	case gatewaycontextsummary.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case gatewaycontextsummary.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown GatewayContextSummary field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *GatewayContextSummaryMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *GatewayContextSummaryMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *GatewayContextSummaryMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *GatewayContextSummaryMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *GatewayContextSummaryMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *GatewayContextSummaryMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *GatewayContextSummaryMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown GatewayContextSummary unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *GatewayContextSummaryMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown GatewayContextSummary edge %s", name)
 }
 
 // GatewayModelMutation represents an operation that mutates the GatewayModel nodes in the graph.

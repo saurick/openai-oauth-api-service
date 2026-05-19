@@ -393,6 +393,12 @@ func (r *gatewayPolicyTestRepo) ListUsageKeySummaries(context.Context, GatewayUs
 func (r *gatewayPolicyTestRepo) ListUsageSessionSummaries(context.Context, GatewayUsageFilter, int, int) ([]*GatewayUsageSessionSummary, int, error) {
 	return nil, 0, nil
 }
+func (r *gatewayPolicyTestRepo) GetContextSummary(context.Context, string) (*GatewayContextSummary, error) {
+	return nil, nil
+}
+func (r *gatewayPolicyTestRepo) UpsertContextSummary(context.Context, GatewayContextSummary) error {
+	return nil
+}
 func (r *gatewayPolicyTestRepo) GetGatewaySetting(_ context.Context, key string) (string, error) {
 	if r.settings == nil {
 		return "", nil

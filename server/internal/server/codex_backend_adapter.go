@@ -991,6 +991,9 @@ func isRetriableCodexBackendError(err error) bool {
 	if err == nil {
 		return false
 	}
+	if isCodexBackendContextLengthError(err) {
+		return false
+	}
 	var httpErr codexBackendHTTPError
 	if errors.As(err, &httpErr) {
 		return httpErr.status == stdhttp.StatusTooManyRequests || httpErr.status >= 500
@@ -1001,6 +1004,15 @@ func isRetriableCodexBackendError(err error) bool {
 		strings.Contains(text, "connection reset") ||
 		strings.Contains(text, "unexpected eof") ||
 		strings.Contains(text, "stream error")
+}
+
+func isCodexBackendContextLengthError(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "context_length_exceeded") ||
+		strings.Contains(text, "exceeds the context window")
 }
 
 func summarizeCodexBackendBody(body []byte) string {

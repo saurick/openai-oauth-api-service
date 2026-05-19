@@ -14,6 +14,7 @@ import (
 	"server/internal/data/model/ent/gatewayalertevent"
 	"server/internal/data/model/ent/gatewayalertrule"
 	"server/internal/data/model/ent/gatewayapikey"
+	"server/internal/data/model/ent/gatewaycontextsummary"
 	"server/internal/data/model/ent/gatewaymodel"
 	"server/internal/data/model/ent/gatewaymodelprice"
 	"server/internal/data/model/ent/gatewaypolicy"
@@ -625,9 +626,17 @@ COALESCE(SUM(CASE WHEN l.upstream_mode = 'codex_cli' THEN 1 ELSE 0 END), 0),
 COALESCE(SUM(CASE WHEN l.upstream_fallback THEN 1 ELSE 0 END), 0),
 COALESCE(AVG(l.duration_ms)::bigint, 0),
 MIN(l.created_at),
-MAX(l.created_at)
+MAX(l.created_at),
+COALESCE(MAX(cs.compaction_count), 0),
+COALESCE(MAX(cs.summary), ''),
+COALESCE(MAX(cs.last_original_bytes), 0),
+COALESCE(MAX(cs.last_compacted_bytes), 0),
+COALESCE(MAX(cs.last_original_tokens), 0),
+COALESCE(MAX(cs.last_compacted_tokens), 0),
+MAX(cs.updated_at)
 FROM gateway_usage_logs l
-LEFT JOIN gateway_api_keys k ON k.id = l.api_key_id` + where + `
+LEFT JOIN gateway_api_keys k ON k.id = l.api_key_id
+LEFT JOIN gateway_context_summaries cs ON cs.session_id = l.session_id` + where + `
 GROUP BY l.session_id
 ORDER BY MAX(l.created_at) DESC
 LIMIT $` + fmt.Sprint(limitPlaceholder) + ` OFFSET $` + fmt.Sprint(offsetPlaceholder)
@@ -645,6 +654,7 @@ LIMIT $` + fmt.Sprint(limitPlaceholder) + ` OFFSET $` + fmt.Sprint(offsetPlaceho
 	out := make([]*biz.GatewayUsageSessionSummary, 0)
 	for rows.Next() {
 		var item biz.GatewayUsageSessionSummary
+		var contextCompactedAt *time.Time
 		if err := rows.Scan(
 			&item.SessionID,
 			&item.APIKeyID,
@@ -664,9 +674,17 @@ LIMIT $` + fmt.Sprint(limitPlaceholder) + ` OFFSET $` + fmt.Sprint(offsetPlaceho
 			&item.AverageDurationMS,
 			&item.FirstSeenAt,
 			&item.LastSeenAt,
+			&item.ContextCompactionCount,
+			&item.ContextSummary,
+			&item.ContextOriginalBytes,
+			&item.ContextCompactedBytes,
+			&item.ContextOriginalTokens,
+			&item.ContextCompactedTokens,
+			&contextCompactedAt,
 		); err != nil {
 			return nil, 0, err
 		}
+		item.ContextCompactedAt = contextCompactedAt
 		out = append(out, &item)
 	}
 	if err := rows.Err(); err != nil {
@@ -674,6 +692,76 @@ LIMIT $` + fmt.Sprint(limitPlaceholder) + ` OFFSET $` + fmt.Sprint(offsetPlaceho
 	}
 	r.attachUsageSessionSummaryCosts(ctx, filter, out)
 	return out, total, nil
+}
+
+func (r *gatewayRepo) GetContextSummary(ctx context.Context, sessionID string) (*biz.GatewayContextSummary, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, nil
+	}
+	item, err := r.data.postgres.GatewayContextSummary.Query().
+		Where(gatewaycontextsummary.SessionIDEQ(sessionID)).
+		Only(ctx)
+	if ent.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return mapGatewayContextSummary(item), nil
+}
+
+func (r *gatewayRepo) UpsertContextSummary(ctx context.Context, item biz.GatewayContextSummary) error {
+	item.SessionID = strings.TrimSpace(item.SessionID)
+	item.Summary = strings.TrimSpace(item.Summary)
+	if item.SessionID == "" || item.Summary == "" {
+		return biz.ErrBadParam
+	}
+
+	update := r.data.postgres.GatewayContextSummary.Update().
+		Where(gatewaycontextsummary.SessionIDEQ(item.SessionID)).
+		SetSummary(item.Summary).
+		SetSummaryTokens(item.SummaryTokens).
+		SetCompactionCount(item.CompactionCount).
+		SetAPIKeyPrefix(item.APIKeyPrefix).
+		SetLastRequestID(item.LastRequestID).
+		SetLastReason(item.LastReason).
+		SetLastOriginalBytes(item.LastOriginalBytes).
+		SetLastCompactedBytes(item.LastCompactedBytes).
+		SetLastOriginalTokens(item.LastOriginalTokens).
+		SetLastCompactedTokens(item.LastCompactedTokens).
+		SetLastError(item.LastError).
+		SetUpdatedAt(time.Now())
+	if item.APIKeyID > 0 {
+		update.SetAPIKeyID(item.APIKeyID)
+	} else {
+		update.ClearAPIKeyID()
+	}
+	updated, err := update.Save(ctx)
+	if err != nil {
+		return err
+	}
+	if updated > 0 {
+		return nil
+	}
+
+	create := r.data.postgres.GatewayContextSummary.Create().
+		SetSessionID(item.SessionID).
+		SetAPIKeyPrefix(item.APIKeyPrefix).
+		SetSummary(item.Summary).
+		SetSummaryTokens(item.SummaryTokens).
+		SetCompactionCount(item.CompactionCount).
+		SetLastRequestID(item.LastRequestID).
+		SetLastReason(item.LastReason).
+		SetLastOriginalBytes(item.LastOriginalBytes).
+		SetLastCompactedBytes(item.LastCompactedBytes).
+		SetLastOriginalTokens(item.LastOriginalTokens).
+		SetLastCompactedTokens(item.LastCompactedTokens).
+		SetLastError(item.LastError)
+	if item.APIKeyID > 0 {
+		create.SetAPIKeyID(item.APIKeyID)
+	}
+	return create.Exec(ctx)
 }
 
 func (r *gatewayRepo) GetPolicyForKeyModel(ctx context.Context, apiKeyID int, modelID string) (*biz.GatewayPolicy, error) {
@@ -1687,6 +1775,33 @@ func mapGatewayUsageLog(item *ent.GatewayUsageLog) *biz.GatewayUsageLog {
 	}
 }
 
+func mapGatewayContextSummary(item *ent.GatewayContextSummary) *biz.GatewayContextSummary {
+	if item == nil {
+		return nil
+	}
+	apiKeyID := 0
+	if item.APIKeyID != nil {
+		apiKeyID = *item.APIKeyID
+	}
+	return &biz.GatewayContextSummary{
+		SessionID:           item.SessionID,
+		APIKeyID:            apiKeyID,
+		APIKeyPrefix:        item.APIKeyPrefix,
+		Summary:             item.Summary,
+		SummaryTokens:       item.SummaryTokens,
+		CompactionCount:     item.CompactionCount,
+		LastRequestID:       item.LastRequestID,
+		LastReason:          item.LastReason,
+		LastOriginalBytes:   item.LastOriginalBytes,
+		LastCompactedBytes:  item.LastCompactedBytes,
+		LastOriginalTokens:  item.LastOriginalTokens,
+		LastCompactedTokens: item.LastCompactedTokens,
+		LastError:           item.LastError,
+		CreatedAt:           item.CreatedAt,
+		UpdatedAt:           item.UpdatedAt,
+	}
+}
+
 func mapGatewayUsageDiagnosticForDB(item biz.GatewayUsageDiagnostic) map[string]any {
 	out := make(map[string]any)
 	if item.RequestBytes > 0 {
@@ -1713,6 +1828,30 @@ func mapGatewayUsageDiagnosticForDB(item biz.GatewayUsageDiagnostic) map[string]
 	if item.UpstreamBody != "" {
 		out["upstream_body"] = item.UpstreamBody
 	}
+	if item.ContextCompacted {
+		out["context_compacted"] = true
+	}
+	if item.ContextCompactionReason != "" {
+		out["context_compaction_reason"] = item.ContextCompactionReason
+	}
+	if item.ContextCompactionSummary != "" {
+		out["context_compaction_summary"] = item.ContextCompactionSummary
+	}
+	if item.ContextCompactionCount > 0 {
+		out["context_compaction_count"] = item.ContextCompactionCount
+	}
+	if item.ContextOriginalBytes > 0 {
+		out["context_original_bytes"] = item.ContextOriginalBytes
+	}
+	if item.ContextCompactedBytes > 0 {
+		out["context_compacted_bytes"] = item.ContextCompactedBytes
+	}
+	if item.ContextOriginalEstimatedTokens > 0 {
+		out["context_original_estimated_tokens"] = item.ContextOriginalEstimatedTokens
+	}
+	if item.ContextCompactedEstimatedTokens > 0 {
+		out["context_compacted_estimated_tokens"] = item.ContextCompactedEstimatedTokens
+	}
 	return out
 }
 
@@ -1721,14 +1860,22 @@ func mapGatewayUsageDiagnosticFromDB(raw map[string]any) biz.GatewayUsageDiagnos
 		return biz.GatewayUsageDiagnostic{}
 	}
 	return biz.GatewayUsageDiagnostic{
-		RequestBytes:       diagnosticInt64(raw["request_bytes"]),
-		ResponseBytes:      diagnosticInt64(raw["response_bytes"]),
-		BackendOnly:        diagnosticBool(raw["backend_only"]),
-		FallbackEnabled:    diagnosticBool(raw["fallback_enabled"]),
-		FallbackBlocked:    diagnosticBool(raw["fallback_blocked"]),
-		ReasoningEffort:    strings.TrimSpace(fmt.Sprint(raw["reasoning_effort"])),
-		UpstreamHTTPStatus: int(diagnosticInt64(raw["upstream_http_status"])),
-		UpstreamBody:       strings.TrimSpace(fmt.Sprint(raw["upstream_body"])),
+		RequestBytes:                    diagnosticInt64(raw["request_bytes"]),
+		ResponseBytes:                   diagnosticInt64(raw["response_bytes"]),
+		BackendOnly:                     diagnosticBool(raw["backend_only"]),
+		FallbackEnabled:                 diagnosticBool(raw["fallback_enabled"]),
+		FallbackBlocked:                 diagnosticBool(raw["fallback_blocked"]),
+		ReasoningEffort:                 strings.TrimSpace(fmt.Sprint(raw["reasoning_effort"])),
+		UpstreamHTTPStatus:              int(diagnosticInt64(raw["upstream_http_status"])),
+		UpstreamBody:                    strings.TrimSpace(fmt.Sprint(raw["upstream_body"])),
+		ContextCompacted:                diagnosticBool(raw["context_compacted"]),
+		ContextCompactionReason:         strings.TrimSpace(fmt.Sprint(raw["context_compaction_reason"])),
+		ContextCompactionSummary:        strings.TrimSpace(fmt.Sprint(raw["context_compaction_summary"])),
+		ContextCompactionCount:          int(diagnosticInt64(raw["context_compaction_count"])),
+		ContextOriginalBytes:            diagnosticInt64(raw["context_original_bytes"]),
+		ContextCompactedBytes:           diagnosticInt64(raw["context_compacted_bytes"]),
+		ContextOriginalEstimatedTokens:  diagnosticInt64(raw["context_original_estimated_tokens"]),
+		ContextCompactedEstimatedTokens: diagnosticInt64(raw["context_compacted_estimated_tokens"]),
 	}
 }
 

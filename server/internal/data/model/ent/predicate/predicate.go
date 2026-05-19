@@ -21,6 +21,9 @@ type GatewayAlertRule func(*sql.Selector)
 // GatewayAuditLog is the predicate function for gatewayauditlog builders.
 type GatewayAuditLog func(*sql.Selector)
 
+// GatewayContextSummary is the predicate function for gatewaycontextsummary builders.
+type GatewayContextSummary func(*sql.Selector)
+
 // GatewayModel is the predicate function for gatewaymodel builders.
 type GatewayModel func(*sql.Selector)
 

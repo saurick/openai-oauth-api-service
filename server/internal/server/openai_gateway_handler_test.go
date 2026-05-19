@@ -46,6 +46,7 @@ func TestUpstreamErrorTypeClassifiesBackendErrors(t *testing.T) {
 		{name: "rate_limit", err: codexBackendHTTPError{status: http.StatusTooManyRequests}, want: "codex_backend_rate_limited"},
 		{name: "http_5xx", err: codexBackendHTTPError{status: http.StatusBadGateway}, want: "codex_backend_http_5xx"},
 		{name: "timeout", err: errors.New("codex backend upstream timed out after 10s"), want: "codex_backend_timeout"},
+		{name: "context_length", err: errors.New(`codex backend response failed: {"error":{"code":"context_length_exceeded"}}`), want: "context_length_exceeded"},
 		{name: "incomplete", err: errors.New("codex backend response incomplete: stopped"), want: "codex_backend_response_incomplete"},
 		{name: "stream", err: errors.New("unexpected EOF while reading stream"), want: "codex_backend_stream_error"},
 		{name: "client_canceled", err: context.Canceled, want: "client_canceled"},
@@ -56,6 +57,13 @@ func TestUpstreamErrorTypeClassifiesBackendErrors(t *testing.T) {
 				t.Fatalf("upstreamErrorType() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCodexBackendContextLengthIsNotRetriable(t *testing.T) {
+	err := errors.New(`codex backend response failed: {"error":{"code":"context_length_exceeded"}}`)
+	if isRetriableCodexBackendError(err) {
+		t.Fatal("context length errors must not retry against the same oversized request")
 	}
 }
 
@@ -103,7 +111,7 @@ echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1,"tota
 		if err != nil {
 			t.Fatal(err)
 		}
-		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "responses", model, effort, stream, body, time.Now())
+		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "responses", model, effort, stream, body, time.Now(), biz.GatewayUsageDiagnostic{})
 	}))
 	defer server.Close()
 
@@ -162,7 +170,7 @@ echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1,"tota
 		if err != nil {
 			t.Fatal(err)
 		}
-		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "responses", model, effort, stream, body, time.Now())
+		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "responses", model, effort, stream, body, time.Now(), biz.GatewayUsageDiagnostic{})
 	}))
 	defer server.Close()
 
@@ -222,7 +230,7 @@ echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1,"tota
 		if err != nil {
 			t.Fatal(err)
 		}
-		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "chat.completions", model, effort, stream, body, time.Now())
+		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "chat.completions", model, effort, stream, body, time.Now(), biz.GatewayUsageDiagnostic{})
 	}))
 	defer server.Close()
 
@@ -283,7 +291,7 @@ func TestStreamResponsesReturnsSSEErrorAfterHeaders(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "responses", model, effort, stream, body, time.Now())
+		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "responses", model, effort, stream, body, time.Now(), biz.GatewayUsageDiagnostic{})
 	}))
 	defer server.Close()
 

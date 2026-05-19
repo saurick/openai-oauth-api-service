@@ -10,6 +10,7 @@ Atlas migration 在生产 / 低配服务器上统一使用宿主机 `/usr/local/
 | --- | --- |
 | `compose/prod/compose.yml` | PostgreSQL + 后端服务 |
 | `compose/prod/compose.nginx.yml` | 可选容器化 Nginx 入口层，迁移或切入口时叠加启用 |
+| `compose/prod/compose.certbot.yml` | 可选项目级 Certbot，单项目交付或独占机器部署时按需执行 |
 | `compose/prod/.env.example` | 生产环境变量示例 |
 | `compose/prod/README.md` | Compose 运行说明 |
 
@@ -33,3 +34,5 @@ docker compose -f compose.yml -f compose.nginx.yml --env-file .env up -d nginx
 ```
 
 当前线上仍使用宿主机 Nginx；容器化 Nginx 是迁移/切入口能力，不是默认启动项。
+
+证书申请与续签不放入主 `compose.yml`。测试服务器上多个项目只是临时共存时，优先使用不同端口或宿主机 Nginx 临时转发；交付到单项目机器时，可选择宿主机 Certbot，也可叠加项目级 `compose.certbot.yml` 管理证书。

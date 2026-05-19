@@ -1060,13 +1060,17 @@ async function assertUsageTableVisuals(page, scenarioName) {
     const table = main?.querySelector('table')
     const tableRect = table?.getBoundingClientRect()
     const mainRect = main?.getBoundingClientRect()
-    const tabTexts = Array.from(
-      main?.querySelectorAll('[role="tab"]') || []
-    ).map((node) => node.textContent.trim())
+    const tabs = Array.from(main?.querySelectorAll('[role="tab"]') || [])
+    const tabTexts = tabs.map((node) => node.textContent.trim())
 
     return {
-      hasDailySummary: document.body.innerText.includes('每日模型汇总'),
+      activeUsageTab: tabs
+        .find((node) => node.getAttribute('aria-selected') === 'true')
+        ?.textContent.trim(),
       hasDetailButton: document.body.innerText.includes('详情'),
+      hasDetailsDefault:
+        document.body.innerText.includes('调用明细') &&
+        document.body.innerText.includes('按请求级 usage 真源直接展示状态'),
       hasPagination: document.body.innerText.includes('共 12 条'),
       hasSidebarUsageNav: document.body.innerText.includes('用量日志'),
       hasTableRefreshAction: Array.from(
@@ -1082,13 +1086,15 @@ async function assertUsageTableVisuals(page, scenarioName) {
         main?.querySelector('[role="combobox"][aria-label="上游错误类型"]')
       ),
       hasUpstreamStats: document.body.innerText.includes('上游分布'),
-      hasUsageTabs: [
-        '每日模型',
-        '凭据统计',
-        '会话聚合',
-        '调用明细',
-        '异常请求',
-      ].every((text) => tabTexts.includes(text)),
+      hasUsageTabs:
+        JSON.stringify(tabTexts) ===
+        JSON.stringify([
+          '调用明细',
+          '异常请求',
+          '会话聚合',
+          '凭据统计',
+          '每日模型',
+        ]),
       hasUsageWindowSummary: document.body.innerText.includes('24h 范围内第'),
       mainHeight: mainRect?.height || 0,
       tableHeight: tableRect?.height || 0,
@@ -1101,8 +1107,12 @@ async function assertUsageTableVisuals(page, scenarioName) {
   assert(metrics.hasUpstreamFilter, `${scenarioName} 缺少实际上游筛选`)
   assert(metrics.hasUpstreamErrorFilter, `${scenarioName} 缺少上游错误类型筛选`)
   assert(metrics.hasUpstreamStats, `${scenarioName} 缺少上游分布统计`)
-  assert(metrics.hasUsageTabs, `${scenarioName} 缺少 usage 分段视图`)
-  assert(metrics.hasDailySummary, `${scenarioName} 缺少每日模型默认视图`)
+  assert(metrics.hasUsageTabs, `${scenarioName} usage 分段视图顺序异常`)
+  assert(
+    metrics.activeUsageTab === '调用明细',
+    `${scenarioName} usage 默认视图不是调用明细: ${metrics.activeUsageTab}`
+  )
+  assert(metrics.hasDetailsDefault, `${scenarioName} 缺少调用明细默认视图`)
   assert(
     metrics.hasUsageWindowSummary,
     `${scenarioName} usage 摘要未显示当前时间窗口`
@@ -1115,14 +1125,14 @@ async function assertUsageTableVisuals(page, scenarioName) {
   assert(metrics.tableHeight > 0, `${scenarioName} usage 表格高度异常`)
   assert(metrics.tableWidth > 0, `${scenarioName} usage 表格宽度异常`)
   assertUsageAggregationRequests(page, scenarioName)
-  await assertUsageDailyModelDetail(page, scenarioName)
-  await assertUsageKeyStatsTab(page, scenarioName)
-  await assertUsageSessionTab(page, scenarioName)
   await assertUsageDetailsTab(page, scenarioName)
   await assertUsageKeyMultiFilterRequest(page, scenarioName)
   await assertUsageTimeRangeRequest(page, scenarioName)
   await assertUsagePaginationRequest(page, scenarioName)
   await assertUsageErrorsTab(page, scenarioName)
+  await assertUsageSessionTab(page, scenarioName)
+  await assertUsageKeyStatsTab(page, scenarioName)
+  await assertUsageDailyModelDetail(page, scenarioName)
 }
 
 function assertUsageAggregationRequests(page, scenarioName) {
@@ -1145,6 +1155,7 @@ function assertUsageAggregationRequests(page, scenarioName) {
 }
 
 async function assertUsageDailyModelDetail(page, scenarioName) {
+  await page.getByRole('tab', { name: '每日模型', exact: true }).click()
   await expectText(page, '每日模型汇总')
   await expectText(page, 'gpt-5.4')
   await page.getByRole('button', { name: '详情', exact: true }).first().click()
@@ -1210,6 +1221,9 @@ async function assertUsageSessionTab(page, scenarioName) {
   await expectText(page, '会话聚合')
   await expectText(page, 'session-style-l1')
   await expectText(page, 'productionapikey')
+  await expectText(page, '上下文压缩')
+  await expectText(page, '2 次压缩')
+  await expectText(page, '自动压缩摘要')
   await page.getByRole('button', { name: '详情', exact: true }).first().click()
   await expectText(page, '会话详情')
   await expectText(page, '凭据备注')
@@ -1243,6 +1257,8 @@ async function assertUsageDetailsTab(page, scenarioName) {
   await expectText(page, 'productionapikey')
   await expectText(page, '缓存输入 / 推理输出')
   await expectText(page, '缓存输入')
+  await expectText(page, 'context compacted')
+  await expectText(page, '自动压缩摘要')
   await expectText(page, '推理输出')
   await expectText(page, '字节')
   const metrics = await page.evaluate(() => ({
@@ -2708,6 +2724,21 @@ function getApiMockData(method, params = {}, state = {}) {
           status_code: 200,
           success: true,
           total_tokens: 4210,
+          diagnostic: {
+            context_compacted: true,
+            context_compaction_count: 2,
+            context_compaction_reason: 'request_preflight',
+            context_compaction_summary:
+              '自动压缩摘要：保留 /srv/app/server.go、context_length_exceeded 和 pnpm style:l1 线索。',
+            context_original_bytes: 980000,
+            context_compacted_bytes: 210000,
+            context_original_estimated_tokens: 240000,
+            context_compacted_estimated_tokens: 52000,
+            request_bytes: 4096,
+            response_bytes: 8192,
+          },
+          diagnostic_summary:
+            'request=4096B, response=8192B, compact_count=2, compact_reason=request_preflight',
           upstream_configured_mode: 'codex_backend',
           upstream_error_type: '',
           upstream_fallback: false,
@@ -2847,6 +2878,14 @@ function getApiMockData(method, params = {}, state = {}) {
           success_requests: 2,
           total_requests: 2,
           total_tokens: 65410,
+          context_compaction_count: 2,
+          context_summary:
+            '自动压缩摘要：保留 /srv/app/server.go、context_length_exceeded 和 pnpm style:l1 线索。',
+          context_original_bytes: 980000,
+          context_compacted_bytes: 210000,
+          context_original_tokens: 240000,
+          context_compacted_tokens: 52000,
+          context_compacted_at: 1778000000,
         },
         {
           api_key_id: 2,

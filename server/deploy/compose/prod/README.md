@@ -8,6 +8,7 @@
 | --- | --- |
 | `compose.yml` | PostgreSQL + app-server |
 | `compose.nginx.yml` | 可选容器化 Nginx 入口层，迁移或切入口时叠加启用 |
+| `compose.certbot.yml` | 可选项目级 Certbot，单项目交付或独占机器部署时按需执行 |
 | `.env.example` | 环境变量示例，复制为 `.env` 后填写真实值 |
 | `nginx/` | 容器化 Nginx 配置、反代 header、timeout 和域名跳转样本 |
 
@@ -91,6 +92,10 @@ flock /tmp/atlas-migrate.lock \
 
 如启用管理员 OAuth 登录，OAuth provider 回调固定登记后端 `/auth/oauth/callback`。本地为 `http://localhost:8400/auth/oauth/callback`；当前个人部署为 `https://oauth-api.saurick.me/auth/oauth/callback`。前端后台域名通过 `OAUTH_API_OAUTH_ALLOWED_FRONTEND_ORIGINS` allowlist 控制，避免授权完成后跳到未登记来源。
 
+## 测试服务器共存
+
+本项目的 Compose 交付结构按单项目机器设计，但当前测试服务器上多个项目只是临时共存，不作为项目部署真源。共存时优先让各项目只启动 `compose.yml`，通过不同 `APP_HTTP_PORT` 暴露服务，或由宿主机 Nginx 做临时反代；不要为了测试机共存把共享入口层、共享证书续签或端口抢占规则沉淀进项目主路径。
+
 ## 可选容器化 Nginx
 
 默认 `compose.yml` 不启动 Nginx，避免和当前宿主机 Nginx 抢占 `80/443`。迁移到新机器或决定把入口层切进 Compose 时，再叠加 `compose.nginx.yml`：
@@ -152,6 +157,68 @@ docker compose -f compose.yml -f compose.nginx.yml --env-file .env up -d nginx
 ```bash
 docker compose -f compose.yml -f compose.nginx.yml --env-file .env stop nginx
 systemctl start nginx
+```
+
+## 可选项目级 Certbot
+
+证书申请与续签默认不放入主 `compose.yml`。如果甲方机器已有宿主机 Nginx / Certbot 运维体系，优先沿用宿主机 Certbot，并把证书路径挂载给容器 Nginx 或直接由宿主机 Nginx 反代本项目。
+
+如果是单项目交付、机器由本项目独占，且希望证书管理跟随项目目录，可以叠加 `compose.certbot.yml` 执行一次性 certbot 命令。该服务带 `certbot` profile，不会随普通 `docker compose up -d` 自动启动。
+
+首次申请证书前，必须先有一个能响应 HTTP-01 challenge 的入口。若甲方机器已有宿主机 Nginx，推荐直接使用宿主机 Nginx 提供 `/.well-known/acme-challenge/`，证书签发后再决定是否复制给容器 Nginx。
+
+如果要用本项目容器 Nginx 完成首次签发，需要先放入临时自签证书让当前 HTTPS server block 能启动；签发成功后再切到 Certbot 的真实证书目录。新机器如果不保留旧域名，先删除或注释旧域名 HTTPS redirect server block，可以少准备旧域名临时证书。
+
+```bash
+mkdir -p /data/openai-oauth-api-service/letsencrypt
+mkdir -p /data/openai-oauth-api-service/certbot/work
+mkdir -p /data/openai-oauth-api-service/certbot/logs
+mkdir -p /data/openai-oauth-api-service/nginx/acme
+for domain in oauth-api.saurick.me oauth-api.saurick.space openai.saurick.space; do
+  mkdir -p "/data/openai-oauth-api-service/nginx/certs/$domain"
+  openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+    -subj "/CN=$domain" \
+    -keyout "/data/openai-oauth-api-service/nginx/certs/$domain/privkey.pem" \
+    -out "/data/openai-oauth-api-service/nginx/certs/$domain/fullchain.pem"
+done
+
+docker compose -f compose.yml -f compose.nginx.yml --env-file .env up -d nginx
+
+docker compose -f compose.certbot.yml --env-file .env --profile certbot run --rm certbot \
+  certonly --webroot \
+  -w /var/www/acme \
+  -d oauth-api.saurick.me \
+  --email admin@example.com \
+  --agree-tos \
+  --no-eff-email
+```
+
+Certbot 默认产物在 `${CERTBOT_CONFIG_DIR}/live/<domain>/`。如果让容器 Nginx 直接读取这套产物，应在 `.env` 中把证书目录调整为：
+
+```bash
+CERTBOT_CONFIG_DIR=/data/openai-oauth-api-service/letsencrypt
+NGINX_CERTS_DIR=/data/openai-oauth-api-service/letsencrypt/live
+```
+
+调整后重建 Nginx，使其读取正式证书：
+
+```bash
+docker compose -f compose.yml -f compose.nginx.yml --env-file .env up -d nginx
+```
+
+续签时执行：
+
+```bash
+docker compose -f compose.certbot.yml --env-file .env --profile certbot run --rm certbot \
+  renew --webroot -w /var/www/acme
+
+docker exec openai-oauth-api-service-nginx nginx -s reload
+```
+
+如果入口层仍是宿主机 Nginx，续签后改为执行：
+
+```bash
+systemctl reload nginx
 ```
 
 ## 说明

@@ -194,6 +194,43 @@ var (
 			},
 		},
 	}
+	// GatewayContextSummariesColumns holds the columns for the "gateway_context_summaries" table.
+	GatewayContextSummariesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "session_id", Type: field.TypeString, Unique: true, Size: 128},
+		{Name: "api_key_id", Type: field.TypeInt, Nullable: true},
+		{Name: "api_key_prefix", Type: field.TypeString, Size: 16, Default: ""},
+		{Name: "summary", Type: field.TypeString, Size: 2147483647, Default: ""},
+		{Name: "summary_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "compaction_count", Type: field.TypeInt, Default: 0},
+		{Name: "last_request_id", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "last_reason", Type: field.TypeString, Size: 64, Default: ""},
+		{Name: "last_original_bytes", Type: field.TypeInt64, Default: 0},
+		{Name: "last_compacted_bytes", Type: field.TypeInt64, Default: 0},
+		{Name: "last_original_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "last_compacted_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "last_error", Type: field.TypeString, Size: 256, Default: ""},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// GatewayContextSummariesTable holds the schema information for the "gateway_context_summaries" table.
+	GatewayContextSummariesTable = &schema.Table{
+		Name:       "gateway_context_summaries",
+		Columns:    GatewayContextSummariesColumns,
+		PrimaryKey: []*schema.Column{GatewayContextSummariesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "gatewaycontextsummary_api_key_id_updated_at",
+				Unique:  false,
+				Columns: []*schema.Column{GatewayContextSummariesColumns[2], GatewayContextSummariesColumns[15]},
+			},
+			{
+				Name:    "gatewaycontextsummary_updated_at",
+				Unique:  false,
+				Columns: []*schema.Column{GatewayContextSummariesColumns[15]},
+			},
+		},
+	}
 	// GatewayModelsColumns holds the columns for the "gateway_models" table.
 	GatewayModelsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -433,6 +470,7 @@ var (
 		GatewayAlertEventsTable,
 		GatewayAlertRulesTable,
 		GatewayAuditLogsTable,
+		GatewayContextSummariesTable,
 		GatewayModelsTable,
 		GatewayModelPricesTable,
 		GatewayPoliciesTable,

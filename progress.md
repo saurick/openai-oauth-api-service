@@ -2,6 +2,41 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-19 FontAwesome npm token 暴露处理
+- 完成：扫描当前工作区和 Git 历史，未发现 OpenAI / ChatGPT `refresh_token` 或 `auth.json` 明文入库；发现 FontAwesome npm auth token 曾以字面量写入 `web/.npmrc` 和 `web/.yarnrc.yml`。
+- 完成：当前工作区已将 FontAwesome npm auth token 改为 `FONTAWESOME_NPM_AUTH_TOKEN` 环境变量引用，避免后续提交继续携带明文 token。
+- 完成：已在临时 mirror clone 中改写历史并验证 `gitleaks detect --source <mirror> --redact` 无命中；当前主工作区和远端尚未切换到改写后的提交链。
+- 下一步：按当前决策暂不处理远端历史，只保证当前文件树和后续提交不再携带明文 token；如旧 token 曾可用，仍建议在 FontAwesome / npm 侧撤销或轮换。
+- 阻塞/风险：本轮未执行 force push；远端旧提交历史如已公开，仍可能保留旧明文，历史风险只能通过 token 失效来真正止血。
+
+## 2026-05-19 用量日志视图顺序调整
+- 完成：`/admin-usage` 用量日志标签按查看频率调整为「调用明细、异常请求、会话聚合、凭据统计、每日模型」，并将默认视图改为「调用明细」。
+- 完成：同步更新前端 README 口径与 `style:l1` 回归断言，覆盖标签顺序、默认激活项、调用明细默认态、筛选、分页、异常请求、会话聚合、凭据统计和每日模型切换。
+- 本地补充：排查截图中的失败后确认 `5176` 仍是旧 Vite 进程且开发库 migration 停在 `20260512130053`；已重启 `5176` 前端并执行 `make migrate_apply` 到 `20260518092411`，`usage_session_summaries` 恢复 `code=0`。
+- 下一步：如后续增加新的 usage 视图，应继续按排障高频入口优先、聚合统计靠后的顺序维护。
+- 阻塞/风险：本轮只调整前端入口顺序和默认激活视图，不改 usage 数据查询、导出、后端 DTO 或数据库字段。
+
+## 2026-05-18 Codex 长上下文错误分类与摘要压缩
+- 完成：排查线上 junnan key 的长会话 502，确认根因是上游 `context_length_exceeded` 被网关记成普通 backend 502，且 Codex CLI 对该错误重复重试；长流式请求本身未复现 stream 超时问题。
+- 完成：新增 `context_length_exceeded` 错误分类，长上下文不再走 5 次无效重试；超过硬阈值的请求在网关提前拦截为 413，并在 usage 中记录明确错误类型与诊断。
+- 完成：新增按 `session_id` 保存的上下文摘要压缩能力，长请求超过压缩阈值时生成工程摘要、保留系统指令和最近消息后再转发，并记录压缩次数、摘要、压缩前后 bytes / token 估算。
+- 完成：后台用量明细和会话聚合展示上下文压缩诊断；同步更新 API / 配置文档、前端 README 与生产 `.env.example`。
+- 补充：`compose.yml` 已透传 `GATEWAY_STREAM_HEARTBEAT_SECONDS` 和 `GATEWAY_CONTEXT_*` 配置，避免 `.env` 调参不进容器。
+- 验证通过：`cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm lint && pnpm css && pnpm test && pnpm build`、`cd web && node --check scripts/styleL1.mjs && pnpm style:l1`。
+- 部署：本机构建镜像 `oauth-api-service-server:20260518T175802-ace0afcc-local`，上传到 `8.218.4.199` 后仅执行 `docker load`、宿主机 Atlas migration 和 `docker compose up -d app-server`，未在服务器构建；Atlas 从 `20260512130053` 应用到 `20260518092411`，状态 `OK`、待执行 `0`。
+- 线上验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260518T175802-ace0afcc-local`；容器内和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；管理员登录、`api.summary` 和 `usage_session_summaries` 返回 `code=0`。
+- 线上验证通过：Windows 机器 `192.168.0.45` 使用测试 key 跑 Codex CLI 自定义 provider，最小请求与 `resume --last` 均返回成功；1,036,105B 长 prompt 返回 `LONG_COMPRESS_OK`，usage 显示本次请求从 1,126,851B 压缩到 63,001B 后成功。
+- 线上验证通过：Windows 机器直连 `/v1/responses` 带 `session_id=win-session-compaction-20260518180227` 的 1,103,270B 请求返回 `SESSION_COMPRESS_OK`；生产库 `gateway_context_summaries` 记录压缩 1 次、压缩后 14,800B；后台 `/admin-usage`「会话聚合」页面可见该 session、`1 次压缩`、`265,116 -> 3,513 tokens`、`1,103,270 -> 14,800B` 和摘要。
+- 线上验证通过：本机 opencode 1.2.21 使用临时 XDG 配置和测试 key 跑 OpenAI-compatible provider，最小请求返回 `OPENCODE_OK`；`--continue` stdin 长上下文 1,104,061B 返回 `OPENCODE_STDIN_COMPRESS_OK`，usage 显示原始 1,153,490B 自动压缩到 58,016B 后成功。opencode `--file` 附件路径不会完整内联 1.13MB 文件，线上只看到 96KB 请求，因此附件场景不触发网关压缩。
+- 清理：清理前远端 `/` 使用率 53%、Docker images 5.433GB；执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260518T174705-ace0afcc-local`、`20260513T201322-081f551e`，回收 695.9MB；清理后 `/` 使用率 49%、Docker images 4.025GB；已删除本轮远端 release tar、本地镜像 tar 和 Windows 临时测试目录。
+- 剩余风险：当前摘要压缩是确定性工程摘要，不调用模型做语义总结，极端超大请求仍会被硬阈值拦截；Codex CLI 0.125.0 对单次输入有本地 1,048,576 字符限制，超过该限制时请求不会发到网关；Codex App 当前未做无侵入测试，避免切换登录态或 provider 导致当前会话中断。
+
+## 2026-05-13 Compose 入口层与证书续签口径
+- 完成：新增可选 `server/deploy/compose/prod/compose.certbot.yml`，提供项目级 one-shot Certbot 服务；服务带 `certbot` profile，不随主 `docker compose up -d` 自动启动，避免把证书续签混入业务主路径。
+- 完成：更新 `server/deploy/README.md`、`server/deploy/compose/prod/README.md` 和 `.env.example`，明确主 `compose.yml` 只管业务服务与数据库，`compose.nginx.yml` / `compose.certbot.yml` 仅用于单项目交付、独占机器或入口迁移；测试服务器多项目共存只作为临时运行方式，不沉淀共享入口层真源。
+- 下一步：后续触达其他同类项目时按该结构逐步统一，不批量机械改所有项目；若新增发布脚本，应把 nginx/certbot overlay 作为可选步骤而非默认主路径。
+- 阻塞/风险：本轮只补项目级可选 Certbot overlay 和文档口径，未在真实服务器申请或续签证书，也未改变当前线上宿主机 Nginx / 续签脚本。
+
 ## 2026-05-13 Atlas 线上迁移规则收口
 - 完成：将线上 / 低配服务器 Atlas migration 口径写入 `AGENTS.md`、`server/deploy/README.md` 和 `server/deploy/compose/prod/README.md`：统一使用宿主机 `/usr/local/bin/atlas` 与 `flock /tmp/atlas-migrate.lock`，migration 目录随 release 上传，禁止通过 `arigaio/atlas:*` 临时容器或 Compose 服务执行生产迁移。
 - 下一步：后续若补自动发布脚本，应把 Atlas 预检、host DSN 和迁移锁做成脚本级门禁。
@@ -91,7 +126,7 @@
 ## 2026-05-11 Codex function_call call_* id 502 修复
 - 发现：线上近 2 小时 `502` 实际来自服务端将 Codex backend 上游 `400` 映射为 `codex_backend_upstream_failed`；上游错误为 `Invalid 'input[4].id': 'call_...'. Expected an ID that begins with 'fc'.`，说明 OpenAI/Codex 客户端工具历史中的 `tool_call.id=call_*` 被错误当作 Responses `function_call.id` 原样转发。
 - 修复：direct backend adapter 对 Responses `function_call` item id 增加 `fc*` 前缀约束；空 id、非法 id、以及合法字符但非 `fc*` 的 `call_*` id 都统一按 `call_id` 生成 `fc_*`，同时保留原始 `call_id` 语义，避免工具结果关联丢失。
-- 部署：本地构建镜像 `oauth-api-service-server:<release-tag>`，上传到远端 `/data/openai-oauth-api-service/releases/20260511T195435-d530adb-fc-id/`；远端仅执行 `docker load`、备份并更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d app-server`，未在服务器构建。
+- 部署：本地构建镜像并上传到远端 release 目录；远端仅执行 `docker load`、备份并更新 Compose 镜像环境变量、`docker compose up -d app-server`，未在服务器构建。
 - 验证通过：`cd server && go test ./internal/server ./internal/biz ./internal/data`、`git diff --check -- server/internal/server/codex_backend_adapter.go server/internal/server/openai_gateway_handler_test.go progress.md`；线上 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`。
 - 验证通过：公网真实 `/v1/chat/completions` 请求包含 `tool_calls.id=call_7DrSS117GxOq1ztYHVJCjrjZ` 和 tool result 历史，返回 `HTTP 200`、`finish_reason=stop`，确认不再出现 `Expected an ID that begins with 'fc'`。
 - 清理：部署后执行 `docker image prune -a -f` 与 `docker builder prune -f`，仅删除未被容器使用的旧镜像 `20260511T194715-d530adb7-local`，回收 `347.6MB`；根分区从清理前 `45%` 回到 `43%`，当前运行镜像和数据库 volume 保持正常。
