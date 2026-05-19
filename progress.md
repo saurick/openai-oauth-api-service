@@ -559,3 +559,12 @@
 - 完成：页面直接读取 `/public/codex/balance`，只展示服务端裁剪后的余额与限额信息；不新增后台 RPC 和数据库字段。
 - 验证通过：`pnpm exec eslint --ext .js --ext .jsx src/pages/AdminCodexBalance/index.jsx src/App.jsx src/common/components/layout/AdminFrame.jsx`、`pnpm test`、`pnpm build`、`git diff --check`。
 - 浏览器回归：本地 `http://localhost:5176/admin-codex-balance` 通过 Playwright 验证桌面 1440x900、移动 390x844、暗色模式；页面渲染正常、4 条进度条可见、无横向溢出。控制台仅有项目既存 React Router v7 future warning。
+
+## 2026-05-19 Codex 余额正式部署
+- 提交：已提交并推送 `fb7d27d 新增 Codex 余额查询与后台展示` 到 `origin/main`；未把本地无关 `AGENTS.md` 改动纳入提交。
+- 验证通过：提交前执行 `cd server && go test ./...`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminCodexBalance/index.jsx src/App.jsx src/common/components/layout/AdminFrame.jsx && pnpm test && pnpm build`、`git diff --check`。
+- 部署：按低配服务器发布约定在干净 worktree 本机构建镜像 `oauth-api-service-server:20260519T172757-fb7d27d1`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260519T172757-fb7d27d1/`；远端只执行 `docker load`、宿主机 Atlas status、更新 Compose `.env`、重建 `app-server`，未在服务器构建，也未改管理员密码。
+- 迁移：远端 Atlas 状态为 `Current Version: 20260518092411`、`Pending Files: 0`，本轮无 schema 变更。
+- 线上验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260519T172757-fb7d27d1`，容器环境 `GIT_SHA=fb7d27d19cdf177dc210cd90095c437e30f3f2a2`；本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；本机和公网 `/public/codex/balance` 均返回 `status=ok`，credits 为 `0`，公开页面 `/admin-codex-balance` 返回 `HTTP 200`。
+- 浏览器回归：公网 `https://oauth-api.saurick.me/admin-codex-balance` 通过 Playwright 登录管理员后验证，页面可见接口状态「正常」、Credits remaining、Codex 与 GPT-5.3-Codex-Spark 两张卡和 4 条额度进度条；桌面 1440x900 无横向溢出，控制台无错误。
+- 清理：部署前远端 `/` 使用率 53%、Docker images 5.434GB；执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未使用旧镜像 `20260519T081406-86bd2f65-local` 与 `20260519T164255-6f72a8ec-balance-local`，回收 696.5MB；清理后 `/` 使用率 50%、Docker images 4.026GB；已删除远端本轮 release image tar 包，未执行 volume prune。
