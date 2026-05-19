@@ -526,3 +526,13 @@
 - 线上验证通过：管理员 `admin/adminadmin` 本机 RPC 登录成功；`api.usage_list` 携带 `upstream_error_type=codex_backend_http_5xx` 返回 `code=0`；真实创建临时 key `diagnostictmp` 后调用 `/v1/chat/completions` 返回 `HTTP 200`，随后 `usage_list key_id=13` 返回 `diagnostic` 与 `diagnostic_summary` 字段，临时 key 已删除。
 - 清理：部署前记录远端 `/` 使用率 48%、Docker images 4.885GB；已删除远端 release tar 包，执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260512T211049-5eb24e4d-local` 和临时 Atlas 镜像，回收 386.2MB；清理后 `/` 使用率 46%、Docker images 4.007GB，未执行 volume prune。
 - 日志检查：最终健康检查后 2 分钟内未发现 `ERROR` / `WARN` / `panic` / `fatal`。较早验证期间存在一次手工传参错误产生的 `bad param` WARN，已确认不是新镜像启动或主链路异常。
+
+## 2026-05-19 长上下文压缩与用量入口部署
+- 完成：提交并推送 `86bd2f6 修复长上下文压缩与用量日志入口`；历史中旧 FontAwesome token、示例 downstream key 和误报镜像标签已重写为占位符，`gitleaks detect --redact --source .` 检查通过。
+- 验证通过：本地执行 `cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/ scripts/styleL1.mjs && pnpm css && pnpm test`、`cd web && pnpm build`、`STYLE_L1_PORT=4324 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
+- 本地回归：本地应用数据库已应用 `20260518092411` migration，`/admin-usage` 不再出现 API 操作失败；用量日志页默认入口和标签顺序为「调用明细、异常请求、会话聚合、凭据统计、每日模型」。
+- 部署：按低配服务器发布约定，本机构建镜像 `oauth-api-service-server:20260519T081406-86bd2f65-local`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260519T081406-86bd2f65-local/`；远端只执行 `docker load`、宿主机 Atlas migration、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 迁移：远端 Atlas 状态为 `Current Version: 20260518092411`、`Pending Files: 0`，无待执行 migration。
+- 线上验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260519T081406-86bd2f65-local`，容器环境 `GIT_SHA=86bd2f65c86c4f93bcf3820587997018ec0fe059`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；公网 `/admin-usage` 返回 `HTTP 200`；管理员 `admin/adminadmin` 登录后，`api.usage_list` 返回 `code=0`、`total=28`、`items=8`，`api.usage_session_summaries` 返回 `code=0`、`total=1`、`items=1`。
+- 清理：部署前记录远端 `/` 使用率 51%、Docker images 4.73GB；执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260518T175802-ace0afcc-local`，回收 348.2MB；清理后 `/` 使用率 49%、Docker images 4.025GB，未执行 volume prune。
+- 下一步：远端 release 目录仍保留本轮镜像 tar 和 migration 文件，便于短期回溯；如确认无需保留，可后续只删除该 release 下的 tar 包。
