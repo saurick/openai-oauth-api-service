@@ -31,6 +31,8 @@ const (
 	defaultCodexRefreshURL     = "https://auth.openai.com/oauth/token"
 	codexBackendRefreshSkew    = 5 * time.Minute
 	defaultCodexBackendPrompt  = "You are a concise assistant. Follow the user's instructions exactly."
+	codexBackendResumePrompt   = "When this conversation is resumed from a compacted context, reasoning summary, or history summary, treat that summary as the prior working state and continue the unfinished task. Do not reply with a generic acknowledgement that the context was loaded, and do not ask what to do next unless the latest user message explicitly asks for status only or a concrete blocker makes the next action impossible. If the user says to continue, proceed with the next concrete step from the summary."
+	defaultCodexBackendSummary = "detailed"
 )
 
 var defaultCodexBackendClient = &codexBackendClient{httpClient: &stdhttp.Client{}}
@@ -283,6 +285,7 @@ func codexBackendRequestFromGateway(path string, body []byte, requestModel strin
 	if err != nil {
 		return nil, "", err
 	}
+	input = codexBackendDropOrphanFunctionOutputs(input)
 	if len(input) == 0 {
 		return nil, "", fmt.Errorf("codex backend upstream prompt is empty")
 	}
@@ -297,14 +300,34 @@ func codexBackendRequestFromGateway(path string, body []byte, requestModel strin
 		"stream":              true,
 		"include":             []any{},
 	}
-	if strings.TrimSpace(instructions) == "" {
+	req["instructions"] = codexBackendInstructions(instructions)
+	reasoning := map[string]any{"summary": codexBackendReasoningSummary(payload)}
+	if reasoningEffort != "" {
+		reasoning["effort"] = reasoningEffort
+	}
+	req["reasoning"] = reasoning
+	return req, model, nil
+}
+
+func codexBackendInstructions(instructions string) string {
+	instructions = strings.TrimSpace(instructions)
+	if instructions == "" {
 		instructions = defaultCodexBackendPrompt
 	}
-	req["instructions"] = instructions
-	if reasoningEffort != "" {
-		req["reasoning"] = map[string]any{"effort": reasoningEffort}
+	if strings.Contains(instructions, codexBackendResumePrompt) {
+		return instructions
 	}
-	return req, model, nil
+	return instructions + "\n\n" + codexBackendResumePrompt
+}
+
+func codexBackendReasoningSummary(payload map[string]any) string {
+	raw := strings.ToLower(strings.TrimSpace(stringValue(mapValue(payload["reasoning"])["summary"])))
+	switch raw {
+	case "auto", "concise", "detailed":
+		return raw
+	default:
+		return defaultCodexBackendSummary
+	}
 }
 
 func codexBackendInputFromPayload(path string, payload map[string]any) (string, []any, error) {
@@ -645,6 +668,47 @@ func codexBackendFunctionCallOutputItem(callID string, output string) map[string
 		"call_id": callID,
 		"output":  output,
 	}
+}
+
+func codexBackendDropOrphanFunctionOutputs(input []any) []any {
+	if len(input) == 0 {
+		return input
+	}
+	seenCalls := make(map[string]struct{})
+	filtered := make([]any, 0, len(input))
+	dropped := false
+	for _, item := range input {
+		message := mapValue(item)
+		if message == nil {
+			filtered = append(filtered, item)
+			continue
+		}
+		switch stringValue(message["type"]) {
+		case "function_call":
+			callID := strings.TrimSpace(stringValue(message["call_id"]))
+			if callID != "" {
+				seenCalls[callID] = struct{}{}
+			}
+			filtered = append(filtered, item)
+		case "function_call_output":
+			callID := strings.TrimSpace(stringValue(message["call_id"]))
+			if callID == "" {
+				dropped = true
+				continue
+			}
+			if _, ok := seenCalls[callID]; !ok {
+				dropped = true
+				continue
+			}
+			filtered = append(filtered, item)
+		default:
+			filtered = append(filtered, item)
+		}
+	}
+	if !dropped {
+		return input
+	}
+	return filtered
 }
 
 func gatewayToolArgumentsString(value any) string {

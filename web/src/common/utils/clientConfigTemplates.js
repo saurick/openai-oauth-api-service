@@ -25,11 +25,16 @@ personality = "pragmatic"
 model = "gpt-5.5"
 model_provider = "openai"
 model_reasoning_effort = "medium"
+model_reasoning_summary = "detailed"
+model_supports_reasoning_summaries = true
+hide_agent_reasoning = false
 
 [profiles."openai"]
 model_provider = "openai"
 model = "gpt-5.5"
 model_reasoning_effort = "medium"
+model_reasoning_summary = "detailed"
+model_supports_reasoning_summaries = true
 model_verbosity = "medium"
 personality = "pragmatic"
 
@@ -43,6 +48,8 @@ experimental_bearer_token = "{{API_KEY}}"
 model_provider = "oauth-api-service"
 model = "gpt-5.5"
 model_reasoning_effort = "medium"
+model_reasoning_summary = "detailed"
+model_supports_reasoning_summaries = true
 model_verbosity = "medium"
 personality = "pragmatic"
 
@@ -50,6 +57,8 @@ personality = "pragmatic"
 model_provider = "oauth-api-service"
 model = "gpt-5.5"
 model_reasoning_effort = "low"
+model_reasoning_summary = "detailed"
+model_supports_reasoning_summaries = true
 model_verbosity = "low"
 personality = "pragmatic"
 
@@ -57,6 +66,8 @@ personality = "pragmatic"
 model_provider = "oauth-api-service"
 model = "gpt-5.5"
 model_reasoning_effort = "medium"
+model_reasoning_summary = "detailed"
+model_supports_reasoning_summaries = true
 model_verbosity = "medium"
 personality = "pragmatic"
 
@@ -64,6 +75,8 @@ personality = "pragmatic"
 model_provider = "oauth-api-service"
 model = "gpt-5.5"
 model_reasoning_effort = "high"
+model_reasoning_summary = "detailed"
+model_supports_reasoning_summaries = true
 model_verbosity = "medium"
 personality = "pragmatic"
 
@@ -71,6 +84,8 @@ personality = "pragmatic"
 model_provider = "oauth-api-service"
 model = "gpt-5.5"
 model_reasoning_effort = "xhigh"
+model_reasoning_summary = "detailed"
+model_supports_reasoning_summaries = true
 model_verbosity = "medium"
 personality = "pragmatic"
 

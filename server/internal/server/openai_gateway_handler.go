@@ -198,7 +198,7 @@ func (h *openAIGatewayHandler) handleModels(w stdhttp.ResponseWriter, r *stdhttp
 				"availability_nux":                 map[string]any{"message": ""},
 				"upgrade":                          nil,
 				"supports_reasoning_summaries":     true,
-				"default_reasoning_summary":        "auto",
+				"default_reasoning_summary":        "detailed",
 				"support_verbosity":                true,
 				"default_verbosity":                "medium",
 				"apply_patch_tool_type":            "freeform",

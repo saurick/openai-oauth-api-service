@@ -518,6 +518,52 @@ func TestCodexBackendRequestPassesAllReasoningEfforts(t *testing.T) {
 			if reasoning["effort"] != effort {
 				t.Fatalf("reasoning.effort = %v, want %s", reasoning["effort"], effort)
 			}
+			if reasoning["summary"] != "detailed" {
+				t.Fatalf("reasoning.summary = %v, want detailed", reasoning["summary"])
+			}
+		})
+	}
+}
+
+func TestCodexBackendRequestPreservesReasoningSummary(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "detailed",
+			body: `{"model":"gpt-5.5","reasoning":{"summary":"detailed"},"messages":[{"role":"user","content":"Reply OK"}]}`,
+			want: "detailed",
+		},
+		{
+			name: "none falls back to detailed",
+			body: `{"model":"gpt-5.5","reasoning":{"summary":"none"},"messages":[{"role":"user","content":"Reply OK"}]}`,
+			want: "detailed",
+		},
+		{
+			name: "missing falls back to detailed",
+			body: `{"model":"gpt-5.5","messages":[{"role":"user","content":"Reply OK"}]}`,
+			want: "detailed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, _, err := codexBackendRequestFromGateway("/v1/chat/completions", []byte(tt.body), "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			reasoning, ok := req["reasoning"].(map[string]any)
+			if !ok {
+				t.Fatalf("missing reasoning payload: %#v", req)
+			}
+			if reasoning["summary"] != tt.want {
+				t.Fatalf("reasoning.summary = %v, want %s", reasoning["summary"], tt.want)
+			}
+			if _, ok := reasoning["effort"]; ok {
+				t.Fatalf("unexpected reasoning.effort: %#v", reasoning)
+			}
 		})
 	}
 }
@@ -668,8 +714,12 @@ func TestCodexBackendRequestFromChatCompletionsPayload(t *testing.T) {
 	if model != "gpt-5.5" {
 		t.Fatalf("model = %q, want gpt-5.5", model)
 	}
-	if req["instructions"] != "Be concise." {
-		t.Fatalf("instructions = %q", req["instructions"])
+	instructions := stringValue(req["instructions"])
+	if !strings.Contains(instructions, "Be concise.") {
+		t.Fatalf("instructions = %q", instructions)
+	}
+	if !strings.Contains(instructions, "continue the unfinished task") {
+		t.Fatalf("instructions missing resume rule: %q", instructions)
 	}
 	reasoning := req["reasoning"].(map[string]any)
 	if reasoning["effort"] != "low" {
@@ -745,6 +795,64 @@ func TestCodexBackendRequestNormalizesFunctionCallIDForBackend(t *testing.T) {
 	call := input[1].(map[string]any)
 	if call["type"] != "function_call" || call["call_id"] != "call_1" || call["id"] != "fc_call_1" {
 		t.Fatalf("function call item = %#v", call)
+	}
+}
+
+func TestCodexBackendRequestDropsResponsesOrphanFunctionOutputs(t *testing.T) {
+	body := []byte(`{
+		"model": "gpt-5.5",
+		"input": [
+			{"role": "user", "content": "continue"},
+			{"type": "function_call_output", "call_id": "call_missing", "output": "stale output"},
+			{"type": "function_call", "id": "call_7DrSS117GxOq1ztYHVJCjrjZ", "call_id": "call_1", "name": "shell", "arguments": "{\"cmd\":\"pwd\"}"},
+			{"type": "function_call_output", "call_id": "call_1", "output": "C:\\Users\\sauri"}
+		]
+	}`)
+
+	req, _, err := codexBackendRequestFromGateway("/v1/responses", body, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := req["input"].([]any)
+	if len(input) != 3 {
+		t.Fatalf("input len = %d, want 3: %#v", len(input), input)
+	}
+	for _, item := range input {
+		message := item.(map[string]any)
+		if message["type"] == "function_call_output" && message["call_id"] == "call_missing" {
+			t.Fatalf("orphan function output was kept: %#v", input)
+		}
+	}
+	output := input[2].(map[string]any)
+	if output["type"] != "function_call_output" || output["call_id"] != "call_1" {
+		t.Fatalf("valid function output was not kept: %#v", input)
+	}
+}
+
+func TestCodexBackendRequestDropsChatOrphanToolResults(t *testing.T) {
+	body := []byte(`{
+		"model": "gpt-5.5",
+		"messages": [
+			{"role": "user", "content": "continue"},
+			{"role": "tool", "tool_call_id": "call_missing", "content": "stale output"},
+			{"role": "assistant", "tool_calls": [
+				{"id": "call_1", "type": "function", "function": {"name": "shell", "arguments": "{\"cmd\":\"pwd\"}"}}
+			]},
+			{"role": "tool", "tool_call_id": "call_1", "content": "C:\\Users\\sauri"}
+		]
+	}`)
+
+	req, _, err := codexBackendRequestFromGateway("/v1/chat/completions", body, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := req["input"].([]any)
+	if len(input) != 3 {
+		t.Fatalf("input len = %d, want 3: %#v", len(input), input)
+	}
+	output := input[2].(map[string]any)
+	if output["type"] != "function_call_output" || output["call_id"] != "call_1" {
+		t.Fatalf("valid tool output was not kept: %#v", input)
 	}
 }
 
@@ -890,8 +998,32 @@ func TestCodexBackendRequestUsesDefaultInstructions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if req["instructions"] != defaultCodexBackendPrompt {
-		t.Fatalf("instructions = %q, want default prompt", req["instructions"])
+	instructions := stringValue(req["instructions"])
+	if !strings.Contains(instructions, defaultCodexBackendPrompt) {
+		t.Fatalf("instructions = %q, want default prompt", instructions)
+	}
+	if !strings.Contains(instructions, "Do not reply with a generic acknowledgement") {
+		t.Fatalf("instructions missing resume rule: %q", instructions)
+	}
+}
+
+func TestCodexBackendRequestAppendsResumeRuleToExplicitInstructions(t *testing.T) {
+	body := []byte(`{
+		"model": "gpt-5.5",
+		"instructions": "Be concise.",
+		"input": "continue"
+	}`)
+
+	req, _, err := codexBackendRequestFromGateway("/v1/responses", body, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	instructions := stringValue(req["instructions"])
+	if !strings.Contains(instructions, "Be concise.") {
+		t.Fatalf("instructions lost explicit prompt: %q", instructions)
+	}
+	if !strings.Contains(instructions, "If the user says to continue, proceed with the next concrete step") {
+		t.Fatalf("instructions missing resume rule: %q", instructions)
 	}
 }
 
