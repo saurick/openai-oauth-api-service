@@ -1838,6 +1838,9 @@ async function assertKeyTableVisuals(page, scenarioName) {
       hasBatchResetAction: Array.from(
         main?.querySelectorAll('button') || []
       ).some((node) => node.textContent.trim() === '重置 API key'),
+      hasSelectPageCheckbox: Boolean(
+        main?.querySelector('thead input[aria-label="选择当前页 API 凭据"]')
+      ),
       hasPagination: Boolean(main?.querySelector('.admin-table-pagination')),
       hasRemarkHeader: document.body.innerText.includes('备注'),
       hasKeyIdentityHeader: document.body.innerText.includes('完整凭据'),
@@ -1963,6 +1966,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
   )
   assert(metrics.hasCurrentOperationRow, `${scenarioName} 缺少当前操作行`)
   assert(metrics.hasBatchResetAction, `${scenarioName} 缺少批量重置 API key 操作`)
+  assert(metrics.hasSelectPageCheckbox, `${scenarioName} 缺少表头全选框`)
   assert(metrics.hasTokenLimitHeader, `${scenarioName} 缺少百万 token 列头`)
   assert(metrics.hasTokenLimitValue, `${scenarioName} 缺少百万 token 换算展示`)
   assert(
@@ -2641,6 +2645,8 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
     await readKeyTableSelectionState(page),
     {
       checked: [true, false, false, false, false, false, false, false],
+      headerChecked: false,
+      headerIndeterminate: true,
       selectedRows: 1,
     },
     `${scenarioName} 单击第一行后应只选中第一条`
@@ -2651,6 +2657,8 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
     await readKeyTableSelectionState(page),
     {
       checked: [false, true, false, false, false, false, false, false],
+      headerChecked: false,
+      headerIndeterminate: true,
       selectedRows: 1,
     },
     `${scenarioName} 单击第二行后应互斥切换选择`
@@ -2661,9 +2669,38 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
     await readKeyTableSelectionState(page),
     {
       checked: [false, false, false, false, false, false, false, false],
+      headerChecked: false,
+      headerIndeterminate: false,
       selectedRows: 0,
     },
     `${scenarioName} 再次点击已选选择框应清空选择`
+  )
+
+  const headerCheckbox = page.locator(
+    'main table thead input[aria-label="选择当前页 API 凭据"]'
+  )
+  await headerCheckbox.click()
+  assert.deepEqual(
+    await readKeyTableSelectionState(page),
+    {
+      checked: [true, true, true, true, true, true, true, true],
+      headerChecked: true,
+      headerIndeterminate: false,
+      selectedRows: 8,
+    },
+    `${scenarioName} 表头全选应选中当前页所有凭据`
+  )
+
+  await headerCheckbox.click()
+  assert.deepEqual(
+    await readKeyTableSelectionState(page),
+    {
+      checked: [false, false, false, false, false, false, false, false],
+      headerChecked: false,
+      headerIndeterminate: false,
+      selectedRows: 0,
+    },
+    `${scenarioName} 表头全选再次点击应清空当前页选择`
   )
 
   await rows.nth(1).click()
@@ -2671,6 +2708,8 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
     await readKeyTableSelectionState(page),
     {
       checked: [false, true, false, false, false, false, false, false],
+      headerChecked: false,
+      headerIndeterminate: true,
       selectedRows: 1,
     },
     `${scenarioName} 选择清空后应可重新单击行选中`
@@ -2681,6 +2720,8 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
     await readKeyTableSelectionState(page),
     {
       checked: [false, true, true, false, false, false, false, false],
+      headerChecked: false,
+      headerIndeterminate: true,
       selectedRows: 2,
     },
     `${scenarioName} 选择框应支持多选后批量重置`
@@ -2726,6 +2767,16 @@ async function readKeyTableSelectionState(page) {
     checked: Array.from(
       document.querySelectorAll('main table tbody input[type="checkbox"]')
     ).map((node) => node.checked),
+    headerChecked: Boolean(
+      document.querySelector(
+        'main table thead input[aria-label="选择当前页 API 凭据"]'
+      )?.checked
+    ),
+    headerIndeterminate: Boolean(
+      document.querySelector(
+        'main table thead input[aria-label="选择当前页 API 凭据"]'
+      )?.indeterminate
+    ),
     selectedRows: document.querySelectorAll(
       'main table tbody tr.admin-table-row-selected'
     ).length,

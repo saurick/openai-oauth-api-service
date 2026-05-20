@@ -30,3 +30,26 @@ export function toggleTableSelection(selectedRowKeys, rowKey, checked) {
   }
   return current.filter((key) => String(key) !== String(rowKey))
 }
+
+export function toggleTablePageSelection(selectedRowKeys, rowKeys, checked) {
+  const current = Array.isArray(selectedRowKeys) ? selectedRowKeys : []
+  const pageKeys = Array.isArray(rowKeys)
+    ? rowKeys.filter((key) => key !== undefined && key !== null)
+    : []
+  if (pageKeys.length === 0) {
+    return current
+  }
+  const pageKeySet = new Set(pageKeys.map((key) => String(key)))
+  if (!checked) {
+    return current.filter((key) => !pageKeySet.has(String(key)))
+  }
+  const currentKeySet = new Set(current.map((key) => String(key)))
+  const next = [...current]
+  for (const key of pageKeys) {
+    if (!currentKeySet.has(String(key))) {
+      next.push(key)
+      currentKeySet.add(String(key))
+    }
+  }
+  return next
+}

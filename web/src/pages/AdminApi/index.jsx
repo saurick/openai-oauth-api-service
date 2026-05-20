@@ -14,6 +14,7 @@ import {
   getTableSelectionAfterClick,
   isInteractiveTableTarget,
   TABLE_ROW_INTERACTION_TITLE,
+  toggleTablePageSelection,
   toggleTableSelection,
 } from '@/common/utils/tableInteraction'
 
@@ -1389,6 +1390,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const [appliedUsageFilters, setAppliedUsageFilters] = useState(
     INITIAL_USAGE_FILTERS
   )
+  const pageKeySelectionRef = useRef(null)
   const selectedKeyIdSet = useMemo(
     () => new Set(selectedKeyIds),
     [selectedKeyIds]
@@ -1440,6 +1442,20 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     () => paginateItems(filteredKeys, keyPagination),
     [filteredKeys, keyPagination]
   )
+  const paginatedKeyIds = useMemo(
+    () => paginatedKeys.map((item) => item.id),
+    [paginatedKeys]
+  )
+  const selectedPaginatedKeyCount = useMemo(
+    () => paginatedKeyIds.filter((id) => selectedKeyIdSet.has(id)).length,
+    [paginatedKeyIds, selectedKeyIdSet]
+  )
+  const isPaginatedKeysAllSelected =
+    paginatedKeyIds.length > 0 &&
+    selectedPaginatedKeyCount === paginatedKeyIds.length
+  const isPaginatedKeysPartiallySelected =
+    selectedPaginatedKeyCount > 0 &&
+    selectedPaginatedKeyCount < paginatedKeyIds.length
   const paginatedKeyTokenStatsRows = useMemo(
     () => paginateItems(keyTokenStatsRows, keyStatsPagination),
     [keyStatsPagination, keyTokenStatsRows]
@@ -1754,9 +1770,16 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       return next.current === current.current &&
         next.pageSize === current.pageSize
         ? current
-        : next
+      : next
     })
   }, [usageTotal])
+
+  useEffect(() => {
+    if (pageKeySelectionRef.current) {
+      pageKeySelectionRef.current.indeterminate =
+        isPaginatedKeysPartiallySelected
+    }
+  }, [isPaginatedKeysPartiallySelected])
 
   useEffect(() => {
     const nextSearch = keySearchInput.trim()
@@ -2041,6 +2064,12 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const toggleKeySelection = (keyId, checked) => {
     setSelectedKeyIds((current) =>
       toggleTableSelection(current, keyId, checked)
+    )
+  }
+
+  const toggleCurrentPageKeySelection = (checked) => {
+    setSelectedKeyIds((current) =>
+      toggleTablePageSelection(current, paginatedKeyIds, checked)
     )
   }
 
@@ -2740,7 +2769,20 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               <table className={`${tableClass} min-w-[1360px]`}>
                 <thead>
                   <tr>
-                    <th className={selectionThClass}>选择</th>
+                    <th className={selectionThClass}>
+                      <input
+                        ref={pageKeySelectionRef}
+                        type="checkbox"
+                        checked={isPaginatedKeysAllSelected}
+                        onChange={(event) =>
+                          toggleCurrentPageKeySelection(event.target.checked)
+                        }
+                        disabled={paginatedKeyIds.length === 0}
+                        aria-label="选择当前页 API 凭据"
+                        title="选择当前页"
+                        className="admin-checkbox"
+                      />
+                    </th>
                     <th className={thClass}>备注</th>
                     <th className={thClass}>创建时间</th>
                     <th className={thClass}>更新时间</th>
