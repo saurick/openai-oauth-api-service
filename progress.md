@@ -3,6 +3,8 @@
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
 ## 2026-05-20 API key 重置与普通保存隔离
+- 补充完成：后台 `/admin-keys` 将单个 / 批量重置 API key、单个 / 批量删除 API 凭据从浏览器原生 `confirm` 改为项目内确认弹窗；弹窗展示操作标题、影响说明、取消按钮和危险确认按钮，提交期间锁定避免重复操作。
+- 确认弹窗补充验证通过：`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs src/common/utils/tableInteraction.js src/common/utils/tableInteraction.test.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd server && go test ./...`、`cd web && STYLE_L1_PORT=4347 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。`style:l1` 已覆盖单个重置确认弹窗、批量重置确认弹窗、批量重置执行、浅色 / 暗色目标区域盒模型，并断言不再触发浏览器原生确认框。
 - 补充完成：参考 `trade-erp` 表格选择交互，为 `/admin-keys` 凭据表头增加当前页全选复选框；行点击仍保持单选，行首复选框支持多选，表头复选框支持当前页全选 / 取消并在部分选中时显示半选态。
 - 补充完成：后台 `/admin-keys` 的「当前操作」区新增批量「重置 API key」按钮，支持选择框多选后一键轮换多个 key；确认后逐个调用 `api.key_reset_secret`，完成后展示本次所有新完整 key，并提供逐条复制和「复制全部完整凭据」。
 - 全选补充验证通过：`cd web && pnpm test`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs src/common/utils/tableInteraction.js src/common/utils/tableInteraction.test.mjs`、`cd web && pnpm build`、`cd server && go test ./...`、`cd web && STYLE_L1_PORT=4346 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。

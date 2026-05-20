@@ -2438,6 +2438,37 @@ async function assertKeyDoubleClickEdit(page, scenarioName) {
     resetMetrics.panelWidth > 0 && resetMetrics.panelHeight > 0,
     `${scenarioName} 编辑弹窗重置区块盒模型异常: ${JSON.stringify(resetMetrics)}`
   )
+  await dialog.getByRole('button', { name: '重置 API key' }).click()
+  const resetDialog = page.getByRole('dialog', { name: '重置 API key' })
+  await resetDialog.waitFor({ state: 'visible' })
+  const confirmMetrics = await resetDialog.evaluate((node) => ({
+    hasDescription:
+      node.innerText.includes('确认重置 API 凭据') &&
+      node.innerText.includes('旧 key 会立即失效') &&
+      node.innerText.includes('新生成的完整 key'),
+    hasCancel: Array.from(node.querySelectorAll('button')).some(
+      (button) => button.textContent.trim() === '取消'
+    ),
+    hasConfirm: Array.from(node.querySelectorAll('button')).some(
+      (button) => button.textContent.trim() === '重置 API key'
+    ),
+    rect: {
+      width: node.getBoundingClientRect().width,
+      height: node.getBoundingClientRect().height,
+    },
+  }))
+  assert(
+    confirmMetrics.hasDescription &&
+      confirmMetrics.hasCancel &&
+      confirmMetrics.hasConfirm,
+    `${scenarioName} 单个 key 重置确认弹窗内容异常: ${JSON.stringify(confirmMetrics)}`
+  )
+  assert(
+    confirmMetrics.rect.width > 0 && confirmMetrics.rect.height > 0,
+    `${scenarioName} 单个 key 重置确认弹窗盒模型异常: ${JSON.stringify(confirmMetrics)}`
+  )
+  await resetDialog.getByRole('button', { name: '取消' }).click()
+  await resetDialog.waitFor({ state: 'hidden' })
   await dialog.getByRole('button', { name: '取消' }).click()
   await dialog.waitFor({ state: 'hidden' })
 }
@@ -2727,14 +2758,51 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
     `${scenarioName} 选择框应支持多选后批量重置`
   )
 
-  page.once('dialog', async (dialog) => {
-    assert(
-      dialog.message().includes('确认重置选中的 2 个 API 凭据'),
-      `${scenarioName} 批量重置确认文案异常: ${dialog.message()}`
+  const nativeDialogMessages = []
+  const nativeDialogHandler = async (dialog) => {
+    nativeDialogMessages.push(dialog.message())
+    await dialog.dismiss().catch(() => {})
+  }
+  page.on('dialog', nativeDialogHandler)
+  try {
+    await page.getByRole('button', { name: '重置 API key' }).click()
+    const resetDialog = page.getByRole('dialog', { name: '批量重置 API key' })
+    await resetDialog.waitFor({ state: 'visible' })
+    const confirmMetrics = await resetDialog.evaluate((node) => ({
+      hasDescription:
+        node.innerText.includes('确认重置选中的 2 个 API 凭据') &&
+        node.innerText.includes('旧 key 会立即失效') &&
+        node.innerText.includes('同步到对应客户端'),
+      hasCancel: Array.from(node.querySelectorAll('button')).some(
+        (button) => button.textContent.trim() === '取消'
+      ),
+      hasConfirm: Array.from(node.querySelectorAll('button')).some(
+        (button) => button.textContent.trim() === '重置 2 个 key'
+      ),
+      rect: {
+        width: node.getBoundingClientRect().width,
+        height: node.getBoundingClientRect().height,
+      },
+    }))
+    assert.equal(
+      nativeDialogMessages.length,
+      0,
+      `${scenarioName} 不应再触发浏览器原生确认框: ${nativeDialogMessages.join(' | ')}`
     )
-    await dialog.accept()
-  })
-  await page.getByRole('button', { name: '重置 API key' }).click()
+    assert(
+      confirmMetrics.hasDescription &&
+        confirmMetrics.hasCancel &&
+        confirmMetrics.hasConfirm,
+      `${scenarioName} 批量重置确认弹窗内容异常: ${JSON.stringify(confirmMetrics)}`
+    )
+    assert(
+      confirmMetrics.rect.width > 0 && confirmMetrics.rect.height > 0,
+      `${scenarioName} 批量重置确认弹窗盒模型异常: ${JSON.stringify(confirmMetrics)}`
+    )
+    await resetDialog.getByRole('button', { name: '重置 2 个 key' }).click()
+  } finally {
+    page.off('dialog', nativeDialogHandler)
+  }
   await page.getByText('批量重置已完成，共生成 2 个新 key').waitFor()
   const batchMetrics = await page.evaluate(() => ({
     hasCopyAll: Array.from(document.querySelectorAll('button')).some(

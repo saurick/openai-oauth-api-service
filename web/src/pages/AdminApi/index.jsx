@@ -1364,6 +1364,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const [newKeyBatch, setNewKeyBatch] = useState([])
   const [editingKeyId, setEditingKeyId] = useState(null)
   const [resettingKey, setResettingKey] = useState(false)
+  const [confirmDialog, setConfirmDialog] = useState(null)
+  const [confirmSubmitting, setConfirmSubmitting] = useState(false)
   const [keyModalOpen, setKeyModalOpen] = useState(false)
   const [keyForm, setKeyForm] = useState(INITIAL_KEY_FORM)
   const [keySearchInput, setKeySearchInput] = useState('')
@@ -1923,24 +1925,39 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     setKeyModalOpen(false)
   }
 
-  const resetKeySecret = async () => {
-    if (!editingKeyId || resettingKey) return
-    const currentKey = keys.find((item) => item.id === editingKeyId)
-    const label = currentKey?.name || currentKey?.key_prefix || `ID ${editingKeyId}`
-    // eslint-disable-next-line no-alert
-    const confirmed = window.confirm(
-      `确认重置 API 凭据「${label}」吗？旧 key 会立即失效，需要把新生成的完整 key 同步到客户端。`
-    )
-    if (!confirmed) {
-      return
+  const openConfirmDialog = (config) => {
+    setErrMsg('')
+    setConfirmDialog({
+      cancelText: '取消',
+      tone: 'danger',
+      ...config,
+    })
+  }
+
+  const closeConfirmDialog = () => {
+    if (confirmSubmitting || resettingKey) return
+    setConfirmDialog(null)
+  }
+
+  const submitConfirmDialog = async () => {
+    if (!confirmDialog?.onConfirm || confirmSubmitting) return
+    setConfirmSubmitting(true)
+    try {
+      await confirmDialog.onConfirm()
+      setConfirmDialog(null)
+    } finally {
+      setConfirmSubmitting(false)
     }
+  }
+
+  const performResetKeySecret = async (keyId) => {
     setErrMsg('')
     setNewKey(null)
     setNewKeyBatch([])
     setResettingKey(true)
     try {
       const result = await apiRpc.call('key_reset_secret', {
-        key_id: editingKeyId,
+        key_id: keyId,
       })
       setNewKey(result?.data || null)
       setNewKeyBatch([])
@@ -1955,17 +1972,22 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     }
   }
 
-  const resetSelectedKeys = async () => {
-    if (selectedKeyIds.length === 0 || resettingKey) return
-    const count = selectedKeyIds.length
-    // eslint-disable-next-line no-alert
-    const confirmed = window.confirm(
-      `确认重置选中的 ${count} 个 API 凭据吗？旧 key 会立即失效，需要把新生成的完整 key 同步到客户端。`
-    )
-    if (!confirmed) {
-      return
-    }
+  const resetKeySecret = () => {
+    if (!editingKeyId || resettingKey) return
+    const keyId = editingKeyId
+    const currentKey = keys.find((item) => item.id === keyId)
+    const label = currentKey?.name || currentKey?.key_prefix || `ID ${keyId}`
+    openConfirmDialog({
+      title: '重置 API key',
+      description: `确认重置 API 凭据「${label}」吗？`,
+      detail: '旧 key 会立即失效，需要把新生成的完整 key 同步到客户端。',
+      confirmText: '重置 API key',
+      pendingText: '重置中...',
+      onConfirm: () => performResetKeySecret(keyId),
+    })
+  }
 
+  const performResetSelectedKeys = async (keyIds) => {
     setErrMsg('')
     setNewKey(null)
     setNewKeyBatch([])
@@ -1973,7 +1995,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
     const generated = []
     try {
-      for (const keyId of selectedKeyIds) {
+      for (const keyId of keyIds) {
         const result = await apiRpc.call('key_reset_secret', {
           key_id: keyId,
         })
@@ -1983,7 +2005,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       }
       setNewKeyBatch(generated)
       setSelectedKeyIds([])
-      if (selectedKeyIds.includes(editingKeyId)) {
+      if (keyIds.includes(editingKeyId)) {
         cancelEditKey()
       }
       await loadAll()
@@ -1996,6 +2018,20 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     } finally {
       setResettingKey(false)
     }
+  }
+
+  const resetSelectedKeys = () => {
+    if (selectedKeyIds.length === 0 || resettingKey) return
+    const keyIds = [...selectedKeyIds]
+    const count = keyIds.length
+    openConfirmDialog({
+      title: '批量重置 API key',
+      description: `确认重置选中的 ${count} 个 API 凭据吗？`,
+      detail: '旧 key 会立即失效，需要把新生成的完整 key 同步到对应客户端。',
+      confirmText: `重置 ${count} 个 key`,
+      pendingText: '重置中...',
+      onConfirm: () => performResetSelectedKeys(keyIds),
+    })
   }
 
   const handleKeySearchInputChange = (e) => {
@@ -2013,16 +2049,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     setKeyStatusFilter('')
   }
 
-  const deleteKey = async (item) => {
+  const performDeleteKey = async (item) => {
     const keyId = item?.id
-    const label = item?.name || item?.key_prefix || `ID ${keyId}`
-    // eslint-disable-next-line no-alert
-    const confirmed = window.confirm(
-      `确认删除 API 凭据「${label}」吗？删除后不可恢复，历史调用记录会保留。`
-    )
-    if (!confirmed) {
-      return
-    }
     setErrMsg('')
     setNewKeyBatch([])
     try {
@@ -2035,26 +2063,44 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     }
   }
 
-  const deleteSelectedKeys = async () => {
-    if (selectedKeyIds.length === 0) return
-    // eslint-disable-next-line no-alert
-    const confirmed = window.confirm(
-      `确认删除选中的 ${selectedKeyIds.length} 个 API 凭据吗？删除后不可恢复，历史调用记录会保留。`
-    )
-    if (!confirmed) {
-      return
-    }
+  const deleteKey = (item) => {
+    const keyId = item?.id
+    const label = item?.name || item?.key_prefix || `ID ${keyId}`
+    openConfirmDialog({
+      title: '删除 API 凭据',
+      description: `确认删除 API 凭据「${label}」吗？`,
+      detail: '删除后不可恢复，历史调用记录会保留。',
+      confirmText: '删除',
+      pendingText: '删除中...',
+      onConfirm: () => performDeleteKey(item),
+    })
+  }
+
+  const performDeleteSelectedKeys = async (keyIds) => {
     setErrMsg('')
     setNewKey(null)
     setNewKeyBatch([])
     try {
-      await apiRpc.call('key_delete_batch', { key_ids: selectedKeyIds })
-      if (selectedKeyIds.includes(editingKeyId)) cancelEditKey()
+      await apiRpc.call('key_delete_batch', { key_ids: keyIds })
+      if (keyIds.includes(editingKeyId)) cancelEditKey()
       setSelectedKeyIds([])
       await loadAll()
     } catch (err) {
       setErrMsg(getActionErrorMessage(err, '批量删除 API key'))
     }
+  }
+
+  const deleteSelectedKeys = () => {
+    if (selectedKeyIds.length === 0) return
+    const keyIds = [...selectedKeyIds]
+    openConfirmDialog({
+      title: '批量删除 API 凭据',
+      description: `确认删除选中的 ${keyIds.length} 个 API 凭据吗？`,
+      detail: '删除后不可恢复，历史调用记录会保留。',
+      confirmText: `删除 ${keyIds.length} 个凭据`,
+      pendingText: '删除中...',
+      onConfirm: () => performDeleteSelectedKeys(keyIds),
+    })
   }
 
   const selectKeyRow = (keyId) => {
@@ -3165,6 +3211,79 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       <span className={fieldHintClass}>{hint}</span>
     </label>
   )
+
+  const renderConfirmDialog = () => {
+    if (!confirmDialog) return null
+
+    const isBusy = confirmSubmitting || resettingKey
+    const confirmClass =
+      confirmDialog.tone === 'primary' ? primaryButtonClass : dangerButtonClass
+
+    return (
+      <div className="admin-modal-backdrop admin-confirm-backdrop">
+        <button
+          type="button"
+          className="admin-modal-overlay"
+          aria-label="关闭确认弹窗"
+          onClick={closeConfirmDialog}
+          disabled={isBusy}
+        />
+        <div
+          className="admin-modal-panel admin-confirm-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admin-confirm-title"
+          aria-describedby="admin-confirm-description"
+        >
+          <div className="admin-modal-header">
+            <div>
+              <h2 id="admin-confirm-title" className="admin-modal-title">
+                {confirmDialog.title}
+              </h2>
+              <p
+                id="admin-confirm-description"
+                className="admin-modal-description"
+              >
+                {confirmDialog.description}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={closeConfirmDialog}
+              className="admin-modal-close"
+              aria-label="关闭弹窗"
+              disabled={isBusy}
+            >
+              ×
+            </button>
+          </div>
+          <div className="admin-confirm-body">
+            <div className="admin-confirm-detail">{confirmDialog.detail}</div>
+          </div>
+          <div className="admin-modal-footer admin-confirm-footer">
+            <button
+              type="button"
+              onClick={closeConfirmDialog}
+              disabled={isBusy}
+              className={secondaryButtonClass}
+            >
+              {confirmDialog.cancelText}
+            </button>
+            <button
+              type="button"
+              onClick={submitConfirmDialog}
+              disabled={isBusy}
+              className={confirmClass}
+            >
+              {isBusy
+                ? confirmDialog.pendingText || '处理中...'
+                : confirmDialog.confirmText}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const renderKeyModal = () => {
     if (!keyModalOpen) return null
@@ -4595,6 +4714,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       {currentView === 'models' ? renderModelContextModal() : null}
       {renderUsageBucketDetailModal()}
       {renderUsageSessionDetailModal()}
+      {renderConfirmDialog()}
     </AdminFrame>
   )
 }
