@@ -2,6 +2,19 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-20 Codex reasoning summary 远端部署验证
+- 完成：当前环境无可用本地 Docker / WSL Docker，无法按常规方式构建镜像 tar；本轮改为在本地 WSL 交叉编译 linux/amd64 `server` 二进制，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260520T150611-82397c53-local-reasoning-summary/`，用 `docker cp` 替换现有 `app-server` 容器内 `/app/server` 后通过 Compose 重启；未在服务器执行 `docker build` / `go build`，未改管理员密码，也无 schema migration。
+- 完成：远端本机 `/healthz`、`/readyz` 和公网 `https://oauth-api.saurick.me/healthz`、`/readyz` 均返回正常；`/v1/models` 返回 `supports_reasoning_summaries=true`、`default_reasoning_summary=auto`。
+- 完成：公网 `/v1/responses stream=true` 携带 `reasoning.summary=detailed` 验证通过，SSE 包含 `response.reasoning_summary_text.delta`、`response.completed.output` 中的 `type=reasoning` item，最终答案包含 `DEPLOY_REASONING_SUMMARY_CN_OK`；网关将英文 reasoning summary 兜底替换为中文摘要“正在分析用户请求，核对上下文与约束，并组织最终回答。”。
+- 验证通过：`cd server && go test ./...`、远端健康检查、公网 Responses reasoning summary 流式调用。
+- 清理：部署前远端 `/` 使用率 51%、Docker images 4.244GB；按规则执行 `docker image prune -a -f` 与 `docker builder prune -f`，无可回收镜像 / 构建缓存，清理后 `/` 仍 51%、Docker images 4.244GB；未执行 volume prune。
+- 阻塞/风险：由于当前本机缺少 Docker，本轮线上容器镜像标签仍显示旧镜像 `oauth-api-service-server:20260520T131239-9bb58677`，实际运行的是替换后的新 `/app/server` 二进制；release 目录和容器内 `/app/server.prev*` 暂保留用于短期回滚。后续有可用 Docker 后建议补一次正式镜像构建发布，收口镜像标签与二进制版本口径。
+## 2026-05-20 Codex reasoning summary 支持
+- 完成：自定义 provider 的 `/v1/models` 元数据改为声明 `supports_reasoning_summaries=true`、默认 `auto`，便于本地 Codex 在 `wire_api="responses"` 下显示过程摘要能力。
+- 完成：direct backend 请求默认补 `reasoning.summary=auto`，并解析上游 `response.reasoning_summary_text.delta/done`；网关合成 Responses SSE 时会输出 reasoning summary 事件，并在 `response.completed.output` 中保留 `reasoning` item。
+- 完成：更新后端 API 文档，说明 reasoning summary 请求、stream 事件与模型元数据口径。
+- 下一步：用本地 Codex 自定义 provider 实际发起一次需要 reasoning 的请求，确认 UI 可展示中文摘要；若需要真正实时逐 token 过程，再把 backend SSE 从“收完后合成”升级为边读边转发。
+- 阻塞/风险：当前实现是最小改动，summary 会随最终结果一并下发，不是完全实时透传；UI 固定英文标签如 `Thinking` / `Running` 仍由 Codex 客户端决定。
 ## 2026-05-19 模型上下文弹窗布局修复
 - 完成：模型上下文策略弹窗改为专用宽度与响应式字段网格，字段内部增加 `min-width: 0`、输入框满宽、说明文字可换行，避免“填入当前值”、placeholder 和当前生效说明互相挤压、溢出或遮挡。
 - 完成：`style:l1` 的模型管理桌面场景新增该弹窗浅色 / 暗色盒模型断言，覆盖面板横向溢出、字段数量、输入框边界、填值按钮边界和字段头部滚动宽度。
