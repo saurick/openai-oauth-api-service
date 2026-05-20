@@ -11,8 +11,13 @@
 - 验证通过：`cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4336 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
 - Windows 验证：`ssh sauri@192.168.0.45` 确认 Codex CLI `0.125.0`、OpenCode `1.14.48`；Windows 能访问本机修复版服务 `http://192.168.0.26:8401/healthz`；用临时 provider `oauthlocal` 指向本机 `/v1` 后，`codex exec` 返回 `WIN_CODEX_LOCAL_PROVIDER_OK_2`，服务端 usage 记录 `/v1/responses`、`stream=true`、`status=200`、`success=true`、`upstream_mode=codex_backend`、`total_tokens=12072`。
 - 清理：Windows 验证用临时 API key 已删除；本机 8401 临时服务已停止。
-- 下一步：如需发布，按既有流程在本地构建镜像、上传并在远端仅执行 `docker load`、宿主机 Atlas migration、重启和健康检查；生产迁移会清除历史明文 key，部署前需要确认管理员已保存仍在使用的完整 key。
-- 阻塞/风险：迁移清空历史 `plain_key` 后，后台无法再找回旧完整 key；遗失的 key 需要新建替换。当前改动尚未部署到线上。
+- 提交推送：已提交并推送 `9bb5867`（修复 Codex 流式透传与凭据明文收敛）到 `origin/main`。
+- 部署：本地构建 amd64 镜像 `oauth-api-service-server:20260520T131239-9bb58677`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260520T131239-9bb58677/`；远端仅执行 `docker load`、宿主机 Atlas migration、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 迁移：远端先清理 release `migrate/._*` 资源叉文件；Atlas dry-run 仅包含 `UPDATE "gateway_api_keys" SET "plain_key" = '' WHERE "plain_key" <> '';`；正式 apply 后状态 `OK`、当前版本 `20260520090000`、待执行 `0`。
+- 部署验证：远端容器运行镜像 `oauth-api-service-server:20260520T131239-9bb58677`，容器环境 `GIT_SHA_SHORT=9bb58677`、`IMAGE_TAG=20260520T131239-9bb58677`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；管理员 `admin/adminadmin` 登录成功；临时 key 创建后只在创建响应返回完整明文，`key_list` 不返回 `plain_key`；`/v1/models` 返回 `supports_reasoning_summaries=true`、`default_reasoning_summary=auto`、`default_verbosity=medium`；生产 `/v1/responses stream=true` 返回 `response.completed`、`[DONE]` 和 `DEPLOY_STREAM_OK`；验证用临时 key 已删除；生产库 `plain_key` 非空数量为 `0`。
+- 清理：清理前远端 `/` 使用率 52%、Docker images 4.731GB；删除本轮远端 release 镜像 tar 后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260519T231421-9052e9d0`，回收 348.4MB；清理后 `/` 使用率 50%、Docker images 4.026GB，未执行 volume prune；本地镜像 tar 和 migration tar 已移入废纸篓。
+- 下一步：观察多人 Codex 长会话下的 usage 分布和 `response.failed` / `response.incomplete` 占比，必要时再按真实失败类型调整 backend fallback 策略。
+- 阻塞/风险：迁移已清空历史 `plain_key`，后台无法再找回旧完整 key；遗失的 key 需要新建替换。
 
 ## 2026-05-19 模型上下文弹窗布局修复
 - 完成：模型上下文策略弹窗改为专用宽度与响应式字段网格，字段内部增加 `min-width: 0`、输入框满宽、说明文字可换行，避免“填入当前值”、placeholder 和当前生效说明互相挤压、溢出或遮挡。
