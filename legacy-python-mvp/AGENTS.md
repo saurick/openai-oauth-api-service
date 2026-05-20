@@ -21,3 +21,8 @@ This legacy MVP is an OpenAI-compatible API forwarding and usage metering refere
 Codex 应优先遵循本仓库真实代码、项目文档和当前工作区状态。若 GPT prompt 与项目真源冲突，应收窄或修正执行范围，并在最终回复中说明原因。
 
 大型任务默认拆阶段执行，每一轮只完成一个可验证闭环。执行后应反馈已完成内容、未做内容、验证结果、剩余风险，以及建议下一步交给 GPT 分析的问题。
+
+## Git 推送前同步
+
+- 执行 `git push` 前，默认先执行 `git fetch` 并检查 `git status -sb` 或等价 upstream 状态，确认本地分支是否落后远端。
+- 若远端已有新提交，禁止直接强推覆盖。工作区干净时，优先使用 `git pull --ff-only`，或按项目规范 rebase / merge 后再推送；工作区不干净时，禁止为了 pull / push 默认 stash，优先用临时 `git worktree`、按路径精确提交 / 整合，或向用户说明分叉和风险。
