@@ -1878,7 +1878,30 @@ async function assertKeyTableVisuals(page, scenarioName) {
         ),
       mainHeight: mainRect?.height || 0,
       tableHeight: tableRect?.height || 0,
+      tableLayout: table ? window.getComputedStyle(table).tableLayout : '',
       tableWidth: tableRect?.width || 0,
+      keyCells: Array.from(table?.querySelectorAll('tbody tr') || []).map(
+        (row) => {
+          const cell = row.children[4]
+          const value = cell?.querySelector('.admin-key-value-text')
+          const button = cell?.querySelector('button')
+          const cellRect = cell?.getBoundingClientRect()
+          const valueRect = value?.getBoundingClientRect()
+          const buttonRect = button?.getBoundingClientRect()
+          const valueStyle = value ? window.getComputedStyle(value) : null
+          return {
+            buttonHeight: buttonRect?.height || 0,
+            buttonWidth: buttonRect?.width || 0,
+            cellHeight: cellRect?.height || 0,
+            cellWidth: cellRect?.width || 0,
+            overflowWrap: valueStyle?.overflowWrap || '',
+            text: value?.textContent.trim() || '',
+            valueHeight: valueRect?.height || 0,
+            valueWidth: valueRect?.width || 0,
+            wordBreak: valueStyle?.wordBreak || '',
+          }
+        }
+      ),
       selectionCheckboxes: Array.from(
         main?.querySelectorAll('table tbody input[type="checkbox"]') || []
       ).map((node) => {
@@ -1960,6 +1983,36 @@ async function assertKeyTableVisuals(page, scenarioName) {
   assert(metrics.mainHeight > 0, `${scenarioName} 后台内容区高度异常`)
   assert(metrics.tableHeight > 0, `${scenarioName} key 表格高度异常`)
   assert(metrics.tableWidth > 0, `${scenarioName} key 表格宽度异常`)
+  assert.equal(
+    metrics.tableLayout,
+    'fixed',
+    `${scenarioName} key 表格应使用固定列宽避免 Windows 下凭据列被压窄: ${JSON.stringify(metrics)}`
+  )
+  assert.equal(metrics.keyCells.length, 8, `${scenarioName} key 凭据列数量异常`)
+  for (const [index, keyCell] of metrics.keyCells.entries()) {
+    assert(
+      keyCell.cellWidth >= 220 && keyCell.valueWidth >= 140,
+      `${scenarioName} 第 ${index + 1} 个完整凭据列宽异常，可能导致逐字符竖排: ${JSON.stringify(keyCell)}`
+    )
+    assert(
+      keyCell.valueHeight <= 80,
+      `${scenarioName} 第 ${index + 1} 个完整凭据被异常竖排或撑高: ${JSON.stringify(keyCell)}`
+    )
+    assert(
+      keyCell.buttonWidth > 0 && keyCell.buttonHeight > 0,
+      `${scenarioName} 第 ${index + 1} 个复制按钮尺寸异常: ${JSON.stringify(keyCell)}`
+    )
+    assert.equal(
+      keyCell.wordBreak,
+      'normal',
+      `${scenarioName} 第 ${index + 1} 个完整凭据不应使用 break-all: ${JSON.stringify(keyCell)}`
+    )
+    assert.equal(
+      keyCell.overflowWrap,
+      'anywhere',
+      `${scenarioName} 第 ${index + 1} 个完整凭据应允许超长连续字符串安全换行: ${JSON.stringify(keyCell)}`
+    )
+  }
   assert.equal(
     metrics.selectionCheckboxes.length,
     8,
@@ -3041,7 +3094,8 @@ function getApiMockData(method, params = {}, state = {}) {
         updated_at: 1777950000,
         last_used_at: 1778000000,
         name: 'productionapikey',
-        plain_key: 'ogw_productionapikey_8a2c',
+        plain_key:
+          'ogw_productionapikey_8a2c_long_windows_regression_continuous_segment',
         upstream_strategy: 'backend_with_cli_fallback',
         quota_daily_billable_input_tokens: 450_000,
         quota_daily_input_tokens: 800_000,
@@ -3062,7 +3116,8 @@ function getApiMockData(method, params = {}, state = {}) {
         updated_at: 1777850000,
         last_used_at: 0,
         name: 'stagingkeylongnameforoverflowcheck',
-        plain_key: 'ogw_stagingkeylongname_3f9d',
+        plain_key:
+          'ogw_stagingkeylongname_3f9d_long_windows_regression_continuous_segment',
         upstream_strategy: '',
         quota_daily_billable_input_tokens: 0,
         quota_daily_input_tokens: 0,
@@ -3086,7 +3141,7 @@ function getApiMockData(method, params = {}, state = {}) {
         updated_at: 1777750000 - index * 1_000,
         last_used_at: 1777990000 - index * 100,
         name: `extraapikey${id}`,
-        plain_key: `ogw_extraapikey${id}_x${id}`,
+        plain_key: `ogw_extraapikey${id}_x${id}_long_windows_regression_continuous_segment`,
         upstream_strategy: index % 2 === 0 ? 'backend_only' : 'codex_cli',
         quota_daily_billable_input_tokens: 0,
         quota_daily_input_tokens: 0,

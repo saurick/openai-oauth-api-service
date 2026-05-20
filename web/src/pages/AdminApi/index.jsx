@@ -39,6 +39,8 @@ const KEY_TOKEN_WINDOWS = [
 ]
 const tableWrapClass = 'overflow-hidden rounded-lg border border-[#dde8df]'
 const tableClass = 'admin-data-table text-left text-sm text-[#1f2d25]'
+const keyTableClass =
+  'admin-data-table admin-key-table text-left text-sm text-[#1f2d25]'
 const thClass =
   'whitespace-nowrap bg-[#f5fbf7] px-4 py-3 font-semibold text-[#66736b]'
 const tdClass = 'px-4 py-4 text-[#1f2d25]'
@@ -2633,7 +2635,18 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
           <div className={tableWrapClass}>
             <div className="overflow-auto">
-              <table className={`${tableClass} min-w-[1360px]`}>
+              <table className={`${keyTableClass} min-w-[1360px]`}>
+                <colgroup>
+                  <col className="admin-key-table-selection-col" />
+                  <col className="admin-key-table-remark-col" />
+                  <col className="admin-key-table-date-col" />
+                  <col className="admin-key-table-date-col" />
+                  <col className="admin-key-table-key-col" />
+                  <col className="admin-key-table-model-col" />
+                  <col className="admin-key-table-upstream-col" />
+                  <col className="admin-key-table-quota-col" />
+                  <col className="admin-key-table-status-col" />
+                </colgroup>
                 <thead>
                   <tr>
                     <th className={selectionThClass}>选择</th>
@@ -2693,8 +2706,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                             {fmtTs(item.updated_at)}
                           </td>
                           <td className={`${tdClass} font-mono text-xs`}>
-                            <div className="flex max-w-[360px] items-start gap-2">
-                              <span className="min-w-0 break-all">
+                            <div className="admin-key-value-cell">
+                              <span className="admin-key-value-text">
                                 {item.plain_key ||
                                   `${item.key_prefix}…${item.key_last4}`}
                               </span>

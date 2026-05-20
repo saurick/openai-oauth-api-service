@@ -631,3 +631,9 @@
 - 线上验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260519T172757-fb7d27d1`，容器环境 `GIT_SHA=fb7d27d19cdf177dc210cd90095c437e30f3f2a2`；本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；本机和公网 `/public/codex/balance` 均返回 `status=ok`，credits 为 `0`，公开页面 `/admin-codex-balance` 返回 `HTTP 200`。
 - 浏览器回归：公网 `https://oauth-api.saurick.me/admin-codex-balance` 通过 Playwright 登录管理员后验证，页面可见接口状态「正常」、Credits remaining、Codex 与 GPT-5.3-Codex-Spark 两张卡和 4 条额度进度条；桌面 1440x900 无横向溢出，控制台无错误。
 - 清理：部署前远端 `/` 使用率 53%、Docker images 5.434GB；执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未使用旧镜像 `20260519T081406-86bd2f65-local` 与 `20260519T164255-6f72a8ec-balance-local`，回收 696.5MB；清理后 `/` 使用率 50%、Docker images 4.026GB；已删除远端本轮 release image tar 包，未执行 volume prune。
+
+## 2026-05-20 Windows API 凭据表格样式修复
+- 完成：修复 `/admin-keys` API 凭据表格在 Windows 下“完整凭据”列被压窄后逐字符竖排的问题；该表改为固定列宽，并为完整凭据列使用 `overflow-wrap:anywhere` + `word-break:normal`，避免 `break-all` 在窄列中产生单字符换行。
+- 完成：`style:l1` 的 API 凭据 mock 数据补充超长连续 key，并新增表格布局、完整凭据列宽/高度、复制按钮尺寸和换行策略断言，覆盖 Windows 字体/滚动条差异导致的回归。
+- 下一步：执行前端 lint/css/test/build 与 `style:l1` 回归；重点确认浅色、暗色、桌面和移动视口下 API 凭据表默认态、选择态、弹窗和分页交互不受影响。
+- 阻塞/风险：本地 PowerShell 环境无 `pnpm`，需通过 WSL 执行前端命令；当前仓库 `.npmrc` 读取时会提示 FontAwesome token 环境变量占位符未注入，若依赖未完整安装可能需要先配置环境变量或安装依赖。
