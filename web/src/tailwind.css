@@ -1118,6 +1118,35 @@
   padding-top: 4px;
 }
 
+.admin-confirm-backdrop {
+  z-index: 90;
+}
+
+.admin-confirm-panel {
+  width: min(520px, 100%);
+}
+
+.admin-confirm-body {
+  display: grid;
+  gap: 12px;
+  padding: 16px 20px 4px;
+}
+
+.admin-confirm-detail {
+  border: 1px solid #f2d19b;
+  border-radius: 8px;
+  background: #fff8e8;
+  padding: 12px 14px;
+  color: #7a4b00;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.admin-confirm-footer {
+  padding: 16px 20px 20px;
+}
+
 /* stylelint-disable no-descending-specificity, no-duplicate-selectors -- 暗夜模式需要在原有浅色规则之后按同一选择器覆盖生效值。 */
 .admin-login-shell [class~='bg-white'],
 .admin-frame [class~='bg-white/95'],
@@ -1334,6 +1363,12 @@
 
 .admin-modal-panel {
   box-shadow: var(--admin-modal-shadow);
+}
+
+.admin-confirm-detail {
+  border-color: var(--admin-warning-border);
+  background-color: var(--admin-warning-bg);
+  color: var(--admin-warning-text);
 }
 
 :root[data-admin-theme='dark'] .admin-frame [class~='text-white'],

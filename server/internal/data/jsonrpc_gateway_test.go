@@ -45,7 +45,7 @@ func TestMapGatewayAPIKeyForRPCIsStructCompatible(t *testing.T) {
 		t.Fatalf("unexpected allowed_models: %#v", models)
 	}
 	if s.AsMap()["plain_key"] != "ogw_plain" {
-		t.Fatalf("plain_key = %#v, want ogw_plain", s.AsMap()["plain_key"])
+		t.Fatalf("plain_key should be included for admin payloads: %#v", s.AsMap())
 	}
 	if s.AsMap()["quota_daily_tokens"] != float64(300) ||
 		s.AsMap()["quota_weekly_tokens"] != float64(900) {
@@ -65,7 +65,7 @@ func TestMapGatewayAPIKeyForRPCCanHidePlainKey(t *testing.T) {
 	item := &biz.GatewayAPIKey{ID: 1, Name: "smoke", PlainKey: "ogw_plain"}
 	data := mapGatewayAPIKeyForRPC(item, false)
 	if _, ok := data["plain_key"]; ok {
-		t.Fatalf("plain_key should be hidden when includePlainKey=false")
+		t.Fatalf("plain_key should be hidden for non-admin payloads")
 	}
 }
 

@@ -50,6 +50,7 @@ HTTP 路由：
 - `key_list`
 - `key_create`
 - `key_update`
+- `key_reset_secret`
 - `key_delete`
 - `key_set_disabled`
 - `gateway_upstream_get`
@@ -78,7 +79,7 @@ HTTP 路由：
 - `user_usage_summary`
 - `user_usage_list`
 
-用途：管理员管理下游 API key、组织用户归属、key+model 策略、key 级上游策略覆盖、固定官方模型列表启停、模型级上下文压缩策略、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；若创建参数 `name` 非空，备注必须只包含字母和数字，并会生成 `ogw_<name>_<random>` 形式的明文 key。数据库保存 `plain_key` 用于后台展示，同时保存 `key_hash` 用于鉴权匹配，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
+用途：管理员管理下游 API key、组织用户归属、key+model 策略、key 级上游策略覆盖、固定官方模型列表启停、模型级上下文压缩策略、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；若创建参数 `name` 非空，备注必须只包含字母和数字，并会生成 `ogw_<name>_<random>` 形式的明文 key。管理员 `api.key_list` / `api.key_update` 返回完整 `plain_key` 供后台展示和复制；普通组织用户接口不返回完整明文。`api.key_update` 只保存备注、额度、模型权限、上游策略和禁用状态，不会重新生成 key；key 泄密或需要轮换时调用 `api.key_reset_secret` 单独重置。鉴权继续使用 `key_hash`，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
 
 模型目录以服务端代码中的官方 Codex 列表为真源，管理端只允许读取、启停和调整上下文压缩策略；`model_upsert` / `model_delete` 不作为正式管理接口开放。`api.model_context_update` 支持按模型保存 `context_window_tokens`、`context_compact_tokens`、`context_hard_tokens`、`context_compact_bytes`、`context_hard_bytes` 和 `context_keep_items`，阈值字段可传整数或 `260K` / `0.38M` 这类字符串，`K=1000`、`M=1000000`；`0` 表示使用服务端推荐 / 运维覆盖值；保存后仅影响后续请求，不改写历史 usage。内置推荐按 Codex 使用体验控制在 `400K` 上下文窗口内，默认 `260K` 开始压缩、`380K` 硬拦截，避免默认进入 API long-context 高消耗区间。
 
@@ -117,8 +118,8 @@ usage 记录：
 - direct backend 会在转发 Responses `function_call` 历史前规范化 item `id`，避免客户端回传空字符串或非法字符时触发上游 `input[n].id` 校验错误
 - `/v1/chat/completions` 和 `/v1/responses` 在请求体接近上下文窗口时会先做网关侧压缩预检：阈值按模型级配置、环境变量运维覆盖、内置模型推荐值和旧默认兜底依次决定；压缩会保留系统 / developer 指令、最近消息和最近完整工具闭环，较早历史压缩为工程摘要；如果客户端传入 `session_id`，摘要会按 session 保存并在后台会话聚合展示压缩次数、摘要、压缩前后体积、粗估 token 和本次生效阈值。
 - 上下文压缩后仍超过硬阈值，或 Codex backend 明确返回 `context_length_exceeded` 时，usage 会记录 `upstream_error_type=context_length_exceeded`，避免继续显示成普通 `codex_backend_response_failed` / 502；非流式预检拦截返回 HTTP `413`，流式已开始后会在 SSE 内返回 `response.failed`。
-- `/v1/chat/completions` 和 `/v1/responses` 的 `stream=true` 会先返回并 flush 首包，等待 Codex backend/CLI 结果期间按 `GATEWAY_STREAM_HEARTBEAT_SECONDS` 输出保活事件，避免 Codex / OpenCode / Cloudflare / 代理在长请求无输出时断开连接。`/v1/responses` 首包为 `response.created`，等待期间继续输出标准 `response.in_progress`，随后输出 `response.output_item.added`、`response.reasoning_summary_text.delta`、`response.content_part.added`、`response.output_text.delta` 和 `response.completed`，用于兼容 Codex CLI 自定义 `wire_api="responses"` provider；如果上游在首字节后失败，会在 SSE 内返回 `response.failed` 与 `[DONE]`，不再尝试把已开始的流改写成 HTTP 502。下游客户端主动断开会按 `client_canceled` 记录，不再归类为 Backend 上游 502。
-- `/v1/models` 除 OpenAI 标准 `data` 外还返回 Codex CLI 读取的 `models` 元数据，包括 reasoning levels、shell type、context window 和输入模态等字段，用于兼容自定义 provider 的模型刷新；context window 使用当前模型的生效上下文窗口，`effective_context_window_percent` 使用硬拦截阈值占窗口比例；当前网关会解析并下发 Codex backend 的 reasoning summary 摘要事件，因此模型元数据声明 `supports_reasoning_summaries=true`、`default_reasoning_summary=auto`
+- `/v1/chat/completions` 和 `/v1/responses` 的 `stream=true` 会按 `GATEWAY_STREAM_HEARTBEAT_SECONDS` 输出保活事件，避免 Codex / OpenCode / Cloudflare / 代理在长请求无输出时断开连接。`/v1/responses` 在 Codex backend 模式下直连透传上游 Responses SSE `data:` 事件，包括 `response.reasoning_summary_text.delta/done`、执行过程、文本增量、完成事件和 usage；网关只旁路解析 usage / 错误用于落库。CLI 模式和 Chat Completions 兼容入口仍会按 OpenAI SSE 口径合成下游事件，并在有 reasoning summary 时输出 reasoning item / summary 事件。上游在流内失败时返回 `response.failed` 与 `[DONE]`；下游客户端主动断开会按 `client_canceled` 记录，不再归类为 Backend 上游 502。
+- `/v1/models` 除 OpenAI 标准 `data` 外还返回 Codex CLI 读取的 `models` 元数据，包括 reasoning levels、shell type、context window、reasoning summary、verbosity 和输入模态等字段，用于兼容自定义 provider 的模型刷新；context window 使用当前模型的生效上下文窗口，`effective_context_window_percent` 使用硬拦截阈值占窗口比例；默认按 Codex 体验声明 `supports_reasoning_summaries=true`、`default_reasoning_summary=auto`、`default_verbosity=medium`
 - OpenAI-compatible 图片输入支持 data URL 形式的 `image_url` / `input_image`；CLI 模式会临时落盘并通过 Codex CLI `--image` 附加到本次请求，direct backend 模式会直接传入 `/responses` 内容；单次最多 4 张、单张最大 16 MiB
 - OpenAI-compatible PDF 输入支持 `input_file` / `file` 的 `application/pdf` data URL，或带 `mimeType=application/pdf` / `media_type=application/pdf` 的 base64 文件数据；PDF 仅支持 direct backend 模式，单次最多 4 个、单个最大 16 MiB。`txt` / `md` / 代码等文本类附件由客户端读取成文本后按普通 `text` 输入转发；`doc` / `docx` / `xls` / `xlsx` 暂不声明为原生模态，后续如需支持应先增加明确的服务端转换链路。
 - 默认不保存 prompt、response body 或正文采样
@@ -213,7 +214,7 @@ HTTP 路由：
 
 ### `api.key_create`
 
-创建参数 `name` 可留空；非空时只允许 ASCII 字母和数字。留空时后端使用 `key<last4>` 作为默认备注，并同样写入新 key 明文前缀。`api.key_update` 更新备注时沿用同一限制；更新备注会把既有 `ogw_<old_remark>_<random>` 改写为 `ogw_<new_remark>_<random>`，保留原随机段，并同步更新 `plain_key`、`key_hash`、`key_prefix` 和 `key_last4`。
+创建参数 `name` 可留空；非空时只允许 ASCII 字母和数字。留空时后端使用 `key<hash>` 形式的默认备注，并同样写入新 key 明文前缀。`api.key_update` 更新备注时沿用同一限制；普通编辑只更新备注、额度、模型权限、上游策略和禁用状态，不改写 `key_hash`、`plain_key`、`key_prefix` 或 `key_last4`。管理员列表和编辑响应会返回完整 `plain_key`。
 
 返回创建后的 key 元数据和完整明文：
 
@@ -235,6 +236,27 @@ HTTP 路由：
 - `quota_weekly_billable_input_tokens`
 - `disabled`
 - `owner_user_id`
+
+### `api.key_reset_secret`
+
+参数：
+
+- `key_id`
+
+用途：在确认某个下游 key 泄密或需要主动轮换时，单独重置该 key 的完整明文和鉴权 hash。重置会立即让旧 key 失效，同时保留备注、归属、模型限制、上游策略、额度、启用状态和历史 usage 归属。
+
+返回重置后的 key 元数据和新的完整明文：
+
+- `id`
+- `name`
+- `key_prefix`
+- `key_last4`
+- `plain_key`
+- `allowed_models`
+- `upstream_strategy`
+- `quota_daily_tokens`
+- `quota_weekly_tokens`
+- `disabled`
 
 ### 上游错误类型
 

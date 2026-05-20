@@ -14,6 +14,7 @@ import {
   getTableSelectionAfterClick,
   isInteractiveTableTarget,
   TABLE_ROW_INTERACTION_TITLE,
+  toggleTablePageSelection,
   toggleTableSelection,
 } from '@/common/utils/tableInteraction'
 
@@ -1198,6 +1199,19 @@ function apiKeyRemark(item) {
   return item?.api_key_name || item?.name || '无备注'
 }
 
+function apiKeyPlainText(item) {
+  return item?.plain_key || ''
+}
+
+function apiKeyDisplayText(item) {
+  const plainKey = apiKeyPlainText(item)
+  if (plainKey) return plainKey
+  if (item?.key_prefix && item?.key_last4) {
+    return `${item.key_prefix}…${item.key_last4}`
+  }
+  return item?.key_prefix || '-'
+}
+
 function ApiKeyUsageCell({ item }) {
   return (
     <div className="min-w-[160px]">
@@ -1349,7 +1363,11 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const [usageSessionDetailLoading, setUsageSessionDetailLoading] =
     useState(false)
   const [newKey, setNewKey] = useState(null)
+  const [newKeyBatch, setNewKeyBatch] = useState([])
   const [editingKeyId, setEditingKeyId] = useState(null)
+  const [resettingKey, setResettingKey] = useState(false)
+  const [confirmDialog, setConfirmDialog] = useState(null)
+  const [confirmSubmitting, setConfirmSubmitting] = useState(false)
   const [keyModalOpen, setKeyModalOpen] = useState(false)
   const [keyForm, setKeyForm] = useState(INITIAL_KEY_FORM)
   const [keySearchInput, setKeySearchInput] = useState('')
@@ -1376,6 +1394,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const [appliedUsageFilters, setAppliedUsageFilters] = useState(
     INITIAL_USAGE_FILTERS
   )
+  const pageKeySelectionRef = useRef(null)
   const selectedKeyIdSet = useMemo(
     () => new Set(selectedKeyIds),
     [selectedKeyIds]
@@ -1427,6 +1446,20 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     () => paginateItems(filteredKeys, keyPagination),
     [filteredKeys, keyPagination]
   )
+  const paginatedKeyIds = useMemo(
+    () => paginatedKeys.map((item) => item.id),
+    [paginatedKeys]
+  )
+  const selectedPaginatedKeyCount = useMemo(
+    () => paginatedKeyIds.filter((id) => selectedKeyIdSet.has(id)).length,
+    [paginatedKeyIds, selectedKeyIdSet]
+  )
+  const isPaginatedKeysAllSelected =
+    paginatedKeyIds.length > 0 &&
+    selectedPaginatedKeyCount === paginatedKeyIds.length
+  const isPaginatedKeysPartiallySelected =
+    selectedPaginatedKeyCount > 0 &&
+    selectedPaginatedKeyCount < paginatedKeyIds.length
   const paginatedKeyTokenStatsRows = useMemo(
     () => paginateItems(keyTokenStatsRows, keyStatsPagination),
     [keyStatsPagination, keyTokenStatsRows]
@@ -1741,9 +1774,16 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       return next.current === current.current &&
         next.pageSize === current.pageSize
         ? current
-        : next
+      : next
     })
   }, [usageTotal])
+
+  useEffect(() => {
+    if (pageKeySelectionRef.current) {
+      pageKeySelectionRef.current.indeterminate =
+        isPaginatedKeysPartiallySelected
+    }
+  }, [isPaginatedKeysPartiallySelected])
 
   useEffect(() => {
     const nextSearch = keySearchInput.trim()
@@ -1757,6 +1797,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     e.preventDefault()
     setErrMsg('')
     setNewKey(null)
+    setNewKeyBatch([])
     try {
       if (editingKeyId) {
         const currentKey = keys.find((item) => item.id === editingKeyId)
@@ -1835,6 +1876,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
   const openCreateKey = () => {
     setNewKey(null)
+    setNewKeyBatch([])
     setEditingKeyId(null)
     setKeyForm(INITIAL_KEY_FORM)
     setKeyModalOpen(true)
@@ -1846,6 +1888,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         ? item.allowed_models[0]
         : ''
     setNewKey(null)
+    setNewKeyBatch([])
     setEditingKeyId(item.id)
     setKeyForm({
       remark: item.name || '',
@@ -1884,6 +1927,115 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     setKeyModalOpen(false)
   }
 
+  const openConfirmDialog = (config) => {
+    setErrMsg('')
+    setConfirmDialog({
+      cancelText: '取消',
+      tone: 'danger',
+      ...config,
+    })
+  }
+
+  const closeConfirmDialog = () => {
+    if (confirmSubmitting || resettingKey) return
+    setConfirmDialog(null)
+  }
+
+  const submitConfirmDialog = async () => {
+    if (!confirmDialog?.onConfirm || confirmSubmitting) return
+    setConfirmSubmitting(true)
+    try {
+      await confirmDialog.onConfirm()
+      setConfirmDialog(null)
+    } finally {
+      setConfirmSubmitting(false)
+    }
+  }
+
+  const performResetKeySecret = async (keyId) => {
+    setErrMsg('')
+    setNewKey(null)
+    setNewKeyBatch([])
+    setResettingKey(true)
+    try {
+      const result = await apiRpc.call('key_reset_secret', {
+        key_id: keyId,
+      })
+      setNewKey(result?.data || null)
+      setNewKeyBatch([])
+      setEditingKeyId(null)
+      setKeyForm(INITIAL_KEY_FORM)
+      setKeyModalOpen(false)
+      await loadAll()
+    } catch (err) {
+      setErrMsg(getActionErrorMessage(err, '重置 API key'))
+    } finally {
+      setResettingKey(false)
+    }
+  }
+
+  const resetKeySecret = () => {
+    if (!editingKeyId || resettingKey) return
+    const keyId = editingKeyId
+    const currentKey = keys.find((item) => item.id === keyId)
+    const label = currentKey?.name || currentKey?.key_prefix || `ID ${keyId}`
+    openConfirmDialog({
+      title: '重置 API key',
+      description: `确认重置 API 凭据「${label}」吗？`,
+      detail: '旧 key 会立即失效，需要把新生成的完整 key 同步到客户端。',
+      confirmText: '重置 API key',
+      pendingText: '重置中...',
+      onConfirm: () => performResetKeySecret(keyId),
+    })
+  }
+
+  const performResetSelectedKeys = async (keyIds) => {
+    setErrMsg('')
+    setNewKey(null)
+    setNewKeyBatch([])
+    setResettingKey(true)
+
+    const generated = []
+    try {
+      for (const keyId of keyIds) {
+        const result = await apiRpc.call('key_reset_secret', {
+          key_id: keyId,
+        })
+        if (result?.data?.plain_key) {
+          generated.push(result.data)
+        }
+      }
+      setNewKeyBatch(generated)
+      setSelectedKeyIds([])
+      if (keyIds.includes(editingKeyId)) {
+        cancelEditKey()
+      }
+      await loadAll()
+    } catch (err) {
+      if (generated.length > 0) {
+        setNewKeyBatch(generated)
+      }
+      setErrMsg(getActionErrorMessage(err, '批量重置 API key'))
+      await loadAll()
+    } finally {
+      setResettingKey(false)
+    }
+  }
+
+  const resetSelectedKeys = () => {
+    if (selectedKeyIds.length === 0 || resettingKey) return
+    const keyIds = [...selectedKeyIds]
+    const count = keyIds.length
+    openConfirmDialog({
+      title: '批量重置 API key',
+      description: `确认重置选中的 ${count} 个 API 凭据吗？`,
+      detail: '旧 key 会立即失效，需要把新生成的完整 key 同步到对应客户端。',
+      confirmText: `重置 ${count} 个 key`,
+      pendingText: '重置中...',
+      onConfirm: () => performResetSelectedKeys(keyIds),
+    })
+  }
+
   const handleKeySearchInputChange = (e) => {
     setErrMsg('')
     setSelectedKeyIds([])
@@ -1899,17 +2051,10 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     setKeyStatusFilter('')
   }
 
-  const deleteKey = async (item) => {
+  const performDeleteKey = async (item) => {
     const keyId = item?.id
-    const label = item?.name || item?.key_prefix || `ID ${keyId}`
-    // eslint-disable-next-line no-alert
-    const confirmed = window.confirm(
-      `确认删除 API 凭据「${label}」吗？删除后不可恢复，历史调用记录会保留。`
-    )
-    if (!confirmed) {
-      return
-    }
     setErrMsg('')
+    setNewKeyBatch([])
     try {
       await apiRpc.call('key_delete', { key_id: keyId })
       if (editingKeyId === keyId) cancelEditKey()
@@ -1920,24 +2065,44 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     }
   }
 
-  const deleteSelectedKeys = async () => {
-    if (selectedKeyIds.length === 0) return
-    // eslint-disable-next-line no-alert
-    const confirmed = window.confirm(
-      `确认删除选中的 ${selectedKeyIds.length} 个 API 凭据吗？删除后不可恢复，历史调用记录会保留。`
-    )
-    if (!confirmed) {
-      return
-    }
+  const deleteKey = (item) => {
+    const keyId = item?.id
+    const label = item?.name || item?.key_prefix || `ID ${keyId}`
+    openConfirmDialog({
+      title: '删除 API 凭据',
+      description: `确认删除 API 凭据「${label}」吗？`,
+      detail: '删除后不可恢复，历史调用记录会保留。',
+      confirmText: '删除',
+      pendingText: '删除中...',
+      onConfirm: () => performDeleteKey(item),
+    })
+  }
+
+  const performDeleteSelectedKeys = async (keyIds) => {
     setErrMsg('')
+    setNewKey(null)
+    setNewKeyBatch([])
     try {
-      await apiRpc.call('key_delete_batch', { key_ids: selectedKeyIds })
-      if (selectedKeyIds.includes(editingKeyId)) cancelEditKey()
+      await apiRpc.call('key_delete_batch', { key_ids: keyIds })
+      if (keyIds.includes(editingKeyId)) cancelEditKey()
       setSelectedKeyIds([])
       await loadAll()
     } catch (err) {
       setErrMsg(getActionErrorMessage(err, '批量删除 API key'))
     }
+  }
+
+  const deleteSelectedKeys = () => {
+    if (selectedKeyIds.length === 0) return
+    const keyIds = [...selectedKeyIds]
+    openConfirmDialog({
+      title: '批量删除 API 凭据',
+      description: `确认删除选中的 ${keyIds.length} 个 API 凭据吗？`,
+      detail: '删除后不可恢复，历史调用记录会保留。',
+      confirmText: `删除 ${keyIds.length} 个凭据`,
+      pendingText: '删除中...',
+      onConfirm: () => performDeleteSelectedKeys(keyIds),
+    })
   }
 
   const selectKeyRow = (keyId) => {
@@ -1947,6 +2112,12 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const toggleKeySelection = (keyId, checked) => {
     setSelectedKeyIds((current) =>
       toggleTableSelection(current, keyId, checked)
+    )
+  }
+
+  const toggleCurrentPageKeySelection = (checked) => {
+    setSelectedKeyIds((current) =>
+      toggleTablePageSelection(current, paginatedKeyIds, checked)
     )
   }
 
@@ -2385,7 +2556,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 value={keySearchInput}
                 onChange={handleKeySearchInputChange}
                 className={inputClass}
-                placeholder="搜索备注、完整凭据、前缀或后四位"
+                placeholder="搜索备注、前缀或后四位"
               />
               <SearchableSelect
                 value={keyModelFilter}
@@ -2531,7 +2702,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   value={keySearchInput}
                   onChange={handleKeySearchInputChange}
                   className={inputClass}
-                  placeholder="搜索备注、完整凭据、前缀或后四位"
+                  placeholder="搜索备注、前缀或后四位"
                 />
                 <SearchableSelect
                   value={keyModelFilter}
@@ -2623,8 +2794,16 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 </button>
                 <button
                   type="button"
+                  onClick={resetSelectedKeys}
+                  disabled={loading || resettingKey || selectedKeyIds.length === 0}
+                  className={dangerButtonClass}
+                >
+                  {resettingKey ? '重置中...' : '重置 API key'}
+                </button>
+                <button
+                  type="button"
                   onClick={deleteSelectedKeys}
-                  disabled={loading || selectedKeyIds.length === 0}
+                  disabled={loading || resettingKey || selectedKeyIds.length === 0}
                   className={dangerButtonClass}
                 >
                   删除
@@ -2649,7 +2828,20 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 </colgroup>
                 <thead>
                   <tr>
-                    <th className={selectionThClass}>选择</th>
+                    <th className={selectionThClass}>
+                      <input
+                        ref={pageKeySelectionRef}
+                        type="checkbox"
+                        checked={isPaginatedKeysAllSelected}
+                        onChange={(event) =>
+                          toggleCurrentPageKeySelection(event.target.checked)
+                        }
+                        disabled={paginatedKeyIds.length === 0}
+                        aria-label="选择当前页 API 凭据"
+                        title="选择当前页"
+                        className="admin-checkbox"
+                      />
+                    </th>
                     <th className={thClass}>备注</th>
                     <th className={thClass}>创建时间</th>
                     <th className={thClass}>更新时间</th>
@@ -2708,11 +2900,13 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                           <td className={`${tdClass} font-mono text-xs`}>
                             <div className="admin-key-value-cell">
                               <span className="admin-key-value-text">
-                                {item.plain_key ||
-                                  `${item.key_prefix}…${item.key_last4}`}
+                                {apiKeyDisplayText(item)}
                               </span>
-                              {item.plain_key ? (
-                                <CopyButton value={item.plain_key} />
+                              {apiKeyPlainText(item) ? (
+                                <CopyButton
+                                  value={apiKeyPlainText(item)}
+                                  label="复制完整凭据"
+                                />
                               ) : null}
                             </div>
                           </td>
@@ -3029,6 +3223,79 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     </label>
   )
 
+  const renderConfirmDialog = () => {
+    if (!confirmDialog) return null
+
+    const isBusy = confirmSubmitting || resettingKey
+    const confirmClass =
+      confirmDialog.tone === 'primary' ? primaryButtonClass : dangerButtonClass
+
+    return (
+      <div className="admin-modal-backdrop admin-confirm-backdrop">
+        <button
+          type="button"
+          className="admin-modal-overlay"
+          aria-label="关闭确认弹窗"
+          onClick={closeConfirmDialog}
+          disabled={isBusy}
+        />
+        <div
+          className="admin-modal-panel admin-confirm-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admin-confirm-title"
+          aria-describedby="admin-confirm-description"
+        >
+          <div className="admin-modal-header">
+            <div>
+              <h2 id="admin-confirm-title" className="admin-modal-title">
+                {confirmDialog.title}
+              </h2>
+              <p
+                id="admin-confirm-description"
+                className="admin-modal-description"
+              >
+                {confirmDialog.description}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={closeConfirmDialog}
+              className="admin-modal-close"
+              aria-label="关闭弹窗"
+              disabled={isBusy}
+            >
+              ×
+            </button>
+          </div>
+          <div className="admin-confirm-body">
+            <div className="admin-confirm-detail">{confirmDialog.detail}</div>
+          </div>
+          <div className="admin-modal-footer admin-confirm-footer">
+            <button
+              type="button"
+              onClick={closeConfirmDialog}
+              disabled={isBusy}
+              className={secondaryButtonClass}
+            >
+              {confirmDialog.cancelText}
+            </button>
+            <button
+              type="button"
+              onClick={submitConfirmDialog}
+              disabled={isBusy}
+              className={confirmClass}
+            >
+              {isBusy
+                ? confirmDialog.pendingText || '处理中...'
+                : confirmDialog.confirmText}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const renderKeyModal = () => {
     if (!keyModalOpen) return null
 
@@ -3082,10 +3349,33 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 placeholder="例如 team1"
               />
               <span className={fieldHintClass}>
-                仅支持字母和数字；留空时使用默认备注，编辑备注会同步改写
-                ogw_备注_随机串。
+                仅支持字母和数字；留空时使用默认备注。保存备注、额度、模型或上游策略不会重新生成
+                API key。
               </span>
             </label>
+            {editingKeyId ? (
+              <div className="grid gap-2 rounded-lg border border-[#e4ece6] bg-[#f7fbf8] p-3">
+                <div>
+                  <div className="text-sm font-semibold text-[#1f2d25]">
+                    重置 API key
+                  </div>
+                  <div className={fieldHintClass}>
+                    如果该 key 已泄密，可以点击重置 API key。重置后旧 key
+                    会立即失效，请把新生成的完整 key 同步到客户端。
+                  </div>
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={resetKeySecret}
+                    disabled={resettingKey || loading}
+                    className={dangerButtonClass}
+                  >
+                    {resettingKey ? '重置中...' : '重置 API key'}
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <label className={fieldClass}>
               允许模型
               <SearchableSelect
@@ -4381,12 +4671,45 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         {currentView === 'keys' && newKey?.plain_key ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
             <div className="font-semibold">新 key 已生成</div>
-            <div>完整 key 已保存，后续可在列表继续查看。</div>
+            <div>完整 key 已保存，可在凭据列表继续查看和复制。</div>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
               <div className="min-w-0 flex-1 break-all font-mono text-xs text-[#1f2d25] sm:text-sm">
                 {newKey.plain_key}
               </div>
               <CopyButton value={newKey.plain_key} label="复制完整凭据" />
+            </div>
+          </div>
+        ) : null}
+
+        {currentView === 'keys' && newKeyBatch.length > 0 ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+            <div className="font-semibold">
+              批量重置已完成，共生成 {newKeyBatch.length} 个新 key
+            </div>
+            <div>旧 key 已立即失效，请把新完整 key 同步到对应客户端。</div>
+            <div className="mt-2">
+              <CopyButton
+                value={newKeyBatch
+                  .map((item) => `${item.name || item.id}: ${item.plain_key}`)
+                  .join('\n')}
+                label="复制全部完整凭据"
+              />
+            </div>
+            <div className="mt-3 grid gap-2">
+              {newKeyBatch.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex flex-col gap-2 rounded-md border border-amber-200 bg-white/65 px-3 py-2 sm:flex-row sm:items-start"
+                >
+                  <div className="min-w-[120px] font-semibold text-amber-900">
+                    {item.name || `ID ${item.id}`}
+                  </div>
+                  <div className="min-w-0 flex-1 break-all font-mono text-xs text-[#1f2d25] sm:text-sm">
+                    {item.plain_key}
+                  </div>
+                  <CopyButton value={item.plain_key} label="复制完整凭据" />
+                </div>
+              ))}
             </div>
           </div>
         ) : null}
@@ -4402,6 +4725,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       {currentView === 'models' ? renderModelContextModal() : null}
       {renderUsageBucketDetailModal()}
       {renderUsageSessionDetailModal()}
+      {renderConfirmDialog()}
     </AdminFrame>
   )
 }

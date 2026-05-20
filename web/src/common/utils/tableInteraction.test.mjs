@@ -11,7 +11,7 @@ function loadTableInteractionModule() {
     .replace(/export function /g, 'function ')
     .replace(/export const /g, 'const ')
     .concat(
-      '\nmodule.exports = { TABLE_ROW_INTERACTION_TITLE, isInteractiveTableTarget, getTableSelectionAfterClick, toggleTableSelection };\n'
+      '\nmodule.exports = { TABLE_ROW_INTERACTION_TITLE, isInteractiveTableTarget, getTableSelectionAfterClick, toggleTableSelection, toggleTablePageSelection };\n'
     )
 
   const sandbox = {
@@ -26,6 +26,7 @@ const {
   TABLE_ROW_INTERACTION_TITLE,
   getTableSelectionAfterClick,
   isInteractiveTableTarget,
+  toggleTablePageSelection,
   toggleTableSelection,
 } = loadTableInteractionModule()
 
@@ -44,6 +45,21 @@ test('tableInteraction: 勾选框按多选处理', () => {
   assert.deepEqual(localArray(toggleTableSelection([1], 2, true)), [1, 2])
   assert.deepEqual(localArray(toggleTableSelection([2], 2, false)), [])
   assert.deepEqual(localArray(toggleTableSelection([1, 2], 1, false)), [2])
+})
+
+test('tableInteraction: 表头复选框按当前页批量选择', () => {
+  assert.deepEqual(
+    localArray(toggleTablePageSelection([9], [1, 2, 3], true)),
+    [9, 1, 2, 3]
+  )
+  assert.deepEqual(
+    localArray(toggleTablePageSelection([1, '2', 9], [1, 2, 3], true)),
+    [1, '2', 9, 3]
+  )
+  assert.deepEqual(
+    localArray(toggleTablePageSelection([1, 2, 9], [1, 2, 3], false)),
+    [9]
+  )
 })
 
 test('tableInteraction: 行内操作控件不触发行选择', () => {

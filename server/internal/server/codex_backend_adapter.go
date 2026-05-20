@@ -125,6 +125,19 @@ func (c *codexBackendClient) run(ctx context.Context, path string, body []byte, 
 }
 
 func (c *codexBackendClient) postResponses(ctx context.Context, body map[string]any, forceRefresh bool) ([]byte, error) {
+	respBody, err := c.openResponses(ctx, body, forceRefresh)
+	if err != nil {
+		return nil, err
+	}
+	defer respBody.Close()
+	responseBody, readErr := io.ReadAll(respBody)
+	if readErr != nil {
+		return nil, readErr
+	}
+	return responseBody, nil
+}
+
+func (c *codexBackendClient) openResponses(ctx context.Context, body map[string]any, forceRefresh bool) (io.ReadCloser, error) {
 	accessToken, accountID, err := c.codexAccessToken(ctx, forceRefresh)
 	if err != nil {
 		return nil, err
@@ -150,19 +163,17 @@ func (c *codexBackendClient) postResponses(ctx context.Context, body map[string]
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	responseBody, readErr := io.ReadAll(resp.Body)
-	if readErr != nil {
-		return nil, readErr
-	}
 	if resp.StatusCode == stdhttp.StatusUnauthorized {
+		responseBody, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
 		return nil, codexBackendHTTPError{status: resp.StatusCode, body: responseBody}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		responseBody, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
 		return nil, codexBackendHTTPError{status: resp.StatusCode, body: responseBody}
 	}
-	return responseBody, nil
+	return resp.Body, nil
 }
 
 func (c *codexBackendClient) codexAccessToken(ctx context.Context, forceRefresh bool) (string, string, error) {

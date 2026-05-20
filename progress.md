@@ -15,6 +15,57 @@
 - 完成：更新后端 API 文档，说明 reasoning summary 请求、stream 事件与模型元数据口径。
 - 下一步：用本地 Codex 自定义 provider 实际发起一次需要 reasoning 的请求，确认 UI 可展示中文摘要；若需要真正实时逐 token 过程，再把 backend SSE 从“收完后合成”升级为边读边转发。
 - 阻塞/风险：当前实现是最小改动，summary 会随最终结果一并下发，不是完全实时透传；UI 固定英文标签如 `Thinking` / `Running` 仍由 Codex 客户端决定。
+## 2026-05-20 API key 重置与普通保存隔离
+- 补充完成：后台 `/admin-keys` 将单个 / 批量重置 API key、单个 / 批量删除 API 凭据从浏览器原生 `confirm` 改为项目内确认弹窗；弹窗展示操作标题、影响说明、取消按钮和危险确认按钮，提交期间锁定避免重复操作。
+- 确认弹窗补充验证通过：`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs src/common/utils/tableInteraction.js src/common/utils/tableInteraction.test.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd server && go test ./...`、`cd web && STYLE_L1_PORT=4347 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。`style:l1` 已覆盖单个重置确认弹窗、批量重置确认弹窗、批量重置执行、浅色 / 暗色目标区域盒模型，并断言不再触发浏览器原生确认框。
+- 补充完成：参考 `trade-erp` 表格选择交互，为 `/admin-keys` 凭据表头增加当前页全选复选框；行点击仍保持单选，行首复选框支持多选，表头复选框支持当前页全选 / 取消并在部分选中时显示半选态。
+- 补充完成：后台 `/admin-keys` 的「当前操作」区新增批量「重置 API key」按钮，支持选择框多选后一键轮换多个 key；确认后逐个调用 `api.key_reset_secret`，完成后展示本次所有新完整 key，并提供逐条复制和「复制全部完整凭据」。
+- 全选补充验证通过：`cd web && pnpm test`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs src/common/utils/tableInteraction.js src/common/utils/tableInteraction.test.mjs`、`cd web && pnpm build`、`cd server && go test ./...`、`cd web && STYLE_L1_PORT=4346 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
+- 全选补充部署：已提交并推送 `827d8e9`（支持 API key 表格全选）；本地构建 amd64 镜像 `oauth-api-service-server:20260520T164604-827d8e98-select-all`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260520T164604-827d8e98-select-all/`；远端仅执行 `docker load`、宿主机 Atlas status、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 全选线上验证：远端 Atlas 状态 `OK`、当前版本 `20260520090000`、待执行 `0`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；公网 `/admin-keys` 使用真实管理员 token 打开后确认表头全选框存在、当前页 8 行可一次全选、再次点击可清空、批量重置按钮存在、document 横向溢出为 `0`，控制台无错误。
+- 全选清理：清理前远端 `/` 使用率 53%、Docker images 4.731GB；删除 release 镜像 tar 后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260520T163145-62b3d2ab-batch-reset`，回收 348.5MB；清理后 `/` 使用率 50%、Docker images 4.026GB，未执行 volume prune；本地 release 临时目录已移入废纸篓。
+- 完成：新增 `api.key_reset_secret`，重置时只改写 `key_hash`、`plain_key`、`key_prefix`、`key_last4`，保留备注、归属、模型限制、上游策略、额度、启用状态和历史 usage 归属；`api.key_update` 类型层面移除 secret 输入，普通保存备注、额度、模型或上游策略不会重新生成 API key。
+- 完成：后台编辑 API 凭据弹窗新增「重置 API key」按钮和泄密场景说明；新建弹窗不显示该危险操作，备注提示改为明确普通保存不会重新生成 key。重置成功后会关闭弹窗并展示新的完整 key，方便立即复制同步客户端。
+- 完成：同步更新 `server/docs/api.md`、`web/README.md` 和 `style:l1` 断言，当前真源为“普通编辑不轮换，泄密时手动重置轮换”。
+- 批量重置补充验证通过：`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd server && go test ./...`、`cd web && STYLE_L1_PORT=4345 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。首次 `STYLE_L1_PORT=4344 NODE_USE_ENV_PROXY=0 pnpm style:l1` 在无关 `admin-codex-balance-mobile` 暗色按钮对比度断言偶发失败，原命令换端口重跑 26 个场景通过。
+- 批量重置补充部署：已提交并推送 `62b3d2a`（支持批量重置 API key）；本地构建 amd64 镜像 `oauth-api-service-server:20260520T163145-62b3d2ab-batch-reset`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260520T163145-62b3d2ab-batch-reset/`；远端仅执行 `docker load`、宿主机 Atlas status、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 批量重置线上验证：远端 Atlas 状态 `OK`、当前版本 `20260520090000`、待执行 `0`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；容器运行镜像 `oauth-api-service-server:20260520T163145-62b3d2ab-batch-reset`，容器环境 `GIT_SHA_SHORT=62b3d2ab`。管理员 RPC 临时创建 `batchreset1` 和 `batchreset2` 两个 key 后连续重置，确认两个新完整 key 都已变化、备注保留、前缀正确；验证用临时 key 已删除。
+- 批量重置清理：清理前远端 `/` 使用率 53%、Docker images 4.731GB；删除 release 镜像 tar 后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260520T160410-6f45781c-local-reset-key`，回收 348.5MB；清理后 `/` 使用率 50%、Docker images 4.026GB，未执行 volume prune；本地 release 临时目录已移入废纸篓。
+- 验证通过：`cd server && go test ./internal/biz ./internal/data ./internal/server`、`cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4342 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
+- 浏览器回归：本地 Vite `127.0.0.1:4343` 使用 mock 管理接口打开 `/admin-keys`，暗色主题下双击 key 行打开编辑弹窗，确认重置区块宽 `598px`、高 `132px`、包含泄密说明和按钮、普通保存不重新生成的提示存在，document 横向溢出为 `0`；接受确认后调用 `key_reset_secret`，页面展示新的完整 key，控制台无错误。
+- 部署：本地构建 amd64 镜像 `oauth-api-service-server:20260520T160410-6f45781c-local-reset-key`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260520T160410-6f45781c-local-reset-key/`；远端仅执行 `docker load`、宿主机 Atlas status、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 线上验证：远端 Atlas 状态 `OK`、当前版本 `20260520090000`、待执行 `0`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；容器运行镜像 `oauth-api-service-server:20260520T160410-6f45781c-local-reset-key`。管理员 RPC 临时创建 `resetdeploy` key 后，`key_update` 保存备注为 `resetdeploy2` 时完整 key 保持不变，随后 `key_reset_secret` 返回 `ogw_resetdeploy2_` 前缀的新完整 key 且旧完整 key 已变化；验证用临时 key 已删除。
+- 清理：清理前远端 `/` 使用率 53%、Docker images 4.731GB；删除 release 镜像 tar 后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260520T153735-6f45781c-local`，回收 348.5MB；清理后 `/` 使用率 50%、Docker images 4.026GB，未执行 volume prune；本地 release 临时目录已移入废纸篓。
+- 阻塞/风险：本轮提供旧 key 无法找回时的手动轮换入口；点击重置会让旧 key 立即失效，需要同步更新客户端配置。当前代码已部署，但尚未提交和推送，需用户确认后再执行 Git 提交 / 推送。
+
+## 2026-05-20 API key 完整展示恢复
+- 完成：恢复新建 API key 时持久化 `plain_key`，管理员 `api.key_list` / `api.key_update` 重新返回完整凭据；普通组织用户 `user_key_list` 仍不返回完整明文。
+- 完成：后台 `/admin-keys` 将「凭据标识」改为「完整凭据」，优先展示完整 `plain_key` 并提供复制；若历史数据仍缺少 `plain_key`，继续按前缀 + 后四位降级展示，避免伪造不可恢复的完整 key。
+- 完成：同步更新 `server/docs/api.md`、`web/README.md` 和 `style:l1` 断言，收口当前真源为“管理员后台可见完整凭据”。
+- 验证通过：`cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4339 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`cd web && STYLE_L1_PORT=4341 NODE_USE_ENV_PROXY=0 pnpm style:l1`。
+- 浏览器回归：本地 Vite `127.0.0.1:4340` 登录 `/admin-keys` 后确认「完整凭据」列返回完整 `ogw_` key、复制按钮存在、桌面 key 文本 `white-space=nowrap` 且高度 16px；移动暗色模式下表格改由内部横向滚动承载长 key，document 无横向溢出，只有 React Router v7 future flag 既有 warning。
+- 部署：本地构建 amd64 镜像 `oauth-api-service-server:20260520T153735-6f45781c-local`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260520T153735-6f45781c-local/`；远端仅执行 `docker load`、宿主机 Atlas status、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 线上验证：远端 Atlas 状态 `OK`、当前版本 `20260520090000`、待执行 `0`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；管理员登录成功；临时创建 `deployfullkey` 验证创建响应返回完整明文、随后 `key_list` 能返回同一完整 `plain_key`，验证后已删除临时 key。
+- 清理：清理前远端 `/` 使用率 52%、Docker images 4.731GB；删除 release 镜像 tar 后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260520T131239-9bb58677`，回收 348.5MB；清理后 `/` 使用率 50%、Docker images 4.026GB，未执行 volume prune。
+- 阻塞/风险：生产主表当前 10 条 key 中只有 1 条仍有 `plain_key`；备份表 `gateway_api_keys_backup_remark_prefix_remote_20260511T2255` 有 9 条明文，但与当前主表 `id/hash/prefix/last4` 均不匹配，不能安全回填。旧 key 完整明文无法从 `key_hash` 反推；新建 key 已恢复可在管理员后台完整展示和复制。完整 key 会重新进入数据库和管理员接口响应，日志参数脱敏仍覆盖 `plain_key`。
+
+## 2026-05-20 Codex provider 流式透传与 key 明文收敛
+- 完成：下游 API key 完整明文改为只在 `api.key_create` 创建响应中返回一次；`api.key_list` / `api.key_update` 不再返回 `plain_key`，后台列表只展示前缀与后四位，普通编辑备注、额度、模型权限、上游策略或禁用状态时不再改写 key hash / 前缀 / 后四位。
+- 完成：新增数据迁移 `20260520090000_migrate.sql`，部署迁移时清空历史 `gateway_api_keys.plain_key` 残留明文；鉴权继续使用 `key_hash`，人工识别和 usage 归属继续使用 `key_prefix` / `key_last4`。
+- 完成：`/v1/responses stream=true` 在 Codex backend 模式下改为直连透传上游 Responses SSE `data:` 事件，执行过程、文本增量、完成事件和 usage 不再由网关先缓存再重组；网关旁路解析 usage / 错误后照常落库，并保留 SSE keepalive。
+- 完成：Codex CLI 收到 `response.completed` 后立即关闭连接时，usage 不再误记为 `client_canceled`；只要已解析完成事件且未收到 `response.failed` / `response.incomplete`，按成功记录 token、字节数和 backend 模式。
+- 完成：`/v1/models` 的 Codex catalog 元数据不再固定 `reasoning_summary=none` 和 `verbosity=low`，改为声明支持 reasoning summary，默认 `auto` / `medium`，以匹配 Codex 长期多人接入的目标体验。
+- 验证通过：`cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4336 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
+- Windows 验证：`ssh sauri@192.168.0.45` 确认 Codex CLI `0.125.0`、OpenCode `1.14.48`；Windows 能访问本机修复版服务 `http://192.168.0.26:8401/healthz`；用临时 provider `oauthlocal` 指向本机 `/v1` 后，`codex exec` 返回 `WIN_CODEX_LOCAL_PROVIDER_OK_2`，服务端 usage 记录 `/v1/responses`、`stream=true`、`status=200`、`success=true`、`upstream_mode=codex_backend`、`total_tokens=12072`。
+- 清理：Windows 验证用临时 API key 已删除；本机 8401 临时服务已停止。
+- 提交推送：已提交并推送 `9bb5867`（修复 Codex 流式透传与凭据明文收敛）到 `origin/main`。
+- 部署：本地构建 amd64 镜像 `oauth-api-service-server:20260520T131239-9bb58677`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260520T131239-9bb58677/`；远端仅执行 `docker load`、宿主机 Atlas migration、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 迁移：远端先清理 release `migrate/._*` 资源叉文件；Atlas dry-run 仅包含 `UPDATE "gateway_api_keys" SET "plain_key" = '' WHERE "plain_key" <> '';`；正式 apply 后状态 `OK`、当前版本 `20260520090000`、待执行 `0`。
+- 部署验证：远端容器运行镜像 `oauth-api-service-server:20260520T131239-9bb58677`，容器环境 `GIT_SHA_SHORT=9bb58677`、`IMAGE_TAG=20260520T131239-9bb58677`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；管理员 `admin/adminadmin` 登录成功；临时 key 创建后只在创建响应返回完整明文，`key_list` 不返回 `plain_key`；`/v1/models` 返回 `supports_reasoning_summaries=true`、`default_reasoning_summary=auto`、`default_verbosity=medium`；生产 `/v1/responses stream=true` 返回 `response.completed`、`[DONE]` 和 `DEPLOY_STREAM_OK`；验证用临时 key 已删除；生产库 `plain_key` 非空数量为 `0`。
+- 清理：清理前远端 `/` 使用率 52%、Docker images 4.731GB；删除本轮远端 release 镜像 tar 后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260519T231421-9052e9d0`，回收 348.4MB；清理后 `/` 使用率 50%、Docker images 4.026GB，未执行 volume prune；本地镜像 tar 和 migration tar 已移入废纸篓。
+- 下一步：观察多人 Codex 长会话下的 usage 分布和 `response.failed` / `response.incomplete` 占比，必要时再按真实失败类型调整 backend fallback 策略。
+- 阻塞/风险：迁移已清空历史 `plain_key`，后台无法再找回旧完整 key；遗失的 key 需要新建替换。
+
 ## 2026-05-19 模型上下文弹窗布局修复
 - 完成：模型上下文策略弹窗改为专用宽度与响应式字段网格，字段内部增加 `min-width: 0`、输入框满宽、说明文字可换行，避免“填入当前值”、placeholder 和当前生效说明互相挤压、溢出或遮挡。
 - 完成：`style:l1` 的模型管理桌面场景新增该弹窗浅色 / 暗色盒模型断言，覆盖面板横向溢出、字段数量、输入框边界、填值按钮边界和字段头部滚动宽度。
@@ -650,3 +701,125 @@
 - 完成：`style:l1` 的 API 凭据 mock 数据补充超长连续 key，并新增表格布局、完整凭据列宽/高度、复制按钮尺寸和换行策略断言，覆盖 Windows 字体/滚动条差异导致的回归。
 - 下一步：执行前端 lint/css/test/build 与 `style:l1` 回归；重点确认浅色、暗色、桌面和移动视口下 API 凭据表默认态、选择态、弹窗和分页交互不受影响。
 - 阻塞/风险：本地 PowerShell 环境无 `pnpm`，需通过 WSL 执行前端命令；当前仓库 `.npmrc` 读取时会提示 FontAwesome token 环境变量占位符未注入，若依赖未完整安装可能需要先配置环境变量或安装依赖。
+
+## 2026-05-20 本机 dev_restart 与 pnpm start 修复
+- 完成：本机后端  失败根因为公共 dev 配置命中  共享 PG 且密码失效；已在本机 PostgreSQL 18 的  创建/复用  库和 ，写入未跟踪的 ，并执行 Atlas migration 到 。
+- 完成：前端  ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND  No package.json (or package.yaml, or package.json5) was found in "/root/projects/openai-oauth-api-service". 启动时会因  /  引用未注入的  产生本机告警；当前项目没有  依赖，已移除 FontAwesome 私有 registry 配置，避免无关 token 占位符影响本机启动。
+- 验证通过：postgres://test_user:***@127.0.0.1:5433/openai_oauth_api_service?sslmode=disable 输出本机脱敏 DSN，using DB_URL=postgres://test_user:***@127.0.0.1:5433/openai_oauth_api_service?sslmode=disable
+No migration files to execute 成功应用 15 个 migration；>>> stopping dev listeners on: 8400 9400
+>>> kill port 8400 via lsof: 4126959
+>>> building ./bin/server-dev from ./cmd/server
+>>> running: ./bin/server-dev
+using conf path: ./configs/dev/config.yaml
+{"caller":"server/main.go:240","level":"INFO","mode":"local","msg":"tracer provider initialized without remote exporter","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_ratio":0,"trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"server/main.go:116","level":"INFO","msg":"postgres dsn overridden from env","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"server/main.go:125","level":"INFO","msg":"jwt secret overridden from env","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"server/main.go:133","level":"INFO","msg":"admin username overridden from env","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"server/main.go:137","level":"INFO","msg":"admin password overridden from env","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"data/data.go:108","level":"INFO","logger.name":"data","msg":"init postgres(otelsql) start...","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"data/data.go:150","level":"INFO","logger.name":"data","msg":"init postgres(otelsql) done","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"data/admin_user_init.go:63","level":"INFO","logger.name":"data","msg":"sync admin_users admin success","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[gpt-5.5]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_models\".\"id\" FROM \"gateway_models\" WHERE \"gateway_models\".\"model_id\" = $1 LIMIT 1","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[gpt-5.4]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_models\".\"id\" FROM \"gateway_models\" WHERE \"gateway_models\".\"model_id\" = $1 LIMIT 1","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[gpt-5.4-mini]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_models\".\"id\" FROM \"gateway_models\" WHERE \"gateway_models\".\"model_id\" = $1 LIMIT 1","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[gpt-5.3-codex]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_models\".\"id\" FROM \"gateway_models\" WHERE \"gateway_models\".\"model_id\" = $1 LIMIT 1","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[gpt-5.3-codex-spark]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_models\".\"id\" FROM \"gateway_models\" WHERE \"gateway_models\".\"model_id\" = $1 LIMIT 1","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[gpt-5.2]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_models\".\"id\" FROM \"gateway_models\" WHERE \"gateway_models\".\"model_id\" = $1 LIMIT 1","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_models\".\"id\", \"gateway_models\".\"model_id\", \"gateway_models\".\"owned_by\", \"gateway_models\".\"created_unix\", \"gateway_models\".\"enabled\", \"gateway_models\".\"source\", \"gateway_models\".\"context_window_tokens\", \"gateway_models\".\"context_compact_tokens\", \"gateway_models\".\"context_hard_tokens\", \"gateway_models\".\"context_compact_bytes\", \"gateway_models\".\"context_hard_bytes\", \"gateway_models\".\"context_keep_items\", \"gateway_models\".\"last_seen_at\", \"gateway_models\".\"created_at\", \"gateway_models\".\"updated_at\" FROM \"gateway_models\"","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[gpt-5.5 gpt-5.4 gpt-5.4-mini gpt-5.3-codex gpt-5.3-codex-spark gpt-5.2]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Exec","query":"DELETE FROM \"gateway_model_prices\" WHERE \"gateway_model_prices\".\"model_id\" NOT IN ($1, $2, $3, $4, $5, $6)","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[* gpt-5.5 gpt-5.4 gpt-5.4-mini gpt-5.3-codex gpt-5.3-codex-spark gpt-5.2]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Exec","query":"DELETE FROM \"gateway_policies\" WHERE \"gateway_policies\".\"model_id\" \u003c\u003e $1 AND \"gateway_policies\".\"model_id\" NOT IN ($2, $3, $4, $5, $6, $7)","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_api_keys\".\"id\", \"gateway_api_keys\".\"owner_user_id\", \"gateway_api_keys\".\"name\", \"gateway_api_keys\".\"key_hash\", \"gateway_api_keys\".\"plain_key\", \"gateway_api_keys\".\"key_prefix\", \"gateway_api_keys\".\"key_last4\", \"gateway_api_keys\".\"disabled\", \"gateway_api_keys\".\"upstream_strategy\", \"gateway_api_keys\".\"quota_requests\", \"gateway_api_keys\".\"quota_total_tokens\", \"gateway_api_keys\".\"quota_daily_tokens\", \"gateway_api_keys\".\"quota_weekly_tokens\", \"gateway_api_keys\".\"quota_daily_input_tokens\", \"gateway_api_keys\".\"quota_weekly_input_tokens\", \"gateway_api_keys\".\"quota_daily_output_tokens\", \"gateway_api_keys\".\"quota_weekly_output_tokens\", \"gateway_api_keys\".\"quota_daily_billable_input_tokens\", \"gateway_api_keys\".\"quota_weekly_billable_input_tokens\", \"gateway_api_keys\".\"allowed_models\", \"gateway_api_keys\".\"last_used_at\", \"gateway_api_keys\".\"created_at\", \"gateway_api_keys\".\"updated_at\" FROM \"gateway_api_keys\"","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"data/token.go:37","level":"INFO","module":"data.token","msg":"token generator init ok, expire=168h0m0s","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"data/admin_token.go:34","level":"INFO","module":"data.admin_token","msg":"admin token generator init ok, expire=168h0m0s","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"data/jsonrpc.go:83","level":"INFO","module":"data.jsonrpc","msg":"JsonrpcData created (auth/admin auth/user admin usecases constructed inside)","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"server/http_custom_handlers.go:248","level":"INFO","msg":"http static dir not found or not dir: /app/public, skip static handler","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"grpc/server.go:212","level":"INFO","msg":"[gRPC] server listening on: [::]:9400","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:33+08:00"}
+{"caller":"http/server.go:330","level":"INFO","msg":"[HTTP] server listening on: [::]:8400","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:33+08:00"}
+{"caller":"grpc/server.go:224","level":"INFO","msg":"[gRPC] server stopping","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:21:47+08:00"}
+{"caller":"http/server.go:345","level":"INFO","msg":"[HTTP] server stopping","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:21:47+08:00"}
+{"caller":"taskgroup/taskgroup.go:304","component":"taskgroup","level":"INFO","msg":"taskgroup stop begin","request_id":"","running_count":0,"service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","timeout_ms":30000,"trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:21:47+08:00","wait":true}
+{"caller":"taskgroup/taskgroup.go:304","component":"taskgroup","level":"INFO","msg":"taskgroup stop finished before timeout","request_id":"","running_count":0,"service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","timeout_ms":30000,"trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:21:47+08:00","wait":true}
+{"caller":"taskgroup/taskgroup.go:304","canceled_count":0,"component":"taskgroup","level":"INFO","msg":"taskgroup dispatched cancellation to remaining tasks","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:21:47+08:00","wait":true}
+{"caller":"config/config.go:67","level":"INFO","msg":"watcher's ctx cancel : context canceled","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:21:47+08:00"} 可启动并监听 ，管理员  登录和  返回成功。
+- 验证通过：
+> openai-oauth-api-service-web@1.0.0 start /root/projects/openai-oauth-api-service/web
+> vite -- --host 127.0.0.1 --no-open
+
+env = {
+  VITE_BASE_URL: '/',
+  VITE_ENABLE_RPC_MOCK: 'false',
+  VITE_APP_TITLE: 'OpenAI OAuth API Service',
+  HTTPS_PROXY: 'http://127.0.0.1:7897',
+  no_proxy: '172.31.*,172.30.*,172.29.*,172.28.*,172.27.*,172.26.*,172.25.*,172.24.*,172.23.*,172.22.*,172.21.*,172.20.*,172.19.*,172.18.*,172.17.*,172.16.*,10.*,192.168.*,127.*,localhost,<local>',
+  USER: 'root',
+  npm_config_user_agent: 'pnpm/10.33.2 npm/? node/v24.14.0 linux x64',
+  npm_node_execpath: '/usr/local/lib/nodejs/node-v24.14.0-linux-x64/bin/node',
+  SHLVL: '1',
+  HOME: '/root',
+  OLDPWD: '/root/projects/openai-oauth-api-service',
+  npm_config_force: '',
+  NO_PROXY: '172.31.*,172.30.*,172.29.*,172.28.*,172.27.*,172.26.*,172.25.*,172.24.*,172.23.*,172.22.*,172.21.*,172.20.*,172.19.*,172.18.*,172.17.*,172.16.*,10.*,192.168.*,127.*,localhost,<local>',
+  npm_package_json: '/root/projects/openai-oauth-api-service/web/package.json',
+  COREPACK_ROOT: '/usr/local/lib/nodejs/node-v24.14.0-linux-x64/lib/node_modules/corepack',
+  DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/0/bus',
+  WSL_DISTRO_NAME: 'Ubuntu-26.04',
+  npm_config_progress: 'true',
+  https_proxy: 'http://127.0.0.1:7897',
+  WAYLAND_DISPLAY: 'wayland-0',
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '1',
+  LOGNAME: 'root',
+  pnpm_config_verify_deps_before_run: 'false',
+  http_proxy: 'http://127.0.0.1:7897',
+  PULSE_SERVER: 'unix:/mnt/wslg/PulseServer',
+  WSL_INTEROP: '/run/WSL/4128427_interop',
+  NAME: 'simon',
+  _: '/usr/local/bin/pnpm',
+  npm_config_package_import_method: 'hardlink',
+  npm_config_registry: 'http://registry.npm.taobao.org/',
+  npm_config_node_linker: 'hoisted',
+  TERM: 'xterm-256color',
+  npm_config_node_gyp: '/root/.cache/node/corepack/v1/pnpm/10.33.2/dist/node_modules/node-gyp/bin/node-gyp.js',
+  PATH: '/root/projects/openai-oauth-api-service/web/node_modules/.bin:/root/.cache/node/corepack/v1/pnpm/10.33.2/dist/node-gyp-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/c/Program Files/PowerShell/7:/mnt/c/Users/sauri/.codex/tmp/arg0/codex-arg01LdnQ8:/mnt/c/Program Files/OpenSSH/:/mnt/c/Program Files/Common Files/Oracle/Java/javapath:/mnt/c/Windows/system32:/mnt/c/Windows:/mnt/c/Windows/System32/Wbem:/mnt/c/Windows/System32/WindowsPowerShell/v1.0/:/mnt/c/Windows/System32/OpenSSH/:/mnt/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/c/Program Files/Git/cmd:/mnt/c/Program Files/Microsoft SQL Server/150/Tools/Binn/:/mnt/c/Program Files/dotnet/:/mnt/c/Program Files (x86)/GtkSharp/2.12/bin:/mnt/c/Program Files/nodejs/:/mnt/c/Program Files/Go/bin:/mnt/c/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR:/mnt/c/Users/sauri/AppData/Local/Programs/Cursor/resources/app/bin:/mnt/c/WINDOWS/system32:/mnt/c/WINDOWS:/mnt/c/WINDOWS/System32/Wbem:/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/c/WINDOWS/System32/OpenSSH/:/mnt/c/Program Files/Tailscale/:/mnt/c/Program Files/Sunshine:/mnt/c/Program Files/Sunshine/tools:/mnt/c/Program Files/PowerShell/7/:/mnt/c/Windows/system32/config/systemprofile/AppData/Local/Microsoft/WindowsApps:/mnt/c/Windows/system32/config/systemprofile/go/bin:/mnt/c/Users/sauri/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Program Files/Multipass/bin:/mnt/c/Windows/system32/config/systemprofile/.dotnet/tools:/mnt/c/Users/sauri/AppData/Roaming/npm:/mnt/c/Users/sauri/AppData/Local/Programs/Lens/resources/cli/bin:/mnt/c/Users/sauri/AppData/Local/GitHubDesktop/bin:/mnt/c/Program Files/mitmproxy/bin:/mnt/c/Users/sauri/go/bin:/mnt/c/Program Files/JetBrains/GoLand 2024.3.5/bin:/mnt/c/Users/sauri/AppData/Local/Microsoft/WindowsApps:/mnt/c/Users/sauri/AppData/Local/Programs/Ollama:/mnt/c/Users/sauri/AppData/Local/Microsoft/WinGet/Links:/mnt/c/Users/sauri/AppData/Local/Microsoft/WinGet/Packages/ar51an.iPerf3_Microsoft.Winget.Source_8wekyb3d8bbwe:/mnt/c/Users/sauri/AppData/Local/OpenAI/Codex/bin/ada252862d154cdd:/mnt/c/Program Files/WindowsApps/OpenAI.Codex_26.513.4821.0_x64__2p2nqsd0c76g0/app/resources',
+  npm_package_name: 'openai-oauth-api-service-web',
+  npm_config_prefer_offline: 'true',
+  NODE: '/usr/local/lib/nodejs/node-v24.14.0-linux-x64/bin/node',
+  XDG_RUNTIME_DIR: '/run/user/0/',
+  npm_config_frozen_lockfile: '',
+  DISPLAY: ':0',
+  LANG: 'C.UTF-8',
+  npm_lifecycle_script: 'vite -- --host 127.0.0.1 --no-open',
+  SHELL: '/usr/bin/zsh',
+  npm_package_version: '1.0.0',
+  npm_lifecycle_event: 'start',
+  npm_config_verify_deps_before_run: 'false',
+  npm_config_strict_peer_dependencies: '',
+  npm_config_npm_globalconfig: '/usr/local/lib/nodejs/node-v24.14.0-linux-x64/etc/npmrc',
+  npm_config_globalconfig: '/root/.config/pnpm/rc',
+  PWD: '/root/projects/openai-oauth-api-service/web',
+  npm_execpath: '/root/.cache/node/corepack/v1/pnpm/10.33.2/bin/pnpm.cjs',
+  HTTP_PROXY: 'http://127.0.0.1:7897',
+  npm_config__jsr_registry: 'https://npm.jsr.io/',
+  npm_command: 'run-script',
+  PNPM_SCRIPT_SRC_DIR: '/root/projects/openai-oauth-api-service/web',
+  HOSTTYPE: 'x86_64',
+  WSL2_GUI_APPS_ENABLED: '1',
+  npm_config_shamefully_hoist: 'true',
+  WSLENV: '',
+  INIT_CWD: '/root/projects/openai-oauth-api-service/web',
+  NODE_ENV: 'development'
+}
+command = serve
+mode = development
+
+  VITE v5.4.21  ready in 181 ms
+
+  ➜  Local:   http://localhost:5176/
+  ➜  Network: http://10.255.255.254:5176/
+  ➜  Network: http://192.168.0.45:5176/
+2:23:55 PM [vite] hmr update /src/tailwind.css, /src/pages/AdminLogin/index.jsx, /src/pages/AdminDashboard/index.jsx, /src/pages/AdminApi/index.jsx, /src/common/components/layout/AdminFrame.jsx
+2:23:56 PM [vite] hmr update /src/tailwind.css, /src/pages/AdminLogin/index.jsx, /src/pages/AdminDashboard/index.jsx, /src/pages/AdminApi/index.jsx, /src/common/components/layout/AdminFrame.jsx
+5:03:50 PM [vite] hmr update /src/tailwind.css, /src/pages/AdminApi/index.jsx
+5:03:50 PM [vite] hmr update /src/pages/AdminApi/index.jsx, /src/tailwind.css
+5:03:50 PM [vite] hmr update /src/tailwind.css
+ ELIFECYCLE  Command failed with exit code 1. 不再出现 FontAwesome token 告警，可启动 Vite 5176；在后端运行期间未再出现  代理连接拒绝。
+- 下一步：如换机器或重置 WSL，需要先确保 PostgreSQL 18 在 5433 运行，并恢复本机  私有 DSN； 仍保持 gitignore，不提交真实本机凭据。

@@ -1130,7 +1130,7 @@ async function assertAnalyticsVisuals(page, scenarioName) {
       hasPagination: Boolean(main?.querySelector('.admin-table-pagination')),
       hasSearchInput: Boolean(
         main?.querySelector(
-          'input[placeholder="搜索备注、完整凭据、前缀或后四位"]'
+          'input[placeholder="搜索备注、前缀或后四位"]'
         )
       ),
       hasStatusFilter: Boolean(
@@ -1265,7 +1265,7 @@ function assertUsageAggregationRequests(page, scenarioName) {
   )
   assert(
     calls.filter((call) => call.method === 'usage_key_summaries').length >= 8,
-    `${scenarioName} 未请求完整凭据 token 窗口: ${JSON.stringify(calls)}`
+    `${scenarioName} 未请求凭据 token 窗口: ${JSON.stringify(calls)}`
   )
 }
 
@@ -1320,7 +1320,7 @@ async function assertUsageKeyStatsTab(page, scenarioName) {
   const metrics = await page.evaluate(() => ({
     hasSearchInput: Boolean(
       document.querySelector(
-        'main input[placeholder="搜索备注、完整凭据、前缀或后四位"]'
+        'main input[placeholder="搜索备注、前缀或后四位"]'
       )
     ),
     hasStatsRows:
@@ -1830,9 +1830,20 @@ async function assertKeyTableVisuals(page, scenarioName) {
       hasFullPlainKey: document.body.innerText.includes(
         'ogw_productionapikey_8a2c'
       ),
+      hasMaskedKey: document.body.innerText.includes('ogw_production…8a2c'),
+      hasCopyFullKeyAction: Array.from(
+        main?.querySelectorAll('button') || []
+      ).some((node) => node.textContent.trim() === '复制完整凭据'),
       hasCurrentOperationRow: document.body.innerText.includes('当前操作'),
+      hasBatchResetAction: Array.from(
+        main?.querySelectorAll('button') || []
+      ).some((node) => node.textContent.trim() === '重置 API key'),
+      hasSelectPageCheckbox: Boolean(
+        main?.querySelector('thead input[aria-label="选择当前页 API 凭据"]')
+      ),
       hasPagination: Boolean(main?.querySelector('.admin-table-pagination')),
       hasRemarkHeader: document.body.innerText.includes('备注'),
+      hasKeyIdentityHeader: document.body.innerText.includes('完整凭据'),
       hasCreatedAtHeader: document.body.innerText.includes('创建时间'),
       hasUpdatedAtHeader: document.body.innerText.includes('更新时间'),
       hasUpstreamStrategyHeader: document.body.innerText.includes('上游策略'),
@@ -1850,7 +1861,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
         .filter(Boolean),
       hasSearchInput: Boolean(
         main?.querySelector(
-          'input[placeholder="搜索备注、完整凭据、前缀或后四位"]'
+          'input[placeholder="搜索备注、前缀或后四位"]'
         )
       ),
       hasSearchAction: Array.from(main?.querySelectorAll('button') || []).some(
@@ -1933,8 +1944,11 @@ async function assertKeyTableVisuals(page, scenarioName) {
   })
 
   assert(metrics.hasSidebarKeyNav, `${scenarioName} 缺少后台侧栏 API 凭据入口`)
-  assert(metrics.hasFullPlainKey, `${scenarioName} 缺少完整 key 展示`)
+  assert(metrics.hasFullPlainKey, `${scenarioName} 列表应展示完整 key`)
+  assert(!metrics.hasMaskedKey, `${scenarioName} 完整 key 不应被前后截断展示`)
+  assert(metrics.hasCopyFullKeyAction, `${scenarioName} 缺少完整 key 复制操作`)
   assert(metrics.hasRemarkHeader, `${scenarioName} 缺少备注列表列`)
+  assert(metrics.hasKeyIdentityHeader, `${scenarioName} 缺少完整凭据列`)
   assert(metrics.hasCreatedAtHeader, `${scenarioName} 缺少创建时间列`)
   assert(metrics.hasUpdatedAtHeader, `${scenarioName} 缺少更新时间列`)
   assert(metrics.hasUpstreamStrategyHeader, `${scenarioName} 缺少上游策略列`)
@@ -1974,6 +1988,8 @@ async function assertKeyTableVisuals(page, scenarioName) {
     `${scenarioName} 主内容区不应再显示表格级刷新按钮`
   )
   assert(metrics.hasCurrentOperationRow, `${scenarioName} 缺少当前操作行`)
+  assert(metrics.hasBatchResetAction, `${scenarioName} 缺少批量重置 API key 操作`)
+  assert(metrics.hasSelectPageCheckbox, `${scenarioName} 缺少表头全选框`)
   assert(metrics.hasTokenLimitHeader, `${scenarioName} 缺少百万 token 列头`)
   assert(metrics.hasTokenLimitValue, `${scenarioName} 缺少百万 token 换算展示`)
   assert(
@@ -2122,8 +2138,11 @@ async function assertKeyCreateModal(page, scenarioName) {
           ?.getAttribute('pattern') || '',
       hasRemarkHint:
         node.innerText.includes('留空时使用默认备注') &&
-        node.innerText.includes('ogw_备注_随机串'),
+        node.innerText.includes('保存备注、额度、模型或上游策略不会重新生成'),
       formNoValidate: Boolean(node.querySelector('form')?.noValidate),
+      hasNoResetButton: !Array.from(node.querySelectorAll('button')).some(
+        (button) => button.textContent.trim() === '重置 API key'
+      ),
       hasTokenLimitInput: Boolean(
         node.querySelector('input[placeholder="0 表示不限，1 = 100 万 token"]')
       ),
@@ -2158,6 +2177,10 @@ async function assertKeyCreateModal(page, scenarioName) {
     `${scenarioName} 备注输入框未限制为字母数字`
   )
   assert(metrics.hasRemarkHint, `${scenarioName} 新建弹窗缺少备注生成口径提示`)
+  assert(
+    metrics.hasNoResetButton,
+    `${scenarioName} 新建弹窗不应显示重置 API key 按钮`
+  )
   assert(
     metrics.formNoValidate,
     `${scenarioName} 凭据弹窗应关闭浏览器原生校验，统一走页面中文错误提示`
@@ -2433,6 +2456,72 @@ async function assertKeyDoubleClickEdit(page, scenarioName) {
     strategyValue.includes('Backend + CLI 兜底'),
     `${scenarioName} 编辑弹窗未回显 key 级上游策略: ${strategyValue}`
   )
+  const resetMetrics = await dialog.evaluate((node) => {
+    const resetPanel = Array.from(
+      node.querySelectorAll('[class~="bg-[#f7fbf8]"]')
+    ).find((panel) => panel.innerText.includes('重置 API key'))
+    const resetButton = Array.from(node.querySelectorAll('button')).find(
+      (button) => button.textContent.trim() === '重置 API key'
+    )
+    const rect = resetPanel?.getBoundingClientRect()
+    return {
+      hasResetPanel: Boolean(resetPanel),
+      hasResetButton: Boolean(resetButton),
+      hasLeakCopy:
+        node.innerText.includes('如果该 key 已泄密') &&
+        node.innerText.includes('旧 key 会立即失效') &&
+        node.innerText.includes('新生成的完整 key'),
+      panelHeight: rect?.height || 0,
+      panelWidth: rect?.width || 0,
+    }
+  })
+  assert(
+    resetMetrics.hasResetPanel,
+    `${scenarioName} 编辑弹窗缺少重置 API key 区块`
+  )
+  assert(
+    resetMetrics.hasResetButton,
+    `${scenarioName} 编辑弹窗缺少重置 API key 按钮`
+  )
+  assert(
+    resetMetrics.hasLeakCopy,
+    `${scenarioName} 编辑弹窗缺少泄密重置说明`
+  )
+  assert(
+    resetMetrics.panelWidth > 0 && resetMetrics.panelHeight > 0,
+    `${scenarioName} 编辑弹窗重置区块盒模型异常: ${JSON.stringify(resetMetrics)}`
+  )
+  await dialog.getByRole('button', { name: '重置 API key' }).click()
+  const resetDialog = page.getByRole('dialog', { name: '重置 API key' })
+  await resetDialog.waitFor({ state: 'visible' })
+  const confirmMetrics = await resetDialog.evaluate((node) => ({
+    hasDescription:
+      node.innerText.includes('确认重置 API 凭据') &&
+      node.innerText.includes('旧 key 会立即失效') &&
+      node.innerText.includes('新生成的完整 key'),
+    hasCancel: Array.from(node.querySelectorAll('button')).some(
+      (button) => button.textContent.trim() === '取消'
+    ),
+    hasConfirm: Array.from(node.querySelectorAll('button')).some(
+      (button) => button.textContent.trim() === '重置 API key'
+    ),
+    rect: {
+      width: node.getBoundingClientRect().width,
+      height: node.getBoundingClientRect().height,
+    },
+  }))
+  assert(
+    confirmMetrics.hasDescription &&
+      confirmMetrics.hasCancel &&
+      confirmMetrics.hasConfirm,
+    `${scenarioName} 单个 key 重置确认弹窗内容异常: ${JSON.stringify(confirmMetrics)}`
+  )
+  assert(
+    confirmMetrics.rect.width > 0 && confirmMetrics.rect.height > 0,
+    `${scenarioName} 单个 key 重置确认弹窗盒模型异常: ${JSON.stringify(confirmMetrics)}`
+  )
+  await resetDialog.getByRole('button', { name: '取消' }).click()
+  await resetDialog.waitFor({ state: 'hidden' })
   await dialog.getByRole('button', { name: '取消' }).click()
   await dialog.waitFor({ state: 'hidden' })
 }
@@ -2640,6 +2729,8 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
     await readKeyTableSelectionState(page),
     {
       checked: [true, false, false, false, false, false, false, false],
+      headerChecked: false,
+      headerIndeterminate: true,
       selectedRows: 1,
     },
     `${scenarioName} 单击第一行后应只选中第一条`
@@ -2650,6 +2741,8 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
     await readKeyTableSelectionState(page),
     {
       checked: [false, true, false, false, false, false, false, false],
+      headerChecked: false,
+      headerIndeterminate: true,
       selectedRows: 1,
     },
     `${scenarioName} 单击第二行后应互斥切换选择`
@@ -2660,9 +2753,38 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
     await readKeyTableSelectionState(page),
     {
       checked: [false, false, false, false, false, false, false, false],
+      headerChecked: false,
+      headerIndeterminate: false,
       selectedRows: 0,
     },
     `${scenarioName} 再次点击已选选择框应清空选择`
+  )
+
+  const headerCheckbox = page.locator(
+    'main table thead input[aria-label="选择当前页 API 凭据"]'
+  )
+  await headerCheckbox.click()
+  assert.deepEqual(
+    await readKeyTableSelectionState(page),
+    {
+      checked: [true, true, true, true, true, true, true, true],
+      headerChecked: true,
+      headerIndeterminate: false,
+      selectedRows: 8,
+    },
+    `${scenarioName} 表头全选应选中当前页所有凭据`
+  )
+
+  await headerCheckbox.click()
+  assert.deepEqual(
+    await readKeyTableSelectionState(page),
+    {
+      checked: [false, false, false, false, false, false, false, false],
+      headerChecked: false,
+      headerIndeterminate: false,
+      selectedRows: 0,
+    },
+    `${scenarioName} 表头全选再次点击应清空当前页选择`
   )
 
   await rows.nth(1).click()
@@ -2670,9 +2792,94 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
     await readKeyTableSelectionState(page),
     {
       checked: [false, true, false, false, false, false, false, false],
+      headerChecked: false,
+      headerIndeterminate: true,
       selectedRows: 1,
     },
     `${scenarioName} 选择清空后应可重新单击行选中`
+  )
+
+  await checkboxes.nth(2).click()
+  assert.deepEqual(
+    await readKeyTableSelectionState(page),
+    {
+      checked: [false, true, true, false, false, false, false, false],
+      headerChecked: false,
+      headerIndeterminate: true,
+      selectedRows: 2,
+    },
+    `${scenarioName} 选择框应支持多选后批量重置`
+  )
+
+  const nativeDialogMessages = []
+  const nativeDialogHandler = async (dialog) => {
+    nativeDialogMessages.push(dialog.message())
+    await dialog.dismiss().catch(() => {})
+  }
+  page.on('dialog', nativeDialogHandler)
+  try {
+    await page.getByRole('button', { name: '重置 API key' }).click()
+    const resetDialog = page.getByRole('dialog', { name: '批量重置 API key' })
+    await resetDialog.waitFor({ state: 'visible' })
+    const confirmMetrics = await resetDialog.evaluate((node) => ({
+      hasDescription:
+        node.innerText.includes('确认重置选中的 2 个 API 凭据') &&
+        node.innerText.includes('旧 key 会立即失效') &&
+        node.innerText.includes('同步到对应客户端'),
+      hasCancel: Array.from(node.querySelectorAll('button')).some(
+        (button) => button.textContent.trim() === '取消'
+      ),
+      hasConfirm: Array.from(node.querySelectorAll('button')).some(
+        (button) => button.textContent.trim() === '重置 2 个 key'
+      ),
+      rect: {
+        width: node.getBoundingClientRect().width,
+        height: node.getBoundingClientRect().height,
+      },
+    }))
+    assert.equal(
+      nativeDialogMessages.length,
+      0,
+      `${scenarioName} 不应再触发浏览器原生确认框: ${nativeDialogMessages.join(' | ')}`
+    )
+    assert(
+      confirmMetrics.hasDescription &&
+        confirmMetrics.hasCancel &&
+        confirmMetrics.hasConfirm,
+      `${scenarioName} 批量重置确认弹窗内容异常: ${JSON.stringify(confirmMetrics)}`
+    )
+    assert(
+      confirmMetrics.rect.width > 0 && confirmMetrics.rect.height > 0,
+      `${scenarioName} 批量重置确认弹窗盒模型异常: ${JSON.stringify(confirmMetrics)}`
+    )
+    await resetDialog.getByRole('button', { name: '重置 2 个 key' }).click()
+  } finally {
+    page.off('dialog', nativeDialogHandler)
+  }
+  await page.getByText('批量重置已完成，共生成 2 个新 key').waitFor()
+  const batchMetrics = await page.evaluate(() => ({
+    hasCopyAll: Array.from(document.querySelectorAll('button')).some(
+      (button) => button.textContent.trim() === '复制全部完整凭据'
+    ),
+    hasFirstResetKey: document.body.innerText.includes(
+      'ogw_stagingkeylongnameforoverflowcheck_reset_2_r2st'
+    ),
+    hasSecondResetKey: document.body.innerText.includes(
+      'ogw_extraapikey3_reset_3_r3st'
+    ),
+    documentOverflowX: Math.ceil(
+      document.documentElement.scrollWidth -
+        document.documentElement.clientWidth
+    ),
+  }))
+  assert(batchMetrics.hasCopyAll, `${scenarioName} 批量重置缺少复制全部按钮`)
+  assert(
+    batchMetrics.hasFirstResetKey && batchMetrics.hasSecondResetKey,
+    `${scenarioName} 批量重置未展示所有新 key: ${JSON.stringify(batchMetrics)}`
+  )
+  assert(
+    batchMetrics.documentOverflowX <= 0,
+    `${scenarioName} 批量重置结果造成页面横向溢出: ${JSON.stringify(batchMetrics)}`
   )
 }
 
@@ -2681,6 +2888,16 @@ async function readKeyTableSelectionState(page) {
     checked: Array.from(
       document.querySelectorAll('main table tbody input[type="checkbox"]')
     ).map((node) => node.checked),
+    headerChecked: Boolean(
+      document.querySelector(
+        'main table thead input[aria-label="选择当前页 API 凭据"]'
+      )?.checked
+    ),
+    headerIndeterminate: Boolean(
+      document.querySelector(
+        'main table thead input[aria-label="选择当前页 API 凭据"]'
+      )?.indeterminate
+    ),
     selectedRows: document.querySelectorAll(
       'main table tbody tr.admin-table-row-selected'
     ).length,
@@ -3090,12 +3307,11 @@ function getApiMockData(method, params = {}, state = {}) {
         id: 1,
         key_last4: '8a2c',
         key_prefix: 'ogw_production',
+        plain_key: 'ogw_productionapikey_8a2c',
         created_at: 1777900000,
         updated_at: 1777950000,
         last_used_at: 1778000000,
         name: 'productionapikey',
-        plain_key:
-          'ogw_productionapikey_8a2c_long_windows_regression_continuous_segment',
         upstream_strategy: 'backend_with_cli_fallback',
         quota_daily_billable_input_tokens: 450_000,
         quota_daily_input_tokens: 800_000,
@@ -3112,12 +3328,11 @@ function getApiMockData(method, params = {}, state = {}) {
         id: 2,
         key_last4: '3f9d',
         key_prefix: 'ogw_stagingke',
+        plain_key: 'ogw_stagingkeylongnameforoverflowcheck_3f9d',
         created_at: 1777800000,
         updated_at: 1777850000,
         last_used_at: 0,
         name: 'stagingkeylongnameforoverflowcheck',
-        plain_key:
-          'ogw_stagingkeylongname_3f9d_long_windows_regression_continuous_segment',
         upstream_strategy: '',
         quota_daily_billable_input_tokens: 0,
         quota_daily_input_tokens: 0,
@@ -3137,11 +3352,11 @@ function getApiMockData(method, params = {}, state = {}) {
         id,
         key_last4: `x${id}z${index}`,
         key_prefix: `ogw_extra${id}`,
+        plain_key: `ogw_extraapikey${id}_x${id}z${index}`,
         created_at: 1777700000 - index * 1_000,
         updated_at: 1777750000 - index * 1_000,
         last_used_at: 1777990000 - index * 100,
         name: `extraapikey${id}`,
-        plain_key: `ogw_extraapikey${id}_x${id}_long_windows_regression_continuous_segment`,
         upstream_strategy: index % 2 === 0 ? 'backend_only' : 'codex_cli',
         quota_daily_billable_input_tokens: 0,
         quota_daily_input_tokens: 0,
@@ -3156,6 +3371,30 @@ function getApiMockData(method, params = {}, state = {}) {
     return {
       items: [...baseKeys, ...extraKeys],
       total: baseKeys.length + extraKeys.length,
+    }
+  }
+
+  if (method === 'key_reset_secret') {
+    const id = Number(params.key_id || 0)
+    const name =
+      id === 1
+        ? 'productionapikey'
+        : id === 2
+          ? 'stagingkeylongnameforoverflowcheck'
+          : `extraapikey${id}`
+    return {
+      allowed_models: ['gpt-5.3-codex'],
+      disabled: false,
+      id,
+      key_last4: `r${id}st`,
+      key_prefix: `ogw_${name}`.slice(0, 12),
+      plain_key: `ogw_${name}_reset_${id}_r${id}st`,
+      created_at: 1777900000,
+      updated_at: 1778050000,
+      name,
+      upstream_strategy: id === 1 ? 'backend_with_cli_fallback' : '',
+      quota_daily_tokens: 0,
+      quota_weekly_tokens: 0,
     }
   }
 
