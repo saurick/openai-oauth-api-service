@@ -1196,6 +1196,19 @@ function apiKeyRemark(item) {
   return item?.api_key_name || item?.name || '无备注'
 }
 
+function apiKeyPlainText(item) {
+  return item?.plain_key || ''
+}
+
+function apiKeyDisplayText(item) {
+  const plainKey = apiKeyPlainText(item)
+  if (plainKey) return plainKey
+  if (item?.key_prefix && item?.key_last4) {
+    return `${item.key_prefix}…${item.key_last4}`
+  }
+  return item?.key_prefix || '-'
+}
+
 function ApiKeyUsageCell({ item }) {
   return (
     <div className="min-w-[160px]">
@@ -1348,6 +1361,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     useState(false)
   const [newKey, setNewKey] = useState(null)
   const [editingKeyId, setEditingKeyId] = useState(null)
+  const [resettingKey, setResettingKey] = useState(false)
   const [keyModalOpen, setKeyModalOpen] = useState(false)
   const [keyForm, setKeyForm] = useState(INITIAL_KEY_FORM)
   const [keySearchInput, setKeySearchInput] = useState('')
@@ -1880,6 +1894,36 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     setEditingKeyId(null)
     setKeyForm(INITIAL_KEY_FORM)
     setKeyModalOpen(false)
+  }
+
+  const resetKeySecret = async () => {
+    if (!editingKeyId || resettingKey) return
+    const currentKey = keys.find((item) => item.id === editingKeyId)
+    const label = currentKey?.name || currentKey?.key_prefix || `ID ${editingKeyId}`
+    // eslint-disable-next-line no-alert
+    const confirmed = window.confirm(
+      `确认重置 API 凭据「${label}」吗？旧 key 会立即失效，需要把新生成的完整 key 同步到客户端。`
+    )
+    if (!confirmed) {
+      return
+    }
+    setErrMsg('')
+    setNewKey(null)
+    setResettingKey(true)
+    try {
+      const result = await apiRpc.call('key_reset_secret', {
+        key_id: editingKeyId,
+      })
+      setNewKey(result?.data || null)
+      setEditingKeyId(null)
+      setKeyForm(INITIAL_KEY_FORM)
+      setKeyModalOpen(false)
+      await loadAll()
+    } catch (err) {
+      setErrMsg(getActionErrorMessage(err, '重置 API key'))
+    } finally {
+      setResettingKey(false)
+    }
   }
 
   const handleKeySearchInputChange = (e) => {
@@ -2640,7 +2684,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     <th className={thClass}>备注</th>
                     <th className={thClass}>创建时间</th>
                     <th className={thClass}>更新时间</th>
-                    <th className={thClass}>凭据标识</th>
+                    <th className={thClass}>完整凭据</th>
                     <th className={thClass}>模型限制</th>
                     <th className={thClass}>上游策略</th>
                     <th className={thClass}>Token 日 / 周限制（百万）</th>
@@ -2692,11 +2736,19 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                           >
                             {fmtTs(item.updated_at)}
                           </td>
-                          <td className={`${tdClass} font-mono text-xs`}>
-                            <div className="flex max-w-[360px] items-start gap-2">
-                              <span className="min-w-0 break-all">
-                                {`${item.key_prefix}…${item.key_last4}`}
+                          <td
+                            className={`${tdClass} whitespace-nowrap font-mono text-xs`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="whitespace-nowrap">
+                                {apiKeyDisplayText(item)}
                               </span>
+                              {apiKeyPlainText(item) ? (
+                                <CopyButton
+                                  value={apiKeyPlainText(item)}
+                                  label="复制完整凭据"
+                                />
+                              ) : null}
                             </div>
                           </td>
                           <td className={tdClass}>
@@ -3065,10 +3117,33 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 placeholder="例如 team1"
               />
               <span className={fieldHintClass}>
-                仅支持字母和数字；留空时使用默认备注，编辑备注会同步改写
-                ogw_备注_随机串。
+                仅支持字母和数字；留空时使用默认备注。保存备注、额度、模型或上游策略不会重新生成
+                API key。
               </span>
             </label>
+            {editingKeyId ? (
+              <div className="grid gap-2 rounded-lg border border-[#e4ece6] bg-[#f7fbf8] p-3">
+                <div>
+                  <div className="text-sm font-semibold text-[#1f2d25]">
+                    重置 API key
+                  </div>
+                  <div className={fieldHintClass}>
+                    如果该 key 已泄密，可以点击重置 API key。重置后旧 key
+                    会立即失效，请把新生成的完整 key 同步到客户端。
+                  </div>
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={resetKeySecret}
+                    disabled={resettingKey || loading}
+                    className={dangerButtonClass}
+                  >
+                    {resettingKey ? '重置中...' : '重置 API key'}
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <label className={fieldClass}>
               允许模型
               <SearchableSelect
@@ -4364,7 +4439,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         {currentView === 'keys' && newKey?.plain_key ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
             <div className="font-semibold">新 key 已生成</div>
-            <div>完整 key 只显示一次，请立即复制保存。</div>
+            <div>完整 key 已保存，可在凭据列表继续查看和复制。</div>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
               <div className="min-w-0 flex-1 break-all font-mono text-xs text-[#1f2d25] sm:text-sm">
                 {newKey.plain_key}

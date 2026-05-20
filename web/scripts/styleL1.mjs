@@ -1831,10 +1831,13 @@ async function assertKeyTableVisuals(page, scenarioName) {
         'ogw_productionapikey_8a2c'
       ),
       hasMaskedKey: document.body.innerText.includes('ogw_production…8a2c'),
+      hasCopyFullKeyAction: Array.from(
+        main?.querySelectorAll('button') || []
+      ).some((node) => node.textContent.trim() === '复制完整凭据'),
       hasCurrentOperationRow: document.body.innerText.includes('当前操作'),
       hasPagination: Boolean(main?.querySelector('.admin-table-pagination')),
       hasRemarkHeader: document.body.innerText.includes('备注'),
-      hasKeyIdentityHeader: document.body.innerText.includes('凭据标识'),
+      hasKeyIdentityHeader: document.body.innerText.includes('完整凭据'),
       hasCreatedAtHeader: document.body.innerText.includes('创建时间'),
       hasUpdatedAtHeader: document.body.innerText.includes('更新时间'),
       hasUpstreamStrategyHeader: document.body.innerText.includes('上游策略'),
@@ -1912,10 +1915,11 @@ async function assertKeyTableVisuals(page, scenarioName) {
   })
 
   assert(metrics.hasSidebarKeyNav, `${scenarioName} 缺少后台侧栏 API 凭据入口`)
-  assert(!metrics.hasFullPlainKey, `${scenarioName} 列表不应展示完整 key`)
-  assert(metrics.hasMaskedKey, `${scenarioName} 缺少前缀和后四位 key 标识`)
+  assert(metrics.hasFullPlainKey, `${scenarioName} 列表应展示完整 key`)
+  assert(!metrics.hasMaskedKey, `${scenarioName} 完整 key 不应被前后截断展示`)
+  assert(metrics.hasCopyFullKeyAction, `${scenarioName} 缺少完整 key 复制操作`)
   assert(metrics.hasRemarkHeader, `${scenarioName} 缺少备注列表列`)
-  assert(metrics.hasKeyIdentityHeader, `${scenarioName} 缺少凭据标识列`)
+  assert(metrics.hasKeyIdentityHeader, `${scenarioName} 缺少完整凭据列`)
   assert(metrics.hasCreatedAtHeader, `${scenarioName} 缺少创建时间列`)
   assert(metrics.hasUpdatedAtHeader, `${scenarioName} 缺少更新时间列`)
   assert(metrics.hasUpstreamStrategyHeader, `${scenarioName} 缺少上游策略列`)
@@ -2073,8 +2077,11 @@ async function assertKeyCreateModal(page, scenarioName) {
           ?.getAttribute('pattern') || '',
       hasRemarkHint:
         node.innerText.includes('留空时使用默认备注') &&
-        node.innerText.includes('ogw_备注_随机串'),
+        node.innerText.includes('保存备注、额度、模型或上游策略不会重新生成'),
       formNoValidate: Boolean(node.querySelector('form')?.noValidate),
+      hasNoResetButton: !Array.from(node.querySelectorAll('button')).some(
+        (button) => button.textContent.trim() === '重置 API key'
+      ),
       hasTokenLimitInput: Boolean(
         node.querySelector('input[placeholder="0 表示不限，1 = 100 万 token"]')
       ),
@@ -2109,6 +2116,10 @@ async function assertKeyCreateModal(page, scenarioName) {
     `${scenarioName} 备注输入框未限制为字母数字`
   )
   assert(metrics.hasRemarkHint, `${scenarioName} 新建弹窗缺少备注生成口径提示`)
+  assert(
+    metrics.hasNoResetButton,
+    `${scenarioName} 新建弹窗不应显示重置 API key 按钮`
+  )
   assert(
     metrics.formNoValidate,
     `${scenarioName} 凭据弹窗应关闭浏览器原生校验，统一走页面中文错误提示`
@@ -2383,6 +2394,41 @@ async function assertKeyDoubleClickEdit(page, scenarioName) {
   assert(
     strategyValue.includes('Backend + CLI 兜底'),
     `${scenarioName} 编辑弹窗未回显 key 级上游策略: ${strategyValue}`
+  )
+  const resetMetrics = await dialog.evaluate((node) => {
+    const resetPanel = Array.from(
+      node.querySelectorAll('[class~="bg-[#f7fbf8]"]')
+    ).find((panel) => panel.innerText.includes('重置 API key'))
+    const resetButton = Array.from(node.querySelectorAll('button')).find(
+      (button) => button.textContent.trim() === '重置 API key'
+    )
+    const rect = resetPanel?.getBoundingClientRect()
+    return {
+      hasResetPanel: Boolean(resetPanel),
+      hasResetButton: Boolean(resetButton),
+      hasLeakCopy:
+        node.innerText.includes('如果该 key 已泄密') &&
+        node.innerText.includes('旧 key 会立即失效') &&
+        node.innerText.includes('新生成的完整 key'),
+      panelHeight: rect?.height || 0,
+      panelWidth: rect?.width || 0,
+    }
+  })
+  assert(
+    resetMetrics.hasResetPanel,
+    `${scenarioName} 编辑弹窗缺少重置 API key 区块`
+  )
+  assert(
+    resetMetrics.hasResetButton,
+    `${scenarioName} 编辑弹窗缺少重置 API key 按钮`
+  )
+  assert(
+    resetMetrics.hasLeakCopy,
+    `${scenarioName} 编辑弹窗缺少泄密重置说明`
+  )
+  assert(
+    resetMetrics.panelWidth > 0 && resetMetrics.panelHeight > 0,
+    `${scenarioName} 编辑弹窗重置区块盒模型异常: ${JSON.stringify(resetMetrics)}`
   )
   await dialog.getByRole('button', { name: '取消' }).click()
   await dialog.waitFor({ state: 'hidden' })
@@ -3041,6 +3087,7 @@ function getApiMockData(method, params = {}, state = {}) {
         id: 1,
         key_last4: '8a2c',
         key_prefix: 'ogw_production',
+        plain_key: 'ogw_productionapikey_8a2c',
         created_at: 1777900000,
         updated_at: 1777950000,
         last_used_at: 1778000000,
@@ -3061,6 +3108,7 @@ function getApiMockData(method, params = {}, state = {}) {
         id: 2,
         key_last4: '3f9d',
         key_prefix: 'ogw_stagingke',
+        plain_key: 'ogw_stagingkeylongnameforoverflowcheck_3f9d',
         created_at: 1777800000,
         updated_at: 1777850000,
         last_used_at: 0,
@@ -3084,6 +3132,7 @@ function getApiMockData(method, params = {}, state = {}) {
         id,
         key_last4: `x${id}z${index}`,
         key_prefix: `ogw_extra${id}`,
+        plain_key: `ogw_extraapikey${id}_x${id}z${index}`,
         created_at: 1777700000 - index * 1_000,
         updated_at: 1777750000 - index * 1_000,
         last_used_at: 1777990000 - index * 100,

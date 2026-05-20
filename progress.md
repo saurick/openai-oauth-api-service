@@ -2,6 +2,28 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-20 API key 重置与普通保存隔离
+- 完成：新增 `api.key_reset_secret`，重置时只改写 `key_hash`、`plain_key`、`key_prefix`、`key_last4`，保留备注、归属、模型限制、上游策略、额度、启用状态和历史 usage 归属；`api.key_update` 类型层面移除 secret 输入，普通保存备注、额度、模型或上游策略不会重新生成 API key。
+- 完成：后台编辑 API 凭据弹窗新增「重置 API key」按钮和泄密场景说明；新建弹窗不显示该危险操作，备注提示改为明确普通保存不会重新生成 key。重置成功后会关闭弹窗并展示新的完整 key，方便立即复制同步客户端。
+- 完成：同步更新 `server/docs/api.md`、`web/README.md` 和 `style:l1` 断言，当前真源为“普通编辑不轮换，泄密时手动重置轮换”。
+- 验证通过：`cd server && go test ./internal/biz ./internal/data ./internal/server`、`cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4342 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
+- 浏览器回归：本地 Vite `127.0.0.1:4343` 使用 mock 管理接口打开 `/admin-keys`，暗色主题下双击 key 行打开编辑弹窗，确认重置区块宽 `598px`、高 `132px`、包含泄密说明和按钮、普通保存不重新生成的提示存在，document 横向溢出为 `0`；接受确认后调用 `key_reset_secret`，页面展示新的完整 key，控制台无错误。
+- 部署：本地构建 amd64 镜像 `oauth-api-service-server:20260520T160410-6f45781c-local-reset-key`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260520T160410-6f45781c-local-reset-key/`；远端仅执行 `docker load`、宿主机 Atlas status、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 线上验证：远端 Atlas 状态 `OK`、当前版本 `20260520090000`、待执行 `0`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；容器运行镜像 `oauth-api-service-server:20260520T160410-6f45781c-local-reset-key`。管理员 RPC 临时创建 `resetdeploy` key 后，`key_update` 保存备注为 `resetdeploy2` 时完整 key 保持不变，随后 `key_reset_secret` 返回 `ogw_resetdeploy2_` 前缀的新完整 key 且旧完整 key 已变化；验证用临时 key 已删除。
+- 清理：清理前远端 `/` 使用率 53%、Docker images 4.731GB；删除 release 镜像 tar 后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260520T153735-6f45781c-local`，回收 348.5MB；清理后 `/` 使用率 50%、Docker images 4.026GB，未执行 volume prune；本地 release 临时目录已移入废纸篓。
+- 阻塞/风险：本轮提供旧 key 无法找回时的手动轮换入口；点击重置会让旧 key 立即失效，需要同步更新客户端配置。当前代码已部署，但尚未提交和推送，需用户确认后再执行 Git 提交 / 推送。
+
+## 2026-05-20 API key 完整展示恢复
+- 完成：恢复新建 API key 时持久化 `plain_key`，管理员 `api.key_list` / `api.key_update` 重新返回完整凭据；普通组织用户 `user_key_list` 仍不返回完整明文。
+- 完成：后台 `/admin-keys` 将「凭据标识」改为「完整凭据」，优先展示完整 `plain_key` 并提供复制；若历史数据仍缺少 `plain_key`，继续按前缀 + 后四位降级展示，避免伪造不可恢复的完整 key。
+- 完成：同步更新 `server/docs/api.md`、`web/README.md` 和 `style:l1` 断言，收口当前真源为“管理员后台可见完整凭据”。
+- 验证通过：`cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4339 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`cd web && STYLE_L1_PORT=4341 NODE_USE_ENV_PROXY=0 pnpm style:l1`。
+- 浏览器回归：本地 Vite `127.0.0.1:4340` 登录 `/admin-keys` 后确认「完整凭据」列返回完整 `ogw_` key、复制按钮存在、桌面 key 文本 `white-space=nowrap` 且高度 16px；移动暗色模式下表格改由内部横向滚动承载长 key，document 无横向溢出，只有 React Router v7 future flag 既有 warning。
+- 部署：本地构建 amd64 镜像 `oauth-api-service-server:20260520T153735-6f45781c-local`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260520T153735-6f45781c-local/`；远端仅执行 `docker load`、宿主机 Atlas status、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 线上验证：远端 Atlas 状态 `OK`、当前版本 `20260520090000`、待执行 `0`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；管理员登录成功；临时创建 `deployfullkey` 验证创建响应返回完整明文、随后 `key_list` 能返回同一完整 `plain_key`，验证后已删除临时 key。
+- 清理：清理前远端 `/` 使用率 52%、Docker images 4.731GB；删除 release 镜像 tar 后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260520T131239-9bb58677`，回收 348.5MB；清理后 `/` 使用率 50%、Docker images 4.026GB，未执行 volume prune。
+- 阻塞/风险：生产主表当前 10 条 key 中只有 1 条仍有 `plain_key`；备份表 `gateway_api_keys_backup_remark_prefix_remote_20260511T2255` 有 9 条明文，但与当前主表 `id/hash/prefix/last4` 均不匹配，不能安全回填。旧 key 完整明文无法从 `key_hash` 反推；新建 key 已恢复可在管理员后台完整展示和复制。完整 key 会重新进入数据库和管理员接口响应，日志参数脱敏仍覆盖 `plain_key`。
+
 ## 2026-05-20 Codex provider 流式透传与 key 明文收敛
 - 完成：下游 API key 完整明文改为只在 `api.key_create` 创建响应中返回一次；`api.key_list` / `api.key_update` 不再返回 `plain_key`，后台列表只展示前缀与后四位，普通编辑备注、额度、模型权限、上游策略或禁用状态时不再改写 key hash / 前缀 / 后四位。
 - 完成：新增数据迁移 `20260520090000_migrate.sql`，部署迁移时清空历史 `gateway_api_keys.plain_key` 残留明文；鉴权继续使用 `key_hash`，人工识别和 usage 归属继续使用 `key_prefix` / `key_last4`。

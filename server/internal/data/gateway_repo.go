@@ -43,7 +43,7 @@ func (r *gatewayRepo) CreateAPIKey(ctx context.Context, input biz.CreateGatewayA
 	create := r.data.postgres.GatewayAPIKey.Create().
 		SetName(input.Name).
 		SetKeyHash(secret.KeyHash).
-		SetPlainKey("").
+		SetPlainKey(secret.PlainKey).
 		SetKeyPrefix(secret.KeyPrefix).
 		SetKeyLast4(secret.KeyLast4).
 		SetUpstreamStrategy(input.UpstreamStrategy).
@@ -162,6 +162,19 @@ func (r *gatewayRepo) UpdateAPIKey(ctx context.Context, input biz.UpdateGatewayA
 		update.ClearOwnerUserID()
 	}
 	item, err := update.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return mapGatewayAPIKey(item), nil
+}
+
+func (r *gatewayRepo) ResetAPIKeySecret(ctx context.Context, id int, secret biz.GatewayAPIKeySecret) (*biz.GatewayAPIKey, error) {
+	item, err := r.data.postgres.GatewayAPIKey.UpdateOneID(id).
+		SetKeyHash(secret.KeyHash).
+		SetPlainKey(secret.PlainKey).
+		SetKeyPrefix(secret.KeyPrefix).
+		SetKeyLast4(secret.KeyLast4).
+		Save(ctx)
 	if err != nil {
 		return nil, err
 	}

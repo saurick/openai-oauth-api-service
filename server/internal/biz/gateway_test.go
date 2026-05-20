@@ -137,8 +137,43 @@ func TestGatewayUsecaseUpdateAPIKeyDoesNotRewriteSecret(t *testing.T) {
 	if updated.Name != "new" {
 		t.Fatalf("updated name = %q, want new", updated.Name)
 	}
-	if repo.updatedInput.Secret != (GatewayAPIKeySecret{}) {
-		t.Fatalf("secret should not be rewritten on ordinary update: %+v", repo.updatedInput.Secret)
+	if repo.resetID != 0 || repo.resetSecret != (GatewayAPIKeySecret{}) {
+		t.Fatalf("secret should not be reset on ordinary update: id=%d secret=%+v", repo.resetID, repo.resetSecret)
+	}
+}
+
+func TestGatewayUsecaseResetAPIKeySecretRewritesOnlySecret(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{
+		currentKey: &GatewayAPIKey{
+			ID:                7,
+			Name:              "client7",
+			Disabled:          true,
+			UpstreamStrategy:  GatewayUpstreamStrategyCodexCLI,
+			QuotaDailyTokens:  12,
+			QuotaWeeklyTokens: 34,
+			AllowedModels:     []string{"gpt-5.5"},
+		},
+	}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+
+	created, err := uc.ResetAPIKeySecret(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("ResetAPIKeySecret() error = %v", err)
+	}
+	if repo.resetID != 7 {
+		t.Fatalf("reset id = %d, want 7", repo.resetID)
+	}
+	if repo.resetSecret == (GatewayAPIKeySecret{}) {
+		t.Fatalf("expected reset secret to be generated")
+	}
+	if !strings.HasPrefix(created.PlainKey, GatewayAPIKeyPrefix+"client7_") {
+		t.Fatalf("plain key = %q, want current remark prefix", created.PlainKey)
+	}
+	if created.Name != "client7" || !created.Disabled || created.UpstreamStrategy != GatewayUpstreamStrategyCodexCLI {
+		t.Fatalf("reset should preserve non-secret fields, got %+v", created.GatewayAPIKey)
+	}
+	if created.QuotaDailyTokens != 12 || created.QuotaWeeklyTokens != 34 || len(created.AllowedModels) != 1 {
+		t.Fatalf("reset should preserve policy fields, got %+v", created.GatewayAPIKey)
 	}
 }
 
@@ -408,6 +443,8 @@ type gatewayPolicyTestRepo struct {
 	createdInput   CreateGatewayAPIKeyInput
 	updatedInput   UpdateGatewayAPIKeyInput
 	currentKey     *GatewayAPIKey
+	resetID        int
+	resetSecret    GatewayAPIKeySecret
 	deletedIDs     []int
 }
 
@@ -428,7 +465,20 @@ func (r *gatewayPolicyTestRepo) ListAPIKeysByOwner(context.Context, int, int, in
 }
 func (r *gatewayPolicyTestRepo) UpdateAPIKey(_ context.Context, input UpdateGatewayAPIKeyInput) (*GatewayAPIKey, error) {
 	r.updatedInput = input
-	return &GatewayAPIKey{ID: input.ID, Name: input.Name, PlainKey: input.Secret.PlainKey, KeyPrefix: input.Secret.KeyPrefix, KeyLast4: input.Secret.KeyLast4}, nil
+	return &GatewayAPIKey{ID: input.ID, Name: input.Name}, nil
+}
+func (r *gatewayPolicyTestRepo) ResetAPIKeySecret(_ context.Context, id int, secret GatewayAPIKeySecret) (*GatewayAPIKey, error) {
+	r.resetID = id
+	r.resetSecret = secret
+	current := &GatewayAPIKey{ID: id, Name: "old"}
+	if r.currentKey != nil {
+		copy := *r.currentKey
+		current = &copy
+	}
+	current.PlainKey = secret.PlainKey
+	current.KeyPrefix = secret.KeyPrefix
+	current.KeyLast4 = secret.KeyLast4
+	return current, nil
 }
 func (r *gatewayPolicyTestRepo) GetAPIKeyByID(context.Context, int) (*GatewayAPIKey, error) {
 	if r.currentKey != nil {

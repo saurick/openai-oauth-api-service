@@ -81,7 +81,7 @@ func (d *JsonrpcData) handleGateway(
 		}
 		items := make([]any, 0, len(list))
 		for _, item := range list {
-			items = append(items, mapGatewayAPIKeyForRPC(item, false))
+			items = append(items, mapGatewayAPIKeyForRPC(item, true))
 		}
 		return id, okResult("获取 API key 列表成功", map[string]any{
 			"items":  items,
@@ -116,7 +116,7 @@ func (d *JsonrpcData) handleGateway(
 		})
 		data := mapGatewayAPIKeyForRPC(&item.GatewayAPIKey, true)
 		data["plain_key"] = item.PlainKey
-		return id, okResult("创建 API key 成功，明文 key 只返回一次", data), nil
+		return id, okResult("创建 API key 成功", data), nil
 
 	case "key_update":
 		keyID := getInt(pm, "key_id", 0)
@@ -144,7 +144,20 @@ func (d *JsonrpcData) handleGateway(
 			"owner_user_id": item.OwnerUserID,
 			"disabled":      item.Disabled,
 		})
-		return id, okResult("更新 API key 成功", mapGatewayAPIKeyForRPC(item, false)), nil
+		return id, okResult("更新 API key 成功", mapGatewayAPIKeyForRPC(item, true)), nil
+
+	case "key_reset_secret":
+		keyID := getInt(pm, "key_id", 0)
+		item, err := d.gatewayUC.ResetAPIKeySecret(ctx, keyID)
+		if err != nil {
+			return id, d.mapGatewayError(ctx, err), nil
+		}
+		d.auditGateway(ctx, "api.key_reset_secret", "api_key", fmt.Sprint(item.ID), map[string]any{
+			"name": item.Name,
+		})
+		data := mapGatewayAPIKeyForRPC(&item.GatewayAPIKey, true)
+		data["plain_key"] = item.PlainKey
+		return id, okResult("重置 API key 成功", data), nil
 
 	case "key_delete":
 		keyID := getInt(pm, "key_id", 0)

@@ -349,7 +349,6 @@ type CreateGatewayAPIKeyInput struct {
 type UpdateGatewayAPIKeyInput struct {
 	ID                             int
 	Name                           string
-	Secret                         GatewayAPIKeySecret
 	OwnerUserID                    int
 	QuotaRequests                  int64
 	QuotaTotalTokens               int64
@@ -440,6 +439,7 @@ type GatewayRepo interface {
 	ListAPIKeysByOwner(ctx context.Context, ownerUserID, limit, offset int) ([]*GatewayAPIKey, int, error)
 	GetAPIKeyByID(ctx context.Context, id int) (*GatewayAPIKey, error)
 	UpdateAPIKey(ctx context.Context, input UpdateGatewayAPIKeyInput) (*GatewayAPIKey, error)
+	ResetAPIKeySecret(ctx context.Context, id int, secret GatewayAPIKeySecret) (*GatewayAPIKey, error)
 	DeleteAPIKey(ctx context.Context, id int) error
 	DeleteAPIKeys(ctx context.Context, ids []int) (int, error)
 	SetAPIKeyDisabled(ctx context.Context, id int, disabled bool) error
@@ -751,6 +751,32 @@ func (uc *GatewayUsecase) UpdateAPIKey(ctx context.Context, input UpdateGatewayA
 		input.Name = "key" + strconv.Itoa(input.ID)
 	}
 	return uc.repo.UpdateAPIKey(ctx, input)
+}
+
+func (uc *GatewayUsecase) ResetAPIKeySecret(ctx context.Context, id int) (*CreatedGatewayAPIKey, error) {
+	if id <= 0 {
+		return nil, ErrBadParam
+	}
+	current, err := uc.repo.GetAPIKeyByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	name, err := NormalizeGatewayAPIKeyRemark(current.Name)
+	if err != nil {
+		return nil, err
+	}
+	if name == "" {
+		name = "key" + strconv.Itoa(id)
+	}
+	secret, err := NewGatewayAPIKeySecretWithRemark(name)
+	if err != nil {
+		return nil, err
+	}
+	item, err := uc.repo.ResetAPIKeySecret(ctx, id, secret)
+	if err != nil {
+		return nil, err
+	}
+	return &CreatedGatewayAPIKey{GatewayAPIKey: *item, PlainKey: secret.PlainKey}, nil
 }
 
 func (uc *GatewayUsecase) DeleteAPIKey(ctx context.Context, id int) error {
