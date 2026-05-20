@@ -860,12 +860,15 @@ func TestParseCodexBackendSSEPreservesFunctionCall(t *testing.T) {
 	body := []byte("data: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"fc_1\",\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"shell\",\"arguments\":\"{\\\"cmd\\\":\\\"pwd\\\"}\"}}\n\n" +
 		"data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"output\":[{\"id\":\"fc_1\",\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"shell\",\"arguments\":\"{\\\"cmd\\\":\\\"pwd\\\"}\"}],\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}}\n\n")
 
-	content, toolCalls, metrics, err := parseCodexBackendSSE(body)
+	content, reasoningSummary, toolCalls, metrics, err := parseCodexBackendSSE(body)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if content != "" {
 		t.Fatalf("content = %q, want empty", content)
+	}
+	if reasoningSummary.Text != "" {
+		t.Fatalf("reasoning summary = %#v, want empty", reasoningSummary)
 	}
 	if len(toolCalls) != 1 || toolCalls[0].CallID != "call_1" || toolCalls[0].Name != "shell" {
 		t.Fatalf("toolCalls = %#v", toolCalls)
@@ -875,11 +878,22 @@ func TestParseCodexBackendSSEPreservesFunctionCall(t *testing.T) {
 	}
 }
 
+func TestNormalizeGatewayReasoningSummaryReplacesEnglishFallback(t *testing.T) {
+	summary := normalizeGatewayReasoningSummary(gatewayReasoningSummary{ID: "rs_1", Text: "**Analyzing request**\n\nI need to answer in Chinese."})
+	if summary.ID != "rs_1" || !strings.Contains(summary.Text, "正在分析") || !containsCJK(summary.Text) {
+		t.Fatalf("summary = %#v", summary)
+	}
+
+	zh := normalizeGatewayReasoningSummary(gatewayReasoningSummary{Text: "正在检查上下文"})
+	if zh.Text != "正在检查上下文" {
+		t.Fatalf("zh summary = %#v", zh)
+	}
+}
 func TestResponsesStreamUsesResponsesSSEEvents(t *testing.T) {
 	handler := &openAIGatewayHandler{}
 	rec := httptest.NewRecorder()
 
-	n := handler.writeCodexCLIResponsesStream(rec, "gpt-5.5", "OK", nil, openAIUsageMetrics{
+	n := handler.writeCodexCLIResponsesStream(rec, "gpt-5.5", "OK", gatewayReasoningSummary{}, nil, openAIUsageMetrics{
 		InputTokens:  1,
 		OutputTokens: 1,
 		TotalTokens:  2,
@@ -902,6 +916,16 @@ func TestResponsesStreamUsesResponsesSSEEvents(t *testing.T) {
 	}
 	if strings.Contains(body, "chat.completion.chunk") {
 		t.Fatalf("responses stream must not use chat chunks:\n%s", body)
+	}
+
+	rec = httptest.NewRecorder()
+	_ = handler.writeCodexCLIResponsesStream(rec, "gpt-5.5", "OK", gatewayReasoningSummary{ID: "rs_1", Text: "正在分析请求"}, nil, openAIUsageMetrics{})
+	body = rec.Body.String()
+	if !strings.Contains(body, `"type":"response.reasoning_summary_text.delta"`) || !strings.Contains(body, "正在分析请求") {
+		t.Fatalf("stream missing reasoning summary delta:\n%s", body)
+	}
+	if !strings.Contains(body, `"type":"reasoning"`) || !strings.Contains(body, `"summary"`) {
+		t.Fatalf("completed response missing reasoning output item:\n%s", body)
 	}
 	if !strings.Contains(body, "data: [DONE]") {
 		t.Fatalf("stream missing done marker:\n%s", body)
@@ -1170,6 +1194,8 @@ func TestRunCodexBackendPostsResponsesAndParsesSSE(t *testing.T) {
 			t.Fatal(err)
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_1\",\"delta\":\"正在分析\"}\n\n"))
+		_, _ = w.Write([]byte("data: {\"type\":\"response.reasoning_summary_text.done\",\"item_id\":\"rs_1\",\"text\":\"正在分析请求\"}\n\n"))
 		_, _ = w.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"O\"}\n\n"))
 		_, _ = w.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"K\"}\n\n"))
 		_, _ = w.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"usage\":{\"input_tokens\":9,\"input_tokens_details\":{\"cached_tokens\":3},\"output_tokens\":5,\"output_tokens_details\":{\"reasoning_tokens\":1},\"total_tokens\":14}}}\n\n"))
@@ -1181,7 +1207,7 @@ func TestRunCodexBackendPostsResponsesAndParsesSSE(t *testing.T) {
 	t.Setenv("CODEX_BACKEND_TIMEOUT_SECONDS", "30")
 
 	client := &codexBackendClient{httpClient: upstream.Client()}
-	content, toolCalls, metrics, err := client.run(
+	content, reasoningSummary, toolCalls, metrics, err := client.run(
 		context.Background(),
 		"/v1/chat/completions",
 		[]byte(`{"messages":[{"role":"user","content":"Reply OK"}]}`),
@@ -1194,6 +1220,9 @@ func TestRunCodexBackendPostsResponsesAndParsesSSE(t *testing.T) {
 	if content != "OK" {
 		t.Fatalf("content = %q, want OK", content)
 	}
+	if reasoningSummary.ID != "rs_1" || reasoningSummary.Text != "正在分析请求" {
+		t.Fatalf("reasoningSummary = %#v", reasoningSummary)
+	}
 	if len(toolCalls) != 0 {
 		t.Fatalf("toolCalls = %#v, want none", toolCalls)
 	}
@@ -1204,8 +1233,8 @@ func TestRunCodexBackendPostsResponsesAndParsesSSE(t *testing.T) {
 		t.Fatalf("unexpected backend request: %#v", seen)
 	}
 	reasoning := seen["reasoning"].(map[string]any)
-	if reasoning["effort"] != "low" {
-		t.Fatalf("backend reasoning = %#v, want low", reasoning)
+	if reasoning["effort"] != "low" || reasoning["summary"] != "detailed" {
+		t.Fatalf("backend reasoning = %#v, want low + detailed summary", reasoning)
 	}
 }
 
@@ -1330,7 +1359,7 @@ func TestRunCodexBackendRetriesTransientHTTPError(t *testing.T) {
 	t.Setenv("CODEX_BACKEND_RETRY_ATTEMPTS", "2")
 
 	client := &codexBackendClient{httpClient: upstream.Client()}
-	content, _, metrics, err := client.run(
+	content, _, _, metrics, err := client.run(
 		context.Background(),
 		"/v1/chat/completions",
 		[]byte(`{"messages":[{"role":"user","content":"Reply OK"}]}`),
@@ -1389,7 +1418,7 @@ func TestCodexBackendRefreshesExpiredAccessToken(t *testing.T) {
 	t.Setenv("CODEX_REFRESH_TOKEN_URL_OVERRIDE", refresh.URL+"/oauth/token")
 
 	client := &codexBackendClient{httpClient: upstream.Client()}
-	content, _, _, err := client.run(
+	content, _, _, _, err := client.run(
 		context.Background(),
 		"/v1/chat/completions",
 		[]byte(`{"messages":[{"role":"user","content":"Reply OK"}]}`),

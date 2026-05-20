@@ -23,6 +23,19 @@
 - 清理：清理前远端 `/` 使用率 54%、Docker images 5.435GB；删除本轮两个 release 镜像 tar 后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260520T170126-2b731356-confirm-modal` 和中间验证镜像 `20260520T174642-f0093787-local-summary-backend`，回收 697MB；清理后 `/` 使用率 50%、Docker images 4.026GB，未执行 volume prune。
 - 下一步：如仍要验证 Codex Desktop UI 的同线程续跑，需要先把 Windows App 里的 Codex 窗口恢复到可交互状态；当前 RDP 桌面只能看到进程和任务栏图标，窗口未正常弹出。本轮服务端已覆盖 Desktop 压缩后实际触发的两个失败条件：`reasoning.summary=none` 和孤立 `function_call_output`。
 
+## 2026-05-20 Codex reasoning summary 远端部署验证
+- 完成：当前环境无可用本地 Docker / WSL Docker，无法按常规方式构建镜像 tar；本轮改为在本地 WSL 交叉编译 linux/amd64 `server` 二进制，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260520T150611-82397c53-local-reasoning-summary/`，用 `docker cp` 替换现有 `app-server` 容器内 `/app/server` 后通过 Compose 重启；未在服务器执行 `docker build` / `go build`，未改管理员密码，也无 schema migration。
+- 完成：远端本机 `/healthz`、`/readyz` 和公网 `https://oauth-api.saurick.me/healthz`、`/readyz` 均返回正常；`/v1/models` 返回 `supports_reasoning_summaries=true`、`default_reasoning_summary=auto`。
+- 完成：公网 `/v1/responses stream=true` 携带 `reasoning.summary=detailed` 验证通过，SSE 包含 `response.reasoning_summary_text.delta`、`response.completed.output` 中的 `type=reasoning` item，最终答案包含 `DEPLOY_REASONING_SUMMARY_CN_OK`；网关将英文 reasoning summary 兜底替换为中文摘要“正在分析用户请求，核对上下文与约束，并组织最终回答。”。
+- 验证通过：`cd server && go test ./...`、远端健康检查、公网 Responses reasoning summary 流式调用。
+- 清理：部署前远端 `/` 使用率 51%、Docker images 4.244GB；按规则执行 `docker image prune -a -f` 与 `docker builder prune -f`，无可回收镜像 / 构建缓存，清理后 `/` 仍 51%、Docker images 4.244GB；未执行 volume prune。
+- 阻塞/风险：由于当前本机缺少 Docker，本轮线上容器镜像标签仍显示旧镜像 `oauth-api-service-server:20260520T131239-9bb58677`，实际运行的是替换后的新 `/app/server` 二进制；release 目录和容器内 `/app/server.prev*` 暂保留用于短期回滚。后续有可用 Docker 后建议补一次正式镜像构建发布，收口镜像标签与二进制版本口径。
+## 2026-05-20 Codex reasoning summary 支持
+- 完成：自定义 provider 的 `/v1/models` 元数据改为声明 `supports_reasoning_summaries=true`、默认 `auto`，便于本地 Codex 在 `wire_api="responses"` 下显示过程摘要能力。
+- 完成：direct backend 请求默认补 `reasoning.summary=auto`，并解析上游 `response.reasoning_summary_text.delta/done`；网关合成 Responses SSE 时会输出 reasoning summary 事件，并在 `response.completed.output` 中保留 `reasoning` item。
+- 完成：更新后端 API 文档，说明 reasoning summary 请求、stream 事件与模型元数据口径。
+- 下一步：用本地 Codex 自定义 provider 实际发起一次需要 reasoning 的请求，确认 UI 可展示中文摘要；若需要真正实时逐 token 过程，再把 backend SSE 从“收完后合成”升级为边读边转发。
+- 阻塞/风险：当前实现是最小改动，summary 会随最终结果一并下发，不是完全实时透传；UI 固定英文标签如 `Thinking` / `Running` 仍由 Codex 客户端决定。
 ## 2026-05-20 API key 重置与普通保存隔离
 - 补充完成：后台 `/admin-keys` 将单个 / 批量重置 API key、单个 / 批量删除 API 凭据从浏览器原生 `confirm` 改为项目内确认弹窗；弹窗展示操作标题、影响说明、取消按钮和危险确认按钮，提交期间锁定避免重复操作。
 - 确认弹窗补充验证通过：`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs src/common/utils/tableInteraction.js src/common/utils/tableInteraction.test.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd server && go test ./...`、`cd web && STYLE_L1_PORT=4347 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。`style:l1` 已覆盖单个重置确认弹窗、批量重置确认弹窗、批量重置执行、浅色 / 暗色目标区域盒模型，并断言不再触发浏览器原生确认框。
@@ -706,3 +719,131 @@
 - 线上验证通过：远端当前 `app-server` 运行镜像为 `oauth-api-service-server:20260519T172757-fb7d27d1`，容器环境 `GIT_SHA=fb7d27d19cdf177dc210cd90095c437e30f3f2a2`；本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；本机和公网 `/public/codex/balance` 均返回 `status=ok`，credits 为 `0`，公开页面 `/admin-codex-balance` 返回 `HTTP 200`。
 - 浏览器回归：公网 `https://oauth-api.saurick.me/admin-codex-balance` 通过 Playwright 登录管理员后验证，页面可见接口状态「正常」、Credits remaining、Codex 与 GPT-5.3-Codex-Spark 两张卡和 4 条额度进度条；桌面 1440x900 无横向溢出，控制台无错误。
 - 清理：部署前远端 `/` 使用率 53%、Docker images 5.434GB；执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未使用旧镜像 `20260519T081406-86bd2f65-local` 与 `20260519T164255-6f72a8ec-balance-local`，回收 696.5MB；清理后 `/` 使用率 50%、Docker images 4.026GB；已删除远端本轮 release image tar 包，未执行 volume prune。
+
+## 2026-05-20 Windows API 凭据表格样式修复
+- 完成：修复 `/admin-keys` API 凭据表格在 Windows 下“完整凭据”列被压窄后逐字符竖排的问题；该表改为固定列宽，并为完整凭据列使用 `overflow-wrap:anywhere` + `word-break:normal`，避免 `break-all` 在窄列中产生单字符换行。
+- 完成：`style:l1` 的 API 凭据 mock 数据补充超长连续 key，并新增表格布局、完整凭据列宽/高度、复制按钮尺寸和换行策略断言，覆盖 Windows 字体/滚动条差异导致的回归。
+- 下一步：执行前端 lint/css/test/build 与 `style:l1` 回归；重点确认浅色、暗色、桌面和移动视口下 API 凭据表默认态、选择态、弹窗和分页交互不受影响。
+- 阻塞/风险：本地 PowerShell 环境无 `pnpm`，需通过 WSL 执行前端命令；当前仓库 `.npmrc` 读取时会提示 FontAwesome token 环境变量占位符未注入，若依赖未完整安装可能需要先配置环境变量或安装依赖。
+
+## 2026-05-20 本机 dev_restart 与 pnpm start 修复
+- 完成：本机后端  失败根因为公共 dev 配置命中  共享 PG 且密码失效；已在本机 PostgreSQL 18 的  创建/复用  库和 ，写入未跟踪的 ，并执行 Atlas migration 到 。
+- 完成：前端  ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND  No package.json (or package.yaml, or package.json5) was found in "/root/projects/openai-oauth-api-service". 启动时会因  /  引用未注入的  产生本机告警；当前项目没有  依赖，已移除 FontAwesome 私有 registry 配置，避免无关 token 占位符影响本机启动。
+- 验证通过：postgres://test_user:***@127.0.0.1:5433/openai_oauth_api_service?sslmode=disable 输出本机脱敏 DSN，using DB_URL=postgres://test_user:***@127.0.0.1:5433/openai_oauth_api_service?sslmode=disable
+No migration files to execute 成功应用 15 个 migration；>>> stopping dev listeners on: 8400 9400
+>>> kill port 8400 via lsof: 4126959
+>>> building ./bin/server-dev from ./cmd/server
+>>> running: ./bin/server-dev
+using conf path: ./configs/dev/config.yaml
+{"caller":"server/main.go:240","level":"INFO","mode":"local","msg":"tracer provider initialized without remote exporter","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_ratio":0,"trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"server/main.go:116","level":"INFO","msg":"postgres dsn overridden from env","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"server/main.go:125","level":"INFO","msg":"jwt secret overridden from env","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"server/main.go:133","level":"INFO","msg":"admin username overridden from env","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"server/main.go:137","level":"INFO","msg":"admin password overridden from env","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"data/data.go:108","level":"INFO","logger.name":"data","msg":"init postgres(otelsql) start...","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"data/data.go:150","level":"INFO","logger.name":"data","msg":"init postgres(otelsql) done","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"data/admin_user_init.go:63","level":"INFO","logger.name":"data","msg":"sync admin_users admin success","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[gpt-5.5]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_models\".\"id\" FROM \"gateway_models\" WHERE \"gateway_models\".\"model_id\" = $1 LIMIT 1","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[gpt-5.4]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_models\".\"id\" FROM \"gateway_models\" WHERE \"gateway_models\".\"model_id\" = $1 LIMIT 1","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[gpt-5.4-mini]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_models\".\"id\" FROM \"gateway_models\" WHERE \"gateway_models\".\"model_id\" = $1 LIMIT 1","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[gpt-5.3-codex]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_models\".\"id\" FROM \"gateway_models\" WHERE \"gateway_models\".\"model_id\" = $1 LIMIT 1","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[gpt-5.3-codex-spark]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_models\".\"id\" FROM \"gateway_models\" WHERE \"gateway_models\".\"model_id\" = $1 LIMIT 1","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[gpt-5.2]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_models\".\"id\" FROM \"gateway_models\" WHERE \"gateway_models\".\"model_id\" = $1 LIMIT 1","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_models\".\"id\", \"gateway_models\".\"model_id\", \"gateway_models\".\"owned_by\", \"gateway_models\".\"created_unix\", \"gateway_models\".\"enabled\", \"gateway_models\".\"source\", \"gateway_models\".\"context_window_tokens\", \"gateway_models\".\"context_compact_tokens\", \"gateway_models\".\"context_hard_tokens\", \"gateway_models\".\"context_compact_bytes\", \"gateway_models\".\"context_hard_bytes\", \"gateway_models\".\"context_keep_items\", \"gateway_models\".\"last_seen_at\", \"gateway_models\".\"created_at\", \"gateway_models\".\"updated_at\" FROM \"gateway_models\"","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[gpt-5.5 gpt-5.4 gpt-5.4-mini gpt-5.3-codex gpt-5.3-codex-spark gpt-5.2]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Exec","query":"DELETE FROM \"gateway_model_prices\" WHERE \"gateway_model_prices\".\"model_id\" NOT IN ($1, $2, $3, $4, $5, $6)","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[* gpt-5.5 gpt-5.4 gpt-5.4-mini gpt-5.3-codex gpt-5.3-codex-spark gpt-5.2]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Exec","query":"DELETE FROM \"gateway_policies\" WHERE \"gateway_policies\".\"model_id\" \u003c\u003e $1 AND \"gateway_policies\".\"model_id\" NOT IN ($2, $3, $4, $5, $6, $7)","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"args":"[]","caller":"dialect/dialect.go:79","level":"DEBUG","msg":"driver.Query","query":"SELECT \"gateway_api_keys\".\"id\", \"gateway_api_keys\".\"owner_user_id\", \"gateway_api_keys\".\"name\", \"gateway_api_keys\".\"key_hash\", \"gateway_api_keys\".\"plain_key\", \"gateway_api_keys\".\"key_prefix\", \"gateway_api_keys\".\"key_last4\", \"gateway_api_keys\".\"disabled\", \"gateway_api_keys\".\"upstream_strategy\", \"gateway_api_keys\".\"quota_requests\", \"gateway_api_keys\".\"quota_total_tokens\", \"gateway_api_keys\".\"quota_daily_tokens\", \"gateway_api_keys\".\"quota_weekly_tokens\", \"gateway_api_keys\".\"quota_daily_input_tokens\", \"gateway_api_keys\".\"quota_weekly_input_tokens\", \"gateway_api_keys\".\"quota_daily_output_tokens\", \"gateway_api_keys\".\"quota_weekly_output_tokens\", \"gateway_api_keys\".\"quota_daily_billable_input_tokens\", \"gateway_api_keys\".\"quota_weekly_billable_input_tokens\", \"gateway_api_keys\".\"allowed_models\", \"gateway_api_keys\".\"last_used_at\", \"gateway_api_keys\".\"created_at\", \"gateway_api_keys\".\"updated_at\" FROM \"gateway_api_keys\"","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"data/token.go:37","level":"INFO","module":"data.token","msg":"token generator init ok, expire=168h0m0s","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"data/admin_token.go:34","level":"INFO","module":"data.admin_token","msg":"admin token generator init ok, expire=168h0m0s","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"data/jsonrpc.go:83","level":"INFO","module":"data.jsonrpc","msg":"JsonrpcData created (auth/admin auth/user admin usecases constructed inside)","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"server/http_custom_handlers.go:248","level":"INFO","msg":"http static dir not found or not dir: /app/public, skip static handler","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:32+08:00"}
+{"caller":"grpc/server.go:212","level":"INFO","msg":"[gRPC] server listening on: [::]:9400","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:33+08:00"}
+{"caller":"http/server.go:330","level":"INFO","msg":"[HTTP] server listening on: [::]:8400","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:02:33+08:00"}
+{"caller":"grpc/server.go:224","level":"INFO","msg":"[gRPC] server stopping","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:21:47+08:00"}
+{"caller":"http/server.go:345","level":"INFO","msg":"[HTTP] server stopping","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:21:47+08:00"}
+{"caller":"taskgroup/taskgroup.go:304","component":"taskgroup","level":"INFO","msg":"taskgroup stop begin","request_id":"","running_count":0,"service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","timeout_ms":30000,"trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:21:47+08:00","wait":true}
+{"caller":"taskgroup/taskgroup.go:304","component":"taskgroup","level":"INFO","msg":"taskgroup stop finished before timeout","request_id":"","running_count":0,"service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","timeout_ms":30000,"trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:21:47+08:00","wait":true}
+{"caller":"taskgroup/taskgroup.go:304","canceled_count":0,"component":"taskgroup","level":"INFO","msg":"taskgroup dispatched cancellation to remaining tasks","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:21:47+08:00","wait":true}
+{"caller":"config/config.go:67","level":"INFO","msg":"watcher's ctx cancel : context canceled","request_id":"","service.id":"simon","service.name":"openai-oauth-api-service-server","service.version":"7b0f361","span.id":"","task.id":"","trace.id":"","trace_link_id":"","trace_sampled":false,"ts":"2026-05-20T14:21:47+08:00"} 可启动并监听 ，管理员  登录和  返回成功。
+- 验证通过：
+> openai-oauth-api-service-web@1.0.0 start /root/projects/openai-oauth-api-service/web
+> vite -- --host 127.0.0.1 --no-open
+
+env = {
+  VITE_BASE_URL: '/',
+  VITE_ENABLE_RPC_MOCK: 'false',
+  VITE_APP_TITLE: 'OpenAI OAuth API Service',
+  HTTPS_PROXY: 'http://127.0.0.1:7897',
+  no_proxy: '172.31.*,172.30.*,172.29.*,172.28.*,172.27.*,172.26.*,172.25.*,172.24.*,172.23.*,172.22.*,172.21.*,172.20.*,172.19.*,172.18.*,172.17.*,172.16.*,10.*,192.168.*,127.*,localhost,<local>',
+  USER: 'root',
+  npm_config_user_agent: 'pnpm/10.33.2 npm/? node/v24.14.0 linux x64',
+  npm_node_execpath: '/usr/local/lib/nodejs/node-v24.14.0-linux-x64/bin/node',
+  SHLVL: '1',
+  HOME: '/root',
+  OLDPWD: '/root/projects/openai-oauth-api-service',
+  npm_config_force: '',
+  NO_PROXY: '172.31.*,172.30.*,172.29.*,172.28.*,172.27.*,172.26.*,172.25.*,172.24.*,172.23.*,172.22.*,172.21.*,172.20.*,172.19.*,172.18.*,172.17.*,172.16.*,10.*,192.168.*,127.*,localhost,<local>',
+  npm_package_json: '/root/projects/openai-oauth-api-service/web/package.json',
+  COREPACK_ROOT: '/usr/local/lib/nodejs/node-v24.14.0-linux-x64/lib/node_modules/corepack',
+  DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/0/bus',
+  WSL_DISTRO_NAME: 'Ubuntu-26.04',
+  npm_config_progress: 'true',
+  https_proxy: 'http://127.0.0.1:7897',
+  WAYLAND_DISPLAY: 'wayland-0',
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '1',
+  LOGNAME: 'root',
+  pnpm_config_verify_deps_before_run: 'false',
+  http_proxy: 'http://127.0.0.1:7897',
+  PULSE_SERVER: 'unix:/mnt/wslg/PulseServer',
+  WSL_INTEROP: '/run/WSL/4128427_interop',
+  NAME: 'simon',
+  _: '/usr/local/bin/pnpm',
+  npm_config_package_import_method: 'hardlink',
+  npm_config_registry: 'http://registry.npm.taobao.org/',
+  npm_config_node_linker: 'hoisted',
+  TERM: 'xterm-256color',
+  npm_config_node_gyp: '/root/.cache/node/corepack/v1/pnpm/10.33.2/dist/node_modules/node-gyp/bin/node-gyp.js',
+  PATH: '/root/projects/openai-oauth-api-service/web/node_modules/.bin:/root/.cache/node/corepack/v1/pnpm/10.33.2/dist/node-gyp-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/c/Program Files/PowerShell/7:/mnt/c/Users/sauri/.codex/tmp/arg0/codex-arg01LdnQ8:/mnt/c/Program Files/OpenSSH/:/mnt/c/Program Files/Common Files/Oracle/Java/javapath:/mnt/c/Windows/system32:/mnt/c/Windows:/mnt/c/Windows/System32/Wbem:/mnt/c/Windows/System32/WindowsPowerShell/v1.0/:/mnt/c/Windows/System32/OpenSSH/:/mnt/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/c/Program Files/Git/cmd:/mnt/c/Program Files/Microsoft SQL Server/150/Tools/Binn/:/mnt/c/Program Files/dotnet/:/mnt/c/Program Files (x86)/GtkSharp/2.12/bin:/mnt/c/Program Files/nodejs/:/mnt/c/Program Files/Go/bin:/mnt/c/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR:/mnt/c/Users/sauri/AppData/Local/Programs/Cursor/resources/app/bin:/mnt/c/WINDOWS/system32:/mnt/c/WINDOWS:/mnt/c/WINDOWS/System32/Wbem:/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/c/WINDOWS/System32/OpenSSH/:/mnt/c/Program Files/Tailscale/:/mnt/c/Program Files/Sunshine:/mnt/c/Program Files/Sunshine/tools:/mnt/c/Program Files/PowerShell/7/:/mnt/c/Windows/system32/config/systemprofile/AppData/Local/Microsoft/WindowsApps:/mnt/c/Windows/system32/config/systemprofile/go/bin:/mnt/c/Users/sauri/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Program Files/Multipass/bin:/mnt/c/Windows/system32/config/systemprofile/.dotnet/tools:/mnt/c/Users/sauri/AppData/Roaming/npm:/mnt/c/Users/sauri/AppData/Local/Programs/Lens/resources/cli/bin:/mnt/c/Users/sauri/AppData/Local/GitHubDesktop/bin:/mnt/c/Program Files/mitmproxy/bin:/mnt/c/Users/sauri/go/bin:/mnt/c/Program Files/JetBrains/GoLand 2024.3.5/bin:/mnt/c/Users/sauri/AppData/Local/Microsoft/WindowsApps:/mnt/c/Users/sauri/AppData/Local/Programs/Ollama:/mnt/c/Users/sauri/AppData/Local/Microsoft/WinGet/Links:/mnt/c/Users/sauri/AppData/Local/Microsoft/WinGet/Packages/ar51an.iPerf3_Microsoft.Winget.Source_8wekyb3d8bbwe:/mnt/c/Users/sauri/AppData/Local/OpenAI/Codex/bin/ada252862d154cdd:/mnt/c/Program Files/WindowsApps/OpenAI.Codex_26.513.4821.0_x64__2p2nqsd0c76g0/app/resources',
+  npm_package_name: 'openai-oauth-api-service-web',
+  npm_config_prefer_offline: 'true',
+  NODE: '/usr/local/lib/nodejs/node-v24.14.0-linux-x64/bin/node',
+  XDG_RUNTIME_DIR: '/run/user/0/',
+  npm_config_frozen_lockfile: '',
+  DISPLAY: ':0',
+  LANG: 'C.UTF-8',
+  npm_lifecycle_script: 'vite -- --host 127.0.0.1 --no-open',
+  SHELL: '/usr/bin/zsh',
+  npm_package_version: '1.0.0',
+  npm_lifecycle_event: 'start',
+  npm_config_verify_deps_before_run: 'false',
+  npm_config_strict_peer_dependencies: '',
+  npm_config_npm_globalconfig: '/usr/local/lib/nodejs/node-v24.14.0-linux-x64/etc/npmrc',
+  npm_config_globalconfig: '/root/.config/pnpm/rc',
+  PWD: '/root/projects/openai-oauth-api-service/web',
+  npm_execpath: '/root/.cache/node/corepack/v1/pnpm/10.33.2/bin/pnpm.cjs',
+  HTTP_PROXY: 'http://127.0.0.1:7897',
+  npm_config__jsr_registry: 'https://npm.jsr.io/',
+  npm_command: 'run-script',
+  PNPM_SCRIPT_SRC_DIR: '/root/projects/openai-oauth-api-service/web',
+  HOSTTYPE: 'x86_64',
+  WSL2_GUI_APPS_ENABLED: '1',
+  npm_config_shamefully_hoist: 'true',
+  WSLENV: '',
+  INIT_CWD: '/root/projects/openai-oauth-api-service/web',
+  NODE_ENV: 'development'
+}
+command = serve
+mode = development
+
+  VITE v5.4.21  ready in 181 ms
+
+  ➜  Local:   http://localhost:5176/
+  ➜  Network: http://10.255.255.254:5176/
+  ➜  Network: http://192.168.0.45:5176/
+2:23:55 PM [vite] hmr update /src/tailwind.css, /src/pages/AdminLogin/index.jsx, /src/pages/AdminDashboard/index.jsx, /src/pages/AdminApi/index.jsx, /src/common/components/layout/AdminFrame.jsx
+2:23:56 PM [vite] hmr update /src/tailwind.css, /src/pages/AdminLogin/index.jsx, /src/pages/AdminDashboard/index.jsx, /src/pages/AdminApi/index.jsx, /src/common/components/layout/AdminFrame.jsx
+5:03:50 PM [vite] hmr update /src/tailwind.css, /src/pages/AdminApi/index.jsx
+5:03:50 PM [vite] hmr update /src/pages/AdminApi/index.jsx, /src/tailwind.css
+5:03:50 PM [vite] hmr update /src/tailwind.css
+ ELIFECYCLE  Command failed with exit code 1. 不再出现 FontAwesome token 告警，可启动 Vite 5176；在后端运行期间未再出现  代理连接拒绝。
+- 下一步：如换机器或重置 WSL，需要先确保 PostgreSQL 18 在 5433 运行，并恢复本机  私有 DSN； 仍保持 gitignore，不提交真实本机凭据。

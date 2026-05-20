@@ -30,7 +30,7 @@ const (
 	codexOAuthClientID         = "app_EMoamEEZ73f0CkXaXp7hrann"
 	defaultCodexRefreshURL     = "https://auth.openai.com/oauth/token"
 	codexBackendRefreshSkew    = 5 * time.Minute
-	defaultCodexBackendPrompt  = "You are a concise assistant. Follow the user's instructions exactly."
+	defaultCodexBackendPrompt  = "你是一个简洁、工程实践导向的中文助手。除非用户明确要求其他语言，面向用户可见的回答、计划、进度说明和 reasoning summary / process summary 必须使用简体中文；命令、路径、错误码和 API 字段名可以保留原文。不要输出完整私有思考链，只输出简洁过程摘要。严格遵循用户指令。"
 	codexBackendResumePrompt   = "When this conversation is resumed from a compacted context, reasoning summary, or history summary, treat that summary as the prior working state and continue the unfinished task. Do not reply with a generic acknowledgement that the context was loaded, and do not ask what to do next unless the latest user message explicitly asks for status only or a concrete blocker makes the next action impossible. If the user says to continue, proceed with the next concrete step from the summary."
 	defaultCodexBackendSummary = "detailed"
 )
@@ -67,14 +67,14 @@ func codexUpstreamMode() string {
 	}
 }
 
-func (h *openAIGatewayHandler) runCodexBackend(ctx context.Context, path string, body []byte, requestModel string, reasoningEffort string) (string, []gatewayToolCall, openAIUsageMetrics, error) {
+func (h *openAIGatewayHandler) runCodexBackend(ctx context.Context, path string, body []byte, requestModel string, reasoningEffort string) (string, gatewayReasoningSummary, []gatewayToolCall, openAIUsageMetrics, error) {
 	return defaultCodexBackendClient.run(ctx, path, body, requestModel, reasoningEffort)
 }
 
-func (c *codexBackendClient) run(ctx context.Context, path string, body []byte, requestModel string, reasoningEffort string) (string, []gatewayToolCall, openAIUsageMetrics, error) {
+func (c *codexBackendClient) run(ctx context.Context, path string, body []byte, requestModel string, reasoningEffort string) (string, gatewayReasoningSummary, []gatewayToolCall, openAIUsageMetrics, error) {
 	requestBody, model, err := codexBackendRequestFromGateway(path, body, requestModel, reasoningEffort)
 	if err != nil {
-		return "", nil, openAIUsageMetrics{}, err
+		return "", gatewayReasoningSummary{}, nil, openAIUsageMetrics{}, err
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -84,6 +84,7 @@ func (c *codexBackendClient) run(ctx context.Context, path string, body []byte, 
 	defer cancel()
 
 	var content string
+	var reasoningSummary gatewayReasoningSummary
 	var toolCalls []gatewayToolCall
 	var metrics openAIUsageMetrics
 	var lastErr error
@@ -93,10 +94,10 @@ func (c *codexBackendClient) run(ctx context.Context, path string, body []byte, 
 			responseBody, err = c.postResponses(reqCtx, requestBody, true)
 		}
 		if reqCtx.Err() == context.DeadlineExceeded {
-			return "", nil, openAIUsageMetrics{}, fmt.Errorf("codex backend upstream timed out after %s", timeout)
+			return "", gatewayReasoningSummary{}, nil, openAIUsageMetrics{}, fmt.Errorf("codex backend upstream timed out after %s", timeout)
 		}
 		if err == nil {
-			content, toolCalls, metrics, err = parseCodexBackendSSE(responseBody)
+			content, reasoningSummary, toolCalls, metrics, err = parseCodexBackendSSE(responseBody)
 		}
 		if err == nil {
 			lastErr = nil
@@ -107,14 +108,14 @@ func (c *codexBackendClient) run(ctx context.Context, path string, body []byte, 
 			break
 		}
 		if !sleepBeforeCodexBackendRetry(reqCtx, attempt) {
-			return "", nil, openAIUsageMetrics{}, reqCtx.Err()
+			return "", gatewayReasoningSummary{}, nil, openAIUsageMetrics{}, reqCtx.Err()
 		}
 	}
 	if lastErr != nil {
-		return "", nil, openAIUsageMetrics{}, lastErr
+		return "", gatewayReasoningSummary{}, nil, openAIUsageMetrics{}, lastErr
 	}
 	if strings.TrimSpace(content) == "" && len(toolCalls) == 0 {
-		return "", nil, openAIUsageMetrics{}, fmt.Errorf("codex backend upstream returned empty answer")
+		return "", gatewayReasoningSummary{}, nil, openAIUsageMetrics{}, fmt.Errorf("codex backend upstream returned empty answer")
 	}
 	if metrics.TotalTokens <= 0 {
 		metrics = estimateCodexCLIUsage(model, promptTextForUsageEstimate(path, body), content)
@@ -122,7 +123,7 @@ func (c *codexBackendClient) run(ctx context.Context, path string, body []byte, 
 	if metrics.Model == "" {
 		metrics.Model = model
 	}
-	return content, toolCalls, metrics, nil
+	return content, reasoningSummary, toolCalls, metrics, nil
 }
 
 func (c *codexBackendClient) postResponses(ctx context.Context, body map[string]any, forceRefresh bool) ([]byte, error) {
@@ -300,8 +301,13 @@ func codexBackendRequestFromGateway(path string, body []byte, requestModel strin
 		"stream":              true,
 		"include":             []any{},
 	}
+	if strings.TrimSpace(instructions) == "" {
+		instructions = defaultCodexBackendPrompt
+	}
 	req["instructions"] = codexBackendInstructions(instructions)
-	reasoning := map[string]any{"summary": codexBackendReasoningSummary(payload)}
+	reasoning := map[string]any{
+		"summary": reasoningSummaryFromPayload(payload),
+	}
 	if reasoningEffort != "" {
 		reasoning["effort"] = reasoningEffort
 	}
@@ -312,7 +318,7 @@ func codexBackendRequestFromGateway(path string, body []byte, requestModel strin
 func codexBackendInstructions(instructions string) string {
 	instructions = strings.TrimSpace(instructions)
 	if instructions == "" {
-		instructions = defaultCodexBackendPrompt
+		return codexBackendResumePrompt
 	}
 	if strings.Contains(instructions, codexBackendResumePrompt) {
 		return instructions
@@ -320,11 +326,21 @@ func codexBackendInstructions(instructions string) string {
 	return instructions + "\n\n" + codexBackendResumePrompt
 }
 
-func codexBackendReasoningSummary(payload map[string]any) string {
-	raw := strings.ToLower(strings.TrimSpace(stringValue(mapValue(payload["reasoning"])["summary"])))
-	switch raw {
+func reasoningSummaryFromPayload(payload map[string]any) string {
+	raw := stringValue(mapValue(payload["reasoning"])["summary"])
+	if raw == "" {
+		raw = stringValue(payload["reasoning_summary"])
+	}
+	if raw == "" {
+		raw = stringValue(payload["reasoningSummary"])
+	}
+	if raw == "" {
+		return defaultCodexBackendSummary
+	}
+	summary := strings.ToLower(strings.TrimSpace(raw))
+	switch summary {
 	case "auto", "concise", "detailed":
-		return raw
+		return summary
 	default:
 		return defaultCodexBackendSummary
 	}
@@ -738,9 +754,10 @@ func firstNonNil(values ...any) any {
 	return nil
 }
 
-func parseCodexBackendSSE(body []byte) (string, []gatewayToolCall, openAIUsageMetrics, error) {
+func parseCodexBackendSSE(body []byte) (string, gatewayReasoningSummary, []gatewayToolCall, openAIUsageMetrics, error) {
 	content := strings.Builder{}
 	metrics := openAIUsageMetrics{}
+	reasoningSummary := gatewayReasoningSummary{}
 	var finalText string
 	toolCalls := make([]gatewayToolCall, 0)
 	var finalToolCalls []gatewayToolCall
@@ -756,6 +773,18 @@ func parseCodexBackendSSE(body []byte) (string, []gatewayToolCall, openAIUsageMe
 		switch stringValue(event["type"]) {
 		case "response.output_text.delta":
 			content.WriteString(stringValue(event["delta"]))
+		case "response.reasoning_summary_text.delta":
+			reasoningSummary.Text += stringValue(event["delta"])
+			if reasoningSummary.ID == "" {
+				reasoningSummary.ID = stringValue(event["item_id"])
+			}
+		case "response.reasoning_summary_text.done":
+			if text := stringValue(event["text"]); text != "" {
+				reasoningSummary.Text = text
+			}
+			if reasoningSummary.ID == "" {
+				reasoningSummary.ID = stringValue(event["item_id"])
+			}
 		case "response.output_item.done":
 			item := mapValue(event["item"])
 			if toolCall, ok := codexBackendToolCallFromValue(item); ok {
@@ -775,9 +804,9 @@ func parseCodexBackendSSE(body []byte) (string, []gatewayToolCall, openAIUsageMe
 				finalToolCalls = calls
 			}
 		case "response.failed":
-			return "", nil, openAIUsageMetrics{}, fmt.Errorf("codex backend response failed: %s", summarizeCodexBackendBody([]byte(data)))
+			return "", gatewayReasoningSummary{}, nil, openAIUsageMetrics{}, fmt.Errorf("codex backend response failed: %s", summarizeCodexBackendBody([]byte(data)))
 		case "response.incomplete":
-			return "", nil, openAIUsageMetrics{}, fmt.Errorf("codex backend response incomplete: %s", summarizeCodexBackendBody([]byte(data)))
+			return "", gatewayReasoningSummary{}, nil, openAIUsageMetrics{}, fmt.Errorf("codex backend response incomplete: %s", summarizeCodexBackendBody([]byte(data)))
 		}
 	}
 
@@ -788,7 +817,7 @@ func parseCodexBackendSSE(body []byte) (string, []gatewayToolCall, openAIUsageMe
 	if len(finalToolCalls) > 0 {
 		toolCalls = finalToolCalls
 	}
-	return text, toolCalls, metrics, nil
+	return text, reasoningSummary, toolCalls, metrics, nil
 }
 
 func sseDataMessages(body []byte) []string {
