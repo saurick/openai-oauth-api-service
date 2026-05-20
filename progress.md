@@ -6,6 +6,9 @@
 - 补充完成：参考 `trade-erp` 表格选择交互，为 `/admin-keys` 凭据表头增加当前页全选复选框；行点击仍保持单选，行首复选框支持多选，表头复选框支持当前页全选 / 取消并在部分选中时显示半选态。
 - 补充完成：后台 `/admin-keys` 的「当前操作」区新增批量「重置 API key」按钮，支持选择框多选后一键轮换多个 key；确认后逐个调用 `api.key_reset_secret`，完成后展示本次所有新完整 key，并提供逐条复制和「复制全部完整凭据」。
 - 全选补充验证通过：`cd web && pnpm test`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs src/common/utils/tableInteraction.js src/common/utils/tableInteraction.test.mjs`、`cd web && pnpm build`、`cd server && go test ./...`、`cd web && STYLE_L1_PORT=4346 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
+- 全选补充部署：已提交并推送 `827d8e9`（支持 API key 表格全选）；本地构建 amd64 镜像 `oauth-api-service-server:20260520T164604-827d8e98-select-all`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260520T164604-827d8e98-select-all/`；远端仅执行 `docker load`、宿主机 Atlas status、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 全选线上验证：远端 Atlas 状态 `OK`、当前版本 `20260520090000`、待执行 `0`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；公网 `/admin-keys` 使用真实管理员 token 打开后确认表头全选框存在、当前页 8 行可一次全选、再次点击可清空、批量重置按钮存在、document 横向溢出为 `0`，控制台无错误。
+- 全选清理：清理前远端 `/` 使用率 53%、Docker images 4.731GB；删除 release 镜像 tar 后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260520T163145-62b3d2ab-batch-reset`，回收 348.5MB；清理后 `/` 使用率 50%、Docker images 4.026GB，未执行 volume prune；本地 release 临时目录已移入废纸篓。
 - 完成：新增 `api.key_reset_secret`，重置时只改写 `key_hash`、`plain_key`、`key_prefix`、`key_last4`，保留备注、归属、模型限制、上游策略、额度、启用状态和历史 usage 归属；`api.key_update` 类型层面移除 secret 输入，普通保存备注、额度、模型或上游策略不会重新生成 API key。
 - 完成：后台编辑 API 凭据弹窗新增「重置 API key」按钮和泄密场景说明；新建弹窗不显示该危险操作，备注提示改为明确普通保存不会重新生成 key。重置成功后会关闭弹窗并展示新的完整 key，方便立即复制同步客户端。
 - 完成：同步更新 `server/docs/api.md`、`web/README.md` 和 `style:l1` 断言，当前真源为“普通编辑不轮换，泄密时手动重置轮换”。
