@@ -2383,7 +2383,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 value={keySearchInput}
                 onChange={handleKeySearchInputChange}
                 className={inputClass}
-                placeholder="搜索备注、完整凭据、前缀或后四位"
+                placeholder="搜索备注、前缀或后四位"
               />
               <SearchableSelect
                 value={keyModelFilter}
@@ -2529,7 +2529,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   value={keySearchInput}
                   onChange={handleKeySearchInputChange}
                   className={inputClass}
-                  placeholder="搜索备注、完整凭据、前缀或后四位"
+                  placeholder="搜索备注、前缀或后四位"
                 />
                 <SearchableSelect
                   value={keyModelFilter}
@@ -2640,7 +2640,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     <th className={thClass}>备注</th>
                     <th className={thClass}>创建时间</th>
                     <th className={thClass}>更新时间</th>
-                    <th className={thClass}>完整凭据</th>
+                    <th className={thClass}>凭据标识</th>
                     <th className={thClass}>模型限制</th>
                     <th className={thClass}>上游策略</th>
                     <th className={thClass}>Token 日 / 周限制（百万）</th>
@@ -2695,12 +2695,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                           <td className={`${tdClass} font-mono text-xs`}>
                             <div className="flex max-w-[360px] items-start gap-2">
                               <span className="min-w-0 break-all">
-                                {item.plain_key ||
-                                  `${item.key_prefix}…${item.key_last4}`}
+                                {`${item.key_prefix}…${item.key_last4}`}
                               </span>
-                              {item.plain_key ? (
-                                <CopyButton value={item.plain_key} />
-                              ) : null}
                             </div>
                           </td>
                           <td className={tdClass}>
@@ -4368,7 +4364,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         {currentView === 'keys' && newKey?.plain_key ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
             <div className="font-semibold">新 key 已生成</div>
-            <div>完整 key 已保存，后续可在列表继续查看。</div>
+            <div>完整 key 只显示一次，请立即复制保存。</div>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
               <div className="min-w-0 flex-1 break-all font-mono text-xs text-[#1f2d25] sm:text-sm">
                 {newKey.plain_key}

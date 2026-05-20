@@ -43,7 +43,7 @@ func (r *gatewayRepo) CreateAPIKey(ctx context.Context, input biz.CreateGatewayA
 	create := r.data.postgres.GatewayAPIKey.Create().
 		SetName(input.Name).
 		SetKeyHash(secret.KeyHash).
-		SetPlainKey(secret.PlainKey).
+		SetPlainKey("").
 		SetKeyPrefix(secret.KeyPrefix).
 		SetKeyLast4(secret.KeyLast4).
 		SetUpstreamStrategy(input.UpstreamStrategy).
@@ -73,7 +73,6 @@ func (r *gatewayRepo) ListAPIKeys(ctx context.Context, limit, offset int, search
 	if search != "" {
 		predicates := []predicate.GatewayAPIKey{
 			gatewayapikey.NameContainsFold(search),
-			gatewayapikey.PlainKeyContainsFold(search),
 			gatewayapikey.KeyPrefixContainsFold(search),
 			gatewayapikey.KeyLast4ContainsFold(search),
 		}
@@ -144,10 +143,6 @@ func (r *gatewayRepo) GetAPIKeyByID(ctx context.Context, id int) (*biz.GatewayAP
 func (r *gatewayRepo) UpdateAPIKey(ctx context.Context, input biz.UpdateGatewayAPIKeyInput) (*biz.GatewayAPIKey, error) {
 	update := r.data.postgres.GatewayAPIKey.UpdateOneID(input.ID).
 		SetName(input.Name).
-		SetPlainKey(input.Secret.PlainKey).
-		SetKeyHash(input.Secret.KeyHash).
-		SetKeyPrefix(input.Secret.KeyPrefix).
-		SetKeyLast4(input.Secret.KeyLast4).
 		SetUpstreamStrategy(input.UpstreamStrategy).
 		SetQuotaRequests(input.QuotaRequests).
 		SetQuotaTotalTokens(input.QuotaTotalTokens).

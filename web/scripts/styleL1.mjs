@@ -1130,7 +1130,7 @@ async function assertAnalyticsVisuals(page, scenarioName) {
       hasPagination: Boolean(main?.querySelector('.admin-table-pagination')),
       hasSearchInput: Boolean(
         main?.querySelector(
-          'input[placeholder="搜索备注、完整凭据、前缀或后四位"]'
+          'input[placeholder="搜索备注、前缀或后四位"]'
         )
       ),
       hasStatusFilter: Boolean(
@@ -1265,7 +1265,7 @@ function assertUsageAggregationRequests(page, scenarioName) {
   )
   assert(
     calls.filter((call) => call.method === 'usage_key_summaries').length >= 8,
-    `${scenarioName} 未请求完整凭据 token 窗口: ${JSON.stringify(calls)}`
+    `${scenarioName} 未请求凭据 token 窗口: ${JSON.stringify(calls)}`
   )
 }
 
@@ -1320,7 +1320,7 @@ async function assertUsageKeyStatsTab(page, scenarioName) {
   const metrics = await page.evaluate(() => ({
     hasSearchInput: Boolean(
       document.querySelector(
-        'main input[placeholder="搜索备注、完整凭据、前缀或后四位"]'
+        'main input[placeholder="搜索备注、前缀或后四位"]'
       )
     ),
     hasStatsRows:
@@ -1830,9 +1830,11 @@ async function assertKeyTableVisuals(page, scenarioName) {
       hasFullPlainKey: document.body.innerText.includes(
         'ogw_productionapikey_8a2c'
       ),
+      hasMaskedKey: document.body.innerText.includes('ogw_production…8a2c'),
       hasCurrentOperationRow: document.body.innerText.includes('当前操作'),
       hasPagination: Boolean(main?.querySelector('.admin-table-pagination')),
       hasRemarkHeader: document.body.innerText.includes('备注'),
+      hasKeyIdentityHeader: document.body.innerText.includes('凭据标识'),
       hasCreatedAtHeader: document.body.innerText.includes('创建时间'),
       hasUpdatedAtHeader: document.body.innerText.includes('更新时间'),
       hasUpstreamStrategyHeader: document.body.innerText.includes('上游策略'),
@@ -1850,7 +1852,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
         .filter(Boolean),
       hasSearchInput: Boolean(
         main?.querySelector(
-          'input[placeholder="搜索备注、完整凭据、前缀或后四位"]'
+          'input[placeholder="搜索备注、前缀或后四位"]'
         )
       ),
       hasSearchAction: Array.from(main?.querySelectorAll('button') || []).some(
@@ -1910,8 +1912,10 @@ async function assertKeyTableVisuals(page, scenarioName) {
   })
 
   assert(metrics.hasSidebarKeyNav, `${scenarioName} 缺少后台侧栏 API 凭据入口`)
-  assert(metrics.hasFullPlainKey, `${scenarioName} 缺少完整 key 展示`)
+  assert(!metrics.hasFullPlainKey, `${scenarioName} 列表不应展示完整 key`)
+  assert(metrics.hasMaskedKey, `${scenarioName} 缺少前缀和后四位 key 标识`)
   assert(metrics.hasRemarkHeader, `${scenarioName} 缺少备注列表列`)
+  assert(metrics.hasKeyIdentityHeader, `${scenarioName} 缺少凭据标识列`)
   assert(metrics.hasCreatedAtHeader, `${scenarioName} 缺少创建时间列`)
   assert(metrics.hasUpdatedAtHeader, `${scenarioName} 缺少更新时间列`)
   assert(metrics.hasUpstreamStrategyHeader, `${scenarioName} 缺少上游策略列`)
@@ -3041,7 +3045,6 @@ function getApiMockData(method, params = {}, state = {}) {
         updated_at: 1777950000,
         last_used_at: 1778000000,
         name: 'productionapikey',
-        plain_key: 'ogw_productionapikey_8a2c',
         upstream_strategy: 'backend_with_cli_fallback',
         quota_daily_billable_input_tokens: 450_000,
         quota_daily_input_tokens: 800_000,
@@ -3062,7 +3065,6 @@ function getApiMockData(method, params = {}, state = {}) {
         updated_at: 1777850000,
         last_used_at: 0,
         name: 'stagingkeylongnameforoverflowcheck',
-        plain_key: 'ogw_stagingkeylongname_3f9d',
         upstream_strategy: '',
         quota_daily_billable_input_tokens: 0,
         quota_daily_input_tokens: 0,
@@ -3086,7 +3088,6 @@ function getApiMockData(method, params = {}, state = {}) {
         updated_at: 1777750000 - index * 1_000,
         last_used_at: 1777990000 - index * 100,
         name: `extraapikey${id}`,
-        plain_key: `ogw_extraapikey${id}_x${id}`,
         upstream_strategy: index % 2 === 0 ? 'backend_only' : 'codex_cli',
         quota_daily_billable_input_tokens: 0,
         quota_daily_input_tokens: 0,

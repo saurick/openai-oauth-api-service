@@ -2,6 +2,18 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-20 Codex provider 流式透传与 key 明文收敛
+- 完成：下游 API key 完整明文改为只在 `api.key_create` 创建响应中返回一次；`api.key_list` / `api.key_update` 不再返回 `plain_key`，后台列表只展示前缀与后四位，普通编辑备注、额度、模型权限、上游策略或禁用状态时不再改写 key hash / 前缀 / 后四位。
+- 完成：新增数据迁移 `20260520090000_migrate.sql`，部署迁移时清空历史 `gateway_api_keys.plain_key` 残留明文；鉴权继续使用 `key_hash`，人工识别和 usage 归属继续使用 `key_prefix` / `key_last4`。
+- 完成：`/v1/responses stream=true` 在 Codex backend 模式下改为直连透传上游 Responses SSE `data:` 事件，执行过程、文本增量、完成事件和 usage 不再由网关先缓存再重组；网关旁路解析 usage / 错误后照常落库，并保留 SSE keepalive。
+- 完成：Codex CLI 收到 `response.completed` 后立即关闭连接时，usage 不再误记为 `client_canceled`；只要已解析完成事件且未收到 `response.failed` / `response.incomplete`，按成功记录 token、字节数和 backend 模式。
+- 完成：`/v1/models` 的 Codex catalog 元数据不再固定 `reasoning_summary=none` 和 `verbosity=low`，改为声明支持 reasoning summary，默认 `auto` / `medium`，以匹配 Codex 长期多人接入的目标体验。
+- 验证通过：`cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4336 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
+- Windows 验证：`ssh sauri@192.168.0.45` 确认 Codex CLI `0.125.0`、OpenCode `1.14.48`；Windows 能访问本机修复版服务 `http://192.168.0.26:8401/healthz`；用临时 provider `oauthlocal` 指向本机 `/v1` 后，`codex exec` 返回 `WIN_CODEX_LOCAL_PROVIDER_OK_2`，服务端 usage 记录 `/v1/responses`、`stream=true`、`status=200`、`success=true`、`upstream_mode=codex_backend`、`total_tokens=12072`。
+- 清理：Windows 验证用临时 API key 已删除；本机 8401 临时服务已停止。
+- 下一步：如需发布，按既有流程在本地构建镜像、上传并在远端仅执行 `docker load`、宿主机 Atlas migration、重启和健康检查；生产迁移会清除历史明文 key，部署前需要确认管理员已保存仍在使用的完整 key。
+- 阻塞/风险：迁移清空历史 `plain_key` 后，后台无法再找回旧完整 key；遗失的 key 需要新建替换。当前改动尚未部署到线上。
+
 ## 2026-05-19 模型上下文弹窗布局修复
 - 完成：模型上下文策略弹窗改为专用宽度与响应式字段网格，字段内部增加 `min-width: 0`、输入框满宽、说明文字可换行，避免“填入当前值”、placeholder 和当前生效说明互相挤压、溢出或遮挡。
 - 完成：`style:l1` 的模型管理桌面场景新增该弹窗浅色 / 暗色盒模型断言，覆盖面板横向溢出、字段数量、输入框边界、填值按钮边界和字段头部滚动宽度。

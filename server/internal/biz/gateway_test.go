@@ -126,7 +126,7 @@ func TestGatewayUsecaseUpdateAPIKeyRejectsInvalidRemark(t *testing.T) {
 	}
 }
 
-func TestGatewayUsecaseUpdateAPIKeyRewritesPlainKeyRemark(t *testing.T) {
+func TestGatewayUsecaseUpdateAPIKeyDoesNotRewriteSecret(t *testing.T) {
 	repo := &gatewayPolicyTestRepo{currentKey: &GatewayAPIKey{ID: 1, Name: "alreadynew", PlainKey: "ogw_old_random_part_with_under_score"}}
 	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
 
@@ -134,12 +134,11 @@ func TestGatewayUsecaseUpdateAPIKeyRewritesPlainKeyRemark(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpdateAPIKey() error = %v", err)
 	}
-	wantPlain := "ogw_new_random_part_with_under_score"
-	if updated.PlainKey != wantPlain {
-		t.Fatalf("updated plain key = %q, want %q", updated.PlainKey, wantPlain)
+	if updated.Name != "new" {
+		t.Fatalf("updated name = %q, want new", updated.Name)
 	}
-	if repo.updatedInput.Secret.KeyHash == "" || repo.updatedInput.Secret.KeyPrefix != wantPlain[:12] {
-		t.Fatalf("updated secret not derived from rewritten plain key: %+v", repo.updatedInput.Secret)
+	if repo.updatedInput.Secret != (GatewayAPIKeySecret{}) {
+		t.Fatalf("secret should not be rewritten on ordinary update: %+v", repo.updatedInput.Secret)
 	}
 }
 

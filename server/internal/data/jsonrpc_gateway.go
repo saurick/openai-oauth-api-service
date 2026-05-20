@@ -81,7 +81,7 @@ func (d *JsonrpcData) handleGateway(
 		}
 		items := make([]any, 0, len(list))
 		for _, item := range list {
-			items = append(items, mapGatewayAPIKeyForRPC(item, true))
+			items = append(items, mapGatewayAPIKeyForRPC(item, false))
 		}
 		return id, okResult("获取 API key 列表成功", map[string]any{
 			"items":  items,
@@ -144,7 +144,7 @@ func (d *JsonrpcData) handleGateway(
 			"owner_user_id": item.OwnerUserID,
 			"disabled":      item.Disabled,
 		})
-		return id, okResult("更新 API key 成功", mapGatewayAPIKeyForRPC(item, true)), nil
+		return id, okResult("更新 API key 成功", mapGatewayAPIKeyForRPC(item, false)), nil
 
 	case "key_delete":
 		keyID := getInt(pm, "key_id", 0)

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -196,10 +197,10 @@ func (h *openAIGatewayHandler) handleModels(w stdhttp.ResponseWriter, r *stdhttp
 				},
 				"availability_nux":                 map[string]any{"message": ""},
 				"upgrade":                          nil,
-				"supports_reasoning_summaries":     false,
-				"default_reasoning_summary":        "none",
+				"supports_reasoning_summaries":     true,
+				"default_reasoning_summary":        "auto",
 				"support_verbosity":                true,
-				"default_verbosity":                "low",
+				"default_verbosity":                "medium",
 				"apply_patch_tool_type":            "freeform",
 				"web_search_tool_type":             "text_and_image",
 				"truncation_policy":                map[string]any{"mode": "tokens", "limit": 10000},
@@ -392,7 +393,7 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		}
 	}
 
-	_, upstreamMode, _ := h.effectiveCodexUpstream(r.Context(), key)
+	_, upstreamMode, fallbackEnabled := h.effectiveCodexUpstream(r.Context(), key)
 	prepared, prepareErr := h.prepareGatewayContext(r.Context(), key, requestID, sessionID, r.URL.Path, body, requestModel, reasoningEffort)
 	if prepareErr != nil {
 		status := stdhttp.StatusRequestEntityTooLarge
@@ -424,7 +425,308 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 	}
 	body = prepared.Body
 
+	if stream && r.URL.Path == "/v1/responses" && upstreamMode == codexUpstreamModeBackend {
+		h.handleCodexBackendResponsesStream(w, r, key, requestID, sessionID, endpoint, requestModel, reasoningEffort, body, start, prepared.Diagnostic, fallbackEnabled)
+		return
+	}
+
 	h.handleCodexCLIProxy(w, r, key, requestID, sessionID, endpoint, requestModel, reasoningEffort, stream, body, start, prepared.Diagnostic)
+}
+
+type codexBackendResponsesStreamResult struct {
+	Metrics       openAIUsageMetrics
+	ResponseBytes int64
+	Started       bool
+	ErrorType     string
+	Diagnostic    biz.GatewayUsageDiagnostic
+}
+
+func (h *openAIGatewayHandler) handleCodexBackendResponsesStream(
+	w stdhttp.ResponseWriter,
+	r *stdhttp.Request,
+	key *biz.GatewayAPIKey,
+	requestID string,
+	sessionID string,
+	endpoint string,
+	requestModel string,
+	reasoningEffort string,
+	body []byte,
+	start time.Time,
+	requestDiagnostic biz.GatewayUsageDiagnostic,
+	fallbackEnabled bool,
+) {
+	result, err := h.streamCodexBackendResponses(r.Context(), w, r.URL.Path, body, requestModel, reasoningEffort, fallbackEnabled)
+	diagnostic := result.Diagnostic
+	if diagnostic.RequestBytes == 0 {
+		diagnostic = requestDiagnostic
+	}
+	if result.ResponseBytes > 0 {
+		diagnostic.ResponseBytes = result.ResponseBytes
+	}
+	if err != nil {
+		status := stdhttp.StatusBadGateway
+		errorType := result.ErrorType
+		if errorType == "" {
+			errorType = upstreamErrorType(err, codexUpstreamModeBackend)
+		}
+		if isGatewayClientCanceled(err) {
+			status = statusClientClosedRequest
+			errorType = "client_canceled"
+		}
+		if h.log != nil {
+			h.log.WithContext(r.Context()).Warnf("codex backend stream failed request_id=%s endpoint=%s model=%s error_type=%s err=%v", requestID, endpoint, requestModel, errorType, err)
+		}
+		if !result.Started {
+			h.writeGatewayError(w, status, err, errorType)
+		}
+		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+			APIKeyID:               key.ID,
+			APIKeyPrefix:           key.KeyPrefix,
+			SessionID:              sessionID,
+			RequestID:              requestID,
+			Method:                 r.Method,
+			Path:                   r.URL.Path,
+			Endpoint:               endpoint,
+			Model:                  requestModel,
+			ReasoningEffort:        reasoningEffort,
+			StatusCode:             status,
+			Success:                false,
+			Stream:                 true,
+			RequestBytes:           int64(len(body)),
+			ResponseBytes:          result.ResponseBytes,
+			DurationMS:             time.Since(start).Milliseconds(),
+			UpstreamConfiguredMode: codexUpstreamModeBackend,
+			UpstreamMode:           codexUpstreamModeBackend,
+			UpstreamErrorType:      errorType,
+			ErrorType:              errorType,
+			Diagnostic:             diagnostic,
+			CreatedAt:              time.Now(),
+		})
+		return
+	}
+	metrics := result.Metrics
+	if metrics.Model == "" {
+		metrics.Model = requestModel
+	}
+	h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+		APIKeyID:               key.ID,
+		APIKeyPrefix:           key.KeyPrefix,
+		SessionID:              sessionID,
+		RequestID:              requestID,
+		Method:                 r.Method,
+		Path:                   r.URL.Path,
+		Endpoint:               endpoint,
+		Model:                  metrics.Model,
+		ReasoningEffort:        reasoningEffort,
+		StatusCode:             stdhttp.StatusOK,
+		Success:                true,
+		Stream:                 true,
+		InputTokens:            metrics.InputTokens,
+		OutputTokens:           metrics.OutputTokens,
+		TotalTokens:            metrics.TotalTokens,
+		CachedTokens:           metrics.CachedTokens,
+		ReasoningTokens:        metrics.ReasoningTokens,
+		RequestBytes:           int64(len(body)),
+		ResponseBytes:          result.ResponseBytes,
+		DurationMS:             time.Since(start).Milliseconds(),
+		UpstreamConfiguredMode: codexUpstreamModeBackend,
+		UpstreamMode:           codexUpstreamModeBackend,
+		Diagnostic:             diagnostic,
+		CreatedAt:              time.Now(),
+	})
+}
+
+func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, w stdhttp.ResponseWriter, path string, body []byte, requestModel string, reasoningEffort string, fallbackEnabled bool) (codexBackendResponsesStreamResult, error) {
+	requestBody, model, err := codexBackendRequestFromGateway(path, body, requestModel, reasoningEffort)
+	if err != nil {
+		return codexBackendResponsesStreamResult{
+			ErrorType:  upstreamErrorType(err, codexUpstreamModeBackend),
+			Diagnostic: gatewayUsageDiagnosticForUpstreamFailure(path, body, reasoningEffort, err, fallbackEnabled),
+		}, err
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	timeout := codexBackendTimeout()
+	reqCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	respBody, err := defaultCodexBackendClient.openResponses(reqCtx, requestBody, false)
+	if err != nil && isCodexBackendUnauthorized(err) {
+		respBody, err = defaultCodexBackendClient.openResponses(reqCtx, requestBody, true)
+	}
+	if reqCtx.Err() == context.DeadlineExceeded {
+		err = fmt.Errorf("codex backend upstream timed out after %s", timeout)
+	}
+	if err != nil {
+		return codexBackendResponsesStreamResult{
+			ErrorType:  upstreamErrorType(err, codexUpstreamModeBackend),
+			Diagnostic: gatewayUsageDiagnosticForUpstreamFailure(path, body, reasoningEffort, err, fallbackEnabled),
+		}, err
+	}
+	defer respBody.Close()
+
+	flusher, _ := w.(stdhttp.Flusher)
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(stdhttp.StatusOK)
+
+	result := codexBackendResponsesStreamResult{
+		Started:    true,
+		Diagnostic: gatewayUsageDiagnosticForRequest(path, body, reasoningEffort),
+	}
+	content := strings.Builder{}
+	doneSeen := false
+	completedSeen := false
+	failedSeen := false
+	finalizeSuccess := func() codexBackendResponsesStreamResult {
+		if result.Metrics.TotalTokens <= 0 {
+			result.Metrics = estimateCodexCLIUsage(model, promptTextForUsageEstimate(path, body), content.String())
+		}
+		if result.Metrics.Model == "" {
+			result.Metrics.Model = model
+		}
+		return result
+	}
+
+	dataCh := make(chan string, 16)
+	errCh := make(chan error, 1)
+	go scanSSEDataMessages(respBody, dataCh, errCh)
+
+	ticker := time.NewTicker(gatewayStreamHeartbeatInterval())
+	defer ticker.Stop()
+
+	for {
+		select {
+		case data, ok := <-dataCh:
+			if !ok {
+				if err := <-errCh; err != nil {
+					if completedSeen && !failedSeen {
+						return finalizeSuccess(), nil
+					}
+					if !doneSeen {
+						result.ResponseBytes += writeGatewayResponsesStreamFailure(w, flusher, "codex_backend_stream_error", err)
+					}
+					result.ErrorType = "codex_backend_stream_error"
+					result.Diagnostic.UpstreamBody = summarizeErrorForUsage(err)
+					return result, err
+				}
+				if !doneSeen {
+					result.ResponseBytes += writeGatewaySSEData(w, flusher, "[DONE]")
+				}
+				if failedSeen {
+					err := fmt.Errorf("codex backend response failed")
+					result.ErrorType = "codex_backend_response_failed"
+					return result, err
+				}
+				return finalizeSuccess(), nil
+			}
+			if strings.TrimSpace(data) == "" {
+				continue
+			}
+			result.ResponseBytes += writeGatewaySSEData(w, flusher, data)
+			if data == "[DONE]" {
+				doneSeen = true
+				continue
+			}
+			var event map[string]any
+			if err := json.Unmarshal([]byte(data), &event); err != nil {
+				continue
+			}
+			switch stringValue(event["type"]) {
+			case "response.output_text.delta":
+				content.WriteString(stringValue(event["delta"]))
+			case "response.output_item.done":
+				if text := codexBackendOutputTextFromValue(mapValue(event["item"])); text != "" {
+					content.Reset()
+					content.WriteString(text)
+				}
+			case "response.completed":
+				completedSeen = true
+				response := mapValue(event["response"])
+				if usageMetrics := codexUsageMetricsFromMap(mapValue(response["usage"])); usageMetrics.TotalTokens > 0 {
+					result.Metrics = usageMetrics
+				}
+				if text := codexBackendOutputTextFromValue(response); text != "" {
+					content.Reset()
+					content.WriteString(text)
+				}
+			case "response.failed":
+				failedSeen = true
+				result.ErrorType = "codex_backend_response_failed"
+				result.Diagnostic.UpstreamBody = summarizeCodexBackendBody([]byte(data))
+			case "response.incomplete":
+				failedSeen = true
+				result.ErrorType = "codex_backend_response_incomplete"
+				result.Diagnostic.UpstreamBody = summarizeCodexBackendBody([]byte(data))
+			}
+		case <-ticker.C:
+			result.ResponseBytes += writeGatewaySSEComment(w, flusher, "keepalive")
+		case <-reqCtx.Done():
+			err := reqCtx.Err()
+			if completedSeen && !failedSeen {
+				return finalizeSuccess(), nil
+			}
+			if !doneSeen {
+				result.ResponseBytes += writeGatewayResponsesStreamFailure(w, flusher, upstreamErrorType(err, codexUpstreamModeBackend), err)
+			}
+			result.ErrorType = upstreamErrorType(err, codexUpstreamModeBackend)
+			result.Diagnostic.UpstreamBody = summarizeErrorForUsage(err)
+			return result, err
+		}
+	}
+}
+
+func scanSSEDataMessages(r io.Reader, dataCh chan<- string, errCh chan<- error) {
+	defer close(dataCh)
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxGatewayRequestBytes)
+	current := strings.Builder{}
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			if current.Len() > 0 {
+				dataCh <- strings.TrimSpace(current.String())
+				current.Reset()
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "data:") {
+			if current.Len() > 0 {
+				current.WriteByte('\n')
+			}
+			current.WriteString(strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+		}
+	}
+	if current.Len() > 0 {
+		dataCh <- strings.TrimSpace(current.String())
+	}
+	errCh <- scanner.Err()
+}
+
+func writeGatewayResponsesStreamFailure(w stdhttp.ResponseWriter, flusher stdhttp.Flusher, errorType string, err error) int64 {
+	now := time.Now().Unix()
+	responseID := fmt.Sprintf("resp_codex_%d", now)
+	n := writeGatewaySSE(w, flusher, map[string]any{
+		"type": "response.failed",
+		"response": map[string]any{
+			"id":                  responseID,
+			"object":              "response",
+			"created_at":          now,
+			"status":              "failed",
+			"output":              []any{},
+			"output_text":         "",
+			"parallel_tool_calls": false,
+			"error": map[string]any{
+				"message": mapGatewayHTTPErrorMessage(err),
+				"type":    "gateway_error",
+				"code":    errorType,
+			},
+		},
+	})
+	n += writeGatewaySSEData(w, flusher, "[DONE]")
+	return n
 }
 
 func (h *openAIGatewayHandler) gatewayRateLimitEnabled() bool {

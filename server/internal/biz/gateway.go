@@ -750,15 +750,6 @@ func (uc *GatewayUsecase) UpdateAPIKey(ctx context.Context, input UpdateGatewayA
 	if input.Name == "" {
 		input.Name = "key" + strconv.Itoa(input.ID)
 	}
-	current, err := uc.repo.GetAPIKeyByID(ctx, input.ID)
-	if err != nil {
-		return nil, err
-	}
-	secret, err := RebuildGatewayAPIKeySecretWithRemark(current.PlainKey, input.Name)
-	if err != nil {
-		return nil, err
-	}
-	input.Secret = secret
 	return uc.repo.UpdateAPIKey(ctx, input)
 }
 

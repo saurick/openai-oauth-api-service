@@ -1077,6 +1077,101 @@ func TestRunCodexBackendPostsResponsesAndParsesSSE(t *testing.T) {
 	}
 }
 
+func TestStreamCodexBackendResponsesPassesThroughEventsAndUsage(t *testing.T) {
+	accessToken := testJWT(time.Now().Add(time.Hour).Unix(), "acct_123")
+	authPath := filepath.Join(t.TempDir(), "auth.json")
+	if err := os.WriteFile(authPath, []byte(`{"tokens":{"access_token":"`+accessToken+`","refresh_token":"refresh-token","account_id":"acct_123"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"status\":\"in_progress\"}}\n\n"))
+		_, _ = w.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"思考中：检查文件。\"}\n\n"))
+		_, _ = w.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"完成。\"}\n\n"))
+		_, _ = w.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"usage\":{\"input_tokens\":9,\"input_tokens_details\":{\"cached_tokens\":3},\"output_tokens\":5,\"output_tokens_details\":{\"reasoning_tokens\":1},\"total_tokens\":14}}}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer upstream.Close()
+
+	t.Setenv("CODEX_AUTH_FILE", authPath)
+	t.Setenv("CODEX_BACKEND_BASE_URL", upstream.URL)
+	t.Setenv("CODEX_BACKEND_TIMEOUT_SECONDS", "30")
+
+	rec := httptest.NewRecorder()
+	result, err := (&openAIGatewayHandler{}).streamCodexBackendResponses(
+		context.Background(),
+		rec,
+		"/v1/responses",
+		[]byte(`{"model":"gpt-5.5","stream":true,"input":"Reply OK"}`),
+		"gpt-5.5",
+		"low",
+		false,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "思考中：检查文件。") || !strings.Contains(body, "完成。") {
+		t.Fatalf("stream did not pass through output deltas:\n%s", body)
+	}
+	if !strings.Contains(body, `"type":"response.created"`) || !strings.Contains(body, "data: [DONE]") {
+		t.Fatalf("stream missing upstream lifecycle events:\n%s", body)
+	}
+	if result.Metrics.InputTokens != 9 || result.Metrics.CachedTokens != 3 || result.Metrics.OutputTokens != 5 || result.Metrics.ReasoningTokens != 1 || result.Metrics.TotalTokens != 14 {
+		t.Fatalf("unexpected metrics: %#v", result.Metrics)
+	}
+}
+
+func TestStreamCodexBackendResponsesCompletedThenClientCancelIsSuccess(t *testing.T) {
+	accessToken := testJWT(time.Now().Add(time.Hour).Unix(), "acct_123")
+	authPath := filepath.Join(t.TempDir(), "auth.json")
+	if err := os.WriteFile(authPath, []byte(`{"tokens":{"access_token":"`+accessToken+`","refresh_token":"refresh-token","account_id":"acct_123"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		_, _ = w.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"OK\"}\n\n"))
+		_, _ = w.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"usage\":{\"input_tokens\":2,\"output_tokens\":1,\"total_tokens\":3}}}\n\n"))
+		if flusher != nil {
+			flusher.Flush()
+		}
+		<-r.Context().Done()
+	}))
+	defer upstream.Close()
+
+	t.Setenv("CODEX_AUTH_FILE", authPath)
+	t.Setenv("CODEX_BACKEND_BASE_URL", upstream.URL)
+	t.Setenv("CODEX_BACKEND_TIMEOUT_SECONDS", "30")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(50*time.Millisecond, cancel)
+	rec := httptest.NewRecorder()
+	result, err := (&openAIGatewayHandler{}).streamCodexBackendResponses(
+		ctx,
+		rec,
+		"/v1/responses",
+		[]byte(`{"model":"gpt-5.5","stream":true,"input":"Reply OK"}`),
+		"gpt-5.5",
+		"medium",
+		false,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ErrorType != "" {
+		t.Fatalf("error type = %q", result.ErrorType)
+	}
+	if result.Metrics.TotalTokens != 3 {
+		t.Fatalf("unexpected metrics: %#v", result.Metrics)
+	}
+	if !strings.Contains(rec.Body.String(), `"type":"response.completed"`) {
+		t.Fatalf("stream missing completed event:\n%s", rec.Body.String())
+	}
+}
+
 func TestRunCodexBackendRetriesTransientHTTPError(t *testing.T) {
 	accessToken := testJWT(time.Now().Add(time.Hour).Unix(), "acct_123")
 	authPath := filepath.Join(t.TempDir(), "auth.json")
