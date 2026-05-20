@@ -1835,6 +1835,9 @@ async function assertKeyTableVisuals(page, scenarioName) {
         main?.querySelectorAll('button') || []
       ).some((node) => node.textContent.trim() === '复制完整凭据'),
       hasCurrentOperationRow: document.body.innerText.includes('当前操作'),
+      hasBatchResetAction: Array.from(
+        main?.querySelectorAll('button') || []
+      ).some((node) => node.textContent.trim() === '重置 API key'),
       hasPagination: Boolean(main?.querySelector('.admin-table-pagination')),
       hasRemarkHeader: document.body.innerText.includes('备注'),
       hasKeyIdentityHeader: document.body.innerText.includes('完整凭据'),
@@ -1959,6 +1962,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
     `${scenarioName} 主内容区不应再显示表格级刷新按钮`
   )
   assert(metrics.hasCurrentOperationRow, `${scenarioName} 缺少当前操作行`)
+  assert(metrics.hasBatchResetAction, `${scenarioName} 缺少批量重置 API key 操作`)
   assert(metrics.hasTokenLimitHeader, `${scenarioName} 缺少百万 token 列头`)
   assert(metrics.hasTokenLimitValue, `${scenarioName} 缺少百万 token 换算展示`)
   assert(
@@ -2671,6 +2675,50 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
     },
     `${scenarioName} 选择清空后应可重新单击行选中`
   )
+
+  await checkboxes.nth(2).click()
+  assert.deepEqual(
+    await readKeyTableSelectionState(page),
+    {
+      checked: [false, true, true, false, false, false, false, false],
+      selectedRows: 2,
+    },
+    `${scenarioName} 选择框应支持多选后批量重置`
+  )
+
+  page.once('dialog', async (dialog) => {
+    assert(
+      dialog.message().includes('确认重置选中的 2 个 API 凭据'),
+      `${scenarioName} 批量重置确认文案异常: ${dialog.message()}`
+    )
+    await dialog.accept()
+  })
+  await page.getByRole('button', { name: '重置 API key' }).click()
+  await page.getByText('批量重置已完成，共生成 2 个新 key').waitFor()
+  const batchMetrics = await page.evaluate(() => ({
+    hasCopyAll: Array.from(document.querySelectorAll('button')).some(
+      (button) => button.textContent.trim() === '复制全部完整凭据'
+    ),
+    hasFirstResetKey: document.body.innerText.includes(
+      'ogw_stagingkeylongnameforoverflowcheck_reset_2_r2st'
+    ),
+    hasSecondResetKey: document.body.innerText.includes(
+      'ogw_extraapikey3_reset_3_r3st'
+    ),
+    documentOverflowX: Math.ceil(
+      document.documentElement.scrollWidth -
+        document.documentElement.clientWidth
+    ),
+  }))
+  assert(batchMetrics.hasCopyAll, `${scenarioName} 批量重置缺少复制全部按钮`)
+  assert(
+    batchMetrics.hasFirstResetKey && batchMetrics.hasSecondResetKey,
+    `${scenarioName} 批量重置未展示所有新 key: ${JSON.stringify(batchMetrics)}`
+  )
+  assert(
+    batchMetrics.documentOverflowX <= 0,
+    `${scenarioName} 批量重置结果造成页面横向溢出: ${JSON.stringify(batchMetrics)}`
+  )
 }
 
 async function readKeyTableSelectionState(page) {
@@ -3151,6 +3199,30 @@ function getApiMockData(method, params = {}, state = {}) {
     return {
       items: [...baseKeys, ...extraKeys],
       total: baseKeys.length + extraKeys.length,
+    }
+  }
+
+  if (method === 'key_reset_secret') {
+    const id = Number(params.key_id || 0)
+    const name =
+      id === 1
+        ? 'productionapikey'
+        : id === 2
+          ? 'stagingkeylongnameforoverflowcheck'
+          : `extraapikey${id}`
+    return {
+      allowed_models: ['gpt-5.3-codex'],
+      disabled: false,
+      id,
+      key_last4: `r${id}st`,
+      key_prefix: `ogw_${name}`.slice(0, 12),
+      plain_key: `ogw_${name}_reset_${id}_r${id}st`,
+      created_at: 1777900000,
+      updated_at: 1778050000,
+      name,
+      upstream_strategy: id === 1 ? 'backend_with_cli_fallback' : '',
+      quota_daily_tokens: 0,
+      quota_weekly_tokens: 0,
     }
   }
 

@@ -1360,6 +1360,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const [usageSessionDetailLoading, setUsageSessionDetailLoading] =
     useState(false)
   const [newKey, setNewKey] = useState(null)
+  const [newKeyBatch, setNewKeyBatch] = useState([])
   const [editingKeyId, setEditingKeyId] = useState(null)
   const [resettingKey, setResettingKey] = useState(false)
   const [keyModalOpen, setKeyModalOpen] = useState(false)
@@ -1769,6 +1770,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     e.preventDefault()
     setErrMsg('')
     setNewKey(null)
+    setNewKeyBatch([])
     try {
       if (editingKeyId) {
         const currentKey = keys.find((item) => item.id === editingKeyId)
@@ -1847,6 +1849,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
   const openCreateKey = () => {
     setNewKey(null)
+    setNewKeyBatch([])
     setEditingKeyId(null)
     setKeyForm(INITIAL_KEY_FORM)
     setKeyModalOpen(true)
@@ -1858,6 +1861,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         ? item.allowed_models[0]
         : ''
     setNewKey(null)
+    setNewKeyBatch([])
     setEditingKeyId(item.id)
     setKeyForm({
       remark: item.name || '',
@@ -1909,18 +1913,63 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     }
     setErrMsg('')
     setNewKey(null)
+    setNewKeyBatch([])
     setResettingKey(true)
     try {
       const result = await apiRpc.call('key_reset_secret', {
         key_id: editingKeyId,
       })
       setNewKey(result?.data || null)
+      setNewKeyBatch([])
       setEditingKeyId(null)
       setKeyForm(INITIAL_KEY_FORM)
       setKeyModalOpen(false)
       await loadAll()
     } catch (err) {
       setErrMsg(getActionErrorMessage(err, '重置 API key'))
+    } finally {
+      setResettingKey(false)
+    }
+  }
+
+  const resetSelectedKeys = async () => {
+    if (selectedKeyIds.length === 0 || resettingKey) return
+    const count = selectedKeyIds.length
+    // eslint-disable-next-line no-alert
+    const confirmed = window.confirm(
+      `确认重置选中的 ${count} 个 API 凭据吗？旧 key 会立即失效，需要把新生成的完整 key 同步到客户端。`
+    )
+    if (!confirmed) {
+      return
+    }
+
+    setErrMsg('')
+    setNewKey(null)
+    setNewKeyBatch([])
+    setResettingKey(true)
+
+    const generated = []
+    try {
+      for (const keyId of selectedKeyIds) {
+        const result = await apiRpc.call('key_reset_secret', {
+          key_id: keyId,
+        })
+        if (result?.data?.plain_key) {
+          generated.push(result.data)
+        }
+      }
+      setNewKeyBatch(generated)
+      setSelectedKeyIds([])
+      if (selectedKeyIds.includes(editingKeyId)) {
+        cancelEditKey()
+      }
+      await loadAll()
+    } catch (err) {
+      if (generated.length > 0) {
+        setNewKeyBatch(generated)
+      }
+      setErrMsg(getActionErrorMessage(err, '批量重置 API key'))
+      await loadAll()
     } finally {
       setResettingKey(false)
     }
@@ -1952,6 +2001,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       return
     }
     setErrMsg('')
+    setNewKeyBatch([])
     try {
       await apiRpc.call('key_delete', { key_id: keyId })
       if (editingKeyId === keyId) cancelEditKey()
@@ -1972,6 +2022,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       return
     }
     setErrMsg('')
+    setNewKey(null)
+    setNewKeyBatch([])
     try {
       await apiRpc.call('key_delete_batch', { key_ids: selectedKeyIds })
       if (selectedKeyIds.includes(editingKeyId)) cancelEditKey()
@@ -2665,8 +2717,16 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 </button>
                 <button
                   type="button"
+                  onClick={resetSelectedKeys}
+                  disabled={loading || resettingKey || selectedKeyIds.length === 0}
+                  className={dangerButtonClass}
+                >
+                  {resettingKey ? '重置中...' : '重置 API key'}
+                </button>
+                <button
+                  type="button"
                   onClick={deleteSelectedKeys}
-                  disabled={loading || selectedKeyIds.length === 0}
+                  disabled={loading || resettingKey || selectedKeyIds.length === 0}
                   className={dangerButtonClass}
                 >
                   删除
@@ -4445,6 +4505,39 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 {newKey.plain_key}
               </div>
               <CopyButton value={newKey.plain_key} label="复制完整凭据" />
+            </div>
+          </div>
+        ) : null}
+
+        {currentView === 'keys' && newKeyBatch.length > 0 ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+            <div className="font-semibold">
+              批量重置已完成，共生成 {newKeyBatch.length} 个新 key
+            </div>
+            <div>旧 key 已立即失效，请把新完整 key 同步到对应客户端。</div>
+            <div className="mt-2">
+              <CopyButton
+                value={newKeyBatch
+                  .map((item) => `${item.name || item.id}: ${item.plain_key}`)
+                  .join('\n')}
+                label="复制全部完整凭据"
+              />
+            </div>
+            <div className="mt-3 grid gap-2">
+              {newKeyBatch.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex flex-col gap-2 rounded-md border border-amber-200 bg-white/65 px-3 py-2 sm:flex-row sm:items-start"
+                >
+                  <div className="min-w-[120px] font-semibold text-amber-900">
+                    {item.name || `ID ${item.id}`}
+                  </div>
+                  <div className="min-w-0 flex-1 break-all font-mono text-xs text-[#1f2d25] sm:text-sm">
+                    {item.plain_key}
+                  </div>
+                  <CopyButton value={item.plain_key} label="复制完整凭据" />
+                </div>
+              ))}
             </div>
           </div>
         ) : null}
