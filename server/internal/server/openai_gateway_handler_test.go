@@ -67,6 +67,17 @@ func TestCodexBackendContextLengthIsNotRetriable(t *testing.T) {
 	}
 }
 
+func TestCodexBackendTerminalResponseEventsAreNotRetriable(t *testing.T) {
+	for _, err := range []error{
+		errors.New(`codex backend response failed: {"response":{"status":"failed"}}`),
+		errors.New(`codex backend response incomplete: {"response":{"incomplete_details":{"reason":"max_output_tokens"}}}`),
+	} {
+		if isRetriableCodexBackendError(err) {
+			t.Fatalf("terminal response event must not retry: %v", err)
+		}
+	}
+}
+
 func TestUpstreamErrorTypeClassifiesCLIErrors(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1330,6 +1341,44 @@ func TestStreamCodexBackendResponsesCompletedThenClientCancelIsSuccess(t *testin
 	}
 	if !strings.Contains(rec.Body.String(), `"type":"response.completed"`) {
 		t.Fatalf("stream missing completed event:\n%s", rec.Body.String())
+	}
+}
+
+func TestStreamCodexBackendResponsesClassifiesContextLengthFailedEvent(t *testing.T) {
+	accessToken := testJWT(time.Now().Add(time.Hour).Unix(), "acct_123")
+	authPath := filepath.Join(t.TempDir(), "auth.json")
+	if err := os.WriteFile(authPath, []byte(`{"tokens":{"access_token":"`+accessToken+`","refresh_token":"refresh-token","account_id":"acct_123"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(`data: {"type":"response.failed","response":{"id":"resp_1","status":"failed","error":{"code":"context_length_exceeded","message":"Your input exceeds the context window of this model."}}}` + "\n\n"))
+	}))
+	defer upstream.Close()
+
+	t.Setenv("CODEX_AUTH_FILE", authPath)
+	t.Setenv("CODEX_BACKEND_BASE_URL", upstream.URL)
+	t.Setenv("CODEX_BACKEND_TIMEOUT_SECONDS", "30")
+
+	rec := httptest.NewRecorder()
+	result, err := (&openAIGatewayHandler{}).streamCodexBackendResponses(
+		context.Background(),
+		rec,
+		"/v1/responses",
+		[]byte(`{"model":"gpt-5.5","stream":true,"input":"Reply OK"}`),
+		"gpt-5.5",
+		"medium",
+		false,
+	)
+	if err == nil {
+		t.Fatal("expected response.failed to return an error")
+	}
+	if result.ErrorType != gatewayContextErrorType {
+		t.Fatalf("error type = %q, want %q", result.ErrorType, gatewayContextErrorType)
+	}
+	if !strings.Contains(result.Diagnostic.UpstreamBody, "context_length_exceeded") {
+		t.Fatalf("diagnostic missing context error: %s", result.Diagnostic.UpstreamBody)
 	}
 }
 

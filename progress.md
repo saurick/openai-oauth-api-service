@@ -2,6 +2,20 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-22 Codex 长会话上下文超限排查
+- 完成：只读统计线上近 7 天 `gateway_usage_logs`，6210 次请求中失败 259 次，只有 2 次带 `session_id`，9 次触发网关压缩；失败不局限于 `zichun`，主要集中在无 session 的长流式 backend-only 请求，典型错误包括 `context_length_exceeded`、`response.incomplete max_output_tokens`、`unexpected EOF`、`client_canceled` 和历史孤立 `function_call_output` 400。
+- 完成：定位根因之一是上下文预检 token 估算复用了 Codex CLI prompt 提取逻辑，只取最近 8 条 `user/assistant`，忽略较早 `tool`、`function_call_output`、`arguments`、`output` 等模型可见历史；线上 90 万字节以上 chat 请求诊断曾只估算数百到一千 tokens，导致没有提前压缩。
+- 完成：`estimateGatewayRequestTokens` 改为从完整请求上下文提取 `content`、`text`、`arguments`、`output`、`tool_calls`、`summary` 和工具定义文本，避免长 session 工具历史被低估；内置 Codex 模型推荐 byte 压缩触发阈值先从 `compactTokens*4` 收紧并封顶到 `850000`，随后按最新口径调整为 `1M`，覆盖线上 92-96 万字节已出现上游 context 超限的区间。
+- 完成：流式 backend 收到上游 `response.failed` / `response.incomplete` 时保留事件级错误分类；若事件正文包含 `context_length_exceeded`，usage 记录为明确 `context_length_exceeded`，不再被后续 EOF 收口覆盖成普通 `codex_backend_response_failed`。
+- 补充完成：收窄服务端 backend 重试边界，只对上游 HTTP `429` / `5xx` 和连接类错误做有限重试；`context_length_exceeded`、上游终态 `response.failed` / `response.incomplete`、`client_canceled` 等不再服务端盲重试，避免和 Codex / OpenCode 客户端自身重试叠加放大请求。当前线上容器 Codex CLI 为 `0.129.0`，Windows 测试机 Codex CLI 为 `0.125.0`，npm `@openai/codex` latest 为 `0.133.0`。
+- 验证通过：新增单元复现无上传文件的长 session 场景：旧工具输出占据 85-104 万字节时会在网关预检阶段提前压缩；旧 `tool` 内容会进入 token 估算；上游流式 `response.failed` 中的 context 超限会被准确分类；终态 `response.failed` / `response.incomplete` 不再被判定为可服务端重试。`cd server && go test ./internal/server ./internal/biz` 与 `cd server && go test ./...` 均通过。未用生产请求打上游复现，避免消耗线上额度和干扰真实用户。
+- 补充验证：新增同一 session 多次压缩单测，模拟第一次压缩生成摘要、第二次继续压缩时携带前次摘要和最新“继续”指令；结果确认服务端在客户端稳定传 `session_id` 的前提下可以把摘要接回下一轮。该测试不代表 Codex App 会自动传 `session_id`，客户端是否传入仍需单独验证。
+- 补充调整：内置 Codex 模型推荐与旧默认兜底的字节压缩触发阈值保留为服务端设置并调整到 `1M`，硬拦截仍为 `1.9M`；后台模型级配置和环境变量覆盖路径保持不变，不下放到 Codex / OpenCode 普通客户端模板。
+- 部署：本地构建 amd64 镜像 `oauth-api-service-server:20260522T175109-c0512d22-local-context-1m`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260522T175109-c0512d22-local-context-1m/`；远端仅执行 release 解包、宿主机 Atlas status、`docker load`、更新 Compose `.env` 的 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。Atlas 状态 `OK`、当前版本 `20260520090000`、待执行 `0`。
+- 线上验证：远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；容器运行镜像为 `oauth-api-service-server:20260522T175109-c0512d22-local-context-1m`，`GIT_SHA_SHORT=c0512d22-local`。管理员 RPC `model_list` 确认 `gpt-5.5` 生效上下文策略为 `400000 / 260000 / 380000 / 1000000 / 1900000 / 8`，数据库模型级字节覆盖仍为 `0 / 0`。
+- 清理：清理前远端 `/` 使用率 53%、Docker images 4.731GB；删除本轮 release 镜像 tar 与 migration tar 后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260522T162645-c0512d2-local-context-retry`，回收 348.5MB；清理后 `/` 使用率 51%、Docker images 4.026GB，未执行 volume prune。
+- 下一步：观察近 24 小时 1M 字节以上请求的 `context_compacted`、`context_length_exceeded` 和 `codex_backend_response_incomplete` 占比；长期还应让 Codex/OpenCode 客户端稳定传 `session_id`，否则网关只能做单请求预检压缩，无法做到官方 App 那种跨线程 summary。
+
 ## 2026-05-20 Windows Codex 上下文压缩暂停排查
 - 完成：通过 `ssh sauri@192.168.0.45` 检查 Windows Codex 现场，截图对应 session 为 `rollout-2026-05-20T16-47-14-019e4491-501b-7b92-afff-f82a3a2b85fd.jsonl`；压缩/恢复后模型产出了 `final_answer`，内容是“已加载这段历史上下文，请告诉我下一步”，因此表现为任务暂停。
 - 完成：确认线上 `/v1/models` 当时声明 `supports_reasoning_summaries=true`、`default_reasoning_summary=auto`、`default_verbosity=medium`；问题 session 和 17:16 后续 session 的 `turn_context.summary` 仍为 `none`，说明当时 Codex Desktop 没有按 reasoning summary 模式发起恢复轮。
@@ -847,3 +861,16 @@ mode = development
 5:03:50 PM [vite] hmr update /src/tailwind.css
  ELIFECYCLE  Command failed with exit code 1. 不再出现 FontAwesome token 告警，可启动 Vite 5176；在后端运行期间未再出现  代理连接拒绝。
 - 下一步：如换机器或重置 WSL，需要先确保 PostgreSQL 18 在 5433 运行，并恢复本机  私有 DSN； 仍保持 gitignore，不提交真实本机凭据。
+
+## 2026-05-22 Codex 长 session 上下文压缩与 backend 重试收敛
+- 发现：线上长 session 报错不只影响 `zichun`，近 7 天失败主要来自无 `session_id` 的长 streaming backend 请求；历史诊断里 90 万字节级请求的 `context_original_estimated_tokens` 仍只有几百到一千多，说明旧估算只抽取了尾部对话，漏掉了较早的工具调用、`function_call_output`、`arguments` 和 `output`。
+- 修复：网关上下文估算改为从完整 JSON 请求提取 `instructions`、`input/messages`、`content/text`、工具调用、函数参数、输出和 `tools`；Codex 推荐模型的自动压缩字节阈值收紧到 850000，硬上限仍按 1900000 字节；backend SSE 的 `response.failed/incomplete` 保留事件级错误类型，`context_length_exceeded` 不再被记成泛化 incomplete。
+- 修复：direct Codex backend 重试边界收窄为 HTTP 429/5xx 与连接类错误；`response.failed`、`response.incomplete` 这类模型或请求语义终态不再由服务端重试，避免重复消耗和错误放大。客户端看到网络断开、超时或 429/5xx 可自行重试；已收到模型终态失败时应让用户修改输入或触发压缩后再发。
+- 结论：本轮不升级服务器 Codex CLI。官方 `@openai/codex` 当前 npm latest 为 0.133.0，线上容器仍是 `codex-cli 0.129.0`；本次问题根因在网关 direct backend 请求估算/压缩和重试分类，不是 CLI 版本主因。
+- 验证通过：`cd server && go test ./internal/server ./internal/biz`、`cd server && go test ./...`、`git diff --check`；新增测试覆盖旧工具上下文计入估算、850KB 前置压缩、SSE context length 分类和 terminal backend event 不重试。
+- 部署完成：本地构建并上传 `oauth-api-service-server:20260522T162645-c0512d2-local-context-retry` 到 `root@8.218.4.199`，远端只执行 release 解包、Atlas status、`docker load`、`docker compose up`，未在低配服务器构建。Atlas migration status 为 OK，当前版本 `20260520090000`，pending 0。
+- 线上验证通过：内网与公网 `/healthz` 返回 `ok`，`/readyz` 返回 `ready`；容器运行镜像为 `oauth-api-service-server:20260522T162645-c0512d2-local-context-retry`，`GIT_SHA_SHORT=c0512d2-local`，`IMAGE_TAG=20260522T162645-c0512d2-local-context-retry`；管理员 `admin/adminadmin` 登录、`api.summary`、`api.key_list` 均返回 `code=0`。
+- 兼容入口验证：创建纯字母数字备注的临时 key，调用 `/v1/models` 返回 6 个模型且包含 `gpt-5.5`，随后删除临时 key 成功；部署后 15 分钟窗口已有 47 次请求且失败 0 次，最近 `ogw_zhonglia` streaming responses 请求 43 万到 59 万字节均成功。
+- 清理：按发布约定执行 `docker image prune -a -f` 与 `docker builder prune -f`，未执行 volume prune；旧 app 镜像 `oauth-api-service-server:20260520T184137-ef3ec0e5-local-resume-guard` 已清理，根分区从 52% 回到 51%。
+- 阻塞/风险：尚未等待到真实超过 850000 字节的新线上请求来验证生产压缩诊断字段；后续需要继续观察 `gateway_usage_logs.diagnostic` 中的 `context_compacted`、`context_original_estimated_tokens`、`context_final_estimated_tokens` 以及 `context_length_exceeded` 是否下降。
+- 补充调整：按最新口径将 Codex 推荐模型和旧默认兜底的自动压缩字节阈值从 `850000` 调整为 `1000000`，硬上限保持 `1900000`；本地构建并部署 `oauth-api-service-server:20260522T175109-c0512d22-local-context-1m` 后，公网健康检查通过，管理员 `model_list` 确认 `gpt-5.5` 生效阈值为 `400000 / 260000 / 380000 / 1000000 / 1900000 / 8`。后续观察口径改为 1M 字节以上请求。

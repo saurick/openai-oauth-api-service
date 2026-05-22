@@ -14,8 +14,8 @@ import (
 
 const (
 	gatewayContextErrorType              = "context_length_exceeded"
-	defaultGatewayContextCompactBytes    = 850_000
-	defaultGatewayContextHardBytes       = 1_050_000
+	defaultGatewayContextCompactBytes    = 1_000_000
+	defaultGatewayContextHardBytes       = 1_900_000
 	defaultGatewayContextCompactTokens   = 180_000
 	defaultGatewayContextHardTokens      = 255_000
 	defaultGatewayContextKeepItems       = 8
@@ -167,11 +167,53 @@ func gatewayContextExceedsHardLimit(bytes int, tokens int64, policy biz.GatewayM
 }
 
 func estimateGatewayRequestTokens(path string, body []byte) int64 {
-	text := promptTextForUsageEstimate(path, body)
+	text := gatewayContextTextForUsageEstimate(path, body)
 	if strings.TrimSpace(text) == "" {
 		text = string(body)
 	}
 	return estimateTokenCount(text)
+}
+
+func gatewayContextTextForUsageEstimate(path string, body []byte) string {
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return ""
+	}
+	parts := make([]string, 0, 64)
+	if instructions := stringValue(payload["instructions"]); instructions != "" {
+		parts = append(parts, instructions)
+	}
+	if path == "/v1/responses" {
+		appendGatewayContextEstimateText(&parts, payload["input"])
+	} else {
+		appendGatewayContextEstimateText(&parts, payload["messages"])
+	}
+	if tools := payload["tools"]; tools != nil {
+		if raw, err := json.Marshal(tools); err == nil {
+			parts = append(parts, string(raw))
+		}
+	}
+	return strings.TrimSpace(strings.Join(parts, "\n"))
+}
+
+func appendGatewayContextEstimateText(parts *[]string, value any) {
+	switch v := value.(type) {
+	case string:
+		if text := strings.TrimSpace(v); text != "" {
+			*parts = append(*parts, text)
+		}
+	case []any:
+		for _, item := range v {
+			appendGatewayContextEstimateText(parts, item)
+		}
+	case map[string]any:
+		for _, key := range []string{"content", "text", "arguments", "output"} {
+			appendGatewayContextEstimateText(parts, v[key])
+		}
+		for _, key := range []string{"function", "tool_calls", "summary"} {
+			appendGatewayContextEstimateText(parts, v[key])
+		}
+	}
 }
 
 func compactGatewayContextRequest(path string, body []byte, previousSummary string, keepItems int) (gatewayContextCompaction, error) {

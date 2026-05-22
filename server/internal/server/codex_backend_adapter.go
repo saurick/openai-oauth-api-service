@@ -1103,9 +1103,7 @@ func isRetriableCodexBackendError(err error) bool {
 		return httpErr.status == stdhttp.StatusTooManyRequests || httpErr.status >= 500
 	}
 	text := strings.ToLower(err.Error())
-	return strings.Contains(text, "response failed") ||
-		strings.Contains(text, "response incomplete") ||
-		strings.Contains(text, "connection reset") ||
+	return strings.Contains(text, "connection reset") ||
 		strings.Contains(text, "unexpected eof") ||
 		strings.Contains(text, "stream error")
 }

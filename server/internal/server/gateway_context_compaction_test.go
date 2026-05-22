@@ -68,6 +68,48 @@ func TestCompactGatewayContextResponsesString(t *testing.T) {
 	}
 }
 
+func TestCompactGatewayContextCarriesPreviousSummaryAcrossCompactions(t *testing.T) {
+	firstHistory := strings.Repeat("phase one failed at /workspace/service/auth.go with oauth callback timeout\n", 240)
+	firstBody := []byte(`{"model":"gpt-5.5","stream":true,"input":` + mustJSONQuote(firstHistory+"next step is patch auth callback handling") + `}`)
+
+	first, err := compactGatewayContextRequest("/v1/responses", firstBody, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first.Changed {
+		t.Fatal("expected first compaction")
+	}
+	if !strings.Contains(first.Summary, "/workspace/service/auth.go") {
+		t.Fatalf("first summary missing auth path: %s", first.Summary)
+	}
+
+	secondHistory := strings.Repeat("phase two terminal output says regression passed but deploy smoke still pending\n", 240)
+	secondBody := []byte(`{"model":"gpt-5.5","stream":true,"input":` + mustJSONQuote(secondHistory+"继续，从上次打断的部署验证开始") + `}`)
+
+	second, err := compactGatewayContextRequest("/v1/responses", secondBody, first.Summary, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !second.Changed {
+		t.Fatal("expected second compaction")
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(second.Body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	input := stringValue(payload["input"])
+	if !strings.Contains(input, "/workspace/service/auth.go") {
+		t.Fatalf("second compacted input missing previous summary: %s", input)
+	}
+	if !strings.Contains(input, "部署验证开始") {
+		t.Fatalf("second compacted input missing latest resume instruction: %s", input)
+	}
+	if !strings.Contains(second.Summary, "/workspace/service/auth.go") {
+		t.Fatalf("second summary did not carry first summary forward: %s", second.Summary)
+	}
+}
+
 func TestCompactGatewayContextSingleLargeChatMessageIncludesSummary(t *testing.T) {
 	oldText := strings.Repeat("single huge prompt with /workspace/app/main.go and context_length_exceeded\n", 200)
 	body := []byte(`{"model":"gpt-5.5","messages":[{"role":"user","content":` + mustJSONQuote(oldText+"reply FINAL_OK") + `}]}`)
@@ -157,6 +199,58 @@ func TestPrepareGatewayContextBlocksUncompactableOversizedRequest(t *testing.T) 
 	}
 }
 
+func TestEstimateGatewayRequestTokensIncludesOlderToolContext(t *testing.T) {
+	toolOutput := strings.Repeat("legacy tool output context_length_exceeded /tmp/app/main.go\n", 2000)
+	body := []byte(`{"model":"gpt-5.5","stream":true,"messages":[` +
+		`{"role":"system","content":"follow project rules"},` +
+		`{"role":"tool","content":` + mustJSONQuote(toolOutput) + `},` +
+		`{"role":"assistant","content":"old answer"},` +
+		`{"role":"user","content":"latest short question"}` +
+		`]}`)
+
+	got := estimateGatewayRequestTokens("/v1/chat/completions", body)
+	wantAtLeast := estimateTokenCount(toolOutput)
+	if got < wantAtLeast {
+		t.Fatalf("estimated tokens = %d, want at least old tool output tokens %d", got, wantAtLeast)
+	}
+}
+
+func TestPrepareGatewayContextCompactsLargeRequestBelowPreviousByteLimit(t *testing.T) {
+	t.Setenv("GATEWAY_CONTEXT_COMPACT_TOKENS", "999999")
+	t.Setenv("GATEWAY_CONTEXT_HARD_TOKENS", "1000000")
+	oldText := strings.Repeat("old function output /srv/app/server.go context_length_exceeded stream heartbeat retry\n", 11800)
+	body := []byte(`{"model":"gpt-5.5","stream":true,"input":[` +
+		`{"type":"function_call_output","call_id":"call_old","output":` + mustJSONQuote(oldText) + `},` +
+		`{"type":"message","role":"user","content":[{"type":"input_text","text":"latest request"}]}` +
+		`]}`)
+	if len(body) < 1_000_000 || len(body) >= 1_040_000 {
+		t.Fatalf("test body length = %d, want [1000000,1040000)", len(body))
+	}
+
+	prepared, err := (&openAIGatewayHandler{}).prepareGatewayContext(
+		context.Background(),
+		&biz.GatewayAPIKey{ID: 12, KeyPrefix: "ogw_test"},
+		"req_test",
+		"",
+		"/v1/responses",
+		body,
+		"gpt-5.5",
+		"high",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !prepared.Diagnostic.ContextCompacted {
+		t.Fatal("expected large request to be compacted before upstream")
+	}
+	if prepared.Diagnostic.ContextCompactByteLimit != 1_000_000 {
+		t.Fatalf("compact byte limit = %d, want 1000000", prepared.Diagnostic.ContextCompactByteLimit)
+	}
+	if len(prepared.Body) >= len(body) {
+		t.Fatalf("prepared body length = %d, original = %d", len(prepared.Body), len(body))
+	}
+}
+
 func TestEffectiveGatewayContextPolicyUsesOfficialModelRecommendation(t *testing.T) {
 	t.Setenv("GATEWAY_CONTEXT_COMPACT_TOKENS", "")
 	t.Setenv("GATEWAY_CONTEXT_HARD_TOKENS", "")
@@ -169,8 +263,8 @@ func TestEffectiveGatewayContextPolicyUsesOfficialModelRecommendation(t *testing
 	if policy.ContextCompactTokens != 260_000 || policy.ContextHardTokens != 380_000 {
 		t.Fatalf("token thresholds = %d/%d, want 260000/380000", policy.ContextCompactTokens, policy.ContextHardTokens)
 	}
-	if policy.ContextCompactBytes != 1_040_000 || policy.ContextHardBytes != 1_900_000 {
-		t.Fatalf("byte thresholds = %d/%d, want 1040000/1900000", policy.ContextCompactBytes, policy.ContextHardBytes)
+	if policy.ContextCompactBytes != 1_000_000 || policy.ContextHardBytes != 1_900_000 {
+		t.Fatalf("byte thresholds = %d/%d, want 1000000/1900000", policy.ContextCompactBytes, policy.ContextHardBytes)
 	}
 }
 

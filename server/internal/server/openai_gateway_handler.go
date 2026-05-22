@@ -623,7 +623,9 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 				}
 				if failedSeen {
 					err := fmt.Errorf("codex backend response failed")
-					result.ErrorType = "codex_backend_response_failed"
+					if result.ErrorType == "" {
+						result.ErrorType = "codex_backend_response_failed"
+					}
 					return result, err
 				}
 				return finalizeSuccess(), nil
@@ -660,12 +662,12 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 				}
 			case "response.failed":
 				failedSeen = true
-				result.ErrorType = "codex_backend_response_failed"
 				result.Diagnostic.UpstreamBody = summarizeCodexBackendBody([]byte(data))
+				result.ErrorType = codexBackendResponseEventErrorType(data, "codex_backend_response_failed")
 			case "response.incomplete":
 				failedSeen = true
-				result.ErrorType = "codex_backend_response_incomplete"
 				result.Diagnostic.UpstreamBody = summarizeCodexBackendBody([]byte(data))
+				result.ErrorType = codexBackendResponseEventErrorType(data, "codex_backend_response_incomplete")
 			}
 		case <-ticker.C:
 			result.ResponseBytes += writeGatewaySSEComment(w, flusher, "keepalive")
@@ -682,6 +684,13 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 			return result, err
 		}
 	}
+}
+
+func codexBackendResponseEventErrorType(data string, fallback string) string {
+	if isCodexBackendContextLengthError(errors.New(data)) {
+		return gatewayContextErrorType
+	}
+	return fallback
 }
 
 func scanSSEDataMessages(r io.Reader, dataCh chan<- string, errCh chan<- error) {

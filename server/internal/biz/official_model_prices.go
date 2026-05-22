@@ -64,10 +64,20 @@ func RecommendedGatewayContextPolicyForModel(modelID string) GatewayModelContext
 		ContextWindowTokens:  window,
 		ContextCompactTokens: compactTokens,
 		ContextHardTokens:    hardTokens,
-		ContextCompactBytes:  compactTokens * 4,
+		ContextCompactBytes:  minPositiveInt64(compactTokens*4, 1_000_000),
 		ContextHardBytes:     hardTokens * 5,
 		ContextKeepItems:     8,
 	}
+}
+
+func minPositiveInt64(a, b int64) int64 {
+	if a <= 0 {
+		return b
+	}
+	if b <= 0 || a < b {
+		return a
+	}
+	return b
 }
 
 func EffectiveGatewayModelContextPolicy(model *GatewayModel, fallback GatewayModelContextPolicy) GatewayModelContextPolicy {
