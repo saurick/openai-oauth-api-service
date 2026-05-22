@@ -378,6 +378,24 @@ func TestCodexCLIPromptFromChatCompletionsPayloadMaterializesImages(t *testing.T
 	}
 }
 
+func TestGatewayRequestLimitCoversMaxBase64Attachments(t *testing.T) {
+	encodedImageBytes := ((maxGatewayImageBytes + 2) / 3) * 4
+	encodedFileBytes := ((maxGatewayFileBytes + 2) / 3) * 4
+	imageURLOverhead := len("data:image/png;base64,")
+	fileURLOverhead := len("data:application/pdf;base64,")
+	jsonOverhead := 8 << 10
+
+	maxImagePayload := maxGatewayImages*(encodedImageBytes+imageURLOverhead) + jsonOverhead
+	if maxImagePayload > maxGatewayRequestBytes {
+		t.Fatalf("request limit %d must cover %d bytes for max image attachments", maxGatewayRequestBytes, maxImagePayload)
+	}
+
+	maxFilePayload := maxGatewayFiles*(encodedFileBytes+fileURLOverhead) + jsonOverhead
+	if maxFilePayload > maxGatewayRequestBytes {
+		t.Fatalf("request limit %d must cover %d bytes for max file attachments", maxGatewayRequestBytes, maxFilePayload)
+	}
+}
+
 func TestCodexCLIPromptRejectsPDFInput(t *testing.T) {
 	body := []byte(`{
 		"messages": [

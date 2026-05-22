@@ -29,11 +29,11 @@ import (
 )
 
 const (
-	maxGatewayRequestBytes                = 32 << 20
 	maxGatewayImages                      = 4
 	maxGatewayImageBytes                  = 16 << 20
 	maxGatewayFiles                       = 4
 	maxGatewayFileBytes                   = 16 << 20
+	maxGatewayRequestBytes                = 90 << 20
 	defaultCodexCLITimeout                = 600 * time.Second
 	gatewayUsageWriteTimeout              = 5 * time.Second
 	defaultGatewayStreamHeartbeatInterval = 15 * time.Second

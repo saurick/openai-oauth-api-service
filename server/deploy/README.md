@@ -33,6 +33,6 @@ docker compose -f compose.yml up -d
 docker compose -f compose.yml -f compose.nginx.yml --env-file .env up -d nginx
 ```
 
-当前线上仍使用宿主机 Nginx；容器化 Nginx 是迁移/切入口能力，不是默认启动项。
+当前线上仍使用宿主机 Nginx；容器化 Nginx 是迁移/切入口能力，不是默认启动项。若继续使用宿主机 Nginx，入口层的 `client_max_body_size` 必须与 app-server 和 `compose/prod/nginx/` 样例保持一致，否则大图片 / PDF data URL 请求会先在入口层返回 413。
 
 证书申请与续签不放入主 `compose.yml`。测试服务器上多个项目只是临时共存时，优先使用不同端口或宿主机 Nginx 临时转发；交付到单项目机器时，可选择宿主机 Certbot，也可叠加项目级 `compose.certbot.yml` 管理证书。

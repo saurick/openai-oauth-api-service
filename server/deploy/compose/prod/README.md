@@ -111,6 +111,7 @@ docker compose -f compose.yml -f compose.nginx.yml --env-file .env up -d nginx
 - `/.well-known/acme-challenge/` HTTP-01 challenge webroot。
 - 旧域名 `oauth-api.saurick.space`、`openai.saurick.space` 到 `oauth-api.saurick.me` 的跳转样本。
 - `proxy_read_timeout 700s` / `proxy_send_timeout 700s`，给 app-server 与 Codex 上游 600 秒等待窗口留余量。
+- `client_max_body_size 90m`，与 app-server 的 OpenAI-compatible data URL 附件请求体上限保持一致。
 
 启用前必须准备证书和 ACME webroot 目录：
 

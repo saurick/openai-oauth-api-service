@@ -2,6 +2,16 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-22 大图片上传 413 排查
+- 完成：使用公网 `https://oauth-api.saurick.me/v1/responses` 复现 data URL 大图片请求体 413；24 MiB 原始图片转 base64 后请求体约 32.00 MiB，线上返回 `HTTP 413`，响应体为 `{"code":"request_too_large","message":"request body too large"}`，说明命中 app-server 的总请求体限制，不是 Codex 上游拒绝。
+- 完成：将 app-server OpenAI-compatible 总请求体上限从 32 MiB 调整为 90 MiB，并同步 Compose Nginx 样例 `client_max_body_size 90m`；保留图片 / PDF 单个附件 16 MiB、单次最多 4 个的业务限制，避免 data URL base64 膨胀后提前被总请求体限制误杀。
+- 完成：更新 `README.md`、`server/docs/api.md`、`server/deploy/README.md` 与 `server/deploy/compose/prod/README.md` 的附件体积口径；新增单测校验 4 个最大图片 / PDF 附件的 base64 预算不会超过总请求体上限。
+- 验证通过：线上旧版本边界复现已完成，临时测试 key 已删除；无效 key 探测约 70 MiB 请求当前会被宿主机 Nginx 返回 HTML 413，说明生产发布时也需要同步宿主机 Nginx `client_max_body_size`；本地 `cd server && go test ./internal/server -run 'TestGatewayRequestLimitCoversMaxBase64Attachments|TestCodexCLIPromptFromChatCompletionsPayloadMaterializesImages'`、`cd server && go test ./...`、`git diff --check` 均通过。
+- 部署：本地构建 amd64 镜像 `oauth-api-service-server:20260522T185252-d88c2651-local-big-image-90m`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260522T185252-d88c2651-local-big-image-90m/`；远端仅执行 release 解包、宿主机 Atlas status、`docker load`、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，并备份后更新宿主机 Nginx snippet 为 `client_max_body_size 90m`、`nginx -t`、`systemctl reload nginx`；未在服务器构建，也未改管理员密码。Atlas 状态 `OK`、当前版本 `20260520090000`、待执行 `0`。
+- 线上验证：远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；容器运行镜像为 `oauth-api-service-server:20260522T185252-d88c2651-local-big-image-90m`，容器环境 `GIT_SHA_SHORT=d88c2651-local`、`IMAGE_TAG=20260522T185252-d88c2651-local-big-image-90m`。公网 `/v1/responses` 34 MiB 请求不再 413，返回预期无效模型 `403 gateway_model_disabled`；绕过 Cloudflare 直连源站 HTTPS 的 65 MiB 请求也返回 `403 gateway_model_disabled`，确认宿主机 Nginx 64m 限制已解除；公网 70 MiB 请求不再 413，但触发 Cloudflare `524`，超大请求仍可能受边缘超时影响。最小 `/v1/responses` 非流式请求返回 `DEPLOY_BIG_IMAGE_90M_OK`；验证用临时 key 均已删除。
+- 清理：清理前远端 `/` 使用率 53%、Docker images 4.721GB；删除本轮 release 镜像 tar 与 migration tar 后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260522T175109-c0512d22-local-context-1m`，回收 348.5MB；清理后 `/` 使用率 50%、Docker images 4.017GB，未执行 volume prune。
+- 下一步：若用户实际上传接近 70 MiB 请求体仍失败，优先排查 Cloudflare 524 / 上传耗时，而不是 app-server 或宿主机 Nginx 413。
+
 ## 2026-05-22 Codex 长会话上下文超限排查
 - 完成：只读统计线上近 7 天 `gateway_usage_logs`，6210 次请求中失败 259 次，只有 2 次带 `session_id`，9 次触发网关压缩；失败不局限于 `zichun`，主要集中在无 session 的长流式 backend-only 请求，典型错误包括 `context_length_exceeded`、`response.incomplete max_output_tokens`、`unexpected EOF`、`client_canceled` 和历史孤立 `function_call_output` 400。
 - 完成：定位根因之一是上下文预检 token 估算复用了 Codex CLI prompt 提取逻辑，只取最近 8 条 `user/assistant`，忽略较早 `tool`、`function_call_output`、`arguments`、`output` 等模型可见历史；线上 90 万字节以上 chat 请求诊断曾只估算数百到一千 tokens，导致没有提前压缩。

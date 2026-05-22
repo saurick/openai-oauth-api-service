@@ -134,7 +134,7 @@ export OPENAI_BASE_URL=http://localhost:8400/v1
 export OPENAI_API_KEY=ogw_xxx
 ```
 
-兼容请求可通过 `reasoning_effort` 传递推理强度，当前支持 `low`、`medium`、`high`、`xhigh`；服务端会把该值作为请求级 usage 快照记录，并分别转为 direct backend 的 `reasoning.effort` 或 Codex CLI 的 `model_reasoning_effort`。direct backend 模式支持 OpenAI-compatible 的 `tools` / `tool_choice`、assistant `tool_calls` 历史和 tool result 回传，可供 OpenCode 这类客户端继续在本机执行 shell、文件和截图等工具；Codex CLI fallback 默认关闭，打开后也只返回纯文本，不代理工具调用，因此带工具调用或工具历史的请求在 backend 失败时会直接返回上游错误，不会降级到 CLI。图片输入支持 OpenAI-compatible 的 data URL 形式 `image_url` / `input_image`；PDF 输入支持 `input_file` / `file` 的 `application/pdf` data URL 或带 `mimeType=application/pdf` 的 base64 文件数据。图片在 CLI 模式会转为 `codex exec --image` 附件，PDF 仅支持 direct backend 模式；文本类附件由客户端读取成文本后按普通 `text` 输入转发。
+兼容请求可通过 `reasoning_effort` 传递推理强度，当前支持 `low`、`medium`、`high`、`xhigh`；服务端会把该值作为请求级 usage 快照记录，并分别转为 direct backend 的 `reasoning.effort` 或 Codex CLI 的 `model_reasoning_effort`。direct backend 模式支持 OpenAI-compatible 的 `tools` / `tool_choice`、assistant `tool_calls` 历史和 tool result 回传，可供 OpenCode 这类客户端继续在本机执行 shell、文件和截图等工具；Codex CLI fallback 默认关闭，打开后也只返回纯文本，不代理工具调用，因此带工具调用或工具历史的请求在 backend 失败时会直接返回上游错误，不会降级到 CLI。图片输入支持 OpenAI-compatible 的 data URL 形式 `image_url` / `input_image`；PDF 输入支持 `input_file` / `file` 的 `application/pdf` data URL 或带 `mimeType=application/pdf` 的 base64 文件数据。图片在 CLI 模式会转为 `codex exec --image` 附件，PDF 仅支持 direct backend 模式；图片 / PDF 单个附件最大 16 MiB、单次最多 4 个，网关总请求体上限 90 MiB；文本类附件由客户端读取成文本后按普通 `text` 输入转发。
 
 生产环境把 `OPENAI_BASE_URL` 换成部署域名下的 `/v1`，当前个人部署为：
 
