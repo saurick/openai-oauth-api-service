@@ -29,7 +29,7 @@ cp .env.example .env
 
 ```bash
 OPENAI_API_KEY=sk-proj-your-real-key
-ADMIN_TOKEN=use-a-long-random-admin-token
+ADMIN_TOKEN=replace-with-explicit-admin-token
 UPSTREAM_PROXY_URL=socks5://127.0.0.1:7890
 ```
 

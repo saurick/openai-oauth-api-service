@@ -748,10 +748,10 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 16px;
-  padding-top: 14px;
+  gap: 10px;
+  padding-top: 12px;
   color: var(--admin-text);
-  font-size: 22px;
+  font-size: 16px;
   line-height: 1;
 }
 
@@ -765,31 +765,31 @@
 
 .admin-table-pagination-controls {
   flex-wrap: wrap;
-  gap: 14px;
+  gap: 8px;
 }
 
 .admin-table-pagination-summary {
-  min-height: 48px;
+  min-height: 36px;
   white-space: nowrap;
 }
 
 .admin-table-page-numbers,
 .admin-table-page-size {
-  gap: 8px;
+  gap: 6px;
 }
 
 .admin-table-page-size .admin-searchable-select {
-  width: 132px;
+  width: 120px;
 }
 
 .admin-frame .admin-table-page-size-input {
-  min-height: 48px;
-  padding: 0 42px 0 14px;
+  min-height: 36px;
+  padding: 0 26px 0 10px;
   border: 2px solid var(--admin-border);
-  border-radius: 10px;
+  border-radius: 8px;
   background-color: var(--admin-surface);
   color: var(--admin-text);
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 1;
 }
@@ -798,14 +798,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: 2px solid transparent;
   border-radius: 50%;
   background: transparent;
   color: var(--admin-text);
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 1;
   transition:
@@ -820,8 +820,35 @@
 }
 
 .admin-page-button-arrow {
-  font-size: 38px;
-  font-weight: 400;
+  font-size: 0;
+  font-weight: 600;
+}
+
+.admin-page-button-arrow > span {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  font-size: 0;
+  line-height: 0;
+}
+
+.admin-page-button-arrow > span::before {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border: solid currentColor;
+  border-width: 2px 2px 0 0;
+  content: '';
+}
+
+.admin-page-button-arrow[aria-label='上一页'] > span::before {
+  transform: rotate(-135deg);
+}
+
+.admin-page-button-arrow[aria-label='下一页'] > span::before {
+  transform: rotate(45deg);
 }
 
 .admin-page-button:not(:disabled):hover {
@@ -838,9 +865,9 @@
 }
 
 .admin-table-pagination-ellipsis {
-  min-width: 24px;
+  min-width: 18px;
   color: var(--admin-muted);
-  font-size: 22px;
+  font-size: 16px;
   line-height: 1;
   text-align: center;
 }
@@ -1446,26 +1473,26 @@
   }
 
   .admin-table-pagination {
-    font-size: 20px;
+    font-size: 16px;
   }
 
   .admin-table-pagination-summary,
   .admin-frame .admin-table-page-size-input {
-    min-height: 44px;
-    font-size: 20px;
+    min-height: 34px;
+    font-size: 16px;
   }
 
   .admin-page-button {
-    width: 44px;
-    height: 44px;
-    font-size: 20px;
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
   }
 
   .admin-page-button-arrow {
-    font-size: 34px;
+    font-size: 0;
   }
 
   .admin-table-page-size .admin-searchable-select {
-    width: 122px;
+    width: 120px;
   }
 }

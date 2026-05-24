@@ -32,11 +32,11 @@ const NAV_GROUPS = [
 function BrandMark() {
   return (
     <div className="leading-none">
-      <div className="text-[30px] font-extrabold tracking-tight text-[#173b59]">
+      <div className="text-[22px] font-extrabold tracking-tight text-[#173b59] sm:text-[30px]">
         <span>OA</span>
         <span className="text-[#d6a23a]">S</span>
       </div>
-      <div className="mt-[-2px] text-[9px] font-bold uppercase tracking-[0.06em] text-[#173b59]">
+      <div className="mt-[-2px] hidden text-[9px] font-bold uppercase tracking-[0.06em] text-[#173b59] sm:block">
         Saurick API Console
       </div>
     </div>
@@ -53,15 +53,15 @@ function NavIcon({ icon: Icon }) {
 
 function Sidebar() {
   return (
-    <aside className="border-b border-[#dce8df] bg-[#f5fbf7] lg:min-h-screen lg:border-b-0 lg:border-r">
-      <div className="flex h-[86px] items-center border-b border-[#dce8df] px-4">
+    <aside className="min-h-screen border-r border-[#dce8df] bg-[#f5fbf7]">
+      <div className="flex h-[78px] items-center border-b border-[#dce8df] px-3 sm:h-[86px] sm:px-4">
         <BrandMark />
       </div>
 
-      <nav className="max-h-[calc(100vh-86px)] overflow-auto px-4 py-5">
+      <nav className="max-h-[calc(100vh-78px)] overflow-auto px-2 py-4 sm:max-h-[calc(100vh-86px)] sm:px-4 sm:py-5">
         {NAV_GROUPS.map((group) => (
-          <div key={group.label} className="mb-6">
-            <div className="mb-3 px-3 text-sm text-[#7b8780]">
+          <div key={group.label} className="mb-5 sm:mb-6">
+            <div className="mb-3 hidden px-3 text-sm text-[#7b8780] sm:block">
               {group.label}
             </div>
             <div className="space-y-1">
@@ -69,9 +69,11 @@ function Sidebar() {
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  aria-label={item.label}
+                  title={item.label}
                   className={({ isActive }) =>
                     [
-                      'flex min-h-10 items-center gap-3 rounded-md px-3 text-sm font-semibold transition',
+                      'flex min-h-10 items-center gap-2 rounded-md px-2 text-xs font-semibold transition sm:gap-3 sm:px-3 sm:text-sm',
                       isActive
                         ? 'bg-[#c7d3c5] text-[#238a43]'
                         : 'text-[#1f2d25] hover:bg-[#e7efe9] hover:text-[#238a43]',
@@ -122,7 +124,7 @@ export default function AdminFrame({
 
   return (
     <AppShell variant="admin" className="admin-frame">
-      <div className="lg:grid lg:min-h-screen lg:grid-cols-[276px_minmax(0,1fr)]">
+      <div className="grid min-h-screen grid-cols-[118px_minmax(0,1fr)] sm:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[276px_minmax(0,1fr)]">
         <Sidebar />
 
         <div className="min-w-0">

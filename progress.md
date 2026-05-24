@@ -2,6 +2,22 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-24 后台分页箭头样式
+- 完成：根据 Codex 网页标注定位 `/admin-models` 分页「下一页」按钮，确认共享分页箭头仍使用大号 `›` 字符，移动视口下按钮为 44x44 但箭头字形达 34px，视觉上偏大且不稳定。
+- 完成：将共享 `.admin-page-button-arrow` 从可见字体箭头改为 CSS chevron，保留原 `aria-label` 与分页结构；箭头图形收口为 16px 居中盒 + 8px 线性箭头，避免依赖 `‹/›` 字形重心。
+- 补充完成：根据 1024px 标注宽度继续压缩分页整体密度，分页字号从 22px 降到 16px，圆形页码 / 箭头从 48px 降到 36px，移动端为 34px；每页条数输入从 132px / 48px 降到 108px / 36px，避免页码和「N 条/页」区域挤压。
+- 修复：每页条数控件首次压缩到 108px 后，最长 `100 条/页` 会被右侧 caret 预留区挤压；最终调整为 120px 宽、左右 padding 为 `10px / 26px`，仍明显小于旧 132px，同时保证最长文案完整显示。
+- 验证补充：`style:l1` 分页断言新增箭头盒模型检查，覆盖箭头字体隐藏、16px 居中图标盒、8px chevron、2px 线宽、按钮中心偏移、页码按钮和每页条数输入的压缩后尺寸，并额外切换到 `100 条/页` 断言 `scrollWidth <= clientWidth`，防止最长选项再次被裁切。
+- 验证通过：in-app Browser 在 `/admin-models` 设置 1024x768 视口，确认分页高度 48px、控件行高 36px、当前页 36x36、每页条数 120x36、可用文字区 80px、页码到每页条数间距 8px、选择 `100 条/页` 后无输入框滚动裁切，分页和 document 均无横向溢出；早前 772x994 和 1280x900 视口也确认箭头居中与无横向溢出。`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx scripts/styleL1.mjs`、`cd web && pnpm build`、`git diff --check -- web/src/tailwind.css web/scripts/styleL1.mjs progress.md` 均通过。
+- 阻塞/风险：`cd web && STYLE_L1_PORT=4352 NODE_USE_ENV_PROXY=0 pnpm style:l1` 与换端口 `4353` 均停在既有 `admin-codex-balance-mobile` 暗色模式公开接口按钮对比度断言，未跑到后续分页场景；本轮已用 Browser 对标注目标做桌面 / 移动盒模型回归，但 `style:l1` 全量仍需后续先处理该既有断言。
+
+## 2026-05-24 后台移动端左侧导航
+- 完成：根据 Codex 网页标注定位 `/admin-models` 移动端后台导航，确认根布局只在 `lg` 以上启用左侧 grid，`lg` 以下把完整 `aside` 堆到顶部，导致导航占据首屏大块高度。
+- 完成：后台根布局改为全断点左侧栏：极窄屏使用 118px 窄文字栏并保留 `aria-label/title`，`sm` 以上使用 220px 文字栏，`lg` 以上保留原 276px 桌面栏；顶部 header 和 main 始终从侧栏右侧开始。首次尝试纯图标栏会让移动端既有「用量日志」可见文本断言失败，已改回可见文字。
+- 验证补充：`style:l1` 的 `assertAdminChrome` 改为断言后台侧边栏在所有断点都贴左，且不与 header/main 重叠，替代原先“移动端侧边栏必须在顶部”的旧口径。
+- 验证通过：in-app Browser 复查 `/admin-models`，821px 标注宽度下侧栏宽 276px、390px 极窄宽度下侧栏宽 118px，`header/main` 均从侧栏右侧开始，「用量日志」文字可见，document/body 无横向溢出；`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/common/components/layout/AdminFrame.jsx scripts/styleL1.mjs`、`cd web && pnpm build`、`git diff --check -- web/src/common/components/layout/AdminFrame.jsx web/scripts/styleL1.mjs web/src/tailwind.css progress.md` 均通过。
+- 阻塞/风险：`cd web && STYLE_L1_PORT=4357 NODE_USE_ENV_PROXY=0 pnpm style:l1` 已通过到 `admin-keys-desktop`，随后停在既有完整凭据列宽断言；本轮改的是后台框架左侧栏和分页样式，没有调整 API key 表格列宽。`4355` 曾因纯图标栏导致移动端可见文本断言失败，该问题已通过 118px 窄文字栏修正。
+
 ## 2026-05-22 大图片上传 413 排查
 - 完成：使用公网 `https://oauth-api.saurick.me/v1/responses` 复现 data URL 大图片请求体 413；24 MiB 原始图片转 base64 后请求体约 32.00 MiB，线上返回 `HTTP 413`，响应体为 `{"code":"request_too_large","message":"request body too large"}`，说明命中 app-server 的总请求体限制，不是 Codex 上游拒绝。
 - 完成：将 app-server OpenAI-compatible 总请求体上限从 32 MiB 调整为 90 MiB，并同步 Compose Nginx 样例 `client_max_body_size 90m`；保留图片 / PDF 单个附件 16 MiB、单次最多 4 个的业务限制，避免 data URL base64 膨胀后提前被总请求体限制误杀。

@@ -319,10 +319,7 @@ const scenarios = [
       await expectText(page, '当前生效：260,000 tokens')
       await expectText(page, '不是无限制')
       await expectText(page, '填入当前值')
-      await assertModelContextModalLayout(
-        page,
-        'admin-models-desktop-light'
-      )
+      await assertModelContextModalLayout(page, 'admin-models-desktop-light')
       await page.getByRole('button', { name: '关闭弹窗' }).click()
       await page.getByRole('button', { name: '暗色', exact: true }).click()
       await page.waitForFunction(
@@ -859,18 +856,14 @@ async function assertAdminChrome(page, scenarioName) {
   assert(!metrics.hasRefreshCurrentPage, `${scenarioName} 仍显示刷新当前页入口`)
   assert(metrics.main.width > 0, `${scenarioName} 内容区宽度异常`)
   assert(metrics.main.height > 0, `${scenarioName} 内容区高度异常`)
-
-  if (metrics.viewportWidth >= 1024) {
-    assert(
-      metrics.aside.right <= metrics.header.left + 1,
-      `${scenarioName} 桌面侧边栏和顶部栏发生重叠: ${JSON.stringify(metrics)}`
-    )
-  } else {
-    assert(
-      metrics.aside.bottom <= metrics.header.top + 1,
-      `${scenarioName} 移动端侧边栏和顶部栏发生重叠: ${JSON.stringify(metrics)}`
-    )
-  }
+  assert(
+    metrics.aside.left <= 1 && metrics.aside.right <= metrics.header.left + 1,
+    `${scenarioName} 后台侧边栏未保持左侧布局: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.aside.right <= metrics.main.left + 1,
+    `${scenarioName} 后台侧边栏和内容区发生重叠: ${JSON.stringify(metrics)}`
+  )
 }
 
 async function assertApiVisuals(page, scenarioName) {
@@ -1129,9 +1122,7 @@ async function assertAnalyticsVisuals(page, scenarioName) {
       ),
       hasPagination: Boolean(main?.querySelector('.admin-table-pagination')),
       hasSearchInput: Boolean(
-        main?.querySelector(
-          'input[placeholder="搜索备注、前缀或后四位"]'
-        )
+        main?.querySelector('input[placeholder="搜索备注、前缀或后四位"]')
       ),
       hasStatusFilter: Boolean(
         main?.querySelector('[role="combobox"][aria-label="按状态筛选"]')
@@ -1319,9 +1310,7 @@ async function assertUsageKeyStatsTab(page, scenarioName) {
   await expectText(page, '5 年 Token')
   const metrics = await page.evaluate(() => ({
     hasSearchInput: Boolean(
-      document.querySelector(
-        'main input[placeholder="搜索备注、前缀或后四位"]'
-      )
+      document.querySelector('main input[placeholder="搜索备注、前缀或后四位"]')
     ),
     hasStatsRows:
       document.body.innerText.includes('productionapikey') &&
@@ -1860,9 +1849,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
         .map((row) => row.children[3]?.textContent.trim() || '')
         .filter(Boolean),
       hasSearchInput: Boolean(
-        main?.querySelector(
-          'input[placeholder="搜索备注、前缀或后四位"]'
-        )
+        main?.querySelector('input[placeholder="搜索备注、前缀或后四位"]')
       ),
       hasSearchAction: Array.from(main?.querySelectorAll('button') || []).some(
         (node) => node.textContent.trim() === '搜索'
@@ -1988,7 +1975,10 @@ async function assertKeyTableVisuals(page, scenarioName) {
     `${scenarioName} 主内容区不应再显示表格级刷新按钮`
   )
   assert(metrics.hasCurrentOperationRow, `${scenarioName} 缺少当前操作行`)
-  assert(metrics.hasBatchResetAction, `${scenarioName} 缺少批量重置 API key 操作`)
+  assert(
+    metrics.hasBatchResetAction,
+    `${scenarioName} 缺少批量重置 API key 操作`
+  )
   assert(metrics.hasSelectPageCheckbox, `${scenarioName} 缺少表头全选框`)
   assert(metrics.hasTokenLimitHeader, `${scenarioName} 缺少百万 token 列头`)
   assert(metrics.hasTokenLimitValue, `${scenarioName} 缺少百万 token 换算展示`)
@@ -2483,10 +2473,7 @@ async function assertKeyDoubleClickEdit(page, scenarioName) {
     resetMetrics.hasResetButton,
     `${scenarioName} 编辑弹窗缺少重置 API key 按钮`
   )
-  assert(
-    resetMetrics.hasLeakCopy,
-    `${scenarioName} 编辑弹窗缺少泄密重置说明`
-  )
+  assert(resetMetrics.hasLeakCopy, `${scenarioName} 编辑弹窗缺少泄密重置说明`)
   assert(
     resetMetrics.panelWidth > 0 && resetMetrics.panelHeight > 0,
     `${scenarioName} 编辑弹窗重置区块盒模型异常: ${JSON.stringify(resetMetrics)}`
@@ -2545,9 +2532,18 @@ async function assertTablePagination(
     const pageSize = node.querySelector('.admin-table-page-size-input')
     const prev = node.querySelector('[aria-label="上一页"]')
     const next = node.querySelector('[aria-label="下一页"]')
+    const nextIcon = next?.querySelector('span')
     const currentStyle = current ? window.getComputedStyle(current) : null
+    const prevStyle = prev ? window.getComputedStyle(prev) : null
+    const nextStyle = next ? window.getComputedStyle(next) : null
+    const nextIconStyle = nextIcon ? window.getComputedStyle(nextIcon) : null
+    const nextChevronStyle = nextIcon
+      ? window.getComputedStyle(nextIcon, '::before')
+      : null
     const pageSizeStyle = pageSize ? window.getComputedStyle(pageSize) : null
     const currentRect = current?.getBoundingClientRect()
+    const nextRect = next?.getBoundingClientRect()
+    const nextIconRect = nextIcon?.getBoundingClientRect()
     const pageSizeRect = pageSize?.getBoundingClientRect()
     const nodeRect = node.getBoundingClientRect()
     return {
@@ -2561,6 +2557,50 @@ async function assertTablePagination(
       currentBackground: currentStyle?.backgroundColor || '',
       pageSizeValue: pageSize?.value || '',
       pageSizeBorderRadius: pageSizeStyle?.borderRadius || '',
+      pageSizeContentWidth:
+        pageSizeRect && pageSizeStyle
+          ? Math.round(
+              pageSizeRect.width -
+                Number.parseFloat(pageSizeStyle.paddingLeft || '0') -
+                Number.parseFloat(pageSizeStyle.paddingRight || '0') -
+                Number.parseFloat(pageSizeStyle.borderLeftWidth || '0') -
+                Number.parseFloat(pageSizeStyle.borderRightWidth || '0')
+            )
+          : 0,
+      prevArrowFontSize: prevStyle?.fontSize || '',
+      nextArrowFontSize: nextStyle?.fontSize || '',
+      nextIconDisplay: nextIconStyle?.display || '',
+      nextIconLineHeight: nextIconStyle?.lineHeight || '',
+      nextIconWidth: Math.round(nextIconRect?.width || 0),
+      nextIconHeight: Math.round(nextIconRect?.height || 0),
+      nextIconCenterDeltaX:
+        nextRect && nextIconRect
+          ? Math.round(
+              ((nextIconRect.x +
+                nextIconRect.width / 2 -
+                (nextRect.x + nextRect.width / 2)) *
+                100) /
+                100
+            )
+          : null,
+      nextIconCenterDeltaY:
+        nextRect && nextIconRect
+          ? Math.round(
+              ((nextIconRect.y +
+                nextIconRect.height / 2 -
+                (nextRect.y + nextRect.height / 2)) *
+                100) /
+                100
+            )
+          : null,
+      nextChevronWidth: Math.round(
+        Number.parseFloat(nextChevronStyle?.width || '0')
+      ),
+      nextChevronHeight: Math.round(
+        Number.parseFloat(nextChevronStyle?.height || '0')
+      ),
+      nextChevronBorderTopWidth: nextChevronStyle?.borderTopWidth || '',
+      nextChevronBorderRightWidth: nextChevronStyle?.borderRightWidth || '',
       currentWidth: Math.round(currentRect?.width || 0),
       currentHeight: Math.round(currentRect?.height || 0),
       pageSizeWidth: Math.round(pageSizeRect?.width || 0),
@@ -2588,12 +2628,35 @@ async function assertTablePagination(
   )
   assert(
     paginationMetrics.currentLabel === '1' &&
-      paginationMetrics.currentWidth >= 40 &&
-      paginationMetrics.currentHeight >= 40 &&
+      paginationMetrics.currentWidth >= 34 &&
+      paginationMetrics.currentWidth <= 38 &&
+      paginationMetrics.currentHeight >= 34 &&
+      paginationMetrics.currentHeight <= 38 &&
       paginationMetrics.currentBorderRadius.includes('50%') &&
+      paginationMetrics.pageSizeWidth >= 118 &&
+      paginationMetrics.pageSizeWidth <= 122 &&
+      paginationMetrics.pageSizeHeight <= 38 &&
+      paginationMetrics.pageSizeContentWidth >= 78 &&
       !paginationMetrics.overflowsX &&
       !paginationMetrics.overflowsY,
     `${scenarioName} 分页数字页码盒模型异常: ${JSON.stringify(
+      paginationMetrics
+    )}`
+  )
+  assert(
+    paginationMetrics.prevArrowFontSize === '0px' &&
+      paginationMetrics.nextArrowFontSize === '0px' &&
+      paginationMetrics.nextIconDisplay === 'flex' &&
+      paginationMetrics.nextIconLineHeight === '0px' &&
+      paginationMetrics.nextIconWidth === 16 &&
+      paginationMetrics.nextIconHeight === 16 &&
+      Math.abs(paginationMetrics.nextIconCenterDeltaX) <= 1 &&
+      Math.abs(paginationMetrics.nextIconCenterDeltaY) <= 1 &&
+      paginationMetrics.nextChevronWidth === 8 &&
+      paginationMetrics.nextChevronHeight === 8 &&
+      paginationMetrics.nextChevronBorderTopWidth === '2px' &&
+      paginationMetrics.nextChevronBorderRightWidth === '2px',
+    `${scenarioName} 分页箭头大小或居中异常: ${JSON.stringify(
       paginationMetrics
     )}`
   )
@@ -2604,6 +2667,40 @@ async function assertTablePagination(
       paginationMetrics
     )}`
   )
+  await pageSizeInput.fill('100')
+  await pageSizeInput.press('Enter')
+  const pageSize100Metrics = await firstPagination.evaluate((node) => {
+    const pageSize = node.querySelector('.admin-table-page-size-input')
+    const pageSizeStyle = pageSize ? window.getComputedStyle(pageSize) : null
+    const pageSizeRect = pageSize?.getBoundingClientRect()
+    return {
+      pageSizeValue: pageSize?.value || '',
+      pageSizeWidth: Math.round(pageSizeRect?.width || 0),
+      pageSizeClientWidth: pageSize?.clientWidth || 0,
+      pageSizeScrollWidth: pageSize?.scrollWidth || 0,
+      pageSizeContentWidth:
+        pageSizeRect && pageSizeStyle
+          ? Math.round(
+              pageSizeRect.width -
+                Number.parseFloat(pageSizeStyle.paddingLeft || '0') -
+                Number.parseFloat(pageSizeStyle.paddingRight || '0') -
+                Number.parseFloat(pageSizeStyle.borderLeftWidth || '0') -
+                Number.parseFloat(pageSizeStyle.borderRightWidth || '0')
+            )
+          : 0,
+    }
+  })
+  assert(
+    pageSize100Metrics.pageSizeValue === '100 条/页' &&
+      pageSize100Metrics.pageSizeContentWidth >= 78 &&
+      pageSize100Metrics.pageSizeScrollWidth <=
+        pageSize100Metrics.pageSizeClientWidth,
+    `${scenarioName} 分页每页条数最长选项显示不完整: ${JSON.stringify(
+      pageSize100Metrics
+    )}`
+  )
+  await pageSizeInput.fill('8')
+  await pageSizeInput.press('Enter')
   assert(
     await page.getByText(previousText).first().isVisible(),
     `${scenarioName} 分页第一页缺少 ${previousText}`
