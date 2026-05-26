@@ -10,7 +10,12 @@
 - 文档：更新 `web/README.md`，补充登录态失效弹窗已纳入 `style:l1`，以及局部场景过滤用法。
 - 验证通过：`cd web && pnpm test`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/common/components/layout/AdminFrame.jsx src/common/components/modal/AppModal.jsx src/common/components/modal/AlertDialog.jsx scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4367 NODE_USE_ENV_PROXY=0 STYLE_L1_SCENARIOS=admin-dashboard-mobile,admin-session-expired-modal-desktop,admin-session-expired-modal-mobile-dark pnpm style:l1`、`cd web && STYLE_L1_PORT=4370 NODE_USE_ENV_PROXY=0 STYLE_L1_SCENARIOS=admin-keys-desktop pnpm style:l1`、`cd web && STYLE_L1_PORT=4371 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`cd web && pnpm build`、`bash scripts/qa/secrets.sh`、`git diff --check`。
 - 验证补充：in-app Browser 通过 OAuth callback 测试管理员态打开 `http://127.0.0.1:4368/admin-dashboard`，页面身份和首屏渲染正常，仅有 React Router v7 future warning；本地旧 `VITE_ENABLE_RPC_MOCK` 未覆盖当前 `admin_login` / `api` 主路径，因此登录态弹窗和 API key 列宽用 `style:l1` 网络 mock 做确定性回归。
-- 下一步：提交推送后按低配服务器主路径部署，远端只执行镜像加载、Atlas 状态 / 迁移、重建、健康检查和清理。
+- 提交推送：已提交 `a9c1e2e4`（`fix: 统一登录态失效弹窗样式`）并推送到 `origin/main`；首次 pre-push 在默认并发下因本机资源临时不足触发 `cgo` buildID 获取失败，随后用 `GOMAXPROCS=2 GOFLAGS='-p=1'` 复跑 `go test ./...`、`make build` 和 `git push` 均通过。
+- 部署：本地构建 linux/amd64 镜像 `oauth-api-service-server:20260526T221901-a9c1e2e4-modal-ui`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260526T221901-a9c1e2e4-modal-ui/`；远端仅执行 checksum、`docker load`、宿主机 `/usr/local/bin/atlas` status/apply、备份并更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 部署修正：首次 migration tar 包含 macOS AppleDouble `._*` 元数据，导致 Atlas checksum mismatch；已用 `COPYFILE_DISABLE=1 tar --exclude='._*' --exclude='.DS_Store'` 重新打包并上传，远端确认迁移目录不再包含这些元数据文件。Atlas 状态 `OK`，当前版本 `20260520090000`，待执行 `0`。
+- 线上验证通过：容器运行镜像为 `oauth-api-service-server:20260526T221901-a9c1e2e4-modal-ui`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；本机 JSON-RPC `system.version` 返回 `code=0`，管理员 `admin_login` 返回 `code=0`。
+- 清理：按发布约定执行 `docker image prune -a -f` 与 `docker builder prune -f`，未执行 volume prune；清理前 `/` 使用率 53%、Docker images 4.78GB，清理后 `/` 使用率 53%、Docker images 4.427GB，旧 app 镜像 `oauth-api-service-server:20260526T090202-5d604ae-local-visible-commentary` 已取消标签。
+- 阻塞/风险：`govulncheck` 在 pre-push 中仍报告 Go 1.25.9 / `x/net` 的已知漏洞告警，但仓库脚本当前按 warning 处理且未阻塞推送；本轮未处理依赖升级。
 
 ## 2026-05-26 公开客户端配置生成页
 - 完成：新增免登录 `/client-config` 公开入口，供非管理员朋友填写自己的 Base URL、API Key、客户端和系统后在浏览器本地生成 Codex / opencode 配置；现有 `/admin-client-config` 仍保留 `AuthGuard requireAdmin`，不放开后台路由。
