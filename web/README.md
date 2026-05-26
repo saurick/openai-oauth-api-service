@@ -2,15 +2,15 @@
 
 ## 目录结构（简版）
 
-| 路径          | 职责                                              |
-| ------------- | ------------------------------------------------- |
-| `src/common/` | 通用认证、组件、hooks、状态、常量与工具函数       |
-| `src/pages/`  | 管理员登录与 API 运营控制台 |
-| `src/mocks/`  | 本地 mock 与前端基线测试辅助                      |
-| `src/assets/` | 图标等静态资源                                    |
-| `public/`     | 静态公开资源                                      |
-| `scripts/`    | 最小浏览器级样式回归等前端侧脚本                  |
-| `build/`      | 构建产物，不作为日常开发真源                      |
+| 路径          | 职责                                        |
+| ------------- | ------------------------------------------- |
+| `src/common/` | 通用认证、组件、hooks、状态、常量与工具函数 |
+| `src/pages/`  | 管理员登录与 API 运营控制台                 |
+| `src/mocks/`  | 本地 mock 与前端基线测试辅助                |
+| `src/assets/` | 图标等静态资源                              |
+| `public/`     | 静态公开资源                                |
+| `scripts/`    | 最小浏览器级样式回归等前端侧脚本            |
+| `build/`      | 构建产物，不作为日常开发真源                |
 
 日常开发入口优先关注 `src/`、`scripts/` 与 `public/`；`build/`、`output/` 更偏本地产物，不建议当成业务实现入口。
 
@@ -32,7 +32,7 @@ pnpm style:l1
 pnpm build
 ```
 
-- `pnpm style:l1` 是当前仓库最小浏览器级样式回归，会自动拉起本地 Vite 并覆盖根路径、历史 `/login`、`/register`、`/oauth-login`、`/portal` 到管理员登录的收口，管理员登录、未登录访问 `/admin-menu` 的重定向，公开 `/client-config` 配置生成页，以及注入测试管理员态后的 `/admin-dashboard` 桌面与移动端页面、`/admin-upstream`、`/admin-accounts` 和 `/admin-oauth` 到看板的收口。
+- `pnpm style:l1` 是当前仓库最小浏览器级样式回归，会自动拉起本地 Vite 并覆盖根路径、历史 `/login`、`/register`、`/oauth-login`、`/portal` 到管理员登录的收口，管理员登录、未登录访问 `/admin-menu` 的重定向，公开 `/client-config` 配置生成页，以及注入测试管理员态后的 `/admin-dashboard` 桌面与移动端页面、登录态失效弹窗、`/admin-upstream`、`/admin-accounts` 和 `/admin-oauth` 到看板的收口。局部排查可用 `STYLE_L1_SCENARIOS=场景名1,场景名2 pnpm style:l1` 只跑指定场景。
 - API 运营后台路径为 `/admin-dashboard`，生产运行依赖真实后端 `/rpc/api` 数据；兼容保留 `/admin-api`、`/admin-keys`、`/admin-models`、`/admin-analytics`、`/admin-upstream`、`/admin-client-config` 和 `/admin-usage` 入口，其中 `/admin-analytics` 会回跳到合并后的 `/admin-usage`。公开 `/client-config` 只提供免登录客户端配置生成器，不复用后台导航，不调用后端接口，不保存 API Key；`style:l1` 使用 mock 数据覆盖登录后的基础样式、调用趋势可视化面板、上游策略切换和盒模型回归。
 - 业务看板保留今日消费、今日请求、错误率、响应耗时、当前 RPM/TPM、Backend / CLI 上游分布、API 凭据、30 天趋势、Token 构成、模型 / 接口分布和最近调用样本；30 天趋势支持柱状 / 折线切换，并支持 hover / focus 查看日期与指标明细；凭据宽表、调用状态细分和按天明细进入统一的 `/admin-usage`「用量日志」，上游策略切换进入 `/admin-upstream`「上游策略」，避免首页信息过载。
 - API 运营后台表格默认每页 8 条，并支持 `8/10/20/50/100` 切换；用量日志支持按 `24h/7 天/30 天/90 天/180 天/1 年/2 年/3 年/5 年` 时间窗口分页查询，并按常用查看频率提供调用明细、异常请求、会话聚合、凭据统计、每日模型、上游模式和上游错误类型筛选视图；异常请求明细会展示请求 / 响应大小、backend-only、fallback 阻断、上下文压缩状态和脱敏上游摘要等诊断字段。每日模型按日期 + 模型聚合请求、Token、费用、错误率、Backend / CLI / fallback 统计，点击详情弹窗下钻当天该模型的请求级明细；会话聚合只展示后端已记录 `session_id` 的调用，并可在详情弹窗展开请求级明细，同时展示该会话的上下文压缩次数、摘要和压缩前后体积 / token 粗估。统计表格中涉及单个 API 凭据的行会同时展示备注和前缀，便于定位使用方。API 凭据表支持单击行单选、行首选择框多选、表头选择框全选 / 取消当前页、双击行打开编辑弹窗，备注输入只允许字母和数字；新建时后端会生成 `ogw_<备注>_<随机串>` 形式的凭据，管理员后台凭据列表展示完整凭据并提供复制；保存备注、额度、模型或上游策略不会重新生成 API key，选中一个或多个凭据后可在「当前操作」批量重置 API key，也可在编辑弹窗里重置单个 key。重置和删除统一使用后台内确认弹窗，避免浏览器原生提示打断操作流。重置只用于 key 泄密或主动轮换，会让旧 key 立即失效，并展示新完整 key 供逐条复制或复制全部。凭据级上游策略默认继承全局，也可单独覆盖为 Backend 直连、Backend + CLI 兜底或强制 CLI；凭据级 Token 限制按每日和每周两个窗口配置，并可分别限制总量、输入、输出和非缓存输入；模型表使用代码内固定官方目录，支持启停并可按模型调整上下文窗口、开始压缩阈值、硬拦截阈值、字节兜底和压缩保留条数，默认按 Codex 体验使用 400K 窗口、260K/380K token 阈值，阈值输入支持整数、`K` 和 `M` 单位，相关列和弹窗字段带问号说明；客户端模板页可导出 macOS / Windows 的 Codex 与 opencode 最小配置。
@@ -45,7 +45,7 @@ pnpm build
 - `VITE_APP_TITLE`：页面标题
 - `VITE_ENABLE_RPC_MOCK`：是否启用本地 RPC mock
 - `VITE_API_PROXY_TARGET`：本地 Vite 代理的后端地址，默认 `http://localhost:8400`
-说明：前端只保存本系统管理员登录返回的 JWT。下游 `ogw_` key 由管理员在 `/admin-keys` 页面生成和维护，OpenAI 兼容客户端使用本服务 `/v1` Base URL 和该 key 调用。
+  说明：前端只保存本系统管理员登录返回的 JWT。下游 `ogw_` key 由管理员在 `/admin-keys` 页面生成和维护，OpenAI 兼容客户端使用本服务 `/v1` Base URL 和该 key 调用。
 
 管理员 OAuth 登录按钮只在后端 `/auth/oauth/config` 返回启用时显示。授权完成后前端 `/oauth/callback` 从 URL fragment 读取管理员 JWT 并写入 `admin_access_token`，随后跳转到后台页面；本地 Vite 端口变化不需要改前端配置。
 

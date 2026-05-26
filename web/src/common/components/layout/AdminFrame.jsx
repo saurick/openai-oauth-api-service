@@ -127,7 +127,7 @@ export default function AdminFrame({
       <div className="grid min-h-screen grid-cols-[118px_minmax(0,1fr)] sm:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[276px_minmax(0,1fr)]">
         <Sidebar />
 
-        <div className="min-w-0">
+        <div className="min-w-0 overflow-x-hidden">
           <header className="sticky top-0 z-20 border-b border-[#dce8df] bg-white/95 backdrop-blur">
             <div className="flex min-h-[86px] flex-col gap-3 px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
               <div className="text-sm font-semibold text-[#1f2d25]">

@@ -2,6 +2,16 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-26 登录态失效弹窗统一
+- 完成：将全局 `AppModal` / `AlertDialog` 从旧深色通用面板改为复用后台 `admin-modal-*` 弹窗结构、标题、关闭按钮、确认按钮和浅色 / 暗色主题变量；登录态失效弹窗现在与 API key 确认、模型上下文、用量详情等后台弹窗保持一致。
+- 完成：后台内容列增加页面级横向 overflow 收口，避免移动端宽表在自己的 `overflow-auto` 滚动容器外继续撑出 body 横向滚动；内部表格横向滚动能力保留。
+- 完成：同步修复 `/admin-keys` 完整凭据列宽，把 key 列从 260px 扩到 300px，避免复制按钮把完整 key 文本压窄到逐字符竖排风险区间。
+- 完成：`style:l1` 增加 `STYLE_L1_SCENARIOS` 局部场景过滤，并新增登录态失效弹窗桌面浅色与移动暗色回归，覆盖弹窗结构、主题颜色、按钮圆角、关闭按钮尺寸、确认后跳转登录页和移动端无页面级横向溢出。
+- 文档：更新 `web/README.md`，补充登录态失效弹窗已纳入 `style:l1`，以及局部场景过滤用法。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/common/components/layout/AdminFrame.jsx src/common/components/modal/AppModal.jsx src/common/components/modal/AlertDialog.jsx scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4367 NODE_USE_ENV_PROXY=0 STYLE_L1_SCENARIOS=admin-dashboard-mobile,admin-session-expired-modal-desktop,admin-session-expired-modal-mobile-dark pnpm style:l1`、`cd web && STYLE_L1_PORT=4370 NODE_USE_ENV_PROXY=0 STYLE_L1_SCENARIOS=admin-keys-desktop pnpm style:l1`、`cd web && STYLE_L1_PORT=4371 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`cd web && pnpm build`、`bash scripts/qa/secrets.sh`、`git diff --check`。
+- 验证补充：in-app Browser 通过 OAuth callback 测试管理员态打开 `http://127.0.0.1:4368/admin-dashboard`，页面身份和首屏渲染正常，仅有 React Router v7 future warning；本地旧 `VITE_ENABLE_RPC_MOCK` 未覆盖当前 `admin_login` / `api` 主路径，因此登录态弹窗和 API key 列宽用 `style:l1` 网络 mock 做确定性回归。
+- 下一步：提交推送后按低配服务器主路径部署，远端只执行镜像加载、Atlas 状态 / 迁移、重建、健康检查和清理。
+
 ## 2026-05-26 公开客户端配置生成页
 - 完成：新增免登录 `/client-config` 公开入口，供非管理员朋友填写自己的 Base URL、API Key、客户端和系统后在浏览器本地生成 Codex / opencode 配置；现有 `/admin-client-config` 仍保留 `AuthGuard requireAdmin`，不放开后台路由。
 - 完成：将原后台客户端模板页的表单、预览、复制和下载逻辑抽成 `ClientConfigBuilder` 共享组件；后台页继续使用 `AdminFrame` 和后台导航，公开页只使用轻量页头与主题切换，不展示后台导航、超级管理员标识或退出按钮。

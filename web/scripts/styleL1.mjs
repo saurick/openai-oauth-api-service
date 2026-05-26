@@ -13,6 +13,10 @@ const devServerPort = Number(process.env.STYLE_L1_PORT || 4173)
 const externalBaseURL = String(process.env.STYLE_L1_BASE_URL || '').trim()
 const baseURL = externalBaseURL || `http://127.0.0.1:${devServerPort}`
 const headless = process.env.HEADED !== '1'
+const scenarioFilter = String(process.env.STYLE_L1_SCENARIOS || '')
+  .split(',')
+  .map((name) => name.trim())
+  .filter(Boolean)
 const CODEX_MODEL_IDS = [
   'gpt-5.5',
   'gpt-5.4',
@@ -239,7 +243,10 @@ const scenarios = [
       await expectText(page, '客户端配置生成器')
       await expectText(page, '免登录配置生成器')
       await expectNoText(page, '超级管理员')
-      await assertPublicClientConfigVisuals(page, 'public-client-config-desktop')
+      await assertPublicClientConfigVisuals(
+        page,
+        'public-client-config-desktop'
+      )
     },
   },
   {
@@ -425,6 +432,37 @@ const scenarios = [
     },
   },
   {
+    name: 'admin-session-expired-modal-desktop',
+    path: '/admin-dashboard',
+    viewport: { width: 1440, height: 900 },
+    adminAuth: true,
+    mockApiRpcAuthExpired: true,
+    verify: async (page) => {
+      await assertSessionExpiredAlertModal(
+        page,
+        'admin-session-expired-modal-desktop'
+      )
+      await page.getByRole('button', { name: '重新登录', exact: true }).click()
+      await waitForPath(page, '/admin-login')
+    },
+  },
+  {
+    name: 'admin-session-expired-modal-mobile-dark',
+    path: '/admin-dashboard',
+    viewport: { width: 390, height: 844 },
+    adminAuth: true,
+    adminTheme: 'dark',
+    mockApiRpcAuthExpired: true,
+    verify: async (page) => {
+      await assertSessionExpiredAlertModal(
+        page,
+        'admin-session-expired-modal-mobile-dark'
+      )
+      await page.getByRole('button', { name: '重新登录', exact: true }).click()
+      await waitForPath(page, '/admin-login')
+    },
+  },
+  {
     name: 'admin-guide-redirect',
     path: '/admin-guide',
     viewport: { width: 1280, height: 800 },
@@ -480,16 +518,25 @@ async function main() {
       await waitForServer(baseURL)
     }
 
+    const selectedScenarios = scenarioFilter.length
+      ? scenarios.filter((scenario) => scenarioFilter.includes(scenario.name))
+      : scenarios
+
+    assert(
+      selectedScenarios.length > 0,
+      `[style:l1] 未找到指定场景: ${scenarioFilter.join(', ')}`
+    )
+
     const browser = await chromium.launch({ headless })
     try {
-      for (const scenario of scenarios) {
+      for (const scenario of selectedScenarios) {
         await runScenario(browser, scenario)
       }
     } finally {
       await browser.close()
     }
 
-    console.log(`[style:l1] 通过，共验证 ${scenarios.length} 个场景`)
+    console.log(`[style:l1] 通过，共验证 ${selectedScenarios.length} 个场景`)
   } finally {
     await stopDevServer()
   }
@@ -597,11 +644,13 @@ async function runScenario(browser, scenario) {
       }, createFakeAdminToken())
     }
 
-    await page.addInitScript(() => {
-      if (!window.localStorage.getItem('admin_theme')) {
+    await page.addInitScript((theme) => {
+      if (theme) {
+        window.localStorage.setItem('admin_theme', theme)
+      } else if (!window.localStorage.getItem('admin_theme')) {
         window.localStorage.setItem('admin_theme', 'system')
       }
-    })
+    }, scenario.adminTheme || '')
 
     if (scenario.userAuth) {
       await page.addInitScript((token) => {
@@ -611,7 +660,9 @@ async function runScenario(browser, scenario) {
 
     await installAuthConfigMock(page)
 
-    if (scenario.mockApiRpc) {
+    if (scenario.mockApiRpcAuthExpired) {
+      await installApiRpcAuthExpiredMock(page)
+    } else if (scenario.mockApiRpc) {
       await installApiRpcMock(page)
     }
 
@@ -1559,10 +1610,7 @@ async function assertUsagePaginationRequest(page, scenarioName) {
 }
 
 async function assertClientConfigVisuals(page, scenarioName, options = {}) {
-  const {
-    requireAdminNav = true,
-    requirePublicNotice = false,
-  } = options
+  const { requireAdminNav = true, requirePublicNotice = false } = options
   const metrics = await page.evaluate(() => {
     const main = document.querySelector('main')
     const pre = main?.querySelector('pre')
@@ -1626,7 +1674,10 @@ async function assertClientConfigVisuals(page, scenarioName, options = {}) {
     assert(metrics.hasClientConfigNav, `${scenarioName} 缺少客户端模板菜单入口`)
   }
   if (requirePublicNotice) {
-    assert(metrics.hasPublicLocalNotice, `${scenarioName} 缺少公开页本地生成提示`)
+    assert(
+      metrics.hasPublicLocalNotice,
+      `${scenarioName} 缺少公开页本地生成提示`
+    )
   }
   assert(metrics.hasNoUploadArea, `${scenarioName} 不应再显示上传配置文件入口`)
   assert(metrics.hasPlaceholders, `${scenarioName} 配置预览未渲染默认占位模板`)
@@ -3259,6 +3310,90 @@ async function assertModelContextModalLayout(page, scenarioName) {
   )
 }
 
+async function assertSessionExpiredAlertModal(page, scenarioName) {
+  const dialog = page.getByRole('dialog', { name: '登录状态已失效' })
+  await dialog.waitFor({ state: 'visible' })
+  await expectText(page, '登录已过期，请重新登录')
+  await expectRole(page, 'button', '重新登录')
+
+  const metrics = await dialog.evaluate((node) => {
+    const rect = node.getBoundingClientRect()
+    const title = node.querySelector('.admin-modal-title')
+    const detail = node.querySelector('.admin-alert-message')
+    const confirmButton = Array.from(node.querySelectorAll('button')).find(
+      (button) => button.textContent.trim() === '重新登录'
+    )
+    const closeButton = node.querySelector('.admin-modal-close')
+    const titleStyle = title ? window.getComputedStyle(title) : null
+    const detailStyle = detail ? window.getComputedStyle(detail) : null
+    const buttonStyle = confirmButton
+      ? window.getComputedStyle(confirmButton)
+      : null
+    const panelStyle = window.getComputedStyle(node)
+    return {
+      bodyScrollWidth: document.body.scrollWidth,
+      buttonBackground: buttonStyle?.backgroundColor || '',
+      buttonBorderRadius: parseFloat(buttonStyle?.borderRadius || '0'),
+      buttonHeight: Math.round(
+        confirmButton?.getBoundingClientRect().height || 0
+      ),
+      closeButtonSize: Math.round(
+        closeButton?.getBoundingClientRect().width || 0
+      ),
+      detailBackground: detailStyle?.backgroundColor || '',
+      detailColor: detailStyle?.color || '',
+      docScrollWidth: document.documentElement.scrollWidth,
+      hasAdminPanelClass: node.classList.contains('admin-modal-panel'),
+      hasAlertClass: node.classList.contains('admin-alert-modal'),
+      panelBackground: panelStyle.backgroundColor,
+      panelBorderRadius: parseFloat(panelStyle.borderRadius || '0'),
+      panelHeight: Math.round(rect.height),
+      panelWidth: Math.round(rect.width),
+      theme: document.documentElement.dataset.adminTheme,
+      titleColor: titleStyle?.color || '',
+      viewportHeight: window.innerHeight,
+      viewportWidth: window.innerWidth,
+    }
+  })
+
+  assert(
+    metrics.hasAdminPanelClass && metrics.hasAlertClass,
+    `${scenarioName} 登录态弹窗未复用后台弹窗结构: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.panelWidth > 0 &&
+      metrics.panelWidth <= Math.min(520, metrics.viewportWidth - 32) + 2,
+    `${scenarioName} 登录态弹窗宽度异常: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.panelHeight > 0 && metrics.panelHeight <= metrics.viewportHeight,
+    `${scenarioName} 登录态弹窗高度异常: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.bodyScrollWidth <= metrics.viewportWidth + 2 &&
+      metrics.docScrollWidth <= metrics.viewportWidth + 2,
+    `${scenarioName} 登录态弹窗导致横向溢出: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.panelBorderRadius <= 12 &&
+      metrics.buttonBorderRadius <= 12 &&
+      metrics.buttonHeight >= 36 &&
+      metrics.closeButtonSize === 32,
+    `${scenarioName} 登录态弹窗仍像旧通用弹窗而不是后台弹窗: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.panelBackground &&
+      metrics.titleColor &&
+      metrics.detailBackground &&
+      metrics.detailColor &&
+      metrics.buttonBackground,
+    `${scenarioName} 登录态弹窗颜色未正常计算: ${JSON.stringify(metrics)}`
+  )
+  if (scenarioName.includes('dark')) {
+    assert.equal(metrics.theme, 'dark', `${scenarioName} 未处于暗色主题`)
+  }
+}
+
 function createFakeAdminToken() {
   const header = { alg: 'none', typ: 'JWT' }
   const payload = {
@@ -3311,6 +3446,25 @@ async function installApiRpcMock(page) {
           code: 0,
           data: getApiMockData(request.method, request.params || {}, state),
           message: 'OK',
+        },
+      }),
+    })
+  })
+}
+
+async function installApiRpcAuthExpiredMock(page) {
+  await page.route('**/rpc/api', async (route) => {
+    const request = route.request().postDataJSON()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: request.id,
+        jsonrpc: '2.0',
+        result: {
+          code: 10005,
+          data: null,
+          message: '登录已过期，请重新登录',
         },
       }),
     })

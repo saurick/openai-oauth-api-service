@@ -1,22 +1,30 @@
 import React from 'react'
-import SurfacePanel from '@/common/components/layout/SurfacePanel'
 
-export default function AppModal({ open, onClose, children, className = '' }) {
+export default function AppModal({
+  open,
+  onClose,
+  children,
+  className = '',
+  panelProps = {},
+}) {
   if (!open) return null
 
+  const { className: panelClassName = '', ...restPanelProps } = panelProps
+
   return (
-    <div className="bg-slate-950/72 fixed inset-0 z-50 flex items-center justify-center px-4 py-6 backdrop-blur-sm">
+    <div className="admin-modal-backdrop admin-modal-theme-scope">
       <button
         type="button"
         aria-label="关闭弹窗"
-        className="absolute inset-0 cursor-default"
+        className="admin-modal-overlay cursor-default"
         onClick={onClose}
       />
-      <SurfacePanel
-        className={`relative z-10 w-full max-w-[640px] px-6 py-6 sm:px-8 sm:py-8 ${className}`}
+      <div
+        {...restPanelProps}
+        className={`admin-modal-panel ${className} ${panelClassName}`.trim()}
       >
         {children}
-      </SurfacePanel>
+      </div>
     </div>
   )
 }

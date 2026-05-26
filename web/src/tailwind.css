@@ -4,7 +4,8 @@
 @tailwind utilities;
 
 .admin-frame,
-.admin-login-shell {
+.admin-login-shell,
+.admin-modal-theme-scope {
   --admin-app-bg: #f4f8f5;
   --admin-surface: #fff;
   --admin-surface-muted: #fbfdfb;
@@ -41,7 +42,8 @@
 }
 
 :root[data-admin-theme='dark'] .admin-frame,
-:root[data-admin-theme='dark'] .admin-login-shell {
+:root[data-admin-theme='dark'] .admin-login-shell,
+:root[data-admin-theme='dark'] .admin-modal-theme-scope {
   --admin-app-bg: #0f172a;
   --admin-surface: #111827;
   --admin-surface-muted: #162033;
@@ -240,7 +242,8 @@
   color: #a5aaa8;
 }
 
-.admin-frame .admin-button {
+.admin-frame .admin-button,
+.admin-modal-backdrop .admin-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -263,24 +266,28 @@
     box-shadow 0.16s ease;
 }
 
-.admin-frame .admin-button:hover {
+.admin-frame .admin-button:hover,
+.admin-modal-backdrop .admin-button:hover {
   border-color: #a9c3b1;
   background: #f8fbf9;
 }
 
-.admin-frame .admin-button:disabled {
+.admin-frame .admin-button:disabled,
+.admin-modal-backdrop .admin-button:disabled {
   cursor: not-allowed;
   opacity: 0.52;
   box-shadow: none;
 }
 
-.admin-frame .admin-button-primary {
+.admin-frame .admin-button-primary,
+.admin-modal-backdrop .admin-button-primary {
   border-color: #238a43;
   background: #238a43;
   color: #fff;
 }
 
-.admin-frame .admin-button-primary:hover {
+.admin-frame .admin-button-primary:hover,
+.admin-modal-backdrop .admin-button-primary:hover {
   border-color: #1d7538;
   background: #1d7538;
   color: #fff;
@@ -635,7 +642,7 @@
 }
 
 .admin-frame .admin-key-table-key-col {
-  width: 260px;
+  width: 300px;
 }
 
 .admin-frame .admin-key-table-model-col {
@@ -1153,6 +1160,10 @@
   width: min(520px, 100%);
 }
 
+.admin-alert-modal {
+  width: min(520px, 100%);
+}
+
 .admin-confirm-body {
   display: grid;
   gap: 12px;
@@ -1172,6 +1183,11 @@
 
 .admin-confirm-footer {
   padding: 16px 20px 20px;
+}
+
+.admin-alert-message {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 
 /* stylelint-disable no-descending-specificity, no-duplicate-selectors -- 暗夜模式需要在原有浅色规则之后按同一选择器覆盖生效值。 */
@@ -1306,6 +1322,7 @@
 }
 
 .admin-frame .admin-button,
+.admin-modal-backdrop .admin-button,
 .admin-frame .admin-page-button,
 .admin-frame .admin-searchable-select-menu,
 .admin-frame .admin-searchable-select-option,
@@ -1319,6 +1336,7 @@
 }
 
 .admin-frame .admin-button:hover,
+.admin-modal-backdrop .admin-button:hover,
 .admin-frame .admin-page-button:not(:disabled):hover,
 .admin-modal-close:hover {
   border-color: var(--admin-accent);
@@ -1327,6 +1345,7 @@
 }
 
 .admin-frame .admin-button-primary,
+.admin-modal-backdrop .admin-button-primary,
 .admin-frame .admin-button-compact-primary {
   border-color: var(--admin-accent);
   background-color: var(--admin-accent);
@@ -1341,6 +1360,7 @@
 }
 
 .admin-frame .admin-button-primary:hover,
+.admin-modal-backdrop .admin-button-primary:hover,
 .admin-frame .admin-button-compact-primary:hover {
   border-color: var(--admin-accent-hover);
   background-color: var(--admin-accent-hover);

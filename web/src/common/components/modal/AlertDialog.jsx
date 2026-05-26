@@ -15,25 +15,58 @@ export default function AlertDialog({
     onClose?.()
   }
 
-  return (
-    <AppModal open={open} onClose={onClose} className={className}>
-      <div className="flex flex-col items-center gap-5 py-2 text-center">
-        {title ? (
-          <div className="text-xl font-semibold tracking-wide text-slate-50 sm:text-2xl">
-            {title}
-          </div>
-        ) : null}
+  const titleId = 'app-alert-title'
+  const descriptionId = message ? 'app-alert-description' : undefined
 
+  return (
+    <AppModal
+      open={open}
+      onClose={onClose}
+      className={`admin-alert-modal ${className}`.trim()}
+      panelProps={{
+        role: 'dialog',
+        'aria-modal': 'true',
+        'aria-labelledby': title ? titleId : undefined,
+        'aria-describedby': descriptionId,
+      }}
+    >
+      <div className="admin-modal-header">
+        <div>
+          {title ? (
+            <h2 id={titleId} className="admin-modal-title">
+              {title}
+            </h2>
+          ) : null}
+          <p className="admin-modal-description">
+            系统需要你重新确认登录状态。
+          </p>
+        </div>
+        <button
+          type="button"
+          aria-label="关闭弹窗"
+          onClick={onClose}
+          className="admin-modal-close"
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="admin-confirm-body admin-alert-body">
         {message ? (
-          <div className="whitespace-pre-line text-sm leading-7 text-slate-300 sm:text-base">
+          <div
+            id={descriptionId}
+            className="admin-confirm-detail admin-alert-message"
+          >
             {message}
           </div>
         ) : null}
+      </div>
 
+      <div className="admin-modal-footer admin-confirm-footer admin-alert-footer">
         <button
           type="button"
           onClick={handleConfirm}
-          className="min-w-[152px] rounded-full bg-cyan-300 px-6 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 active:bg-cyan-400"
+          className="admin-button admin-button-primary"
         >
           {confirmText}
         </button>
