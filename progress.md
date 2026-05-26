@@ -2,6 +2,26 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-26 Codex 自定义 provider 可见过程说明
+- 完成：只读排查线上 `https://oauth-api.saurick.me/v1/responses`，确认生产容器健康且运行镜像 `oauth-api-service-server:20260525T122959-5d604ae3-local-codex-0.133.0`；无显式引导的工具调用请求只返回 `function_call` 事件，`response.output_text.delta=0`、`response.reasoning_summary_text.delta=0`，说明当前默认链路没有把中文过程说明引导出来。
+- 完成：同一线上链路在请求 `instructions` 显式要求“调用任何工具之前先输出一句简短中文说明”时，会先返回 `phase=commentary` 的中文 `output_text.delta`，再返回 `function_call`，说明服务端和上游具备承载可见 commentary 的能力，缺口在默认 Codex backend instructions。
+- 完成：`codexBackendInstructions` 追加服务端级可见过程说明规则，要求非平凡工具调用、读文件、命令、SSH、浏览器操作或外部请求前先输出一到两句简体中文可见 commentary；同时保留禁止输出隐藏思维链的边界，并保持对客户端显式 `instructions` 与压缩恢复规则的幂等追加。
+- 验证通过：`cd server && go test ./internal/server -run 'TestCodexBackendRequestUsesDefaultInstructions|TestCodexBackendRequestAppendsResumeRuleToExplicitInstructions|TestCodexBackendInstructionsAreIdempotent|TestCodexBackendRequestPreservesReasoningSummary|TestCodexBackendRequestPassesAllReasoningEfforts'`、`cd server && go test ./internal/server`、`cd server && go test ./...`、`git diff --check -- server/internal/server/codex_backend_adapter.go server/internal/server/openai_gateway_handler_test.go progress.md`。
+- 部署：本地构建 linux/amd64 镜像 `oauth-api-service-server:20260526T090202-5d604ae-local-visible-commentary`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260526T090202-5d604ae-local-visible-commentary/`；远端只执行 checksum、`docker load`、Atlas migration status、备份并更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 部署注意：首次 `docker load -i image.tar.gz` 期间宿主机出现重启，旧容器自动恢复；复查包 checksum / gzip 均正常，改用 `gunzip -c image.tar.gz | docker load` 后镜像加载成功，加载期间 `/healthz` 持续返回 `ok`。
+- 验证通过：远端 Atlas `migrate status` 为 `Already at latest version`；容器运行镜像为 `oauth-api-service-server:20260526T090202-5d604ae-local-visible-commentary`，容器内 `codex --version` 为 `codex-cli 0.133.0`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`。
+- 验证通过：线上临时 key 默认工具调用请求收到 `LOCAL_OUTPUT_TEXT_DELTAS=19`、`LOCAL_TEXT_BEFORE_FUNCTION=19`、`LOCAL_FUNCTION_EVENTS=4`，样例为“我将调用工作区列表工具，查看当前目录下可用的文件和结构。”；Windows 主机 `sauri@192.168.0.45` 侧请求收到 `WINDOWS_OUTPUT_TEXT_DELTAS=22`、`WINDOWS_TEXT_BEFORE_FUNCTION=22`、`WINDOWS_FUNCTION_EVENTS=4`，样例为“我将调用 `list_workspace` 查看当前工作区文件列表，以便了解可用文件和目录。”；两次临时 key 均已删除并确认 `key_list search total=0`。
+- 文档：`server/docs/api.md` 已补充 direct backend 的服务端级 Codex 运行规则，明确可见过程说明是用户可见 commentary / process summary，不是隐藏 chain-of-thought；该规则对客户端显式 `instructions` 幂等追加，不依赖 Windows 端 `hide_agent_reasoning` 或全局 AGENTS。
+- 清理：清理前远端 `/` 使用率 53%、Docker images 4.78GB；执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除上一版未使用 app 镜像 `20260525T122959-5d604ae3-local-codex-0.133.0`，回收 352.3MB；清理后 `/` 使用率 51%、Docker images 4.067GB，未执行 volume prune。
+- 阻塞/风险：上线回归中有两次客户端侧测试超时 / 脚本中断导致服务日志出现 `client_canceled` WARN，后续同类请求已通过；该 WARN 属于本轮验证噪音，不代表当前服务启动失败。
+
+## 2026-05-25 远端 Codex CLI 升级
+- 完成：确认 npm `@openai/codex` 当前 `latest` 为 `0.133.0`；远端宿主机 `8.218.4.199` 原 `/usr/local/bin/codex` 为 `0.130.0`，线上 `openai-oauth-api-service-server` 容器内实际调用的镜像内 Codex CLI 为 `0.129.0`。
+- 完成：已将宿主机全局 `@openai/codex` 升级到 `0.133.0`，并将 `server/Dockerfile` 中镜像内固定版本同步调整为 `0.133.0`。
+- 部署：本地构建 linux/amd64 镜像 `oauth-api-service-server:20260525T122959-5d604ae3-local-codex-0.133.0`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260525T122959-5d604ae3-local-codex-0.133.0/`；远端仅执行 `docker load`、备份并更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 验证通过：远端宿主机 `codex --version` 为 `codex-cli 0.133.0`；容器内 `codex --version` 和 `npm list -g @openai/codex` 均为 `0.133.0`，`CODEX_HOME=/root/.codex codex login status` 显示 `Logged in using ChatGPT`。远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；公网 `/public/codex/balance` 返回 200；容器运行镜像为 `oauth-api-service-server:20260525T122959-5d604ae3-local-codex-0.133.0`，`GIT_SHA_SHORT=5d604ae3-local`。
+- 清理：清理前远端 `/` 使用率 53%、Docker images 4.798GB；删除本轮 release 镜像 tar 后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260522T185252-d88c2651-local-big-image-90m` 和未使用 `frpc` 镜像，回收 354.8MB；清理后 `/` 使用率 51%、Docker images 4.07GB，未执行 volume prune。
+
 ## 2026-05-24 后台分页箭头样式
 - 完成：根据 Codex 网页标注定位 `/admin-models` 分页「下一页」按钮，确认共享分页箭头仍使用大号 `›` 字符，移动视口下按钮为 44x44 但箭头字形达 34px，视觉上偏大且不稳定。
 - 完成：将共享 `.admin-page-button-arrow` 从可见字体箭头改为 CSS chevron，保留原 `aria-label` 与分页结构；箭头图形收口为 16px 居中盒 + 8px 线性箭头，避免依赖 `‹/›` 字形重心。

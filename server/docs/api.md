@@ -113,7 +113,10 @@ usage 记录：
 - `codex_cli` 模式 token 优先读取 Codex JSON 事件里的 usage，没有事件时才退回字符数估算；`codex_backend` 模式优先读取 Responses SSE `response.completed.usage`
 - usage log 会记录 `upstream_configured_mode`、`upstream_mode`、`upstream_fallback` 和细分 `upstream_error_type`，用于区分配置模式、实际执行模式、fallback 情况和失败类型；后台表格会保留原始错误码并展示简短中文说明，完整含义见下方“上游错误类型”。
 - OpenAI-compatible 请求体支持 `reasoning_effort`、`reasoningEffort` 和 `reasoning.effort`，可选值为 `low`、`medium`、`high`、`xhigh`；direct backend 会转为 OpenAI Responses 口径的 `reasoning.effort`，并默认补 `reasoning.summary=detailed` 以便自定义 Codex provider 展示 reasoning summary；客户端显式传 `auto`、`concise` 或 `detailed` 时会保留，缺失、`none` 或非法值会回补为 `detailed`；CLI 模式会转为 Codex CLI `model_reasoning_effort`
-- direct backend 模式会把 `system` / `developer` 消息合并为 `instructions`；若请求没有这类消息，会补一个最小默认 instructions，因为 Codex backend 要求该字段非空；同时会追加压缩恢复续跑规则，要求模型在收到 compacted context、reasoning summary 或 history summary 恢复时继续未完成任务，避免只机械回复“已读取上下文，请告诉我下一步”
+- direct backend 模式会把 `system` / `developer` 消息合并为 `instructions`；若请求没有这类消息，会补一个最小默认 instructions，因为 Codex backend 要求该字段非空；同时会追加服务端级 Codex 运行规则：
+  - 可见过程说明：非平凡工具调用、读文件、shell 命令、SSH、浏览器操作或外部请求前，先输出一到两句简体中文用户可见 commentary / process summary，说明即将做什么和为什么。这是执行过程摘要，不是隐藏 chain-of-thought；不要输出完整私有思考链。
+  - 压缩恢复续跑：模型在收到 compacted context、reasoning summary 或 history summary 恢复时继续未完成任务，避免只机械回复“已读取上下文，请告诉我下一步”。
+  - 追加规则对客户端显式 `instructions` 幂等生效，不依赖 Windows 端 `hide_agent_reasoning` 或全局 AGENTS。这个服务端规则是自定义 Codex provider 新会话工具调用前能看到中文过程说明的主路径。
 - direct backend 模式会透传 OpenAI-compatible `tools` / `tool_choice`，并在 chat messages 与 Responses input 之间转换 assistant `tool_calls`、`function_call` 和 `function_call_output`，上游返回 function call 时再映射回 Chat Completions `tool_calls` 或 Responses `function_call`；Codex CLI fallback 默认关闭，打开后也只支持纯文本响应，不支持工具调用回传，因此这类请求在 backend 失败时会直接返回上游错误，避免错误转为服务端 `codex exec`
 - direct backend 会在转发 Responses `function_call` 历史前规范化 item `id`，避免客户端回传空字符串或非法字符时触发上游 `input[n].id` 校验错误；若压缩或重放历史中残留了没有对应前置 `function_call` 的孤立 `function_call_output`，转发前会丢弃这类残值，避免上游因 `No tool call found` 拒绝整轮请求
 - `/v1/chat/completions` 和 `/v1/responses` 在请求体接近上下文窗口时会先做网关侧压缩预检：阈值按模型级配置、环境变量运维覆盖、内置模型推荐值和旧默认兜底依次决定；压缩会保留系统 / developer 指令、最近消息和最近完整工具闭环，较早历史压缩为工程摘要；如果客户端传入 `session_id`，摘要会按 session 保存并在后台会话聚合展示压缩次数、摘要、压缩前后体积、粗估 token 和本次生效阈值。

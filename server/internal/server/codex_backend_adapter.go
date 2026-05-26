@@ -24,15 +24,16 @@ const (
 	codexUpstreamModeCLI     = biz.GatewayUpstreamModeCodexCLI
 	codexUpstreamModeBackend = biz.GatewayUpstreamModeCodexBackend
 
-	defaultCodexBackendBaseURL = "https://chatgpt.com/backend-api/codex"
-	defaultCodexBackendTimeout = 600 * time.Second
-	defaultCodexBackendRetries = 2
-	codexOAuthClientID         = "app_EMoamEEZ73f0CkXaXp7hrann"
-	defaultCodexRefreshURL     = "https://auth.openai.com/oauth/token"
-	codexBackendRefreshSkew    = 5 * time.Minute
-	defaultCodexBackendPrompt  = "你是一个简洁、工程实践导向的中文助手。除非用户明确要求其他语言，面向用户可见的回答、计划、进度说明和 reasoning summary / process summary 必须使用简体中文；命令、路径、错误码和 API 字段名可以保留原文。不要输出完整私有思考链，只输出简洁过程摘要。严格遵循用户指令。"
-	codexBackendResumePrompt   = "When this conversation is resumed from a compacted context, reasoning summary, or history summary, treat that summary as the prior working state and continue the unfinished task. Do not reply with a generic acknowledgement that the context was loaded, and do not ask what to do next unless the latest user message explicitly asks for status only or a concrete blocker makes the next action impossible. If the user says to continue, proceed with the next concrete step from the summary."
-	defaultCodexBackendSummary = "detailed"
+	defaultCodexBackendBaseURL       = "https://chatgpt.com/backend-api/codex"
+	defaultCodexBackendTimeout       = 600 * time.Second
+	defaultCodexBackendRetries       = 2
+	codexOAuthClientID               = "app_EMoamEEZ73f0CkXaXp7hrann"
+	defaultCodexRefreshURL           = "https://auth.openai.com/oauth/token"
+	codexBackendRefreshSkew          = 5 * time.Minute
+	defaultCodexBackendPrompt        = "你是一个简洁、工程实践导向的中文助手。除非用户明确要求其他语言，面向用户可见的回答、计划、进度说明和 reasoning summary / process summary 必须使用简体中文；命令、路径、错误码和 API 字段名可以保留原文。不要输出完整私有思考链，只输出简洁过程摘要。严格遵循用户指令。"
+	codexBackendVisibleProcessPrompt = "Before any non-trivial tool call, file read, shell command, SSH operation, browser action, or external request, first emit a brief user-visible commentary message in Simplified Chinese explaining what you are about to do and why. This commentary is an execution/process summary, not hidden chain-of-thought; keep it to one or two practical sentences, and merge repeated trivial operations when appropriate."
+	codexBackendResumePrompt         = "When this conversation is resumed from a compacted context, reasoning summary, or history summary, treat that summary as the prior working state and continue the unfinished task. Do not reply with a generic acknowledgement that the context was loaded, and do not ask what to do next unless the latest user message explicitly asks for status only or a concrete blocker makes the next action impossible. If the user says to continue, proceed with the next concrete step from the summary."
+	defaultCodexBackendSummary       = "detailed"
 )
 
 var defaultCodexBackendClient = &codexBackendClient{httpClient: &stdhttp.Client{}}
@@ -318,12 +319,14 @@ func codexBackendRequestFromGateway(path string, body []byte, requestModel strin
 func codexBackendInstructions(instructions string) string {
 	instructions = strings.TrimSpace(instructions)
 	if instructions == "" {
-		return codexBackendResumePrompt
+		instructions = defaultCodexBackendPrompt
 	}
-	if strings.Contains(instructions, codexBackendResumePrompt) {
-		return instructions
+	for _, prompt := range []string{codexBackendVisibleProcessPrompt, codexBackendResumePrompt} {
+		if !strings.Contains(instructions, prompt) {
+			instructions += "\n\n" + prompt
+		}
 	}
-	return instructions + "\n\n" + codexBackendResumePrompt
+	return instructions
 }
 
 func reasoningSummaryFromPayload(payload map[string]any) string {

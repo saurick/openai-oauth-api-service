@@ -1055,6 +1055,9 @@ func TestCodexBackendRequestUsesDefaultInstructions(t *testing.T) {
 	if !strings.Contains(instructions, defaultCodexBackendPrompt) {
 		t.Fatalf("instructions = %q, want default prompt", instructions)
 	}
+	if !strings.Contains(instructions, "Before any non-trivial tool call") {
+		t.Fatalf("instructions missing visible process rule: %q", instructions)
+	}
 	if !strings.Contains(instructions, "Do not reply with a generic acknowledgement") {
 		t.Fatalf("instructions missing resume rule: %q", instructions)
 	}
@@ -1075,8 +1078,36 @@ func TestCodexBackendRequestAppendsResumeRuleToExplicitInstructions(t *testing.T
 	if !strings.Contains(instructions, "Be concise.") {
 		t.Fatalf("instructions lost explicit prompt: %q", instructions)
 	}
+	if !strings.Contains(instructions, "brief user-visible commentary message in Simplified Chinese") {
+		t.Fatalf("instructions missing visible process rule: %q", instructions)
+	}
 	if !strings.Contains(instructions, "If the user says to continue, proceed with the next concrete step") {
 		t.Fatalf("instructions missing resume rule: %q", instructions)
+	}
+}
+
+func TestCodexBackendInstructionsAreIdempotent(t *testing.T) {
+	body := []byte(`{
+		"model": "gpt-5.5",
+		"instructions": "Be concise.",
+		"input": "continue"
+	}`)
+
+	req, _, err := codexBackendRequestFromGateway("/v1/responses", body, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	once := stringValue(req["instructions"])
+	twice := codexBackendInstructions(once)
+
+	if once != twice {
+		t.Fatalf("instructions should be idempotent\nonce=%q\ntwice=%q", once, twice)
+	}
+	if got := strings.Count(twice, "Before any non-trivial tool call"); got != 1 {
+		t.Fatalf("visible process rule count = %d, want 1", got)
+	}
+	if got := strings.Count(twice, "When this conversation is resumed"); got != 1 {
+		t.Fatalf("resume rule count = %d, want 1", got)
 	}
 }
 
