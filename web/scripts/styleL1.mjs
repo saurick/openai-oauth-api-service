@@ -219,6 +219,7 @@ const scenarios = [
       await expectText(page, '客户端配置模板')
       await expectText(page, 'Codex')
       await expectText(page, 'opencode')
+      await expectRole(page, 'link', '打开公开页')
       await assertAdminChrome(page, 'admin-client-config-desktop')
       await assertClientConfigVisuals(page, 'admin-client-config-desktop')
     },
@@ -231,6 +232,7 @@ const scenarios = [
     verify: async (page) => {
       await expectText(page, '客户端配置模板')
       await expectText(page, '配置预览')
+      await expectRole(page, 'link', '打开公开页')
       await assertAdminChrome(page, 'admin-client-config-mobile')
       await assertClientConfigVisuals(page, 'admin-client-config-mobile')
     },
@@ -1620,6 +1622,10 @@ async function assertClientConfigVisuals(page, scenarioName, options = {}) {
     const text = document.body.innerText
     return {
       hasClientConfigNav: text.includes('客户端模板'),
+      hasPublicClientConfigLink:
+        document
+          .querySelector('a[href="/client-config"]')
+          ?.textContent.trim() === '打开公开页',
       hasNoPersonalStateWarning:
         text.includes('不会导出 Codex 的 auth.json') &&
         text.includes('projects 信任记录') &&
@@ -1672,6 +1678,10 @@ async function assertClientConfigVisuals(page, scenarioName, options = {}) {
 
   if (requireAdminNav) {
     assert(metrics.hasClientConfigNav, `${scenarioName} 缺少客户端模板菜单入口`)
+    assert(
+      metrics.hasPublicClientConfigLink,
+      `${scenarioName} 缺少跳转公开配置页的入口`
+    )
   }
   if (requirePublicNotice) {
     assert(

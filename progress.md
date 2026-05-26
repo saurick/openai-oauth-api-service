@@ -20,7 +20,9 @@
 ## 2026-05-26 公开客户端配置生成页
 - 完成：新增免登录 `/client-config` 公开入口，供非管理员朋友填写自己的 Base URL、API Key、客户端和系统后在浏览器本地生成 Codex / opencode 配置；现有 `/admin-client-config` 仍保留 `AuthGuard requireAdmin`，不放开后台路由。
 - 完成：将原后台客户端模板页的表单、预览、复制和下载逻辑抽成 `ClientConfigBuilder` 共享组件；后台页继续使用 `AdminFrame` 和后台导航，公开页只使用轻量页头与主题切换，不展示后台导航、超级管理员标识或退出按钮。
+- 补充完成：在 `/admin-client-config` 后台页顶部操作区新增「打开公开页」按钮，跳转到 `/client-config`，避免需要手动记忆和输入公开地址；`style:l1` 同步断言后台配置页存在该公开入口。
 - 文档：更新 `web/README.md`，明确 `/client-config` 不调用后端接口、不保存 API Key，`style:l1` 覆盖公开配置生成页。
+- 补充验证：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminClientConfig/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4384 NODE_USE_ENV_PROXY=0 STYLE_L1_SCENARIOS=admin-client-config-desktop,admin-client-config-mobile pnpm style:l1`、`cd web && pnpm test`、`cd web && pnpm build`、`git diff --check` 均通过；Playwright 实测 `/admin-client-config` 存在 `target=_blank` 的「打开公开页」链接并可到 `/client-config`。
 - 验证通过：`cd web && pnpm test`、`cd web && pnpm build`、`git diff --check`；in-app Browser 验证 `http://127.0.0.1:5177/client-config` 桌面默认态、填写 `https://proxy.example.test/v1/` 与 `ogw_demo_public_key` 后切换 opencode 的预览更新、无后台壳、无横向溢出，并验证 390x844 移动视口默认态无横向溢出。
 - 阻塞/风险：`cd web && pnpm style:l1` 已跑过新增公开页场景，但全量随后停在既有 `admin-keys-desktop` 完整凭据列宽断言（`valueWidth=116 < 140`），本轮未改 API key 表格列宽；本轮仅完成本地代码和前端验证，未部署线上。
 
