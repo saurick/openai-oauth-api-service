@@ -232,6 +232,28 @@ const scenarios = [
     },
   },
   {
+    name: 'public-client-config-desktop',
+    path: '/client-config',
+    viewport: { width: 1440, height: 900 },
+    verify: async (page) => {
+      await expectText(page, '客户端配置生成器')
+      await expectText(page, '免登录配置生成器')
+      await expectNoText(page, '超级管理员')
+      await assertPublicClientConfigVisuals(page, 'public-client-config-desktop')
+    },
+  },
+  {
+    name: 'public-client-config-mobile',
+    path: '/client-config',
+    viewport: { width: 390, height: 844 },
+    verify: async (page) => {
+      await expectText(page, '客户端配置生成器')
+      await expectText(page, '配置预览')
+      await expectNoText(page, '超级管理员')
+      await assertPublicClientConfigVisuals(page, 'public-client-config-mobile')
+    },
+  },
+  {
     name: 'admin-codex-balance-desktop',
     path: '/admin-codex-balance',
     viewport: { width: 1440, height: 900 },
@@ -1536,7 +1558,11 @@ async function assertUsagePaginationRequest(page, scenarioName) {
   )
 }
 
-async function assertClientConfigVisuals(page, scenarioName) {
+async function assertClientConfigVisuals(page, scenarioName, options = {}) {
+  const {
+    requireAdminNav = true,
+    requirePublicNotice = false,
+  } = options
   const metrics = await page.evaluate(() => {
     const main = document.querySelector('main')
     const pre = main?.querySelector('pre')
@@ -1550,6 +1576,10 @@ async function assertClientConfigVisuals(page, scenarioName) {
         text.includes('不会导出 Codex 的 auth.json') &&
         text.includes('projects 信任记录') &&
         text.includes('本机绝对路径'),
+      hasPublicLocalNotice:
+        text.includes('API Key 只在当前浏览器本地替换模板') &&
+        text.includes('不会上传到服务器') &&
+        text.includes('不会保存到本系统'),
       hasInstallPath: text.includes('~/.codex/config.toml'),
       hasPlaceholders:
         pre?.innerText.includes('https://oauth-api.saurick.me/v1') &&
@@ -1592,7 +1622,12 @@ async function assertClientConfigVisuals(page, scenarioName) {
     }
   })
 
-  assert(metrics.hasClientConfigNav, `${scenarioName} 缺少客户端模板菜单入口`)
+  if (requireAdminNav) {
+    assert(metrics.hasClientConfigNav, `${scenarioName} 缺少客户端模板菜单入口`)
+  }
+  if (requirePublicNotice) {
+    assert(metrics.hasPublicLocalNotice, `${scenarioName} 缺少公开页本地生成提示`)
+  }
   assert(metrics.hasNoUploadArea, `${scenarioName} 不应再显示上传配置文件入口`)
   assert(metrics.hasPlaceholders, `${scenarioName} 配置预览未渲染默认占位模板`)
   assert(metrics.hasInstallPath, `${scenarioName} 缺少目标安装路径说明`)
@@ -1667,6 +1702,62 @@ async function assertClientConfigVisuals(page, scenarioName) {
   assert(
     darkMetrics.preContrast >= 7,
     `${scenarioName} 暗色模式代码预览对比度不足: ${JSON.stringify(darkMetrics)}`
+  )
+
+  await page.locator('[data-admin-theme-option="system"]').click()
+  await page.waitForFunction(
+    () => document.documentElement.dataset.adminThemeMode === 'system'
+  )
+}
+
+async function assertPublicClientConfigVisuals(page, scenarioName) {
+  await assertClientConfigVisuals(page, scenarioName, {
+    requireAdminNav: false,
+    requirePublicNotice: true,
+  })
+
+  await page.getByLabel('Base URL').fill('https://proxy.example.test/v1/')
+  await page.getByLabel('API Key').fill('ogw_demo_public_key')
+  await page.getByRole('tab', { name: 'opencode', exact: true }).click()
+  await page.waitForFunction(() => {
+    const pre = document.querySelector('main pre')
+    return (
+      pre?.innerText.includes('"baseURL": "https://proxy.example.test/v1"') &&
+      pre?.innerText.includes('"apiKey": "ogw_demo_public_key"') &&
+      pre?.innerText.includes('"model": "oauth-api-service/gpt-5.5"')
+    )
+  })
+
+  const publicMetrics = await page.evaluate(() => {
+    const text = document.body.innerText
+    const adminLinks = [...document.querySelectorAll('a[href^="/admin-"]')]
+    const rpcResources = performance
+      .getEntriesByType('resource')
+      .filter((entry) => entry.name.includes('/rpc/api'))
+    return {
+      adminLinkCount: adminLinks.length,
+      hasAdminHeader: text.includes('API 管理后台'),
+      hasLogout: text.includes('退出'),
+      hasSuperAdminBadge: text.includes('超级管理员'),
+      rpcResourceCount: rpcResources.length,
+    }
+  })
+
+  assert.equal(
+    publicMetrics.adminLinkCount,
+    0,
+    `${scenarioName} 公开页不应暴露后台导航链接: ${JSON.stringify(publicMetrics)}`
+  )
+  assert.equal(
+    publicMetrics.rpcResourceCount,
+    0,
+    `${scenarioName} 公开页不应调用后台 RPC: ${JSON.stringify(publicMetrics)}`
+  )
+  assert(
+    !publicMetrics.hasAdminHeader &&
+      !publicMetrics.hasLogout &&
+      !publicMetrics.hasSuperAdminBadge,
+    `${scenarioName} 公开页不应显示后台壳内容: ${JSON.stringify(publicMetrics)}`
   )
 }
 

@@ -2,6 +2,13 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-26 公开客户端配置生成页
+- 完成：新增免登录 `/client-config` 公开入口，供非管理员朋友填写自己的 Base URL、API Key、客户端和系统后在浏览器本地生成 Codex / opencode 配置；现有 `/admin-client-config` 仍保留 `AuthGuard requireAdmin`，不放开后台路由。
+- 完成：将原后台客户端模板页的表单、预览、复制和下载逻辑抽成 `ClientConfigBuilder` 共享组件；后台页继续使用 `AdminFrame` 和后台导航，公开页只使用轻量页头与主题切换，不展示后台导航、超级管理员标识或退出按钮。
+- 文档：更新 `web/README.md`，明确 `/client-config` 不调用后端接口、不保存 API Key，`style:l1` 覆盖公开配置生成页。
+- 验证通过：`cd web && pnpm test`、`cd web && pnpm build`、`git diff --check`；in-app Browser 验证 `http://127.0.0.1:5177/client-config` 桌面默认态、填写 `https://proxy.example.test/v1/` 与 `ogw_demo_public_key` 后切换 opencode 的预览更新、无后台壳、无横向溢出，并验证 390x844 移动视口默认态无横向溢出。
+- 阻塞/风险：`cd web && pnpm style:l1` 已跑过新增公开页场景，但全量随后停在既有 `admin-keys-desktop` 完整凭据列宽断言（`valueWidth=116 < 140`），本轮未改 API key 表格列宽；本轮仅完成本地代码和前端验证，未部署线上。
+
 ## 2026-05-26 Codex 自定义 provider 可见过程说明
 - 完成：只读排查线上 `https://oauth-api.saurick.me/v1/responses`，确认生产容器健康且运行镜像 `oauth-api-service-server:20260525T122959-5d604ae3-local-codex-0.133.0`；无显式引导的工具调用请求只返回 `function_call` 事件，`response.output_text.delta=0`、`response.reasoning_summary_text.delta=0`，说明当前默认链路没有把中文过程说明引导出来。
 - 完成：同一线上链路在请求 `instructions` 显式要求“调用任何工具之前先输出一句简短中文说明”时，会先返回 `phase=commentary` 的中文 `output_text.delta`，再返回 `function_call`，说明服务端和上游具备承载可见 commentary 的能力，缺口在默认 Codex backend instructions。

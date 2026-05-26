@@ -11,6 +11,7 @@ import AdminApiPage from '@/pages/AdminApi'
 import AdminDashboardPage from '@/pages/AdminDashboard'
 import AdminClientConfigPage from '@/pages/AdminClientConfig'
 import AdminCodexBalancePage from '@/pages/AdminCodexBalance'
+import PublicClientConfigPage from '@/pages/PublicClientConfig'
 import OAuthCallbackPage from '@/pages/OAuthCallback'
 
 import 'normalize.css/normalize.css'
@@ -58,6 +59,7 @@ const App = () => {
           <Route path="/oauth-login" element={<Navigate to="/admin-login" replace />} />
           <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
           <Route path="/admin-login" element={<AdminLoginPage />} />
+          <Route path="/client-config" element={<PublicClientConfigPage />} />
           <Route path="/register" element={<Navigate to="/admin-login" replace />} />
           <Route
             path="/admin-menu"
