@@ -5,6 +5,7 @@ export default function AlertDialog({
   open,
   onClose,
   title = '提示',
+  description = '系统需要你重新确认登录状态。',
   message = '',
   confirmText = '确定',
   onConfirm = null,
@@ -37,9 +38,9 @@ export default function AlertDialog({
               {title}
             </h2>
           ) : null}
-          <p className="admin-modal-description">
-            系统需要你重新确认登录状态。
-          </p>
+          {description ? (
+            <p className="admin-modal-description">{description}</p>
+          ) : null}
         </div>
         <button
           type="button"

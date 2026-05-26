@@ -26,7 +26,8 @@ export default function PublicClientConfigPage() {
             客户端配置生成器
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[#7b8780]">
-            免登录生成 Codex 和 opencode 的 macOS / Windows 最小配置。填写自己的 API Key 后复制或下载配置文件即可。
+            生成 Codex 和 opencode 的 macOS / Windows 最小配置。填写 Base
+            URL、API Key 和必要的 profile 后，可以复制内容或下载配置文件。
           </p>
         </div>
 

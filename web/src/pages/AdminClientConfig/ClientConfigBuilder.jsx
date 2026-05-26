@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import SurfacePanel from '@/common/components/layout/SurfacePanel'
+import { useAppAlert } from '@/common/components/modal/AppAlertProvider'
 import {
   CLIENT_CONFIG_DEFAULTS,
   CLIENT_CONFIG_OS_OPTIONS,
@@ -20,12 +21,14 @@ const primaryButtonClass = 'admin-button admin-button-primary'
 const secondaryButtonClass = 'admin-button admin-button-default'
 
 export default function ClientConfigBuilder({ publicMode = false }) {
+  const { alert } = useAppAlert()
   const [tool, setTool] = useState('codex')
   const [os, setOs] = useState('mac')
   const [baseUrl, setBaseUrl] = useState(CLIENT_CONFIG_DEFAULTS.baseUrl)
-  const [apiKey, setApiKey] = useState(CLIENT_CONFIG_DEFAULTS.apiKey)
+  const [apiKey, setApiKey] = useState('')
   const [profile, setProfile] = useState(CLIENT_CONFIG_DEFAULTS.profile)
   const [copyStatus, setCopyStatus] = useState('')
+  const apiKeyInputRef = useRef(null)
 
   const renderValues = useMemo(
     () => ({
@@ -45,11 +48,27 @@ export default function ClientConfigBuilder({ publicMode = false }) {
   const filename = getClientConfigFilename(tool, os)
   const installPath = getClientConfigInstallPath(tool, os)
 
+  const ensureApiKey = () => {
+    if (normalizeApiKey(apiKey)) return true
+    alert({
+      title: '请先填写 API Key',
+      description: '复制或下载配置前需要填写 API Key。',
+      message: 'API Key 只会在当前浏览器里用于生成配置，不会上传到服务器。',
+      confirmText: '去填写',
+      onConfirm: () => {
+        window.setTimeout(() => apiKeyInputRef.current?.focus(), 0)
+      },
+    })
+    return false
+  }
+
   const handleDownload = () => {
+    if (!ensureApiKey()) return
     downloadTextFile(templateContent, filename)
   }
 
   const handleCopy = async () => {
+    if (!ensureApiKey()) return
     try {
       await navigator.clipboard.writeText(templateContent)
       setCopyStatus('已复制配置内容')
@@ -66,13 +85,24 @@ export default function ClientConfigBuilder({ publicMode = false }) {
           <div className="grid gap-4">
             {publicMode ? (
               <div className="rounded-md border border-[#dde8df] bg-[#fbfdfb] px-3 py-2 text-sm leading-6 text-[#365141]">
-                这是免登录配置生成器。API Key 只在当前浏览器本地替换模板，不会上传到服务器，也不会保存到本系统。
+                API Key
+                只在当前浏览器里用于生成配置，不会上传到服务器，也不会保存到本系统。
               </div>
             ) : null}
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <ToggleGroup label="客户端" value={tool} options={CLIENT_CONFIG_TOOL_OPTIONS} onChange={setTool} />
-              <ToggleGroup label="系统" value={os} options={CLIENT_CONFIG_OS_OPTIONS} onChange={setOs} />
+              <ToggleGroup
+                label="客户端"
+                value={tool}
+                options={CLIENT_CONFIG_TOOL_OPTIONS}
+                onChange={setTool}
+              />
+              <ToggleGroup
+                label="系统"
+                value={os}
+                options={CLIENT_CONFIG_OS_OPTIONS}
+                onChange={setOs}
+              />
             </div>
 
             <div className="grid gap-3 lg:grid-cols-3">
@@ -86,19 +116,22 @@ export default function ClientConfigBuilder({ publicMode = false }) {
                   autoComplete="off"
                   spellCheck={false}
                 />
-                <span className={hintClass}>会写入 Codex base_url 或 opencode baseURL。</span>
+                <span className={hintClass}>
+                  会写入 Codex base_url 或 opencode baseURL。
+                </span>
               </label>
               <label className={fieldClass}>
                 API Key
                 <input
+                  ref={apiKeyInputRef}
                   className={inputClass}
                   value={apiKey}
                   onChange={(event) => setApiKey(event.target.value)}
-                  placeholder="ogw_xxx 或 sk-xxx"
+                  placeholder="粘贴你的 API Key，例如 ogw_xxx 或 sk-xxx"
                   autoComplete="off"
                   spellCheck={false}
                 />
-                <span className={hintClass}>下载前替换；不需要把真实 key 固化进仓库。</span>
+                <span className={hintClass}>复制或下载前请填写 API Key。</span>
               </label>
               <label className={fieldClass}>
                 Codex profile
@@ -111,22 +144,41 @@ export default function ClientConfigBuilder({ publicMode = false }) {
                   autoComplete="off"
                   spellCheck={false}
                 />
-                <span className={hintClass}>仅 Codex 使用；opencode 通过 agent model 选择 provider。</span>
+                <span className={hintClass}>
+                  仅 Codex 使用；opencode 通过 agent model 选择 provider。
+                </span>
               </label>
             </div>
           </div>
 
           <div className="rounded-lg border border-[#dde8df] bg-[#fbfdfb] p-4">
-            <h2 className="text-base font-semibold text-[#1f2d25]">替换与安装教程</h2>
+            <h2 className="text-base font-semibold text-[#1f2d25]">
+              替换与安装教程
+            </h2>
             <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-6 text-[#365141]">
-              <li>在本页填入目标服务 <strong>Base URL</strong>、<strong>API Key</strong>{tool === 'codex' ? '，再确认 profile。' : '。'}</li>
-              <li>点击下载，把模板保存到本机。</li>
-              <li>在新电脑安装 {tool === 'codex' ? 'Codex' : 'opencode'}，先运行一次让它创建配置目录。</li>
-              <li>备份旧文件，再把下载文件改名并放到：<code>{installPath}</code></li>
-              <li>{tool === 'codex' ? `执行 codex --profile ${renderValues.profile} 验证。` : '执行 opencode 并选择 build / plan agent 验证。'}</li>
+              <li>
+                在本页填入目标服务 <strong>Base URL</strong>、
+                <strong>API Key</strong>
+                {tool === 'codex' ? '，再确认 profile。' : '。'}
+              </li>
+              <li>填写完成后复制内容，或下载配置文件到本机。</li>
+              <li>
+                在新电脑安装 {tool === 'codex' ? 'Codex' : 'opencode'}
+                ，先运行一次让它创建配置目录。
+              </li>
+              <li>
+                备份旧文件，再把下载文件改名并放到：<code>{installPath}</code>
+              </li>
+              <li>
+                {tool === 'codex'
+                  ? `执行 codex --profile ${renderValues.profile} 验证。`
+                  : '执行 opencode 并选择 build / plan agent 验证。'}
+              </li>
             </ol>
             <div className="mt-4 rounded-md border border-[#f0c868] bg-[#fff8df] px-3 py-2 text-xs leading-5 text-[#c07a00]">
-              不会导出 Codex 的 auth.json、历史会话、projects 信任记录、opencode secrets 目录或本机绝对路径；这些属于个人状态，应在目标机器重新生成。
+              不会导出 Codex 的 auth.json、历史会话、projects 信任记录、opencode
+              secrets
+              目录或本机绝对路径；这些属于个人状态，应在目标机器重新生成。
             </div>
           </div>
         </div>
@@ -136,19 +188,33 @@ export default function ClientConfigBuilder({ publicMode = false }) {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#dde8df] px-5 py-4">
           <div>
             <h2 className="text-base font-semibold text-[#1f2d25]">配置预览</h2>
-            <p className="mt-1 text-sm text-[#7b8780]">{filename} · 安装路径 {installPath}</p>
+            <p className="mt-1 text-sm text-[#7b8780]">
+              {filename} · 安装路径 {installPath}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {copyStatus ? <span className="text-xs text-[#7b8780]">{copyStatus}</span> : null}
-            <button type="button" className={secondaryButtonClass} onClick={handleCopy}>
+            {copyStatus ? (
+              <span className="text-xs text-[#7b8780]">{copyStatus}</span>
+            ) : null}
+            <button
+              type="button"
+              className={secondaryButtonClass}
+              onClick={handleCopy}
+            >
               复制内容
             </button>
-            <button type="button" className={primaryButtonClass} onClick={handleDownload}>
+            <button
+              type="button"
+              className={primaryButtonClass}
+              onClick={handleDownload}
+            >
               下载配置
             </button>
           </div>
         </div>
-        <pre className="admin-code-preview max-h-[560px] overflow-auto p-5 text-xs leading-5"><code>{templateContent}</code></pre>
+        <pre className="admin-code-preview max-h-[560px] overflow-auto p-5 text-xs leading-5">
+          <code>{templateContent}</code>
+        </pre>
       </SurfacePanel>
     </>
   )

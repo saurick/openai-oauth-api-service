@@ -15,6 +15,7 @@ export function AppAlertProvider({ children }) {
   const [state, setState] = useState({
     open: false,
     title: '提示',
+    description: '系统需要你重新确认登录状态。',
     message: '',
     confirmText: '确定',
     onConfirm: null,
@@ -28,6 +29,7 @@ export function AppAlertProvider({ children }) {
     setState({
       open: true,
       title: opts.title ?? '提示',
+      description: opts.description ?? '系统需要你重新确认登录状态。',
       message: opts.message ?? '',
       confirmText: opts.confirmText ?? '确定',
       onConfirm: opts.onConfirm ?? null,
@@ -47,6 +49,7 @@ export function AppAlertProvider({ children }) {
         open={state.open}
         onClose={close}
         title={state.title}
+        description={state.description}
         message={state.message}
         confirmText={state.confirmText}
         onConfirm={state.onConfirm}

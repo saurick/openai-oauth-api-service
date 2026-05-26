@@ -216,7 +216,7 @@ const scenarios = [
     viewport: { width: 1440, height: 900 },
     adminAuth: true,
     verify: async (page) => {
-      await expectText(page, '客户端配置模板')
+      await expectText(page, '客户端配置生成器')
       await expectText(page, 'Codex')
       await expectText(page, 'opencode')
       await expectRole(page, 'link', '打开公开页')
@@ -230,7 +230,7 @@ const scenarios = [
     viewport: { width: 390, height: 844 },
     adminAuth: true,
     verify: async (page) => {
-      await expectText(page, '客户端配置模板')
+      await expectText(page, '客户端配置生成器')
       await expectText(page, '配置预览')
       await expectRole(page, 'link', '打开公开页')
       await assertAdminChrome(page, 'admin-client-config-mobile')
@@ -243,7 +243,7 @@ const scenarios = [
     viewport: { width: 1440, height: 900 },
     verify: async (page) => {
       await expectText(page, '客户端配置生成器')
-      await expectText(page, '免登录配置生成器')
+      await expectText(page, '公开客户端配置生成器')
       await expectNoText(page, '超级管理员')
       await assertPublicClientConfigVisuals(
         page,
@@ -1621,7 +1621,12 @@ async function assertClientConfigVisuals(page, scenarioName, options = {}) {
     const preStyle = window.getComputedStyle(pre)
     const text = document.body.innerText
     return {
-      hasClientConfigNav: text.includes('客户端模板'),
+      apiKeyInputPlaceholder:
+        document.querySelector('input[placeholder*="API Key"]')?.placeholder ||
+        '',
+      apiKeyInputValue:
+        document.querySelector('input[placeholder*="API Key"]')?.value ?? null,
+      hasClientConfigNav: text.includes('客户端配置'),
       hasPublicClientConfigLink:
         document
           .querySelector('a[href="/client-config"]')
@@ -1631,9 +1636,11 @@ async function assertClientConfigVisuals(page, scenarioName, options = {}) {
         text.includes('projects 信任记录') &&
         text.includes('本机绝对路径'),
       hasPublicLocalNotice:
-        text.includes('API Key 只在当前浏览器本地替换模板') &&
+        text.includes('API Key 只在当前浏览器里用于生成配置') &&
         text.includes('不会上传到服务器') &&
         text.includes('不会保存到本系统'),
+      hasRequiredKeyHint: text.includes('复制或下载前请填写 API Key'),
+      hasNoRepositoryHint: !text.includes('固化进仓库'),
       hasInstallPath: text.includes('~/.codex/config.toml'),
       hasPlaceholders:
         pre?.innerText.includes('https://oauth-api.saurick.me/v1') &&
@@ -1677,7 +1684,7 @@ async function assertClientConfigVisuals(page, scenarioName, options = {}) {
   })
 
   if (requireAdminNav) {
-    assert(metrics.hasClientConfigNav, `${scenarioName} 缺少客户端模板菜单入口`)
+    assert(metrics.hasClientConfigNav, `${scenarioName} 缺少客户端配置菜单入口`)
     assert(
       metrics.hasPublicClientConfigLink,
       `${scenarioName} 缺少跳转公开配置页的入口`
@@ -1690,6 +1697,21 @@ async function assertClientConfigVisuals(page, scenarioName, options = {}) {
     )
   }
   assert(metrics.hasNoUploadArea, `${scenarioName} 不应再显示上传配置文件入口`)
+  assert.equal(
+    metrics.apiKeyInputValue,
+    '',
+    `${scenarioName} API Key 输入框不应默认填入占位 key`
+  )
+  assert(
+    metrics.apiKeyInputPlaceholder.includes('ogw_xxx') &&
+      metrics.apiKeyInputPlaceholder.includes('sk-xxx'),
+    `${scenarioName} API Key 输入框缺少示例 placeholder: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.hasRequiredKeyHint,
+    `${scenarioName} 缺少复制下载前填写 key 的提示`
+  )
+  assert(metrics.hasNoRepositoryHint, `${scenarioName} 不应出现仓库固化文案`)
   assert(metrics.hasPlaceholders, `${scenarioName} 配置预览未渲染默认占位模板`)
   assert(metrics.hasInstallPath, `${scenarioName} 缺少目标安装路径说明`)
   assert(
@@ -1703,6 +1725,8 @@ async function assertClientConfigVisuals(page, scenarioName, options = {}) {
     metrics.previewContrast >= 7,
     `${scenarioName} 浅色模式代码预览对比度不足: ${JSON.stringify(metrics)}`
   )
+
+  await assertClientConfigRequiresApiKey(page, scenarioName)
 
   await page.locator('[data-admin-theme-option="dark"]').click()
   await page.waitForFunction(
@@ -1768,6 +1792,46 @@ async function assertClientConfigVisuals(page, scenarioName, options = {}) {
   await page.locator('[data-admin-theme-option="system"]').click()
   await page.waitForFunction(
     () => document.documentElement.dataset.adminThemeMode === 'system'
+  )
+}
+
+async function assertClientConfigRequiresApiKey(page, scenarioName) {
+  await page.getByRole('button', { name: '复制内容', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: '请先填写 API Key', exact: true })
+    .waitFor({ state: 'visible' })
+
+  const dialogMetrics = await page.evaluate(() => {
+    const dialog = document.querySelector('[role="dialog"]')
+    const text = dialog?.innerText || ''
+    const activeTag = document.activeElement?.tagName || ''
+    return {
+      activeTag,
+      hasApiKeyMessage: text.includes('复制或下载配置前需要填写 API Key'),
+      hasLocalOnlyMessage:
+        text.includes('API Key 只会在当前浏览器里用于生成配置') &&
+        text.includes('不会上传到服务器'),
+      hasNativeAlert: false,
+      title:
+        dialog?.querySelector('.admin-modal-title')?.textContent.trim() || '',
+    }
+  })
+  assert.equal(
+    dialogMetrics.title,
+    '请先填写 API Key',
+    `${scenarioName} API Key 缺失弹窗标题异常: ${JSON.stringify(dialogMetrics)}`
+  )
+  assert(
+    dialogMetrics.hasApiKeyMessage && dialogMetrics.hasLocalOnlyMessage,
+    `${scenarioName} API Key 缺失弹窗文案异常: ${JSON.stringify(dialogMetrics)}`
+  )
+
+  await page.getByRole('button', { name: '去填写', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: '请先填写 API Key', exact: true })
+    .waitFor({ state: 'hidden' })
+  await page.waitForFunction(() =>
+    document.activeElement?.labels?.[0]?.textContent.includes('API Key')
   )
 }
 

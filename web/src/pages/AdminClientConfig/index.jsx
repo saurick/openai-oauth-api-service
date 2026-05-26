@@ -5,9 +5,9 @@ import ClientConfigBuilder from './ClientConfigBuilder'
 export default function AdminClientConfigPage() {
   return (
     <AdminFrame
-      title="客户端配置模板"
-      description="导出 Codex 和 opencode 的 macOS / Windows 最小配置模板，只保留 Base URL、API Key 和 Codex profile 等必要字段；历史记录、工作区信任、通知路径等个人字段不写入模板。"
-      breadcrumb="转发配置 / 客户端配置模板"
+      title="客户端配置生成器"
+      description="生成 Codex 和 opencode 的 macOS / Windows 最小配置。填写 Base URL、API Key 和必要的 profile 后，可以复制内容或下载配置文件。"
+      breadcrumb="转发配置 / 客户端配置生成器"
       actions={
         <a
           className="admin-button"
