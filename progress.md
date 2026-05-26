@@ -24,7 +24,11 @@
 - 文档：更新 `web/README.md`，明确 `/client-config` 不调用后端接口、不保存 API Key，`style:l1` 覆盖公开配置生成页。
 - 补充验证：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminClientConfig/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4384 NODE_USE_ENV_PROXY=0 STYLE_L1_SCENARIOS=admin-client-config-desktop,admin-client-config-mobile pnpm style:l1`、`cd web && pnpm test`、`cd web && pnpm build`、`git diff --check` 均通过；Playwright 实测 `/admin-client-config` 存在 `target=_blank` 的「打开公开页」链接并可到 `/client-config`。
 - 验证通过：`cd web && pnpm test`、`cd web && pnpm build`、`git diff --check`；in-app Browser 验证 `http://127.0.0.1:5177/client-config` 桌面默认态、填写 `https://proxy.example.test/v1/` 与 `ogw_demo_public_key` 后切换 opencode 的预览更新、无后台壳、无横向溢出，并验证 390x844 移动视口默认态无横向溢出。
-- 阻塞/风险：`cd web && pnpm style:l1` 已跑过新增公开页场景，但全量随后停在既有 `admin-keys-desktop` 完整凭据列宽断言（`valueWidth=116 < 140`），本轮未改 API key 表格列宽；本轮仅完成本地代码和前端验证，未部署线上。
+- 提交推送：已提交并推送 `4c3eef20`（`feat: 增加公开配置页跳转入口`）到 `origin/main`；pre-push 门禁通过 shellcheck、db guard、错误码同步、secrets 扫描、web lint/test/build、server `go test ./...` 和 `make build`，其中 `govulncheck` 仍提示 Go 1.25.9 / `x/net` 相关既有漏洞警告，未阻塞本次推送。
+- 部署：本地构建并上传 `linux/amd64` 镜像 `oauth-api-service-server:20260526T223747-4c3eef20-client-config-link`，远端 release 目录为 `/data/openai-oauth-api-service/releases/20260526T223747-4c3eef20-client-config-link`；远端 `sha256sum` 与本地制品一致，`docker load` 后通过宿主机 `/usr/local/bin/atlas` 确认迁移已是最新，无待执行 migration；更新 compose `.env` 前备份为 `.env.bak.20260526T224057-client-config-link`，随后 `--force-recreate` 重建 `app-server`。
+- 线上验证：远端容器运行镜像已切到 `oauth-api-service-server:20260526T223747-4c3eef20-client-config-link`，容器环境 `GIT_SHA_SHORT=4c3eef20`；本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；公网 `/client-config` 与 `/admin-client-config` 均返回 `HTTP 200` 并加载 `assets/index.DhsGc1qg.js`，产物内包含「打开公开页」与「客户端配置生成器」；后台 `admin_login` 与 `summary` RPC 均返回 `code=0`。
+- 发布清理：远端删除本次上传的压缩镜像包与校验文件，执行 `docker image prune -a -f` 和 `docker builder prune -f`，未执行 volume prune；根分区使用率从 56% 降到 53%，Docker 镜像占用从 5.14GB 降到 4.427GB，当前业务容器和数据库容器保持运行。
+- 阻塞/风险：`cd web && pnpm style:l1` 已跑过新增公开页场景，但全量随后停在既有 `admin-keys-desktop` 完整凭据列宽断言（`valueWidth=116 < 140`），本轮未改 API key 表格列宽；线上部署已完成，本轮未处理 pre-push 中 `govulncheck` 报出的既有依赖 / Go 版本漏洞警告。
 
 ## 2026-05-26 Codex 自定义 provider 可见过程说明
 - 完成：只读排查线上 `https://oauth-api.saurick.me/v1/responses`，确认生产容器健康且运行镜像 `oauth-api-service-server:20260525T122959-5d604ae3-local-codex-0.133.0`；无显式引导的工具调用请求只返回 `function_call` 事件，`response.output_text.delta=0`、`response.reasoning_summary_text.delta=0`，说明当前默认链路没有把中文过程说明引导出来。
