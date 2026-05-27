@@ -2,6 +2,12 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-27 长任务中断筛选口径
+- 判断：用量日志筛选不需要重写；现有时间、凭据、模型、Effort、状态、实际上游和错误类型维度已经能覆盖长任务排查，问题是前端“错误类型”实际按 `upstream_error_type` 过滤，漏掉 `client_canceled`、网关预检和其他只落 `error_type` 的记录。
+- 完成：`api.usage_list` / 导出筛选新增统一 `error_type` 过滤，保留 `upstream_error_type` 兼容；前端筛选项改为“错误 / 中断类型”，补齐客户端取消、上下文超限、网关侧错误、Backend/CLI 细分错误，和表格展示的 `error_type` 字段对齐。
+- 完成：新增 `status_code` 筛选，便于直接过滤 `499`、`502`、`413`、`429` 等排查边界；异常请求视图默认排除 `client_canceled`，`failed_requests` 口径调整为服务 / 上游 / 网关错误数，`client_canceled_requests` 单独统计和展示，避免 499 抬高服务错误率。
+- 下一步：如后续需要排查“卡在 10 分钟 / 30 分钟 / 8 小时边界”的批量分布，再单独加 `duration_ms` 区间筛选或异常聚合视图；本轮不新增 duration schema 或索引。
+
 ## 2026-05-27 长任务 8 小时超时窗口
 - 判断：官方 Codex 单会话可以跑很久，本项目中转层不应比官方客户端更早掐断；长时间本地工具执行通常不占用上游 SSE，但模型请求本身长时间等待时，服务端、Nginx 和客户端 provider timeout 都不能停留在 10 或 30 分钟。
 - 完成：将 Codex backend / CLI 默认上游超时从 `1800s` 提高到 `28800s`，服务 HTTP 超时从 `1900s` 提高到 `28900s`，Compose Nginx 样例 `proxy_read_timeout` / `proxy_send_timeout` 提高到 `28900s`，并同步 `server/docs/config.md`、`server/docs/api.md`、`server/deploy/compose/prod/README.md`。

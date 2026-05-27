@@ -218,6 +218,9 @@ type GatewayUsageFilter struct {
 	Endpoint          string
 	UpstreamMode      string
 	UpstreamErrorType string
+	ErrorType         string
+	ExcludeErrorType  string
+	StatusCode        int
 	SuccessSet        bool
 	Success           bool
 	StartTime         time.Time
@@ -228,6 +231,7 @@ type GatewayUsageSummary struct {
 	TotalRequests     int64
 	SuccessRequests   int64
 	FailedRequests    int64
+	ClientCanceled    int64
 	TotalTokens       int64
 	InputTokens       int64
 	OutputTokens      int64
@@ -248,6 +252,7 @@ type GatewayUsageBucket struct {
 	TotalRequests     int64
 	SuccessRequests   int64
 	FailedRequests    int64
+	ClientCanceled    int64
 	TotalTokens       int64
 	InputTokens       int64
 	OutputTokens      int64
@@ -270,6 +275,7 @@ type GatewayUsageKeySummary struct {
 	TotalRequests     int64
 	SuccessRequests   int64
 	FailedRequests    int64
+	ClientCanceled    int64
 	TotalTokens       int64
 	InputTokens       int64
 	OutputTokens      int64
@@ -290,6 +296,7 @@ type GatewayUsageSessionSummary struct {
 	TotalRequests          int64
 	SuccessRequests        int64
 	FailedRequests         int64
+	ClientCanceled         int64
 	TotalTokens            int64
 	InputTokens            int64
 	OutputTokens           int64
@@ -1057,6 +1064,8 @@ func normalizeUsageFilter(filter GatewayUsageFilter) GatewayUsageFilter {
 	filter.Endpoint = strings.TrimSpace(filter.Endpoint)
 	filter.UpstreamMode = NormalizeGatewayUpstreamMode(filter.UpstreamMode)
 	filter.UpstreamErrorType = strings.TrimSpace(filter.UpstreamErrorType)
+	filter.ErrorType = strings.TrimSpace(filter.ErrorType)
+	filter.ExcludeErrorType = strings.TrimSpace(filter.ExcludeErrorType)
 	return filter
 }
 

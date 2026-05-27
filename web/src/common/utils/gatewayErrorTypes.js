@@ -1,4 +1,37 @@
 const GATEWAY_ERROR_TYPES = {
+  gateway_api_key_invalid: {
+    label: 'API key 无效',
+    description: '请求携带的下游 API key 不存在或格式无效。',
+  },
+  gateway_api_key_disabled: {
+    label: 'API key 已禁用',
+    description: '请求携带的下游 API key 已在后台禁用。',
+  },
+  gateway_model_disabled: {
+    label: '模型已禁用',
+    description: '请求模型在后台模型管理中已禁用。',
+  },
+  gateway_model_not_allowed: {
+    label: '模型未授权',
+    description: '请求模型不在该 API 凭据允许模型范围内。',
+  },
+  gateway_rate_limited: {
+    label: '网关限流',
+    description: '请求命中服务端网关限流。',
+  },
+  gateway_quota_exceeded: {
+    label: '凭据额度超限',
+    description: '请求开始前该 API 凭据的 Token 额度已超限。',
+  },
+  gateway_reasoning_effort_invalid: {
+    label: 'Effort 非法',
+    description:
+      '请求传入的 reasoning_effort 不在 low / medium / high / xhigh 范围内。',
+  },
+  gateway_error: {
+    label: '网关错误',
+    description: '网关侧未分类错误，需要结合 request_id 和服务日志查看。',
+  },
   codex_backend_auth_failed: {
     label: 'Backend 鉴权失败',
     description:
@@ -45,7 +78,8 @@ const GATEWAY_ERROR_TYPES = {
   },
   client_canceled: {
     label: '客户端取消',
-    description: '下游客户端或入口代理主动断开请求，通常需要排查客户端超时、网络中断或流式保活识别。',
+    description:
+      '下游客户端或入口代理主动断开请求，通常需要排查客户端超时、网络中断或流式保活识别。',
   },
   codex_cli_timeout: {
     label: 'CLI 超时',
@@ -61,7 +95,8 @@ const GATEWAY_ERROR_TYPES = {
   },
   codex_cli_empty_answer: {
     label: 'CLI 空回复',
-    description: 'CLI 正常退出但未解析到最终回答，可能输出格式变化或模型无最终回答。',
+    description:
+      'CLI 正常退出但未解析到最终回答，可能输出格式变化或模型无最终回答。',
   },
   codex_cli_upstream_failed: {
     label: 'CLI 未分类失败',
@@ -70,7 +105,7 @@ const GATEWAY_ERROR_TYPES = {
 }
 
 export const GATEWAY_ERROR_TYPE_HELP =
-  '错误字段来自 usage.error_type；失败时记录细分错误类型，例如 backend 超时、鉴权失败、上游 5xx、限流、客户端取消或 CLI 超时等；诊断字段只保存请求大小、fallback 状态和脱敏上游摘要，不保存 prompt / output 正文。'
+  '错误字段来自 usage.error_type；失败或中断时记录细分类型，例如 backend 超时、鉴权失败、上游 5xx、限流、客户端取消或 CLI 超时等；客户端取消会单独统计，不计入服务错误率。诊断字段只保存请求大小、fallback 状态和脱敏上游摘要，不保存 prompt / output 正文。'
 
 export function gatewayErrorTypeInfo(code) {
   const normalized = String(code || '').trim()

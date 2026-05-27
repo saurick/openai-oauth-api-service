@@ -76,7 +76,21 @@ const KEY_STATUS_FILTER_OPTIONS = [
 const USAGE_SUCCESS_FILTER_OPTIONS = [
   { label: '全部状态', value: '' },
   { label: '成功', value: 'true' },
-  { label: '失败', value: 'false' },
+  { label: '未完成 / 失败', value: 'false' },
+]
+const USAGE_STATUS_CODE_FILTER_OPTIONS = [
+  { label: '全部状态码', value: '' },
+  { label: '200 OK', value: '200' },
+  { label: '400 Bad Request', value: '400' },
+  { label: '401 Unauthorized', value: '401' },
+  { label: '403 Forbidden', value: '403' },
+  { label: '413 Payload Too Large', value: '413' },
+  { label: '429 Too Many Requests', value: '429' },
+  { label: '499 Client Closed Request', value: '499' },
+  { label: '500 Internal Server Error', value: '500' },
+  { label: '502 Bad Gateway', value: '502' },
+  { label: '503 Service Unavailable', value: '503' },
+  { label: '504 Gateway Timeout', value: '504' },
 ]
 const CODEX_UPSTREAM_MODE_OPTIONS = [
   { label: 'Backend', value: 'codex_backend' },
@@ -114,8 +128,7 @@ const MODEL_CONTEXT_HELP = {
     '表格显示当前生效值；弹窗保存的是模型覆盖值。开始压缩是转发前先摘要历史；硬拦截是压缩后仍过大则返回 413。留空或 0 表示继承默认 260K / 380K，不是关闭压缩。',
   bytes:
     '表格显示当前生效值；弹窗保存的是模型覆盖值。字节阈值用于兜底 JSON、工具输出和附件文本导致的超大请求。留空或 0 表示继承，不是无限制；它不是计费 token。',
-  keep:
-    '表格显示当前生效值；弹窗保存的是模型覆盖值。保留条数是压缩时至少保留的最近 messages / input items 数；留空或 0 表示继承默认值。',
+  keep: '表格显示当前生效值；弹窗保存的是模型覆盖值。保留条数是压缩时至少保留的最近 messages / input items 数；留空或 0 表示继承默认值。',
   units:
     '阈值可填整数、K 或 M，例如 260K、0.38M；保留条数只能填整数。留空或 0 表示不写模型覆盖，继续走运维覆盖或内置推荐，不代表无限制。',
 }
@@ -123,8 +136,18 @@ const USAGE_UPSTREAM_FILTER_OPTIONS = [
   { label: '全部上游', value: '' },
   ...CODEX_UPSTREAM_MODE_OPTIONS,
 ]
-const USAGE_UPSTREAM_ERROR_FILTER_OPTIONS = [
-  { label: '全部错误类型', value: '' },
+const USAGE_ERROR_FILTER_OPTIONS = [
+  { label: '全部错误 / 中断类型', value: '' },
+  { label: '客户端 / 入口代理取消', value: 'client_canceled' },
+  { label: '上下文超限', value: 'context_length_exceeded' },
+  { label: 'API key 无效', value: 'gateway_api_key_invalid' },
+  { label: 'API key 已禁用', value: 'gateway_api_key_disabled' },
+  { label: '模型已禁用', value: 'gateway_model_disabled' },
+  { label: '模型未授权', value: 'gateway_model_not_allowed' },
+  { label: '网关限流', value: 'gateway_rate_limited' },
+  { label: '凭据额度超限', value: 'gateway_quota_exceeded' },
+  { label: 'Effort 非法', value: 'gateway_reasoning_effort_invalid' },
+  { label: '网关错误', value: 'gateway_error' },
   { label: 'Backend 鉴权失败', value: 'codex_backend_auth_failed' },
   { label: 'Backend 限流', value: 'codex_backend_rate_limited' },
   { label: 'Backend 5xx', value: 'codex_backend_http_5xx' },
@@ -249,8 +272,9 @@ const INITIAL_USAGE_FILTERS = {
   model: '',
   reasoningEffort: '',
   success: '',
+  statusCode: '',
   upstreamMode: '',
-  upstreamErrorType: '',
+  errorType: '',
   timeRange: DEFAULT_USAGE_TIME_RANGE,
 }
 
@@ -280,7 +304,7 @@ const VIEW_CONFIG = {
     section: '用量统计',
     title: '用量统计',
     description:
-      '先按凭据维度汇总 Token 窗口，后续可继续扩展模型、趋势、错误率和延迟分析。',
+      '先按凭据维度汇总 Token 窗口，后续可继续扩展模型、趋势、服务错误率和延迟分析。',
   },
   usage: {
     section: '用量统计',
@@ -330,8 +354,7 @@ function limitInputToNumber(value, { allowUnit = true } = {}) {
   const match = normalized.match(/^(\d+(?:\.\d+)?)([km])?$/)
   if (!match) return null
   if (match[2] && !allowUnit) return null
-  const multiplier =
-    match[2] === 'm' ? 1_000_000 : match[2] === 'k' ? 1_000 : 1
+  const multiplier = match[2] === 'm' ? 1_000_000 : match[2] === 'k' ? 1_000 : 1
   const n = Number(match[1]) * multiplier
   if (!Number.isFinite(n)) return null
   return Math.trunc(n)
@@ -434,6 +457,10 @@ function reasoningEffortLabel(value) {
   return item?.label || '未记录'
 }
 
+function isClientCanceledUsage(item) {
+  return String(item?.error_type || '') === 'client_canceled'
+}
+
 function renderUpstreamStats(item) {
   return (
     <div className="text-xs leading-5">
@@ -523,6 +550,10 @@ function usageFiltersForTab(filters, tab) {
     return {
       ...filters,
       success: 'false',
+      excludeErrorType:
+        filters.errorType || filters.statusCode === '499'
+          ? ''
+          : 'client_canceled',
     }
   }
   return filters
@@ -616,24 +647,12 @@ function fmtPricePerMillion(value) {
 
 function modelContextFormFromItem(item) {
   return {
-    contextWindowTokens: String(
-      asInt(item?.context_window_tokens, 0) || ''
-    ),
-    contextCompactTokens: String(
-      asInt(item?.context_compact_tokens, 0) || ''
-    ),
-    contextHardTokens: String(
-      asInt(item?.context_hard_tokens, 0) || ''
-    ),
-    contextCompactBytes: String(
-      asInt(item?.context_compact_bytes, 0) || ''
-    ),
-    contextHardBytes: String(
-      asInt(item?.context_hard_bytes, 0) || ''
-    ),
-    contextKeepItems: String(
-      asInt(item?.context_keep_items, 0) || ''
-    ),
+    contextWindowTokens: String(asInt(item?.context_window_tokens, 0) || ''),
+    contextCompactTokens: String(asInt(item?.context_compact_tokens, 0) || ''),
+    contextHardTokens: String(asInt(item?.context_hard_tokens, 0) || ''),
+    contextCompactBytes: String(asInt(item?.context_compact_bytes, 0) || ''),
+    contextHardBytes: String(asInt(item?.context_hard_bytes, 0) || ''),
+    contextKeepItems: String(asInt(item?.context_keep_items, 0) || ''),
   }
 }
 
@@ -1121,12 +1140,17 @@ function DiagnosticCell({ item }) {
     chips.push(`上游 HTTP ${diagnostic.upstream_http_status}`)
   }
   const body = String(diagnostic.upstream_body || '').trim()
-  const compactSummary = String(diagnostic.context_compaction_summary || '').trim()
+  const compactSummary = String(
+    diagnostic.context_compaction_summary || ''
+  ).trim()
 
   if (!summary && chips.length === 0 && !body && !compactSummary) return '-'
 
   return (
-    <div className="max-w-[280px] text-xs leading-5" title={summary || body || compactSummary}>
+    <div
+      className="max-w-[280px] text-xs leading-5"
+      title={summary || body || compactSummary}
+    >
       {chips.length > 0 ? (
         <div className="flex flex-wrap gap-1">
           {chips.map((chip) => (
@@ -1531,9 +1555,13 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       params.reasoning_effort = filters.reasoningEffort
     }
     if (filters.success) params.success = filters.success === 'true'
+    if (filters.statusCode) params.status_code = asInt(filters.statusCode, 0)
     if (filters.upstreamMode) params.upstream_mode = filters.upstreamMode
-    if (filters.upstreamErrorType) {
-      params.upstream_error_type = filters.upstreamErrorType
+    if (filters.errorType) {
+      params.error_type = filters.errorType
+    }
+    if (filters.excludeErrorType) {
+      params.exclude_error_type = filters.excludeErrorType
     }
     return params
   }
@@ -1774,7 +1802,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       return next.current === current.current &&
         next.pageSize === current.pageSize
         ? current
-      : next
+        : next
     })
   }, [usageTotal])
 
@@ -2178,17 +2206,24 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       context_compact_tokens: limitInputToNumber(
         modelContextForm.contextCompactTokens
       ),
-      context_hard_tokens: limitInputToNumber(modelContextForm.contextHardTokens),
+      context_hard_tokens: limitInputToNumber(
+        modelContextForm.contextHardTokens
+      ),
       context_compact_bytes: limitInputToNumber(
         modelContextForm.contextCompactBytes
       ),
       context_hard_bytes: limitInputToNumber(modelContextForm.contextHardBytes),
-      context_keep_items: limitInputToNumber(modelContextForm.contextKeepItems, {
-        allowUnit: false,
-      }),
+      context_keep_items: limitInputToNumber(
+        modelContextForm.contextKeepItems,
+        {
+          allowUnit: false,
+        }
+      ),
     }
     if (Object.values(payload).some((value) => value == null)) {
-      setErrMsg('上下文策略只支持数字，阈值可使用 K / M 单位，保留条数只能填整数。')
+      setErrMsg(
+        '上下文策略只支持数字，阈值可使用 K / M 单位，保留条数只能填整数。'
+      )
       return
     }
     setErrMsg('')
@@ -2407,8 +2442,14 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     <StatusBadge
                       active={!!item.success}
                       trueText={`HTTP ${item.status_code}`}
-                      falseText={`HTTP ${item.status_code}`}
-                      falseTone="danger"
+                      falseText={
+                        isClientCanceledUsage(item)
+                          ? `已取消 HTTP ${item.status_code}`
+                          : `HTTP ${item.status_code}`
+                      }
+                      falseTone={
+                        isClientCanceledUsage(item) ? 'neutral' : 'danger'
+                      }
                     />
                   </td>
                   <td className={tdClass}>
@@ -2492,7 +2533,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
           <SummaryCard
             label="24h 请求"
             value={fmtNumber(summary.total_requests)}
-            sub={`${fmtNumber(summary.success_requests)} 成功 / ${fmtNumber(summary.failed_requests)} 失败`}
+            sub={`${fmtNumber(summary.success_requests)} 成功 / ${fmtNumber(summary.failed_requests)} 服务错误 / ${fmtNumber(summary.client_canceled_requests)} 取消`}
           />
           <SummaryCard
             label="24h Token"
@@ -2795,7 +2836,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 <button
                   type="button"
                   onClick={resetSelectedKeys}
-                  disabled={loading || resettingKey || selectedKeyIds.length === 0}
+                  disabled={
+                    loading || resettingKey || selectedKeyIds.length === 0
+                  }
                   className={dangerButtonClass}
                 >
                   {resettingKey ? '重置中...' : '重置 API key'}
@@ -2803,7 +2846,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 <button
                   type="button"
                   onClick={deleteSelectedKeys}
-                  disabled={loading || resettingKey || selectedKeyIds.length === 0}
+                  disabled={
+                    loading || resettingKey || selectedKeyIds.length === 0
+                  }
                   className={dangerButtonClass}
                 >
                   删除
@@ -3016,7 +3061,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
           <SummaryCard
             label="统计维度"
             value="凭据"
-            sub="模型、趋势和错误率后续扩展"
+            sub="模型、趋势和服务错误率后续扩展"
           />
         </div>
 
@@ -3511,11 +3556,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     hint,
     help,
     effectiveKey,
-    {
-      effectiveSuffix = '',
-      placeholder = '留空=继承',
-      allowUnit = true,
-    } = {}
+    { effectiveSuffix = '', placeholder = '留空=继承', allowUnit = true } = {}
   ) => {
     const effectiveRawValue = asInt(editingModelContext?.[effectiveKey], 0)
     const effectiveValue = fmtEffectiveContextValue(
@@ -3562,7 +3603,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         />
         <span className={fieldHintClass}>{hint}</span>
         <span className={fieldHintClass}>
-          当前生效：{effectiveValue}；输入框留空或填 0 表示继承该值，不是无限制。
+          当前生效：{effectiveValue}；输入框留空或填 0
+          表示继承该值，不是无限制。
         </span>
       </div>
     )
@@ -3597,7 +3639,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 模型上下文策略
               </h2>
               <p className="admin-modal-description">
-                {editingModelContext.model_id} 的压缩阈值；保存后仅影响后续请求。留空或 0 表示继承当前生效值，不是无限制。
+                {editingModelContext.model_id}{' '}
+                的压缩阈值；保存后仅影响后续请求。留空或 0
+                表示继承当前生效值，不是无限制。
               </p>
             </div>
             <button
@@ -3620,7 +3664,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   Token 阈值
                 </div>
                 <div className={fieldHintClass}>
-                  硬拦截必须大于开始压缩；0 使用推荐值；支持 K / M 单位。默认按 Codex 体验控制在 400K 窗口内。
+                  硬拦截必须大于开始压缩；0 使用推荐值；支持 K / M 单位。默认按
+                  Codex 体验控制在 400K 窗口内。
                 </div>
               </div>
               <div className="admin-model-context-grid">
@@ -3665,7 +3710,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   字节阈值
                 </div>
                 <div className={fieldHintClass}>
-                  用于保护 JSON、工具输出和附件文本导致的超大请求体；支持 K / M 单位，不等同于计费 token。
+                  用于保护 JSON、工具输出和附件文本导致的超大请求体；支持 K / M
+                  单位，不等同于计费 token。
                 </div>
               </div>
               <div className="admin-model-context-grid">
@@ -3905,10 +3951,10 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       ['最近调用', fmtTs(selectedUsageSession.last_seen_at)],
       ['请求数', fmtNumber(selectedUsageSession.total_requests)],
       [
-        '成功 / 失败',
+        '成功 / 服务错误 / 取消',
         `${fmtNumber(selectedUsageSession.success_requests)} / ${fmtNumber(
           selectedUsageSession.failed_requests
-        )}`,
+        )} / ${fmtNumber(selectedUsageSession.client_canceled_requests)}`,
       ],
       [
         'Backend / CLI',
@@ -4027,8 +4073,16 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                             <StatusBadge
                               active={!!item.success}
                               trueText={`HTTP ${item.status_code}`}
-                              falseText={`HTTP ${item.status_code}`}
-                              falseTone="danger"
+                              falseText={
+                                isClientCanceledUsage(item)
+                                  ? `已取消 HTTP ${item.status_code}`
+                                  : `HTTP ${item.status_code}`
+                              }
+                              falseTone={
+                                isClientCanceledUsage(item)
+                                  ? 'neutral'
+                                  : 'danger'
+                              }
                             />
                           </td>
                           <td className={tdClass}>
@@ -4079,7 +4133,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       <SummaryCard
         label="请求数"
         value={fmtNumber(summary.total_requests)}
-        sub={`${fmtNumber(summary.success_requests)} 成功 / ${fmtNumber(summary.failed_requests)} 失败`}
+        sub={`${fmtNumber(summary.success_requests)} 成功 / ${fmtNumber(summary.failed_requests)} 服务错误 / ${fmtNumber(summary.client_canceled_requests)} 取消`}
       />
       <SummaryCard
         label="总 Token"
@@ -4097,9 +4151,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         sub={`${fmtNumber(summary.fallback_requests)} 次 fallback`}
       />
       <SummaryCard
-        label="错误率"
+        label="服务错误率"
         value={fmtRate(summary.failed_requests, summary.total_requests)}
-        sub={`${fmtNumber(summary.average_duration_ms)} ms 平均耗时`}
+        sub={`${fmtNumber(summary.client_canceled_requests)} 次客户端取消 / ${fmtNumber(summary.average_duration_ms)} ms 平均耗时`}
       />
     </div>
   )
@@ -4151,7 +4205,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               每日模型汇总
             </h2>
             <div className="mt-1 text-sm text-[#7b8780]">
-              按日期和模型聚合请求、Token、费用估算和错误率；点击详情后只在当天该模型的请求内分页。
+              按日期和模型聚合请求、Token、费用估算和服务错误率；点击详情后只在当天该模型的请求内分页。
             </div>
           </div>
           <div className="text-sm text-[#7b8780]">
@@ -4179,6 +4233,10 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 {rows.length > 0 ? (
                   rows.map((item) => {
                     const failedRequests = asInt(item.failed_requests, 0)
+                    const canceledRequests = asInt(
+                      item.client_canceled_requests,
+                      0
+                    )
                     const totalRequests = asInt(item.total_requests, 0)
                     return (
                       <tr
@@ -4197,7 +4255,10 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                           {fmtNumber(item.total_requests)}
                           <div className="mt-1 text-xs font-normal text-[#9aa39e]">
                             {fmtNumber(item.success_requests)} 成功 /{' '}
-                            {fmtNumber(item.failed_requests)} 失败
+                            {fmtNumber(item.failed_requests)} 服务错误
+                            {canceledRequests > 0
+                              ? ` / ${fmtNumber(canceledRequests)} 取消`
+                              : ''}
                           </div>
                         </td>
                         <td className={tdClass}>{renderUpstreamStats(item)}</td>
@@ -4224,7 +4285,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                             }
                           >
                             {failedRequests > 0 ? '!' : '✓'}{' '}
-                            {fmtRate(failedRequests, totalRequests)} 错误
+                            {fmtRate(failedRequests, totalRequests)} 服务错误
                           </span>
                         </td>
                         <td className={tdClass}>
@@ -4311,7 +4372,10 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                       {fmtNumber(item.total_requests)}
                       <div className="mt-1 text-xs font-normal text-[#9aa39e]">
                         {fmtNumber(item.success_requests)} 成功 /{' '}
-                        {fmtNumber(item.failed_requests)} 失败
+                        {fmtNumber(item.failed_requests)} 服务错误
+                        {asInt(item.client_canceled_requests, 0) > 0
+                          ? ` / ${fmtNumber(item.client_canceled_requests)} 取消`
+                          : ''}
                       </div>
                     </td>
                     <td className={tdClass}>{renderUpstreamStats(item)}</td>
@@ -4411,7 +4475,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     const detailTitle = usageTab === 'errors' ? '异常请求' : '调用明细'
     const detailDescription =
       usageTab === 'errors'
-        ? '仅展示失败请求，用于排查上游错误、限流、鉴权和网关异常。'
+        ? '默认排除客户端取消，仅展示服务 / 上游 / 网关失败；可用错误 / 中断类型或状态码单独查看 499。'
         : '按请求级 usage 真源直接展示状态、Token、缓存、Reasoning、字节、费用估算、耗时和错误类型。'
 
     return (
@@ -4536,6 +4600,21 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   />
                 </label>
                 <label className={fieldClass}>
+                  状态码
+                  <SearchableSelect
+                    value={usageFilters.statusCode}
+                    onChange={(nextValue) =>
+                      setUsageFilters((current) => ({
+                        ...current,
+                        statusCode: nextValue,
+                      }))
+                    }
+                    ariaLabel="HTTP 状态码"
+                    options={USAGE_STATUS_CODE_FILTER_OPTIONS}
+                    placeholder="输入状态码"
+                  />
+                </label>
+                <label className={fieldClass}>
                   实际上游
                   <SearchableSelect
                     value={usageFilters.upstreamMode}
@@ -4551,18 +4630,18 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   />
                 </label>
                 <label className={fieldClass}>
-                  错误类型
+                  错误 / 中断类型
                   <SearchableSelect
-                    value={usageFilters.upstreamErrorType}
+                    value={usageFilters.errorType}
                     onChange={(nextValue) =>
                       setUsageFilters((current) => ({
                         ...current,
-                        upstreamErrorType: nextValue,
+                        errorType: nextValue,
                       }))
                     }
-                    ariaLabel="上游错误类型"
-                    options={USAGE_UPSTREAM_ERROR_FILTER_OPTIONS}
-                    placeholder="输入错误类型"
+                    ariaLabel="错误或中断类型"
+                    options={USAGE_ERROR_FILTER_OPTIONS}
+                    placeholder="输入错误或中断类型"
                   />
                 </label>
               </div>

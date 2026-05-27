@@ -392,7 +392,8 @@ func (r *gatewayRepo) SummarizeUsage(ctx context.Context, filter biz.GatewayUsag
 	query := `SELECT
 COUNT(*),
 COALESCE(SUM(CASE WHEN success THEN 1 ELSE 0 END), 0),
-COALESCE(SUM(CASE WHEN success THEN 0 ELSE 1 END), 0),
+COALESCE(SUM(CASE WHEN NOT success AND error_type <> 'client_canceled' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN error_type = 'client_canceled' THEN 1 ELSE 0 END), 0),
 COALESCE(SUM(total_tokens), 0),
 COALESCE(SUM(input_tokens), 0),
 COALESCE(SUM(output_tokens), 0),
@@ -411,6 +412,7 @@ FROM gateway_usage_logs` + where
 		&out.TotalRequests,
 		&out.SuccessRequests,
 		&out.FailedRequests,
+		&out.ClientCanceled,
 		&out.TotalTokens,
 		&out.InputTokens,
 		&out.OutputTokens,
@@ -448,7 +450,8 @@ DATE_TRUNC('day', created_at) AS bucket_start,
 ` + modelSelect + `
 COUNT(*),
 COALESCE(SUM(CASE WHEN success THEN 1 ELSE 0 END), 0),
-COALESCE(SUM(CASE WHEN success THEN 0 ELSE 1 END), 0),
+COALESCE(SUM(CASE WHEN NOT success AND error_type <> 'client_canceled' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN error_type = 'client_canceled' THEN 1 ELSE 0 END), 0),
 COALESCE(SUM(total_tokens), 0),
 COALESCE(SUM(input_tokens), 0),
 COALESCE(SUM(output_tokens), 0),
@@ -483,6 +486,7 @@ ORDER BY bucket_start ASC` + modelOrder
 			&item.TotalRequests,
 			&item.SuccessRequests,
 			&item.FailedRequests,
+			&item.ClientCanceled,
 			&item.TotalTokens,
 			&item.InputTokens,
 			&item.OutputTokens,
@@ -538,7 +542,8 @@ COALESCE(MAX(k.name), ''),
 COALESCE(BOOL_OR(k.disabled), false),
 COUNT(*),
 COALESCE(SUM(CASE WHEN l.success THEN 1 ELSE 0 END), 0),
-COALESCE(SUM(CASE WHEN l.success THEN 0 ELSE 1 END), 0),
+COALESCE(SUM(CASE WHEN NOT l.success AND l.error_type <> 'client_canceled' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN l.error_type = 'client_canceled' THEN 1 ELSE 0 END), 0),
 COALESCE(SUM(l.total_tokens), 0),
 COALESCE(SUM(l.input_tokens), 0),
 COALESCE(SUM(l.output_tokens), 0),
@@ -575,6 +580,7 @@ LIMIT $` + fmt.Sprint(len(args))
 			&item.TotalRequests,
 			&item.SuccessRequests,
 			&item.FailedRequests,
+			&item.ClientCanceled,
 			&item.TotalTokens,
 			&item.InputTokens,
 			&item.OutputTokens,
@@ -625,7 +631,8 @@ COALESCE(MAX(k.key_prefix), MAX(NULLIF(l.api_key_prefix, '')), ''),
 COALESCE(MAX(k.name), ''),
 COUNT(*),
 COALESCE(SUM(CASE WHEN l.success THEN 1 ELSE 0 END), 0),
-COALESCE(SUM(CASE WHEN l.success THEN 0 ELSE 1 END), 0),
+COALESCE(SUM(CASE WHEN NOT l.success AND l.error_type <> 'client_canceled' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN l.error_type = 'client_canceled' THEN 1 ELSE 0 END), 0),
 COALESCE(SUM(l.total_tokens), 0),
 COALESCE(SUM(l.input_tokens), 0),
 COALESCE(SUM(l.output_tokens), 0),
@@ -673,6 +680,7 @@ LIMIT $` + fmt.Sprint(limitPlaceholder) + ` OFFSET $` + fmt.Sprint(offsetPlaceho
 			&item.TotalRequests,
 			&item.SuccessRequests,
 			&item.FailedRequests,
+			&item.ClientCanceled,
 			&item.TotalTokens,
 			&item.InputTokens,
 			&item.OutputTokens,
@@ -1319,8 +1327,16 @@ func (r *gatewayRepo) applyUsageFilter(ctx context.Context, q *ent.GatewayUsageL
 	if filter.UpstreamMode != "" {
 		q = q.Where(gatewayusagelog.UpstreamModeEQ(filter.UpstreamMode))
 	}
-	if filter.UpstreamErrorType != "" {
+	if filter.ErrorType != "" {
+		q = q.Where(gatewayusagelog.ErrorTypeEQ(filter.ErrorType))
+	} else if filter.UpstreamErrorType != "" {
 		q = q.Where(gatewayusagelog.UpstreamErrorTypeEQ(filter.UpstreamErrorType))
+	}
+	if filter.ExcludeErrorType != "" {
+		q = q.Where(gatewayusagelog.ErrorTypeNEQ(filter.ExcludeErrorType))
+	}
+	if filter.StatusCode > 0 {
+		q = q.Where(gatewayusagelog.StatusCodeEQ(filter.StatusCode))
 	}
 	if filter.SuccessSet {
 		q = q.Where(gatewayusagelog.SuccessEQ(filter.Success))
@@ -1385,8 +1401,16 @@ func buildUsageWhereClauseWithPrefix(filter biz.GatewayUsageFilter, columnPrefix
 	if filter.UpstreamMode != "" {
 		add(col("upstream_mode")+" = $%d", filter.UpstreamMode)
 	}
-	if filter.UpstreamErrorType != "" {
+	if filter.ErrorType != "" {
+		add(col("error_type")+" = $%d", filter.ErrorType)
+	} else if filter.UpstreamErrorType != "" {
 		add(col("upstream_error_type")+" = $%d", filter.UpstreamErrorType)
+	}
+	if filter.ExcludeErrorType != "" {
+		add(col("error_type")+" <> $%d", filter.ExcludeErrorType)
+	}
+	if filter.StatusCode > 0 {
+		add(col("status_code")+" = $%d", filter.StatusCode)
 	}
 	if filter.SuccessSet {
 		add(col("success")+" = $%d", filter.Success)

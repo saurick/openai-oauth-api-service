@@ -73,6 +73,9 @@ func TestGatewayUsageFilterFromParamsSupportsKeyIDs(t *testing.T) {
 	filter := gatewayUsageFilterFromParams(map[string]any{
 		"key_id":              1,
 		"key_ids":             []any{2, float64(3), "4", 0, "bad"},
+		"error_type":          "client_canceled",
+		"exclude_error_type":  "gateway_error",
+		"status_code":         499,
 		"upstream_error_type": "codex_backend_http_5xx",
 	})
 
@@ -87,6 +90,15 @@ func TestGatewayUsageFilterFromParamsSupportsKeyIDs(t *testing.T) {
 	}
 	if filter.UpstreamErrorType != "codex_backend_http_5xx" {
 		t.Fatalf("UpstreamErrorType = %q, want codex_backend_http_5xx", filter.UpstreamErrorType)
+	}
+	if filter.ErrorType != "client_canceled" {
+		t.Fatalf("ErrorType = %q, want client_canceled", filter.ErrorType)
+	}
+	if filter.ExcludeErrorType != "gateway_error" {
+		t.Fatalf("ExcludeErrorType = %q, want gateway_error", filter.ExcludeErrorType)
+	}
+	if filter.StatusCode != 499 {
+		t.Fatalf("StatusCode = %d, want 499", filter.StatusCode)
 	}
 }
 

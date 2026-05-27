@@ -121,15 +121,21 @@ func (h *adminExportHandler) requireAdminAndBuildFilter(ctx context.Context, w s
 	}
 
 	filter := biz.GatewayUsageFilter{
-		Limit:           200,
-		KeyID:           queryInt(r, "key_id"),
-		KeyIDs:          queryIntList(r, "key_ids"),
-		Model:           strings.TrimSpace(r.URL.Query().Get("model")),
-		ReasoningEffort: strings.TrimSpace(r.URL.Query().Get("reasoning_effort")),
-		Endpoint:        strings.TrimSpace(r.URL.Query().Get("endpoint")),
-		UpstreamMode:    strings.TrimSpace(r.URL.Query().Get("upstream_mode")),
-		StartTime:       queryUnixTime(r, "start_time", time.Now().Add(-24*time.Hour)),
-		EndTime:         queryUnixTime(r, "end_time", time.Now()),
+		Limit:            200,
+		KeyID:            queryInt(r, "key_id"),
+		KeyIDs:           queryIntList(r, "key_ids"),
+		Model:            strings.TrimSpace(r.URL.Query().Get("model")),
+		ReasoningEffort:  strings.TrimSpace(r.URL.Query().Get("reasoning_effort")),
+		Endpoint:         strings.TrimSpace(r.URL.Query().Get("endpoint")),
+		UpstreamMode:     strings.TrimSpace(r.URL.Query().Get("upstream_mode")),
+		ErrorType:        strings.TrimSpace(r.URL.Query().Get("error_type")),
+		ExcludeErrorType: strings.TrimSpace(r.URL.Query().Get("exclude_error_type")),
+		StatusCode:       queryInt(r, "status_code"),
+		StartTime:        queryUnixTime(r, "start_time", time.Now().Add(-24*time.Hour)),
+		EndTime:          queryUnixTime(r, "end_time", time.Now()),
+	}
+	if filter.ErrorType == "" {
+		filter.UpstreamErrorType = strings.TrimSpace(r.URL.Query().Get("upstream_error_type"))
 	}
 	if raw := strings.TrimSpace(r.URL.Query().Get("success")); raw != "" {
 		filter.SuccessSet = true

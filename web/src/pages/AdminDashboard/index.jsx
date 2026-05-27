@@ -17,7 +17,12 @@ const TREND_DAYS = 30
 const DASHBOARD_KEY_FETCH_LIMIT = 200
 const TREND_METRICS = [
   { key: 'requests', label: '请求', field: 'total_requests', color: '#1478ff' },
-  { key: 'errors', label: '错误', field: 'failed_requests', color: '#cf1322' },
+  {
+    key: 'errors',
+    label: '服务错误',
+    field: 'failed_requests',
+    color: '#cf1322',
+  },
   {
     key: 'cost',
     label: '费用',
@@ -187,6 +192,7 @@ function fillDailyBuckets(items, days) {
       billable_input_tokens: billableInputTokens(source),
       bucket_start: asInt(source?.bucket_start, bucketStart),
       cached_tokens: asInt(source?.cached_tokens, 0),
+      client_canceled_requests: asInt(source?.client_canceled_requests, 0),
       backend_requests: asInt(source?.backend_requests, 0),
       cli_requests: asInt(source?.cli_requests, 0),
       failed_requests: asInt(source?.failed_requests, 0),
@@ -227,6 +233,9 @@ function sumBuckets(buckets) {
           acc.duration_weighted_ms +
           asInt(item.average_duration_ms, 0) * requests,
         failed_requests: acc.failed_requests + asInt(item.failed_requests, 0),
+        client_canceled_requests:
+          acc.client_canceled_requests +
+          asInt(item.client_canceled_requests, 0),
         backend_requests:
           acc.backend_requests + asInt(item.backend_requests, 0),
         cli_requests: acc.cli_requests + asInt(item.cli_requests, 0),
@@ -247,6 +256,7 @@ function sumBuckets(buckets) {
       billable_input_tokens: 0,
       backend_requests: 0,
       cached_tokens: 0,
+      client_canceled_requests: 0,
       cli_requests: 0,
       duration_weighted_ms: 0,
       fallback_requests: 0,
@@ -294,7 +304,8 @@ function getTrendTooltipRows(item, metricConfig) {
     return [
       ['总请求', fmtNumber(item.total_requests)],
       ['成功', fmtNumber(item.success_requests)],
-      ['失败', fmtNumber(item.failed_requests)],
+      ['服务错误', fmtNumber(item.failed_requests)],
+      ['客户端取消', fmtNumber(item.client_canceled_requests)],
       [
         'Backend / CLI',
         `${fmtNumber(item.backend_requests)} / ${fmtNumber(item.cli_requests)}`,
@@ -304,8 +315,8 @@ function getTrendTooltipRows(item, metricConfig) {
   }
   if (metricConfig.key === 'errors') {
     return [
-      ['失败请求', fmtNumber(item.failed_requests)],
-      ['错误率', fmtRate(item.failed_requests, item.total_requests)],
+      ['服务错误', fmtNumber(item.failed_requests)],
+      ['服务错误率', fmtRate(item.failed_requests, item.total_requests)],
       ['总请求', fmtNumber(item.total_requests)],
     ]
   }
@@ -320,7 +331,7 @@ function getTrendTooltipRows(item, metricConfig) {
     return [
       ['平均耗时', fmtDuration(item.average_duration_ms)],
       ['总请求', fmtNumber(item.total_requests)],
-      ['失败请求', fmtNumber(item.failed_requests)],
+      ['服务错误', fmtNumber(item.failed_requests)],
     ]
   }
   return [
@@ -354,11 +365,14 @@ function SummaryCard({ label, value, sub, tone = 'green' }) {
   )
 }
 
-function StatusBadge({ active, text }) {
+function StatusBadge({ active, text, neutral = false }) {
+  const inactiveClass = neutral
+    ? 'bg-zinc-100 text-zinc-600'
+    : 'bg-rose-50 text-rose-700'
   return (
     <span
       className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${
-        active ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+        active ? 'bg-emerald-50 text-emerald-700' : inactiveClass
       }`}
     >
       {text}
@@ -673,7 +687,9 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
                   </HeaderWithHelp>
                 </th>
                 <th className={thClass}>
-                  <HeaderWithHelp help={GATEWAY_ERROR_TYPE_HELP}>错误</HeaderWithHelp>
+                  <HeaderWithHelp help={GATEWAY_ERROR_TYPE_HELP}>
+                    错误
+                  </HeaderWithHelp>
                 </th>
               </tr>
             </thead>
@@ -716,7 +732,12 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
                     <td className={tdClass}>
                       <StatusBadge
                         active={!!item.success}
-                        text={`HTTP ${item.status_code || '-'}`}
+                        text={
+                          item.error_type === 'client_canceled'
+                            ? `已取消 HTTP ${item.status_code || '-'}`
+                            : `HTTP ${item.status_code || '-'}`
+                        }
+                        neutral={item.error_type === 'client_canceled'}
                       />
                     </td>
                     <td className={tdClass}>
@@ -913,16 +934,16 @@ export default function AdminDashboardPage() {
           label="今日请求"
           tone="blue"
           value={fmtNumber(todaySummary.total_requests)}
-          sub={`${fmtNumber(todaySummary.success_requests)} 成功 / ${fmtNumber(todaySummary.failed_requests)} 失败`}
+          sub={`${fmtNumber(todaySummary.success_requests)} 成功 / ${fmtNumber(todaySummary.failed_requests)} 服务错误 / ${fmtNumber(todaySummary.client_canceled_requests)} 取消`}
         />
         <SummaryCard
-          label="错误率"
+          label="服务错误率"
           tone={asInt(todaySummary.failed_requests, 0) > 0 ? 'red' : 'green'}
           value={fmtRate(
             todaySummary.failed_requests,
             todaySummary.total_requests
           )}
-          sub={`成功率 ${fmtRate(todaySummary.success_requests, todaySummary.total_requests)}`}
+          sub={`取消 ${fmtNumber(todaySummary.client_canceled_requests)} / 成功率 ${fmtRate(todaySummary.success_requests, todaySummary.total_requests)}`}
         />
         <SummaryCard
           label="响应耗时"

@@ -90,7 +90,7 @@ HTTP 管理导出：
 - `GET /admin/exports/usage.csv`
 - `GET /admin/exports/usage.json`
 
-导出要求管理员登录态，筛选条件与 `api.usage_list` 保持一致：时间范围、key、模型、reasoning_effort、endpoint、success、upstream_mode。导出行包含 `api_key_name` 和 `reasoning_effort`，API 凭据备注按当前 key 表回补；凭据已删除时为空。导出会写审计日志。
+导出要求管理员登录态，筛选条件与 `api.usage_list` 保持一致：时间范围、key、模型、reasoning_effort、endpoint、success、status_code、upstream_mode、error_type。导出行包含 `api_key_name` 和 `reasoning_effort`，API 凭据备注按当前 key 表回补；凭据已删除时为空。导出会写审计日志。
 
 ## OpenAI 兼容入口
 
@@ -111,7 +111,7 @@ usage 记录：
 - 默认记录 endpoint、model、reasoning_effort、可选 session_id、HTTP 状态、耗时、请求/响应字节数和 token usage；未传 reasoning effort 或历史旧数据保持空值，不按 token 反推
 - 上游策略可在管理后台「上游策略」页通过 `api.gateway_upstream_get` / `api.gateway_upstream_set` 读取和切换全局默认；单个 API key 可通过 `upstream_strategy` 覆盖全局默认，空值表示继承全局。未保存运行时设置时，默认 Backend 直连。`codex_backend` 会直接请求 Codex backend `/responses`，backend 失败时默认直接返回上游错误；只有显式选择 Backend + CLI 兜底策略时，纯文本 / 图片请求才允许 fallback 到 `codex_cli`。带工具调用、工具历史或文件输入的 backend-only 请求始终不会 fallback 到 CLI；显式切到强制 CLI 时只走 CLI。
 - `codex_cli` 模式 token 优先读取 Codex JSON 事件里的 usage，没有事件时才退回字符数估算；`codex_backend` 模式优先读取 Responses SSE `response.completed.usage`
-- usage log 会记录 `upstream_configured_mode`、`upstream_mode`、`upstream_fallback` 和细分 `upstream_error_type`，用于区分配置模式、实际执行模式、fallback 情况和失败类型；后台表格会保留原始错误码并展示简短中文说明，完整含义见下方“上游错误类型”。
+- usage log 会记录 `upstream_configured_mode`、`upstream_mode`、`upstream_fallback`、细分 `upstream_error_type` 和统一 `error_type`，用于区分配置模式、实际执行模式、fallback 情况和最终失败类型；后台表格按 `error_type` 保留原始错误码并展示简短中文说明，完整含义见下方“错误类型”。聚合统计中的 `failed_requests` 表示服务 / 上游 / 网关错误数，默认不包含 `client_canceled`；客户端主动断开以 `client_canceled_requests` 单独返回。
 - OpenAI-compatible 请求体支持 `reasoning_effort`、`reasoningEffort` 和 `reasoning.effort`，可选值为 `low`、`medium`、`high`、`xhigh`；direct backend 会转为 OpenAI Responses 口径的 `reasoning.effort`，并默认补 `reasoning.summary=detailed` 以便自定义 Codex provider 展示 reasoning summary；客户端显式传 `auto`、`concise` 或 `detailed` 时会保留，缺失、`none` 或非法值会回补为 `detailed`；CLI 模式会转为 Codex CLI `model_reasoning_effort`
 - direct backend 模式会把 `system` / `developer` 消息合并为 `instructions`；若请求没有这类消息，会补一个最小默认 instructions，因为 Codex backend 要求该字段非空；同时会追加服务端级 Codex 运行规则：
   - 可见过程说明：非平凡工具调用、读文件、shell 命令、SSH、浏览器操作或外部请求前，先输出一到两句简体中文用户可见 commentary / process summary，说明即将做什么和为什么。这是执行过程摘要，不是隐藏 chain-of-thought；不要输出完整私有思考链。
@@ -311,11 +311,13 @@ HTTP 路由：
 - `items[].upstream_mode`
 - `items[].upstream_fallback`
 - `items[].upstream_error_type`
+- `items[].error_type`
 - `items[].diagnostic`
 - `items[].diagnostic_summary`
 - `summary.total_requests`
 - `summary.success_requests`
 - `summary.failed_requests`
+- `summary.client_canceled_requests`
 - `summary.total_tokens`
 - `summary.backend_requests`
 - `summary.cli_requests`
@@ -323,7 +325,7 @@ HTTP 路由：
 - `summary.average_duration_ms`
 - `summary.estimated_cost_usd`
 
-筛选条件支持 `key_id` 单凭据兼容参数、`key_ids` 多凭据数组或逗号分隔值、`reasoning_effort=low|medium|high|xhigh`、`upstream_mode=codex_backend|codex_cli` 和 `upstream_error_type`。未传时不按对应维度过滤；同时传 `key_ids` 与 `key_id` 时优先按 `key_ids` 过滤。
+筛选条件支持 `key_id` 单凭据兼容参数、`key_ids` 多凭据数组或逗号分隔值、`reasoning_effort=low|medium|high|xhigh`、`status_code`、`upstream_mode=codex_backend|codex_cli`、`error_type` 和 `exclude_error_type`。未传时不按对应维度过滤；同时传 `key_ids` 与 `key_id` 时优先按 `key_ids` 过滤。`upstream_error_type` 仍保留兼容，但前端“错误 / 中断类型”筛选使用 `error_type`，可覆盖客户端取消、上下文超限、网关预检和上游失败等统一错误码；异常请求视图默认传 `exclude_error_type=client_canceled`，避免把 HTTP 499 计入服务错误排查。
 
 ### `api.usage_buckets`
 
@@ -336,6 +338,7 @@ HTTP 路由：
 - `items[].total_requests`
 - `items[].success_requests`
 - `items[].failed_requests`
+- `items[].client_canceled_requests`
 - `items[].input_tokens`
 - `items[].cached_tokens`
 - `items[].output_tokens`
@@ -360,6 +363,7 @@ HTTP 路由：
 - `items[].total_requests`
 - `items[].success_requests`
 - `items[].failed_requests`
+- `items[].client_canceled_requests`
 - `items[].input_tokens`
 - `items[].cached_tokens`
 - `items[].output_tokens`
@@ -386,6 +390,7 @@ HTTP 路由：
 - `items[].total_requests`
 - `items[].success_requests`
 - `items[].failed_requests`
+- `items[].client_canceled_requests`
 - `items[].input_tokens`
 - `items[].cached_tokens`
 - `items[].output_tokens`

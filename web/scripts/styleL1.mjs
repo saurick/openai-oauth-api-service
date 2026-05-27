@@ -959,7 +959,7 @@ async function assertApiVisuals(page, scenarioName) {
       hasCoreCards: [
         '今日消费',
         '今日请求',
-        '错误率',
+        '服务错误率',
         '响应耗时',
         '当前 RPM / TPM',
         '上游分布',
@@ -1022,7 +1022,7 @@ async function assertApiVisuals(page, scenarioName) {
   )
   assert(metrics.hasDetailsLink, `${scenarioName} 最近调用缺少明细页入口`)
   assert(
-    ['请求', '错误', '费用', '延迟', 'Token'].every((text) =>
+    ['请求', '服务错误', '费用', '延迟', 'Token'].every((text) =>
       metrics.trendMetricButtons.some((item) => item.text === text)
     ) &&
       metrics.trendMetricButtons.some(
@@ -1060,7 +1060,7 @@ async function assertApiVisuals(page, scenarioName) {
 }
 
 async function assertDashboardTrendMetricInteraction(page, scenarioName) {
-  await page.getByRole('button', { name: '错误', exact: true }).click()
+  await page.getByRole('button', { name: '服务错误', exact: true }).click()
   const metrics = await page.evaluate(() => {
     const pressed = Array.from(
       document.querySelectorAll('[aria-label="趋势指标"] button')
@@ -1077,7 +1077,7 @@ async function assertDashboardTrendMetricInteraction(page, scenarioName) {
   })
   assert(
     metrics.pressed.length === 1 &&
-      metrics.pressed[0] === '错误' &&
+      metrics.pressed[0] === '服务错误' &&
       metrics.hasErrorTitle,
     `${scenarioName} 趋势指标切换错误后状态异常: ${JSON.stringify(metrics)}`
   )
@@ -1145,8 +1145,8 @@ async function assertDashboardTrendTooltip(page, scenarioName) {
   })
   assert(
     hoverMetrics.visible &&
-      hoverMetrics.text.includes('失败请求') &&
-      hoverMetrics.text.includes('错误率') &&
+      hoverMetrics.text.includes('服务错误') &&
+      hoverMetrics.text.includes('服务错误率') &&
       hoverMetrics.text.includes('总请求'),
     `${scenarioName} 趋势图 hover 未展示错误指标明细: ${JSON.stringify(hoverMetrics)}`
   )
@@ -1260,11 +1260,14 @@ async function assertUsageTableVisuals(page, scenarioName) {
       hasTimeRangeFilter: Boolean(
         main?.querySelector('[role="combobox"][aria-label="时间范围"]')
       ),
+      hasStatusCodeFilter: Boolean(
+        main?.querySelector('[role="combobox"][aria-label="HTTP 状态码"]')
+      ),
       hasUpstreamFilter: Boolean(
         main?.querySelector('[role="combobox"][aria-label="实际执行上游"]')
       ),
-      hasUpstreamErrorFilter: Boolean(
-        main?.querySelector('[role="combobox"][aria-label="上游错误类型"]')
+      hasErrorTypeFilter: Boolean(
+        main?.querySelector('[role="combobox"][aria-label="错误或中断类型"]')
       ),
       hasUpstreamStats: document.body.innerText.includes('上游分布'),
       hasUsageTabs:
@@ -1285,8 +1288,9 @@ async function assertUsageTableVisuals(page, scenarioName) {
 
   assert(metrics.hasSidebarUsageNav, `${scenarioName} 缺少后台侧栏 usage 入口`)
   assert(metrics.hasTimeRangeFilter, `${scenarioName} 缺少 usage 时间范围筛选`)
+  assert(metrics.hasStatusCodeFilter, `${scenarioName} 缺少 HTTP 状态码筛选`)
   assert(metrics.hasUpstreamFilter, `${scenarioName} 缺少实际上游筛选`)
-  assert(metrics.hasUpstreamErrorFilter, `${scenarioName} 缺少上游错误类型筛选`)
+  assert(metrics.hasErrorTypeFilter, `${scenarioName} 缺少错误 / 中断类型筛选`)
   assert(metrics.hasUpstreamStats, `${scenarioName} 缺少上游分布统计`)
   assert(metrics.hasUsageTabs, `${scenarioName} usage 分段视图顺序异常`)
   assert(
@@ -1309,6 +1313,7 @@ async function assertUsageTableVisuals(page, scenarioName) {
   await assertUsageDetailsTab(page, scenarioName)
   await assertUsageKeyMultiFilterRequest(page, scenarioName)
   await assertUsageTimeRangeRequest(page, scenarioName)
+  await assertUsageStatusCodeFilterRequest(page, scenarioName)
   await assertUsagePaginationRequest(page, scenarioName)
   await assertUsageErrorsTab(page, scenarioName)
   await assertUsageSessionTab(page, scenarioName)
@@ -1516,7 +1521,9 @@ async function assertUsageErrorsTab(page, scenarioName) {
         .slice(startIndex)
         .some(
           (call) =>
-            call.method === 'usage_list' && call.params?.success === false
+            call.method === 'usage_list' &&
+            call.params?.success === false &&
+            call.params?.exclude_error_type === 'client_canceled'
         )
     ) {
       return
@@ -1525,7 +1532,46 @@ async function assertUsageErrorsTab(page, scenarioName) {
   }
 
   assert.fail(
-    `${scenarioName} 切换异常请求后未按失败状态查询: ${JSON.stringify(
+    `${scenarioName} 切换异常请求后未按服务错误口径查询: ${JSON.stringify(
+      calls.slice(startIndex)
+    )}`
+  )
+}
+
+async function assertUsageStatusCodeFilterRequest(page, scenarioName) {
+  const calls = page.__styleL1ApiRpcCalls || []
+  const startIndex = calls.length
+  await page.getByRole('combobox', { name: 'HTTP 状态码' }).click()
+  await page
+    .getByRole('option', { name: '499 Client Closed Request', exact: true })
+    .click()
+  await page.getByRole('button', { name: '应用筛选', exact: true }).click()
+
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    const matched = calls.slice(startIndex).some((call) => {
+      return (
+        call.method === 'usage_list' &&
+        call.params?.offset === 0 &&
+        call.params?.status_code === 499
+      )
+    })
+    const hasSelected = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('[role="combobox"]')).some(
+        (node) =>
+          node.getAttribute('aria-label') === 'HTTP 状态码' &&
+          node.value === '499 Client Closed Request'
+      )
+    )
+    if (matched && hasSelected) {
+      await page.getByRole('button', { name: '重置', exact: true }).click()
+      return
+    }
+    await delay(100)
+  }
+
+  assert.fail(
+    `${scenarioName} 状态码筛选未按 499 查询: ${JSON.stringify(
       calls.slice(startIndex)
     )}`
   )
