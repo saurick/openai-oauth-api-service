@@ -34,7 +34,7 @@ const (
 	maxGatewayFiles                       = 4
 	maxGatewayFileBytes                   = 16 << 20
 	maxGatewayRequestBytes                = 90 << 20
-	defaultCodexCLITimeout                = 1800 * time.Second
+	defaultCodexCLITimeout                = 28800 * time.Second
 	gatewayUsageWriteTimeout              = 5 * time.Second
 	defaultGatewayStreamHeartbeatInterval = 15 * time.Second
 	statusClientClosedRequest             = 499

@@ -271,7 +271,7 @@ HTTP 路由：
 | `codex_backend_auth_failed` | Backend 鉴权失败 | 服务器 Codex 登录态无效、`auth.json` / refresh token 失效，或上游返回 401 / 403。 |
 | `codex_backend_rate_limited` | Backend 限流 | 上游返回 429，可能是账号、模型或组织维度被限流。 |
 | `codex_backend_http_5xx` | Backend 5xx | Codex backend 或其上游服务返回 5xx。 |
-| `codex_backend_timeout` | Backend 超时 | Codex backend 调用超过超时时间；常见于上游慢、网络慢或 `CODEX_BACKEND_TIMEOUT_SECONDS` 到期。默认生产模板为 `1800` 秒。 |
+| `codex_backend_timeout` | Backend 超时 | Codex backend 调用超过超时时间；常见于上游慢、网络慢或 `CODEX_BACKEND_TIMEOUT_SECONDS` 到期。默认生产模板为 `28800` 秒。 |
 | `codex_backend_response_failed` | Backend response failed | 上游 SSE 返回 `response.failed`，表示本次 response 执行失败。 |
 | `context_length_exceeded` | 上下文超限 | 请求历史超过模型上下文窗口；网关会先尝试压缩可压缩历史，仍超限时直接拦截，避免客户端反复重试。 |
 | `codex_backend_response_incomplete` | Backend response incomplete | 上游 SSE 返回 `response.incomplete`，可能因长度、上下文、策略、工具或内部中断。 |
@@ -279,7 +279,7 @@ HTTP 路由：
 | `codex_backend_http_error` | Backend HTTP 错误 | backend 返回其他非 2xx HTTP 状态，且不属于鉴权、限流或 5xx。 |
 | `codex_backend_upstream_failed` | Backend 未分类失败 | backend 兜底错误，需要结合服务日志里的 `err` 查看。 |
 | `client_canceled` | 客户端取消 | 下游客户端或入口代理主动断开请求；通常应排查客户端超时、网络中断或流式保活是否被识别。 |
-| `codex_cli_timeout` | CLI 超时 | Codex CLI 执行超过 `CODEX_CLI_TIMEOUT_SECONDS`。默认生产模板为 `1800` 秒。 |
+| `codex_cli_timeout` | CLI 超时 | Codex CLI 执行超过 `CODEX_CLI_TIMEOUT_SECONDS`。默认生产模板为 `28800` 秒。 |
 | `codex_cli_not_found` | CLI 不存在 | 容器内找不到 `codex` 二进制，或 `CODEX_CLI_BIN` / PATH 配错。 |
 | `codex_cli_empty_prompt` | CLI 空输入 | 请求体没有有效 user input，或请求转换后 prompt 为空。 |
 | `codex_cli_empty_answer` | CLI 空回复 | CLI 正常退出但未解析到最终回答，可能输出格式变化或模型无最终回答。 |

@@ -25,7 +25,7 @@ const (
 	codexUpstreamModeBackend = biz.GatewayUpstreamModeCodexBackend
 
 	defaultCodexBackendBaseURL       = "https://chatgpt.com/backend-api/codex"
-	defaultCodexBackendTimeout       = 1800 * time.Second
+	defaultCodexBackendTimeout       = 28800 * time.Second
 	defaultCodexBackendRetries       = 2
 	codexOAuthClientID               = "app_EMoamEEZ73f0CkXaXp7hrann"
 	defaultCodexRefreshURL           = "https://auth.openai.com/oauth/token"

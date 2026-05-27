@@ -2,6 +2,18 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-27 长任务 8 小时超时窗口
+- 判断：官方 Codex 单会话可以跑很久，本项目中转层不应比官方客户端更早掐断；长时间本地工具执行通常不占用上游 SSE，但模型请求本身长时间等待时，服务端、Nginx 和客户端 provider timeout 都不能停留在 10 或 30 分钟。
+- 完成：将 Codex backend / CLI 默认上游超时从 `1800s` 提高到 `28800s`，服务 HTTP 超时从 `1900s` 提高到 `28900s`，Compose Nginx 样例 `proxy_read_timeout` / `proxy_send_timeout` 提高到 `28900s`，并同步 `server/docs/config.md`、`server/docs/api.md`、`server/deploy/compose/prod/README.md`。
+- 客户端配置：本机 Mac Codex 从 `0.130.0` 升级到 `0.133.0`；本机 Mac OpenCode 和 Windows `sauri@192.168.0.45` OpenCode 的 `oauth-api-service` provider timeout 均从 `600000ms` 调整为 `28800000ms`，不改 API key。
+- 补充验证：本机 Mac Codex 通过临时 `CODEX_HOME` + 临时 key 返回 `MAC_CODEX_TEMP_OK`；本机 Mac OpenCode 通过临时配置 + 临时 key 返回 `MAC_OPENCODE_TEMP_OK`；Windows OpenCode 通过临时配置 + 临时 key 的服务端 usage 记录为 `200`、`reasoning_effort=medium`、约 `3.0s` 完成；临时 key `octest`、`ocwin`、`codemac` 均已删除。
+- 验证通过：`cd server && go test ./internal/server -run 'TestUpstreamErrorType|TestStreamCodexBackendResponsesKeepsAliveBeforeUpstreamHeaders|TestStreamCodexBackendResponsesPassesThroughEventsAndUsage'`、`cd server && go test ./...`、`cd server && make build`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`git diff --check`。
+- 部署：本地构建并上传 linux/amd64 镜像，仓库名 `oauth-api-service-server`，tag 为 `20260527T215740-55ef479-local-8h-timeout`，远端 release 目录为 `/data/openai-oauth-api-service/releases/20260527T215740-55ef479-local-8h-timeout`；远端校验 image / migrate 包 sha256 一致，宿主机 `/usr/local/bin/atlas` 状态为最新且无待执行 migration，更新 Compose `.env` 的 `APP_IMAGE`、`CODEX_CLI_TIMEOUT_SECONDS=28800`、`CODEX_BACKEND_TIMEOUT_SECONDS=28800` 后重建 `app-server`，未在服务器构建，也未改管理员密码。
+- 线上配置修正：远端 compose 默认 Codex CLI / backend 超时已改为 `28800`；宿主机 Nginx `/etc/nginx/snippets/openai-oauth-api-service-proxy-common.conf` 已备份并将 `proxy_read_timeout` / `proxy_send_timeout` 改为 `28900s`，`nginx -t` 通过后已 reload。
+- 线上验证通过：远端容器运行镜像仓库 `oauth-api-service-server`、tag `20260527T215740-55ef479-local-8h-timeout`，容器环境 `GIT_SHA_SHORT=55ef479-local`、`CODEX_CLI_TIMEOUT_SECONDS=28800`、`CODEX_BACKEND_TIMEOUT_SECONDS=28800`、`GATEWAY_STREAM_HEARTBEAT_SECONDS=15`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；公网临时 key 流式回归首行 `: keepalive`，完整请求返回 `LONG_TIMEOUT_OK`，验证用临时 key 已删除。
+- 清理：删除本轮远端 release 的镜像压缩包与校验文件，执行 `docker image prune -a -f` 与 `docker builder prune -f`，未执行 volume prune；根分区使用率保持 52%，Docker 镜像占用 4.067GB，当前业务容器和数据库容器保持运行。
+- 阻塞/风险：该改动消除本项目服务端、Nginx 与 OpenCode provider 的 10/30 分钟人为短板，但仍不保证任意单条上游请求能稳定挂满 8 小时；上游服务、电脑休眠、代理、token 状态和客户端自身机制仍可能中断。大半天任务仍应依赖 Codex 会话恢复、checkpoint 和分阶段执行。
+
 ## 2026-05-27 长上下文中转慢与 10 分钟断流修复
 - 现场证据：线上近 2 天 `/v1/responses` / `/v1/chat/completions` 的慢失败集中在 `gpt-5.5 + codex_backend`；多条失败刚好卡到 `600s`，`upstream_error_type=codex_backend_timeout` 或 `client_canceled`，部分 `response_bytes=0`，说明下游在等待上游响应头期间没有收到 SSE 数据或保活。
 - 完成：`/v1/responses stream=true` 的 Codex backend 主路径改为先建立下游 SSE 并立即输出 keepalive，再异步连接上游；等待上游响应头期间继续按 `GATEWAY_STREAM_HEARTBEAT_SECONDS` 输出 keepalive，避免长上下文请求在上游首包前被客户端 / 入口代理误判为空闲断开。
@@ -26,9 +38,9 @@
 - 验证通过：`cd web && pnpm test`、`cd web && pnpm css`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/common/components/layout/AdminFrame.jsx src/common/components/modal/AppModal.jsx src/common/components/modal/AlertDialog.jsx scripts/styleL1.mjs`、`cd web && STYLE_L1_PORT=4367 NODE_USE_ENV_PROXY=0 STYLE_L1_SCENARIOS=admin-dashboard-mobile,admin-session-expired-modal-desktop,admin-session-expired-modal-mobile-dark pnpm style:l1`、`cd web && STYLE_L1_PORT=4370 NODE_USE_ENV_PROXY=0 STYLE_L1_SCENARIOS=admin-keys-desktop pnpm style:l1`、`cd web && STYLE_L1_PORT=4371 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`cd web && pnpm build`、`bash scripts/qa/secrets.sh`、`git diff --check`。
 - 验证补充：in-app Browser 通过 OAuth callback 测试管理员态打开 `http://127.0.0.1:4368/admin-dashboard`，页面身份和首屏渲染正常，仅有 React Router v7 future warning；本地旧 `VITE_ENABLE_RPC_MOCK` 未覆盖当前 `admin_login` / `api` 主路径，因此登录态弹窗和 API key 列宽用 `style:l1` 网络 mock 做确定性回归。
 - 提交推送：已提交 `a9c1e2e4`（`fix: 统一登录态失效弹窗样式`）并推送到 `origin/main`；首次 pre-push 在默认并发下因本机资源临时不足触发 `cgo` buildID 获取失败，随后用 `GOMAXPROCS=2 GOFLAGS='-p=1'` 复跑 `go test ./...`、`make build` 和 `git push` 均通过。
-- 部署：本地构建 linux/amd64 镜像 `oauth-api-service-server:20260526T221901-a9c1e2e4-modal-ui`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260526T221901-a9c1e2e4-modal-ui/`；远端仅执行 checksum、`docker load`、宿主机 `/usr/local/bin/atlas` status/apply、备份并更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 部署：本地构建 linux/amd64 镜像，仓库名 `oauth-api-service-server`，tag 为 `20260526T221901-a9c1e2e4-modal-ui`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260526T221901-a9c1e2e4-modal-ui/`；远端仅执行 checksum、`docker load`、宿主机 `/usr/local/bin/atlas` status/apply、备份并更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
 - 部署修正：首次 migration tar 包含 macOS AppleDouble `._*` 元数据，导致 Atlas checksum mismatch；已用 `COPYFILE_DISABLE=1 tar --exclude='._*' --exclude='.DS_Store'` 重新打包并上传，远端确认迁移目录不再包含这些元数据文件。Atlas 状态 `OK`，当前版本 `20260520090000`，待执行 `0`。
-- 线上验证通过：容器运行镜像为 `oauth-api-service-server:20260526T221901-a9c1e2e4-modal-ui`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；本机 JSON-RPC `system.version` 返回 `code=0`，管理员 `admin_login` 返回 `code=0`。
+- 线上验证通过：容器运行镜像仓库 `oauth-api-service-server`、tag `20260526T221901-a9c1e2e4-modal-ui`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；本机 JSON-RPC `system.version` 返回 `code=0`，管理员 `admin_login` 返回 `code=0`。
 - 清理：按发布约定执行 `docker image prune -a -f` 与 `docker builder prune -f`，未执行 volume prune；清理前 `/` 使用率 53%、Docker images 4.78GB，清理后 `/` 使用率 53%、Docker images 4.427GB，旧 app 镜像 `oauth-api-service-server:20260526T090202-5d604ae-local-visible-commentary` 已取消标签。
 - 阻塞/风险：`govulncheck` 在 pre-push 中仍报告 Go 1.25.9 / `x/net` 的已知漏洞告警，但仓库脚本当前按 warning 处理且未阻塞推送；本轮未处理依赖升级。
 
@@ -256,11 +268,11 @@
 - 完成：同步更新 `server/docs/api.md`、`web/README.md` 和 `style:l1` mock/断言，覆盖 key 级策略列表展示、弹窗新建态、编辑态回显、暗色模式和桌面/移动端盒模型。
 - 验证通过：`cd server && make data`、`cd server && go test ./internal/biz ./internal/data ./internal/server`、`cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4325 NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。
 - 提交：已提交并推送 `48640da6`（`支持 API key 级上游策略`）。
-- 部署：本地构建镜像 `oauth-api-service-server:20260519T174003-48640da6`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260519T174003-48640da6/`；远端仅执行 `docker load`、宿主机 Atlas migration、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
+- 部署：本地构建镜像，仓库名 `oauth-api-service-server`，tag 为 `20260519T174003-48640da6`，上传到 `8.218.4.199:/data/openai-oauth-api-service/releases/20260519T174003-48640da6/`；远端仅执行 `docker load`、宿主机 Atlas migration、更新 Compose `.env` 的 `APP_IMAGE`、`docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。
 - 迁移：远端 Atlas 从 `20260518092411` 应用到 `20260519093313`，新增 `gateway_api_keys.upstream_strategy`；迁移后状态 `OK`、待执行 `0`。
-- 部署验证：远端当前运行镜像为 `oauth-api-service-server:20260519T174003-48640da6`，容器内 `GIT_SHA_SHORT=48640da6`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；公网管理员 `admin/adminadmin` 登录返回 `code=0`，`api.key_list` 返回 `code=0 total=10` 且 `items[].upstream_strategy` 字段存在；使用现有 key 调用公网 `/v1/models` 返回 `HTTP 200` 和 6 个模型。
+- 部署验证：远端当前运行镜像仓库 `oauth-api-service-server`、tag `20260519T174003-48640da6`，容器内 `GIT_SHA_SHORT=48640da6`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；公网管理员 `admin/adminadmin` 登录返回 `code=0`，`api.key_list` 返回 `code=0 total=10` 且 `items[].upstream_strategy` 字段存在；使用现有 key 调用公网 `/v1/models` 返回 `HTTP 200` 和 6 个模型。
 - 清理：清理前远端 `/` 使用率 52%、Docker images 4.73GB；执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧 app 镜像 `20260519T172757-fb7d27d1`，回收 348.3MB；清理后 `/` 使用率 50%、Docker images 4.026GB；已删除远端本轮 release image tar 包，未执行 volume prune。
-- 阻塞/风险：本轮没有改 usage schema 来单独记录“策略来源=全局/key”，排障时可从当前 key 配置和 usage 的最终 `upstream_configured_mode` / `upstream_mode` 判断；如后续需要审计策略来源，应单独扩展 usage 字段。首次远端重建时 shell 中旧 `APP_IMAGE` 覆盖 `.env`，容器仍使用旧镜像；已用显式 `APP_IMAGE=oauth-api-service-server:20260519T174003-48640da6` 重新重建并复核通过。
+- 阻塞/风险：本轮没有改 usage schema 来单独记录“策略来源=全局/key”，排障时可从当前 key 配置和 usage 的最终 `upstream_configured_mode` / `upstream_mode` 判断；如后续需要审计策略来源，应单独扩展 usage 字段。首次远端重建时 shell 中旧 `APP_IMAGE` 覆盖 `.env`，容器仍使用旧镜像；已用显式镜像 tag `20260519T174003-48640da6` 重新重建并复核通过。
 
 ## 2026-05-19 FontAwesome npm token 暴露处理
 - 完成：扫描当前工作区和 Git 历史，未发现 OpenAI / ChatGPT `refresh_token` 或 `auth.json` 明文入库；发现 FontAwesome npm auth token 曾以字面量写入 `web/.npmrc` 和 `web/.yarnrc.yml`。

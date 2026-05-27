@@ -28,7 +28,7 @@
 
 - HTTP `0.0.0.0:8400`
 - gRPC `0.0.0.0:9400`
-- HTTP 超时 `1900s`，需要覆盖 Codex backend / CLI 最长 `1800s` 上游等待窗口，避免长上下文请求在外层 HTTP context 先被切断并记录为 502。
+- HTTP 超时 `28900s`，需要覆盖 Codex backend / CLI 最长 `28800s` 上游等待窗口，避免长上下文请求在外层 HTTP context 先被切断并记录为 502。
 - gRPC 超时 `10s`，当前主要用于内部接口默认保护，不承载 OpenAI-compatible 长耗时转发。
 
 ## `log`
@@ -94,9 +94,9 @@
 - `CODEX_APP_SERVER_BIN`：公开余额查询使用的 Codex app-server 可执行文件，默认复用 `CODEX_CLI_BIN`，再回退到 `codex`。
 - `CODEX_BALANCE_TIMEOUT_SECONDS`：`GET /public/codex/balance` 启动 Codex app-server 并读取 `account/rateLimits/read` 的超时，默认 `15` 秒。
 - `CODEX_BALANCE_CACHE_SECONDS`：公开余额查询的内存缓存时间，默认 `30` 秒；设为 `0` 可关闭缓存。
-- `CODEX_CLI_TIMEOUT_SECONDS`：单次 Codex CLI upstream 超时，默认 `1800` 秒。
+- `CODEX_CLI_TIMEOUT_SECONDS`：单次 Codex CLI upstream 超时，默认 `28800` 秒。
 - `CODEX_BACKEND_BASE_URL`：direct backend 基础地址，默认 `https://chatgpt.com/backend-api/codex`。
-- `CODEX_BACKEND_TIMEOUT_SECONDS`：direct backend 单次请求超时，默认 `1800` 秒。
+- `CODEX_BACKEND_TIMEOUT_SECONDS`：direct backend 单次请求超时，默认 `28800` 秒。
 - `CODEX_BACKEND_RETRY_ATTEMPTS`：direct backend 瞬时失败重试次数，默认 `2`；仅对 HTTP `429` / `5xx` 和连接类错误生效，`response.failed` / `response.incomplete` 这类上游终态事件不做服务端盲重试。
 - `CODEX_BACKEND_USER_AGENT`：direct backend 请求 `User-Agent`，默认 `codex-cli`。
 - `GATEWAY_STREAM_HEARTBEAT_SECONDS`：`stream=true` 请求等待上游期间的 SSE keepalive 间隔，默认 `15` 秒；backend Responses 流会在连接上游前先建立下游 SSE 并持续输出 keepalive，用于避免 Codex / OpenCode / Cloudflare / 代理在长请求无输出时断开连接。
