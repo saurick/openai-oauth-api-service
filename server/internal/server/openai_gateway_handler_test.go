@@ -137,7 +137,7 @@ echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1,"tota
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -195,7 +195,7 @@ echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1,"tota
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -255,7 +255,7 @@ echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1,"tota
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -315,7 +315,7 @@ func TestStreamResponsesReturnsSSEErrorAfterHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200 because stream headers were already sent", resp.StatusCode)
 	}
@@ -1341,6 +1341,65 @@ func TestStreamCodexBackendResponsesPassesThroughEventsAndUsage(t *testing.T) {
 	}
 	if result.Metrics.InputTokens != 9 || result.Metrics.CachedTokens != 3 || result.Metrics.OutputTokens != 5 || result.Metrics.ReasoningTokens != 1 || result.Metrics.TotalTokens != 14 {
 		t.Fatalf("unexpected metrics: %#v", result.Metrics)
+	}
+}
+
+func TestStreamCodexBackendResponsesKeepsAliveBeforeUpstreamHeaders(t *testing.T) {
+	accessToken := testJWT(time.Now().Add(time.Hour).Unix(), "acct_123")
+	authPath := filepath.Join(t.TempDir(), "auth.json")
+	if err := os.WriteFile(authPath, []byte(`{"tokens":{"access_token":"`+accessToken+`","refresh_token":"refresh-token","account_id":"acct_123"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(2 * time.Second)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"usage\":{\"input_tokens\":2,\"output_tokens\":1,\"total_tokens\":3}}}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer upstream.Close()
+
+	t.Setenv("CODEX_AUTH_FILE", authPath)
+	t.Setenv("CODEX_BACKEND_BASE_URL", upstream.URL)
+	t.Setenv("CODEX_BACKEND_TIMEOUT_SECONDS", "30")
+	t.Setenv("GATEWAY_STREAM_HEARTBEAT_SECONDS", "1")
+
+	errCh := make(chan error, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := (&openAIGatewayHandler{}).streamCodexBackendResponses(
+			r.Context(),
+			w,
+			"/v1/responses",
+			[]byte(`{"model":"gpt-5.5","stream":true,"input":"Reply OK"}`),
+			"gpt-5.5",
+			"medium",
+			false,
+		)
+		errCh <- err
+	}))
+	defer server.Close()
+
+	start := time.Now()
+	resp, err := http.Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	reader := bufio.NewReader(resp.Body)
+	first := readNonEmptyStreamLine(t, reader)
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("first keepalive took %s, want under 1s", elapsed)
+	}
+	if first != ": keepalive\n" {
+		t.Fatalf("first line = %q, want keepalive comment", first)
+	}
+	second := readNonEmptyStreamLine(t, reader)
+	if !strings.Contains(second, "keepalive") && !strings.Contains(second, "response.completed") {
+		t.Fatalf("second line = %q, want keepalive or upstream event", second)
 	}
 }
 

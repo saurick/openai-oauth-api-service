@@ -2,6 +2,21 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-27 长上下文中转慢与 10 分钟断流修复
+- 现场证据：线上近 2 天 `/v1/responses` / `/v1/chat/completions` 的慢失败集中在 `gpt-5.5 + codex_backend`；多条失败刚好卡到 `600s`，`upstream_error_type=codex_backend_timeout` 或 `client_canceled`，部分 `response_bytes=0`，说明下游在等待上游响应头期间没有收到 SSE 数据或保活。
+- 完成：`/v1/responses stream=true` 的 Codex backend 主路径改为先建立下游 SSE 并立即输出 keepalive，再异步连接上游；等待上游响应头期间继续按 `GATEWAY_STREAM_HEARTBEAT_SECONDS` 输出 keepalive，避免长上下文请求在上游首包前被客户端 / 入口代理误判为空闲断开。
+- 完成：将 Codex backend / CLI 默认上游超时从 `600s` 调整为 `1800s`，并将服务 HTTP 超时和 Compose Nginx 样例反代读写超时调整为 `1900s`，给长上下文任务留出服务端窗口。
+- 文档：同步更新 `server/docs/config.md`、`server/docs/api.md` 和 `server/deploy/compose/prod/README.md` 的超时与 keepalive 口径。
+- 验证通过：`cd server && go test ./internal/server -run 'TestStreamCodexBackendResponses|TestStreamResponsesKeepsConnectionAlive|TestStreamResponsesWritesCreated|TestStreamChatCompletionsKeepsConnectionAlive|TestUpstreamErrorType'`、`cd server && go test ./...`、`cd server && make build`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`git diff --check`。
+- 部署：本地构建并上传 linux/amd64 镜像 `oauth-api-service-server:20260527T210610-ffe3c0a1-stream-keepalive`，远端 release 目录为 `/data/openai-oauth-api-service/releases/20260527T210610-ffe3c0a1-stream-keepalive`；远端校验 image / migrate 包 sha256 一致，宿主机 `/usr/local/bin/atlas` 状态为最新且无待执行 migration，更新 Compose `.env` 的 `APP_IMAGE`、`CODEX_CLI_TIMEOUT_SECONDS=1800`、`CODEX_BACKEND_TIMEOUT_SECONDS=1800` 后重建 `app-server`，未在服务器构建，也未改管理员密码。
+- 线上配置修正：远端 compose `compose.yml` 的 Codex CLI / backend 默认超时从 `600` 改为 `1800`；宿主机 Nginx `/etc/nginx/snippets/openai-oauth-api-service-proxy-common.conf` 已备份并将 `proxy_read_timeout` / `proxy_send_timeout` 从 `600s` 改为 `1900s`，`nginx -t` 通过后已 reload。
+- 线上验证通过：远端容器运行镜像 `oauth-api-service-server:20260527T210610-ffe3c0a1-stream-keepalive`，容器环境 `GIT_SHA_SHORT=ffe3c0a1`、`CODEX_CLI_TIMEOUT_SECONDS=1800`、`CODEX_BACKEND_TIMEOUT_SECONDS=1800`、`GATEWAY_STREAM_HEARTBEAT_SECONDS=15`；远端本机和公网 `/healthz` 返回 `ok`、`/readyz` 返回 `ready`；公网临时 key 流式回归 59ms 内收到首行 `: keepalive`，完整小请求 31.5s 后收到 `response.completed`、`[DONE]` 和 `STREAM_FULL_OK`，两个验证用临时 key 均已删除。
+- 线上日志：发布后 20 分钟内 `/v1/responses` 有 2 条验证记录，1 条成功、1 条为刻意读首行后断开的 `client_canceled`，无 `codex_backend_timeout`；服务日志仅有该刻意断开的 `client_canceled` WARN，未见新 panic/fatal。
+- Windows 客户端补充验证：SSH 到 `sauri@192.168.0.45`，确认 Windows Codex CLI 为 `0.133.0`，默认 `saurick` profile 指向 `https://oauth-api.saurick.me/v1`；通过 `codex exec --profile saurick --skip-git-repo-check` 真实走生产中转，最终输出 `WIN_STREAM_OK`，服务端 usage 对应 `200` 成功。随后用 `--profile saurick` 复测 ASCII medium 场景也返回 `WIN_SAURICK_MEDIUM_OK`。
+- Windows 端发现：`--profile medium` 不是 Saurick 中转 profile，而是继承全局官方 `openai` provider；该路径失败于 Windows 本机 ChatGPT 登录态 `refresh_token_reused` / `token_expired`，未走本服务。Windows 端还会输出 MCP transport 的 `token_expired` 噪音日志，但不影响 Saurick provider 请求完成。
+- 清理：删除本轮远端 release 的镜像压缩包与校验文件，执行 `docker image prune -a -f` 与 `docker builder prune -f`，未执行 volume prune；根分区使用率从 54% 降到 52%，Docker 镜像占用从 4.78GB 降到 4.067GB，当前业务容器和数据库容器保持运行。
+- 阻塞/风险：该修复保证连接不断和服务端不在 10 分钟主动超时，但不保证上游模型本身一定更快；若上游持续 30 分钟无最终结果，仍会按新超时记录为 backend timeout。
+
 ## 2026-05-26 登录态失效弹窗统一
 - 完成：将全局 `AppModal` / `AlertDialog` 从旧深色通用面板改为复用后台 `admin-modal-*` 弹窗结构、标题、关闭按钮、确认按钮和浅色 / 暗色主题变量；登录态失效弹窗现在与 API key 确认、模型上下文、用量详情等后台弹窗保持一致。
 - 完成：后台内容列增加页面级横向 overflow 收口，避免移动端宽表在自己的 `overflow-auto` 滚动容器外继续撑出 body 横向滚动；内部表格横向滚动能力保留。

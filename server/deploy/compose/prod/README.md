@@ -38,7 +38,7 @@ CODEX_CONTAINER_HOME=/root/.codex
 CODEX_UPSTREAM_MODE=codex_backend
 CODEX_UPSTREAM_FALLBACK_ENABLED=false
 CODEX_CLI_BIN=codex
-CODEX_CLI_TIMEOUT_SECONDS=600
+CODEX_CLI_TIMEOUT_SECONDS=1800
 CODEX_BACKEND_RETRY_ATTEMPTS=2
 APP_MEM_LIMIT=900m
 APP_MEM_RESERVATION=256m
@@ -110,7 +110,7 @@ docker compose -f compose.yml -f compose.nginx.yml --env-file .env up -d nginx
 - `oauth-api.saurick.me` HTTPS 主入口，反代到 Compose 内部 `app-server:8400`。
 - `/.well-known/acme-challenge/` HTTP-01 challenge webroot。
 - 旧域名 `oauth-api.saurick.space`、`openai.saurick.space` 到 `oauth-api.saurick.me` 的跳转样本。
-- `proxy_read_timeout 700s` / `proxy_send_timeout 700s`，给 app-server 与 Codex 上游 600 秒等待窗口留余量。
+- `proxy_read_timeout 1900s` / `proxy_send_timeout 1900s`，给 app-server 与 Codex 上游 1800 秒等待窗口留余量。
 - `client_max_body_size 90m`，与 app-server 的 OpenAI-compatible data URL 附件请求体上限保持一致。
 
 启用前必须准备证书和 ACME webroot 目录：

@@ -34,7 +34,7 @@ const (
 	maxGatewayFiles                       = 4
 	maxGatewayFileBytes                   = 16 << 20
 	maxGatewayRequestBytes                = 90 << 20
-	defaultCodexCLITimeout                = 600 * time.Second
+	defaultCodexCLITimeout                = 1800 * time.Second
 	gatewayUsageWriteTimeout              = 5 * time.Second
 	defaultGatewayStreamHeartbeatInterval = 15 * time.Second
 	statusClientClosedRequest             = 499
@@ -557,21 +557,6 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 	reqCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	respBody, err := defaultCodexBackendClient.openResponses(reqCtx, requestBody, false)
-	if err != nil && isCodexBackendUnauthorized(err) {
-		respBody, err = defaultCodexBackendClient.openResponses(reqCtx, requestBody, true)
-	}
-	if reqCtx.Err() == context.DeadlineExceeded {
-		err = fmt.Errorf("codex backend upstream timed out after %s", timeout)
-	}
-	if err != nil {
-		return codexBackendResponsesStreamResult{
-			ErrorType:  upstreamErrorType(err, codexUpstreamModeBackend),
-			Diagnostic: gatewayUsageDiagnosticForUpstreamFailure(path, body, reasoningEffort, err, fallbackEnabled),
-		}, err
-	}
-	defer respBody.Close()
-
 	flusher, _ := w.(stdhttp.Flusher)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -582,6 +567,61 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 		Started:    true,
 		Diagnostic: gatewayUsageDiagnosticForRequest(path, body, reasoningEffort),
 	}
+	result.ResponseBytes += writeGatewaySSEComment(w, flusher, "keepalive")
+
+	ticker := time.NewTicker(gatewayStreamHeartbeatInterval())
+	defer ticker.Stop()
+
+	type openResult struct {
+		body io.ReadCloser
+		err  error
+	}
+	openCh := make(chan openResult)
+	go func() {
+		respBody, err := defaultCodexBackendClient.openResponses(reqCtx, requestBody, false)
+		if err != nil && isCodexBackendUnauthorized(err) {
+			respBody, err = defaultCodexBackendClient.openResponses(reqCtx, requestBody, true)
+		}
+		select {
+		case openCh <- openResult{body: respBody, err: err}:
+		case <-reqCtx.Done():
+			if respBody != nil {
+				_ = respBody.Close()
+			}
+		}
+	}()
+
+	var respBody io.ReadCloser
+	for respBody == nil {
+		select {
+		case opened := <-openCh:
+			err := opened.err
+			if reqCtx.Err() == context.DeadlineExceeded {
+				err = fmt.Errorf("codex backend upstream timed out after %s", timeout)
+			}
+			if err != nil {
+				result.ResponseBytes += writeGatewayResponsesStreamFailure(w, flusher, upstreamErrorType(err, codexUpstreamModeBackend), err)
+				result.ErrorType = upstreamErrorType(err, codexUpstreamModeBackend)
+				result.Diagnostic = gatewayUsageDiagnosticForUpstreamFailure(path, body, reasoningEffort, err, fallbackEnabled)
+				result.Diagnostic.ResponseBytes = result.ResponseBytes
+				return result, err
+			}
+			respBody = opened.body
+		case <-ticker.C:
+			result.ResponseBytes += writeGatewaySSEComment(w, flusher, "keepalive")
+		case <-reqCtx.Done():
+			err := reqCtx.Err()
+			if err == context.DeadlineExceeded {
+				err = fmt.Errorf("codex backend upstream timed out after %s", timeout)
+			}
+			result.ResponseBytes += writeGatewayResponsesStreamFailure(w, flusher, upstreamErrorType(err, codexUpstreamModeBackend), err)
+			result.ErrorType = upstreamErrorType(err, codexUpstreamModeBackend)
+			result.Diagnostic.UpstreamBody = summarizeErrorForUsage(err)
+			return result, err
+		}
+	}
+	defer func() { _ = respBody.Close() }()
+
 	content := strings.Builder{}
 	doneSeen := false
 	completedSeen := false
@@ -599,9 +639,6 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 	dataCh := make(chan string, 16)
 	errCh := make(chan error, 1)
 	go scanSSEDataMessages(respBody, dataCh, errCh)
-
-	ticker := time.NewTicker(gatewayStreamHeartbeatInterval())
-	defer ticker.Stop()
 
 	for {
 		select {
