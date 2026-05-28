@@ -158,6 +158,10 @@ const USAGE_ERROR_FILTER_OPTIONS = [
     value: 'codex_backend_response_incomplete',
   },
   { label: 'Backend 流中断', value: 'codex_backend_stream_error' },
+  {
+    label: 'Backend 流中途断开',
+    value: 'codex_backend_stream_interrupted',
+  },
   { label: 'Backend HTTP 错误', value: 'codex_backend_http_error' },
   { label: 'Backend 未分类失败', value: 'codex_backend_upstream_failed' },
   { label: 'CLI 超时', value: 'codex_cli_timeout' },

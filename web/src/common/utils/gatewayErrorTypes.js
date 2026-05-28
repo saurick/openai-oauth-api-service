@@ -66,7 +66,13 @@ const GATEWAY_ERROR_TYPES = {
   },
   codex_backend_stream_error: {
     label: 'Backend 流中断',
-    description: 'SSE 流连接 reset、unexpected EOF、代理或网络断流。',
+    description:
+      'SSE 流在首个有效上游事件前连接 reset、unexpected EOF、代理或网络断流。',
+  },
+  codex_backend_stream_interrupted: {
+    label: 'Backend 流中途断开',
+    description:
+      '上游 SSE 已返回部分事件，但尚未返回 response.completed / [DONE] 就断开；通常是上游、代理或网络中途断流，不能在网关侧安全自动重试。',
   },
   codex_backend_http_error: {
     label: 'Backend HTTP 错误',

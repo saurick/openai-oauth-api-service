@@ -122,7 +122,7 @@ usage 记录：
 - `/v1/chat/completions` 和 `/v1/responses` 在请求体接近上下文窗口时会先做网关侧压缩预检：阈值按模型级配置、环境变量运维覆盖、内置模型推荐值和旧默认兜底依次决定；压缩会保留系统 / developer 指令、最近消息和最近完整工具闭环，较早历史压缩为工程摘要；如果客户端传入 `session_id`，摘要会按 session 保存并在后台会话聚合展示压缩次数、摘要、压缩前后体积、粗估 token 和本次生效阈值。
 - 上下文压缩后仍超过硬阈值，或 Codex backend 明确返回 `context_length_exceeded` 时，usage 会记录 `upstream_error_type=context_length_exceeded`，避免继续显示成普通 `codex_backend_response_failed` / 502；非流式预检拦截返回 HTTP `413`，流式已开始后会在 SSE 内返回 `response.failed`。
 - 服务端只对可判定为瞬时的 backend 错误做有限重试，包括上游 HTTP `429` / `5xx` 和连接类错误；`context_length_exceeded`、上游终态 `response.failed`、`response.incomplete`、下游 `client_canceled`、鉴权失败、参数校验失败和 backend-only 请求无法 fallback 的情况不做服务端盲重试，避免和 Codex / OpenCode 客户端自身重试叠加放大请求。
-- `/v1/chat/completions` 和 `/v1/responses` 的 `stream=true` 会按 `GATEWAY_STREAM_HEARTBEAT_SECONDS` 输出保活事件，避免 Codex / OpenCode / Cloudflare / 代理在长请求无输出时断开连接。`/v1/responses` 在 Codex backend 模式下会先建立下游 SSE 并输出 keepalive，再直连透传上游 Responses SSE `data:` 事件，包括 `response.reasoning_summary_text.delta/done`、执行过程、文本增量、完成事件和 usage；网关只旁路解析 usage / 错误用于落库。CLI 模式和 Chat Completions 兼容入口仍会按 OpenAI SSE 口径合成下游事件，并在有 reasoning summary 时输出 reasoning item / summary 事件。上游在流内失败时返回 `response.failed` 与 `[DONE]`；下游客户端主动断开会按 `client_canceled` 记录，不再归类为 Backend 上游 502。
+- `/v1/chat/completions` 和 `/v1/responses` 的 `stream=true` 会按 `GATEWAY_STREAM_HEARTBEAT_SECONDS` 输出保活事件，避免 Codex / OpenCode / Cloudflare / 代理在长请求无输出时断开连接。`/v1/responses` 在 Codex backend 模式下会先建立下游 SSE 并输出 keepalive，再直连透传上游 Responses SSE `data:` 事件，包括 `response.reasoning_summary_text.delta/done`、执行过程、文本增量、完成事件和 usage；网关只旁路解析 usage / 错误用于落库。CLI 模式和 Chat Completions 兼容入口仍会按 OpenAI SSE 口径合成下游事件，并在有 reasoning summary 时输出 reasoning item / summary 事件。上游在流内失败时返回 `response.failed` 与 `[DONE]`；下游客户端主动断开会按 `client_canceled` 记录，不再归类为 Backend 上游 502。若上游已经返回部分 SSE 事件，但还没出现 `response.completed` 或 `[DONE]` 就断开，会按 `codex_backend_stream_interrupted` 记录，避免和首个有效事件前的连接错误混在一起。
 - `/v1/models` 除 OpenAI 标准 `data` 外还返回 Codex CLI 读取的 `models` 元数据，包括 reasoning levels、shell type、context window、reasoning summary、verbosity 和输入模态等字段，用于兼容自定义 provider 的模型刷新；context window 使用当前模型的生效上下文窗口，`effective_context_window_percent` 使用硬拦截阈值占窗口比例；默认按 Codex 体验声明 `supports_reasoning_summaries=true`、`default_reasoning_summary=detailed`、`default_verbosity=medium`
 - OpenAI-compatible 图片输入支持 data URL 形式的 `image_url` / `input_image`；CLI 模式会临时落盘并通过 Codex CLI `--image` 附加到本次请求，direct backend 模式会直接传入 `/responses` 内容；单次最多 4 张、单张最大 16 MiB，网关总请求体上限 90 MiB，用于覆盖 data URL 的 base64 膨胀。
 - OpenAI-compatible PDF 输入支持 `input_file` / `file` 的 `application/pdf` data URL，或带 `mimeType=application/pdf` / `media_type=application/pdf` 的 base64 文件数据；PDF 仅支持 direct backend 模式，单次最多 4 个、单个最大 16 MiB，网关总请求体上限 90 MiB。`txt` / `md` / 代码等文本类附件由客户端读取成文本后按普通 `text` 输入转发；`doc` / `docx` / `xls` / `xlsx` 暂不声明为原生模态，后续如需支持应先增加明确的服务端转换链路。
@@ -275,7 +275,8 @@ HTTP 路由：
 | `codex_backend_response_failed` | Backend response failed | 上游 SSE 返回 `response.failed`，表示本次 response 执行失败。 |
 | `context_length_exceeded` | 上下文超限 | 请求历史超过模型上下文窗口；网关会先尝试压缩可压缩历史，仍超限时直接拦截，避免客户端反复重试。 |
 | `codex_backend_response_incomplete` | Backend response incomplete | 上游 SSE 返回 `response.incomplete`，可能因长度、上下文、策略、工具或内部中断。 |
-| `codex_backend_stream_error` | Backend 流中断 | SSE 流连接 reset、unexpected EOF、代理或网络断流。 |
+| `codex_backend_stream_error` | Backend 流中断 | SSE 流在首个有效上游事件前连接 reset、unexpected EOF、代理或网络断流。 |
+| `codex_backend_stream_interrupted` | Backend 流中途断开 | 上游 SSE 已返回部分事件，但尚未返回 `response.completed` / `[DONE]` 就断开；网关不会自动重试已开始输出的流。 |
 | `codex_backend_http_error` | Backend HTTP 错误 | backend 返回其他非 2xx HTTP 状态，且不属于鉴权、限流或 5xx。 |
 | `codex_backend_upstream_failed` | Backend 未分类失败 | backend 兜底错误，需要结合服务日志里的 `err` 查看。 |
 | `client_canceled` | 客户端取消 | 下游客户端或入口代理主动断开请求；通常应排查客户端超时、网络中断或流式保活是否被识别。 |
@@ -314,6 +315,10 @@ HTTP 路由：
 - `items[].error_type`
 - `items[].diagnostic`
 - `items[].diagnostic_summary`
+- `items[].diagnostic.upstream_stream_started`
+- `items[].diagnostic.upstream_stream_completed`
+- `items[].diagnostic.upstream_stream_done_seen`
+- `items[].diagnostic.upstream_stream_events`
 - `summary.total_requests`
 - `summary.success_requests`
 - `summary.failed_requests`

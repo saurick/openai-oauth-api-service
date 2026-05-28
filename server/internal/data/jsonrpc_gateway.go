@@ -940,6 +940,18 @@ func mapGatewayUsageDiagnosticForRPC(item biz.GatewayUsageDiagnostic) map[string
 	if item.UpstreamBody != "" {
 		out["upstream_body"] = item.UpstreamBody
 	}
+	if item.UpstreamStreamStarted {
+		out["upstream_stream_started"] = true
+	}
+	if item.UpstreamStreamCompleted {
+		out["upstream_stream_completed"] = true
+	}
+	if item.UpstreamStreamDoneSeen {
+		out["upstream_stream_done_seen"] = true
+	}
+	if item.UpstreamStreamEvents > 0 {
+		out["upstream_stream_events"] = item.UpstreamStreamEvents
+	}
 	if item.ContextCompacted {
 		out["context_compacted"] = true
 	}

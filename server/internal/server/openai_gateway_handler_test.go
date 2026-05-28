@@ -1344,6 +1344,51 @@ func TestStreamCodexBackendResponsesPassesThroughEventsAndUsage(t *testing.T) {
 	}
 }
 
+func TestStreamCodexBackendResponsesClassifiesMidStreamClose(t *testing.T) {
+	accessToken := testJWT(time.Now().Add(time.Hour).Unix(), "acct_123")
+	authPath := filepath.Join(t.TempDir(), "auth.json")
+	if err := os.WriteFile(authPath, []byte(`{"tokens":{"access_token":"`+accessToken+`","refresh_token":"refresh-token","account_id":"acct_123"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"status\":\"in_progress\"}}\n\n"))
+		_, _ = w.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\n"))
+	}))
+	defer upstream.Close()
+
+	t.Setenv("CODEX_AUTH_FILE", authPath)
+	t.Setenv("CODEX_BACKEND_BASE_URL", upstream.URL)
+	t.Setenv("CODEX_BACKEND_TIMEOUT_SECONDS", "30")
+
+	rec := httptest.NewRecorder()
+	result, err := (&openAIGatewayHandler{}).streamCodexBackendResponses(
+		context.Background(),
+		rec,
+		"/v1/responses",
+		[]byte(`{"model":"gpt-5.5","stream":true,"input":"Reply OK"}`),
+		"gpt-5.5",
+		"high",
+		false,
+	)
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("err = %v, want unexpected EOF", err)
+	}
+	if result.ErrorType != "codex_backend_stream_interrupted" {
+		t.Fatalf("error type = %q, want codex_backend_stream_interrupted", result.ErrorType)
+	}
+	if !result.Diagnostic.UpstreamStreamStarted || result.Diagnostic.UpstreamStreamCompleted || result.Diagnostic.UpstreamStreamDoneSeen {
+		t.Fatalf("unexpected stream diagnostic: %#v", result.Diagnostic)
+	}
+	if result.Diagnostic.UpstreamStreamEvents != 2 {
+		t.Fatalf("upstream events = %d, want 2", result.Diagnostic.UpstreamStreamEvents)
+	}
+	if !strings.Contains(rec.Body.String(), `"code":"codex_backend_stream_interrupted"`) {
+		t.Fatalf("stream missing interrupted failure event:\n%s", rec.Body.String())
+	}
+}
+
 func TestStreamCodexBackendResponsesKeepsAliveBeforeUpstreamHeaders(t *testing.T) {
 	accessToken := testJWT(time.Now().Add(time.Hour).Unix(), "acct_123")
 	authPath := filepath.Join(t.TempDir(), "auth.json")
@@ -1400,6 +1445,38 @@ func TestStreamCodexBackendResponsesKeepsAliveBeforeUpstreamHeaders(t *testing.T
 	second := readNonEmptyStreamLine(t, reader)
 	if !strings.Contains(second, "keepalive") && !strings.Contains(second, "response.completed") {
 		t.Fatalf("second line = %q, want keepalive or upstream event", second)
+	}
+}
+
+func TestMergeGatewayUsageDiagnosticPreservesContextPreflight(t *testing.T) {
+	got := mergeGatewayUsageDiagnostic(
+		biz.GatewayUsageDiagnostic{
+			RequestBytes:                   1200,
+			ContextOriginalBytes:           1200,
+			ContextOriginalEstimatedTokens: 300,
+			ContextWindowTokens:            400000,
+			ContextCompactTokenLimit:       260000,
+			ContextHardTokenLimit:          380000,
+			ContextCompactByteLimit:        1000000,
+			ContextHardByteLimit:           1900000,
+			ContextKeepItems:               8,
+		},
+		biz.GatewayUsageDiagnostic{
+			RequestBytes:          900,
+			ResponseBytes:         80,
+			UpstreamBody:          "unexpected EOF",
+			UpstreamStreamStarted: true,
+			UpstreamStreamEvents:  2,
+		},
+	)
+	if got.RequestBytes != 900 || got.ResponseBytes != 80 || got.UpstreamBody != "unexpected EOF" {
+		t.Fatalf("overlay fields not applied: %#v", got)
+	}
+	if got.ContextOriginalBytes != 1200 || got.ContextWindowTokens != 400000 || got.ContextKeepItems != 8 {
+		t.Fatalf("context preflight fields not preserved: %#v", got)
+	}
+	if !got.UpstreamStreamStarted || got.UpstreamStreamEvents != 2 {
+		t.Fatalf("stream fields not applied: %#v", got)
 	}
 }
 

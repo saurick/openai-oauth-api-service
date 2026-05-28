@@ -179,13 +179,15 @@ func TestMapGatewayUsageForRPCIncludesKeyName(t *testing.T) {
 		APIKeyName:      "production",
 		ReasoningEffort: "high",
 		Diagnostic: biz.GatewayUsageDiagnostic{
-			RequestBytes:       4096,
-			BackendOnly:        true,
-			FallbackEnabled:    true,
-			FallbackBlocked:    true,
-			ReasoningEffort:    "high",
-			UpstreamHTTPStatus: 502,
-			UpstreamBody:       "bad gateway",
+			RequestBytes:          4096,
+			BackendOnly:           true,
+			FallbackEnabled:       true,
+			FallbackBlocked:       true,
+			ReasoningEffort:       "high",
+			UpstreamHTTPStatus:    502,
+			UpstreamBody:          "bad gateway",
+			UpstreamStreamStarted: true,
+			UpstreamStreamEvents:  3,
 		},
 		CreatedAt:    time.Unix(1778000000, 0),
 		InputTokens:  100,
@@ -208,10 +210,14 @@ func TestMapGatewayUsageForRPCIncludesKeyName(t *testing.T) {
 		t.Fatalf("unexpected key fields: %#v", got)
 	}
 	diagnostic, ok := got["diagnostic"].(map[string]any)
-	if !ok || diagnostic["backend_only"] != true || diagnostic["upstream_http_status"] != float64(502) {
+	if !ok ||
+		diagnostic["backend_only"] != true ||
+		diagnostic["upstream_http_status"] != float64(502) ||
+		diagnostic["upstream_stream_started"] != true ||
+		diagnostic["upstream_stream_events"] != float64(3) {
 		t.Fatalf("unexpected diagnostic: %#v", got["diagnostic"])
 	}
-	if summary, _ := got["diagnostic_summary"].(string); !strings.Contains(summary, "backend-only") || !strings.Contains(summary, "upstream_http=502") {
+	if summary, _ := got["diagnostic_summary"].(string); !strings.Contains(summary, "backend-only") || !strings.Contains(summary, "upstream_http=502") || !strings.Contains(summary, "upstream_events=3") {
 		t.Fatalf("unexpected diagnostic_summary: %#v", got["diagnostic_summary"])
 	}
 }

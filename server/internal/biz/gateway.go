@@ -111,6 +111,10 @@ type GatewayUsageDiagnostic struct {
 	ReasoningEffort                 string `json:"reasoning_effort"`
 	UpstreamHTTPStatus              int    `json:"upstream_http_status"`
 	UpstreamBody                    string `json:"upstream_body"`
+	UpstreamStreamStarted           bool   `json:"upstream_stream_started"`
+	UpstreamStreamCompleted         bool   `json:"upstream_stream_completed"`
+	UpstreamStreamDoneSeen          bool   `json:"upstream_stream_done_seen"`
+	UpstreamStreamEvents            int    `json:"upstream_stream_events"`
 	ContextCompacted                bool   `json:"context_compacted"`
 	ContextCompactionReason         string `json:"context_compaction_reason"`
 	ContextCompactionSummary        string `json:"context_compaction_summary"`
@@ -151,6 +155,19 @@ func (d GatewayUsageDiagnostic) Summary() string {
 	}
 	if d.UpstreamBody != "" {
 		parts = append(parts, "upstream_body="+d.UpstreamBody)
+	}
+	if d.UpstreamStreamStarted {
+		if d.UpstreamStreamCompleted {
+			parts = append(parts, "upstream-stream-completed")
+		} else {
+			parts = append(parts, "upstream-stream-started")
+		}
+		if d.UpstreamStreamDoneSeen {
+			parts = append(parts, "upstream-done-seen")
+		}
+		if d.UpstreamStreamEvents > 0 {
+			parts = append(parts, fmt.Sprintf("upstream_events=%d", d.UpstreamStreamEvents))
+		}
 	}
 	if d.ContextCompacted {
 		parts = append(parts, "context-compacted")

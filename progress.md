@@ -2,6 +2,12 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-28 zhongliang 流式中途断开诊断
+- 现场证据：线上只读查询 `zhongliang` API key（`id=15`）北京时间 2026-05-28 的 usage，共 23 次请求、21 次成功、1 次 `499/client_canceled`、1 次服务侧失败。服务侧失败为 `gpt-5.5 + high + codex_backend`，请求体约 625KB，耗时约 56s，上游摘要 `unexpected EOF`，失败时已向下游输出约 82KB SSE 数据；另一次 499 为下游主动取消，耗时约 75s。
+- 判断：这不是整体服务不可用，也不是本项目 8 小时超时窗口生效问题；`unexpected EOF` 发生在上游已经开始输出后，网关不能安全透明重试，否则可能重复或错乱已发送的流式内容。现有问题是诊断粒度不够，首包前断流和中途断流都归为 `codex_backend_stream_error`，且 Codex backend 流式路径会覆盖掉上下文预检 diagnostic。
+- 完成：Codex backend 流式路径保留 preflight 上下文 diagnostic，并新增上游流状态字段 `upstream_stream_started`、`upstream_stream_completed`、`upstream_stream_done_seen`、`upstream_stream_events`；若上游已返回部分 SSE 事件但未返回 `response.completed` / `[DONE]` 就结束，统一记录为 `codex_backend_stream_interrupted`。
+- 下一步：完成本地测试、构建、部署和线上回归；后续若该类型集中出现，再按 provider / 网络 / 上游稳定性继续查，而不是在网关侧盲目重试已开始输出的流。
+
 ## 2026-05-27 长任务中断筛选口径
 - 判断：用量日志筛选不需要重写；现有时间、凭据、模型、Effort、状态、实际上游和错误类型维度已经能覆盖长任务排查，问题是前端“错误类型”实际按 `upstream_error_type` 过滤，漏掉 `client_canceled`、网关预检和其他只落 `error_type` 的记录。
 - 完成：`api.usage_list` / 导出筛选新增统一 `error_type` 过滤，保留 `upstream_error_type` 兼容；前端筛选项改为“错误 / 中断类型”，补齐客户端取消、上下文超限、网关侧错误、Backend/CLI 细分错误，和表格展示的 `error_type` 字段对齐。

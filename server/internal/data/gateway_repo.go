@@ -1902,6 +1902,18 @@ func mapGatewayUsageDiagnosticForDB(item biz.GatewayUsageDiagnostic) map[string]
 	if item.UpstreamBody != "" {
 		out["upstream_body"] = item.UpstreamBody
 	}
+	if item.UpstreamStreamStarted {
+		out["upstream_stream_started"] = true
+	}
+	if item.UpstreamStreamCompleted {
+		out["upstream_stream_completed"] = true
+	}
+	if item.UpstreamStreamDoneSeen {
+		out["upstream_stream_done_seen"] = true
+	}
+	if item.UpstreamStreamEvents > 0 {
+		out["upstream_stream_events"] = item.UpstreamStreamEvents
+	}
 	if item.ContextCompacted {
 		out["context_compacted"] = true
 	}
@@ -1960,6 +1972,10 @@ func mapGatewayUsageDiagnosticFromDB(raw map[string]any) biz.GatewayUsageDiagnos
 		ReasoningEffort:                 strings.TrimSpace(fmt.Sprint(raw["reasoning_effort"])),
 		UpstreamHTTPStatus:              int(diagnosticInt64(raw["upstream_http_status"])),
 		UpstreamBody:                    strings.TrimSpace(fmt.Sprint(raw["upstream_body"])),
+		UpstreamStreamStarted:           diagnosticBool(raw["upstream_stream_started"]),
+		UpstreamStreamCompleted:         diagnosticBool(raw["upstream_stream_completed"]),
+		UpstreamStreamDoneSeen:          diagnosticBool(raw["upstream_stream_done_seen"]),
+		UpstreamStreamEvents:            int(diagnosticInt64(raw["upstream_stream_events"])),
 		ContextCompacted:                diagnosticBool(raw["context_compacted"]),
 		ContextCompactionReason:         strings.TrimSpace(fmt.Sprint(raw["context_compaction_reason"])),
 		ContextCompactionSummary:        strings.TrimSpace(fmt.Sprint(raw["context_compaction_summary"])),

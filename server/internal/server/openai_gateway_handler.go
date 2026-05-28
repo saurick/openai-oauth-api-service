@@ -462,10 +462,7 @@ func (h *openAIGatewayHandler) handleCodexBackendResponsesStream(
 	fallbackEnabled bool,
 ) {
 	result, err := h.streamCodexBackendResponses(r.Context(), w, r.URL.Path, body, requestModel, reasoningEffort, fallbackEnabled)
-	diagnostic := result.Diagnostic
-	if diagnostic.RequestBytes == 0 {
-		diagnostic = requestDiagnostic
-	}
+	diagnostic := mergeGatewayUsageDiagnostic(requestDiagnostic, result.Diagnostic)
 	if result.ResponseBytes > 0 {
 		diagnostic.ResponseBytes = result.ResponseBytes
 	}
@@ -607,6 +604,7 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 				return result, err
 			}
 			respBody = opened.body
+			result.Diagnostic.UpstreamStreamStarted = true
 		case <-ticker.C:
 			result.ResponseBytes += writeGatewaySSEComment(w, flusher, "keepalive")
 		case <-reqCtx.Done():
@@ -645,25 +643,36 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 		case data, ok := <-dataCh:
 			if !ok {
 				if err := <-errCh; err != nil {
-					if completedSeen && !failedSeen {
+					if (completedSeen || doneSeen) && !failedSeen {
 						return finalizeSuccess(), nil
 					}
 					if !doneSeen {
-						result.ResponseBytes += writeGatewayResponsesStreamFailure(w, flusher, "codex_backend_stream_error", err)
+						result.ResponseBytes += writeGatewayResponsesStreamFailure(w, flusher, codexBackendStreamFailureType(err, result.Diagnostic), err)
 					}
-					result.ErrorType = "codex_backend_stream_error"
+					result.ErrorType = codexBackendStreamFailureType(err, result.Diagnostic)
 					result.Diagnostic.UpstreamBody = summarizeErrorForUsage(err)
 					return result, err
 				}
-				if !doneSeen {
-					result.ResponseBytes += writeGatewaySSEData(w, flusher, "[DONE]")
-				}
 				if failedSeen {
+					if !doneSeen {
+						result.ResponseBytes += writeGatewaySSEData(w, flusher, "[DONE]")
+					}
 					err := fmt.Errorf("codex backend response failed")
 					if result.ErrorType == "" {
 						result.ErrorType = "codex_backend_response_failed"
 					}
 					return result, err
+				}
+				if !doneSeen {
+					if completedSeen {
+						result.ResponseBytes += writeGatewaySSEData(w, flusher, "[DONE]")
+					} else {
+						err := io.ErrUnexpectedEOF
+						result.ResponseBytes += writeGatewayResponsesStreamFailure(w, flusher, codexBackendStreamFailureType(err, result.Diagnostic), err)
+						result.ErrorType = codexBackendStreamFailureType(err, result.Diagnostic)
+						result.Diagnostic.UpstreamBody = summarizeErrorForUsage(err)
+						return result, err
+					}
 				}
 				return finalizeSuccess(), nil
 			}
@@ -673,8 +682,10 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 			result.ResponseBytes += writeGatewaySSEData(w, flusher, data)
 			if data == "[DONE]" {
 				doneSeen = true
+				result.Diagnostic.UpstreamStreamDoneSeen = true
 				continue
 			}
+			result.Diagnostic.UpstreamStreamEvents++
 			var event map[string]any
 			if err := json.Unmarshal([]byte(data), &event); err != nil {
 				continue
@@ -689,6 +700,7 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 				}
 			case "response.completed":
 				completedSeen = true
+				result.Diagnostic.UpstreamStreamCompleted = true
 				response := mapValue(event["response"])
 				if usageMetrics := codexUsageMetricsFromMap(mapValue(response["usage"])); usageMetrics.TotalTokens > 0 {
 					result.Metrics = usageMetrics
@@ -723,11 +735,89 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 	}
 }
 
+func mergeGatewayUsageDiagnostic(base biz.GatewayUsageDiagnostic, overlay biz.GatewayUsageDiagnostic) biz.GatewayUsageDiagnostic {
+	out := base
+	if overlay.RequestBytes > 0 {
+		out.RequestBytes = overlay.RequestBytes
+	}
+	if overlay.ResponseBytes > 0 {
+		out.ResponseBytes = overlay.ResponseBytes
+	}
+	out.BackendOnly = out.BackendOnly || overlay.BackendOnly
+	out.FallbackEnabled = out.FallbackEnabled || overlay.FallbackEnabled
+	out.FallbackBlocked = out.FallbackBlocked || overlay.FallbackBlocked
+	if overlay.ReasoningEffort != "" {
+		out.ReasoningEffort = overlay.ReasoningEffort
+	}
+	if overlay.UpstreamHTTPStatus > 0 {
+		out.UpstreamHTTPStatus = overlay.UpstreamHTTPStatus
+	}
+	if overlay.UpstreamBody != "" {
+		out.UpstreamBody = overlay.UpstreamBody
+	}
+	out.UpstreamStreamStarted = out.UpstreamStreamStarted || overlay.UpstreamStreamStarted
+	out.UpstreamStreamCompleted = out.UpstreamStreamCompleted || overlay.UpstreamStreamCompleted
+	out.UpstreamStreamDoneSeen = out.UpstreamStreamDoneSeen || overlay.UpstreamStreamDoneSeen
+	if overlay.UpstreamStreamEvents > 0 {
+		out.UpstreamStreamEvents = overlay.UpstreamStreamEvents
+	}
+	if overlay.ContextCompacted {
+		out.ContextCompacted = true
+	}
+	if overlay.ContextCompactionReason != "" {
+		out.ContextCompactionReason = overlay.ContextCompactionReason
+	}
+	if overlay.ContextCompactionSummary != "" {
+		out.ContextCompactionSummary = overlay.ContextCompactionSummary
+	}
+	if overlay.ContextCompactionCount > 0 {
+		out.ContextCompactionCount = overlay.ContextCompactionCount
+	}
+	if overlay.ContextOriginalBytes > 0 {
+		out.ContextOriginalBytes = overlay.ContextOriginalBytes
+	}
+	if overlay.ContextCompactedBytes > 0 {
+		out.ContextCompactedBytes = overlay.ContextCompactedBytes
+	}
+	if overlay.ContextOriginalEstimatedTokens > 0 {
+		out.ContextOriginalEstimatedTokens = overlay.ContextOriginalEstimatedTokens
+	}
+	if overlay.ContextCompactedEstimatedTokens > 0 {
+		out.ContextCompactedEstimatedTokens = overlay.ContextCompactedEstimatedTokens
+	}
+	if overlay.ContextWindowTokens > 0 {
+		out.ContextWindowTokens = overlay.ContextWindowTokens
+	}
+	if overlay.ContextCompactTokenLimit > 0 {
+		out.ContextCompactTokenLimit = overlay.ContextCompactTokenLimit
+	}
+	if overlay.ContextHardTokenLimit > 0 {
+		out.ContextHardTokenLimit = overlay.ContextHardTokenLimit
+	}
+	if overlay.ContextCompactByteLimit > 0 {
+		out.ContextCompactByteLimit = overlay.ContextCompactByteLimit
+	}
+	if overlay.ContextHardByteLimit > 0 {
+		out.ContextHardByteLimit = overlay.ContextHardByteLimit
+	}
+	if overlay.ContextKeepItems > 0 {
+		out.ContextKeepItems = overlay.ContextKeepItems
+	}
+	return out
+}
+
 func codexBackendResponseEventErrorType(data string, fallback string) string {
 	if isCodexBackendContextLengthError(errors.New(data)) {
 		return gatewayContextErrorType
 	}
 	return fallback
+}
+
+func codexBackendStreamFailureType(err error, diagnostic biz.GatewayUsageDiagnostic) string {
+	if diagnostic.UpstreamStreamEvents > 0 && !diagnostic.UpstreamStreamCompleted && !diagnostic.UpstreamStreamDoneSeen {
+		return "codex_backend_stream_interrupted"
+	}
+	return upstreamErrorType(err, codexUpstreamModeBackend)
 }
 
 func scanSSEDataMessages(r io.Reader, dataCh chan<- string, errCh chan<- error) {
