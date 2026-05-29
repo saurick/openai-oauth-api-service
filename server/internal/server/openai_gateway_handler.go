@@ -575,10 +575,7 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 	}
 	openCh := make(chan openResult)
 	go func() {
-		respBody, err := defaultCodexBackendClient.openResponses(reqCtx, requestBody, false)
-		if err != nil && isCodexBackendUnauthorized(err) {
-			respBody, err = defaultCodexBackendClient.openResponses(reqCtx, requestBody, true)
-		}
+		respBody, err := defaultCodexBackendClient.openResponsesWithRetry(reqCtx, requestBody)
 		select {
 		case openCh <- openResult{body: respBody, err: err}:
 		case <-reqCtx.Done():

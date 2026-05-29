@@ -67,6 +67,13 @@ func TestCodexBackendContextLengthIsNotRetriable(t *testing.T) {
 	}
 }
 
+func TestCodexBackendPlainEOFIsRetriable(t *testing.T) {
+	err := errors.New(`Post "https://chatgpt.com/backend-api/codex/responses": EOF`)
+	if !isRetriableCodexBackendError(err) {
+		t.Fatal("plain upstream EOF before a terminal response must be retriable")
+	}
+}
+
 func TestCodexBackendTerminalResponseEventsAreNotRetriable(t *testing.T) {
 	for _, err := range []error{
 		errors.New(`codex backend response failed: {"response":{"status":"failed"}}`),
@@ -1445,6 +1452,57 @@ func TestStreamCodexBackendResponsesKeepsAliveBeforeUpstreamHeaders(t *testing.T
 	second := readNonEmptyStreamLine(t, reader)
 	if !strings.Contains(second, "keepalive") && !strings.Contains(second, "response.completed") {
 		t.Fatalf("second line = %q, want keepalive or upstream event", second)
+	}
+}
+
+func TestStreamCodexBackendResponsesRetriesOpenFailureBeforeUpstreamEvents(t *testing.T) {
+	accessToken := testJWT(time.Now().Add(time.Hour).Unix(), "acct_123")
+	authPath := filepath.Join(t.TempDir(), "auth.json")
+	if err := os.WriteFile(authPath, []byte(`{"tokens":{"access_token":"`+accessToken+`","refresh_token":"refresh-token","account_id":"acct_123"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var attempts atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if attempts.Add(1) == 1 {
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte(`{"error":"temporary upstream failure"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"OK\"}\n\n"))
+		_, _ = w.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer upstream.Close()
+
+	t.Setenv("CODEX_AUTH_FILE", authPath)
+	t.Setenv("CODEX_BACKEND_BASE_URL", upstream.URL)
+	t.Setenv("CODEX_BACKEND_TIMEOUT_SECONDS", "30")
+	t.Setenv("CODEX_BACKEND_RETRY_ATTEMPTS", "2")
+
+	rec := httptest.NewRecorder()
+	result, err := (&openAIGatewayHandler{}).streamCodexBackendResponses(
+		context.Background(),
+		rec,
+		"/v1/responses",
+		[]byte(`{"model":"gpt-5.5","stream":true,"input":"Reply OK"}`),
+		"gpt-5.5",
+		"high",
+		false,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if attempts.Load() != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts.Load())
+	}
+	if result.Metrics.TotalTokens != 2 {
+		t.Fatalf("metrics = %#v, want total tokens", result.Metrics)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, ": keepalive") || !strings.Contains(body, `"delta":"OK"`) || strings.Contains(body, `"code":"codex_backend_http_5xx"`) {
+		t.Fatalf("unexpected stream body after retry:\n%s", body)
 	}
 }
 

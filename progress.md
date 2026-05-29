@@ -2,6 +2,16 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-29 backend 首包前 EOF 重试与线上 502 排查
+- 现场证据：线上北京时间 2026-05-29 00:00-13:00 共 195 次 usage，189 次成功、2 次 `502`、4 次 `499/client_canceled`。两次 502 分别是 `ogw_xiuzhu_1` 的 `/v1/chat/completions` 首包前 `Post "https://chatgpt.com/backend-api/codex/responses": EOF`，以及 `ogw_zhonglia` 的 `/v1/responses` 在已输出 2993 个上游事件、约 690KB SSE 后收到 `stream ID 27; INTERNAL_ERROR; received from peer`。Nginx access log 对这两次流式请求均为 HTTP 200，说明入口层已建立 SSE；usage 记录为 502 是网关对上游失败的业务归因。服务本机与公网健康检查正常，容器无重启/OOM，Codex 登录态正常，balance 可返回且未触发 rate limit。
+- 判断：今天不是整体服务不可用、Nginx 超时、登录过期、额度耗尽或部署镜像异常。已开始输出上游事件后的中途断流不能安全透明重试，否则可能重复或打乱下游已收到的流式内容；但首包前 EOF / 5xx 属于可安全重试范围，当前非流式 backend 的可重试判断漏掉普通 `EOF`，流式 `/v1/responses` 在上游打开失败但还没转发任何上游事件时也未复用 `CODEX_BACKEND_RETRY_ATTEMPTS`。
+- 完成：将普通 `EOF` / `io.EOF` 纳入 Codex backend 可重试错误；新增 `openResponsesWithRetry`，让 `/v1/responses stream=true` 在只发送 keepalive、尚未收到上游事件前按既有重试次数重开 backend SSE。中途断流仍保持 `codex_backend_stream_interrupted`，只记录并向下游发送错误事件，不做不安全重试。
+- 验证通过：`cd server && go test ./internal/server -run 'TestCodexBackendPlainEOFIsRetriable|TestStreamCodexBackendResponsesRetriesOpenFailureBeforeUpstreamEvents|TestCodexBackendRunRetriesRetriableFailures|TestStreamCodexBackendResponsesClassifiesMidStreamClose|TestStreamCodexBackendResponsesKeepsAliveBeforeUpstreamHeaders'`、`cd server && go test ./...`、`cd server && make build`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`git diff --check`。
+- 部署：本地构建 linux/amd64 镜像 `oauth-api-service-server:20260529T130926-f8c59a88-local-backend-retry`，上传到 `/data/openai-oauth-api-service/releases/20260529T130926-f8c59a88-local-backend-retry`；远端只执行 sha256 校验、`docker load`、宿主机 `/usr/local/bin/atlas migrate status`、备份 `.env` 为 `.env.bak.20260529T131126-backend-retry`、更新 `APP_IMAGE` 并 `docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建，也未改管理员密码。Atlas 状态为最新，待执行 migration 为 0。
+- 线上验证通过：容器运行镜像已切到 `oauth-api-service-server:20260529T130926-f8c59a88-local-backend-retry`，`GIT_SHA_SHORT=f8c59a88-local`，`CODEX_BACKEND_TIMEOUT_SECONDS=28800`，`GATEWAY_STREAM_HEARTBEAT_SECONDS=15`；远端本机 `/healthz` 返回 `ok`，公网 `/readyz` 返回 `ready`。创建临时 key `retrytest` 后公网同链路最小 `/v1/responses stream=true` 返回 HTTP 200、包含 `DEPLOY_BACKEND_RETRY_OK` 和 `[DONE]`，临时 key 已删除。
+- 清理：删除本轮远端上传的 image / migration 压缩包和校验文件，执行 `docker image prune -a -f` 与 `docker builder prune -f`，未执行 volume prune；根分区使用率从 54% 回到 52%，当前业务容器和数据库容器保持运行。
+- 阻塞/风险：该修复只能减少首包前 EOF / 5xx 这类可安全重试失败；已经开始输出上游事件后的 `INTERNAL_ERROR` / `unexpected EOF` 仍取决于上游或网络稳定性，网关不会透明重放已开始的流。若后续 `codex_backend_stream_interrupted` 集中出现，需要继续按 provider / 网络路径 / 上游稳定性聚合排查，而不是在网关侧盲目重试。
+
 ## 2026-05-28 zhongliang 流式中途断开诊断
 - 现场证据：线上只读查询 `zhongliang` API key（`id=15`）北京时间 2026-05-28 的 usage，共 23 次请求、21 次成功、1 次 `499/client_canceled`、1 次服务侧失败。服务侧失败为 `gpt-5.5 + high + codex_backend`，请求体约 625KB，耗时约 56s，上游摘要 `unexpected EOF`，失败时已向下游输出约 82KB SSE 数据；另一次 499 为下游主动取消，耗时约 75s。
 - 判断：这不是整体服务不可用，也不是本项目 8 小时超时窗口生效问题；`unexpected EOF` 发生在上游已经开始输出后，网关不能安全透明重试，否则可能重复或错乱已发送的流式内容。现有问题是诊断粒度不够，首包前断流和中途断流都归为 `codex_backend_stream_error`，且 Codex backend 流式路径会覆盖掉上下文预检 diagnostic。

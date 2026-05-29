@@ -179,6 +179,27 @@ func (c *codexBackendClient) openResponses(ctx context.Context, body map[string]
 	return resp.Body, nil
 }
 
+func (c *codexBackendClient) openResponsesWithRetry(ctx context.Context, body map[string]any) (io.ReadCloser, error) {
+	var lastErr error
+	for attempt := 0; attempt <= codexBackendRetries(); attempt++ {
+		respBody, err := c.openResponses(ctx, body, false)
+		if err != nil && isCodexBackendUnauthorized(err) {
+			respBody, err = c.openResponses(ctx, body, true)
+		}
+		if err == nil {
+			return respBody, nil
+		}
+		lastErr = err
+		if !isRetriableCodexBackendError(err) || attempt == codexBackendRetries() {
+			break
+		}
+		if !sleepBeforeCodexBackendRetry(ctx, attempt) {
+			return nil, ctx.Err()
+		}
+	}
+	return nil, lastErr
+}
+
 func (c *codexBackendClient) codexAccessToken(ctx context.Context, forceRefresh bool) (string, string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -1101,12 +1122,18 @@ func isRetriableCodexBackendError(err error) bool {
 	if isCodexBackendContextLengthError(err) {
 		return false
 	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
 	var httpErr codexBackendHTTPError
 	if errors.As(err, &httpErr) {
 		return httpErr.status == stdhttp.StatusTooManyRequests || httpErr.status >= 500
 	}
 	text := strings.ToLower(err.Error())
 	return strings.Contains(text, "connection reset") ||
+		strings.Contains(text, " eof") ||
+		strings.HasSuffix(text, ": eof") ||
+		strings.HasSuffix(text, " eof") ||
 		strings.Contains(text, "unexpected eof") ||
 		strings.Contains(text, "stream error")
 }
