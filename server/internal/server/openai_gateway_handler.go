@@ -300,6 +300,7 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		})
 		return
 	}
+	reasoningEffort = h.effectiveReasoningEffort(r.Context(), key, reasoningEffort)
 	if err := h.gatewayUC.ValidateModelAccess(r.Context(), key, requestModel); err != nil {
 		status := stdhttp.StatusForbidden
 		h.writeGatewayError(w, status, err, gatewayErrorType(err))
@@ -1077,6 +1078,21 @@ func (h *openAIGatewayHandler) effectiveCodexUpstream(ctx context.Context, key *
 		strategy = biz.GatewayUpstreamStrategy(mode, fallbackEnabled)
 	}
 	return strategy, mode, fallbackEnabled
+}
+
+func (h *openAIGatewayHandler) effectiveReasoningEffort(ctx context.Context, key *biz.GatewayAPIKey, requested string) string {
+	requested = biz.NormalizeGatewayReasoningEffort(requested)
+	if h.gatewayUC == nil {
+		return requested
+	}
+	effort, err := h.gatewayUC.GetEffectiveReasoningEffort(ctx, key, requested)
+	if err != nil {
+		if h.log != nil {
+			h.log.WithContext(ctx).Warnf("get effective reasoning effort failed: %v", err)
+		}
+		return requested
+	}
+	return effort
 }
 
 func (h *openAIGatewayHandler) runCodexUpstream(ctx context.Context, upstreamMode string, fallbackEnabled bool, path string, body []byte, requestModel string, reasoningEffort string) (codexUpstreamCallResult, error) {
@@ -2842,13 +2858,11 @@ func reasoningEffortFromPayload(payload map[string]any) (string, error) {
 		return "", nil
 	}
 
-	effort := strings.ToLower(strings.TrimSpace(raw))
-	switch effort {
-	case "low", "medium", "high", "xhigh":
+	effort := biz.NormalizeGatewayReasoningEffort(raw)
+	if effort != "" {
 		return effort, nil
-	default:
-		return "", fmt.Errorf("unsupported reasoning_effort: %s", raw)
 	}
+	return "", fmt.Errorf("unsupported reasoning_effort: %s", raw)
 }
 
 func sessionIDFromGatewayRequest(r *stdhttp.Request, body []byte) string {

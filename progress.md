@@ -2,6 +2,15 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-05-31 默认推理档位开关
+- 完成：新增全局推理档位运行时设置，默认关闭；后台「上游策略」页可切换关闭 / Fast / Medium / High / Deep。单个 API 凭据新增默认推理档位，支持继承全局、关闭覆盖或覆盖为 `low` / `medium` / `high` / `xhigh`。最终生效顺序为 key 覆盖档位、全局覆盖档位、客户端请求档位；key 级 `none` 会阻止全局覆盖生效。
+- 数据：`gateway_api_keys` 新增 `default_reasoning_effort` 字段，已生成 Ent 代码与 Atlas migration `20260531143157_migrate.sql`。全局默认值继续走 gateway settings，不新增环境变量。
+- 前端：API 凭据表格展示默认 Effort，新建 / 编辑弹窗可配置 key 级默认推理档位；`style:l1` mock 和断言覆盖全局默认切换、凭据表格展示、弹窗回显和移动端凭据页。
+- 文档：同步更新 `README.md`、`server/docs/api.md`、`server/docs/config.md`、`web/README.md` 的默认档位优先级、后台入口和 API 字段说明。
+- 验证通过：`cd server && go test ./...`、`cd server && make build`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && pnpm style:l1`、`git diff --check`。额外用 in-app Browser 打开本地 `/admin-upstream` 和 `/admin-keys`，确认全局默认档位可切换、API 凭据表格展示默认 Effort、新建弹窗包含 key 级默认推理档位；只看到 React Router v7 future flag 既有 warning。
+- 客户端验证：本地开发库已迁移到 `20260531143157`，本地 `server-dev` 使用当前代码重启；本机 Codex 临时 `CODEX_HOME` + 临时 key（key 覆盖 `low`，Codex 客户端未配置显式 effort 但自身会带默认 `medium`）返回 `LOCAL_CODEX_FAST_OVERRIDE_OK`，usage 记录 `status=200`、`reasoning_effort=low`。通过 `ssh sauri@192.168.0.45` 在 Windows Codex 临时配置中把 `variant high` 打到本机 `192.168.0.66:8400/v1`，返回 `WINDOWS_CODEX_FAST_OVERRIDE_OK`，usage 记录 `status=200`、`reasoning_effort=low`。验证用临时 key 均已删除。
+- 下一步：部署前需要在目标数据库执行 Atlas migration；本轮只是本地生成迁移和代码，不改线上配置。
+
 ## 2026-05-29 backend 首包前 EOF 重试与线上 502 排查
 - 现场证据：线上北京时间 2026-05-29 00:00-13:00 共 195 次 usage，189 次成功、2 次 `502`、4 次 `499/client_canceled`。两次 502 分别是 `ogw_xiuzhu_1` 的 `/v1/chat/completions` 首包前 `Post "https://chatgpt.com/backend-api/codex/responses": EOF`，以及 `ogw_zhonglia` 的 `/v1/responses` 在已输出 2993 个上游事件、约 690KB SSE 后收到 `stream ID 27; INTERNAL_ERROR; received from peer`。Nginx access log 对这两次流式请求均为 HTTP 200，说明入口层已建立 SSE；usage 记录为 502 是网关对上游失败的业务归因。服务本机与公网健康检查正常，容器无重启/OOM，Codex 登录态正常，balance 可返回且未触发 rate limit。
 - 判断：今天不是整体服务不可用、Nginx 超时、登录过期、额度耗尽或部署镜像异常。已开始输出上游事件后的中途断流不能安全透明重试，否则可能重复或打乱下游已收到的流式内容；但首包前 EOF / 5xx 属于可安全重试范围，当前非流式 backend 的可重试判断漏掉普通 `EOF`，流式 `/v1/responses` 在上游打开失败但还没转发任何上游事件时也未复用 `CODEX_BACKEND_RETRY_ATTEMPTS`。

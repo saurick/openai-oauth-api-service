@@ -84,7 +84,7 @@
 
 ## Codex 上游环境变量
 
-服务端 `/v1` 上游默认通过 `CODEX_UPSTREAM_MODE` 指定启动初始模式；管理员在后台「上游策略」页保存过策略后，后续请求以数据库中的运行时设置为准，无需重启服务：
+服务端 `/v1` 上游默认通过 `CODEX_UPSTREAM_MODE` 指定启动初始模式；管理员在后台「上游策略」页保存过策略后，后续请求以数据库中的运行时设置为准，无需重启服务。全局推理档位开关同样保存在数据库设置中，默认关闭，不通过环境变量预设：
 
 - `CODEX_HOST_HOME`：宿主机 Codex 登录态目录，Compose 默认挂载到容器。
 - `CODEX_CONTAINER_HOME`：容器内 `CODEX_HOME`，默认 `/root/.codex`。
@@ -111,7 +111,7 @@
 - `NO_PROXY` / `no_proxy`：可选代理排除列表，至少应包含 `localhost,127.0.0.1,::1,postgres,openai-oauth-api-service-postgres`。
 - `NODE_USE_ENV_PROXY`：Node.js 代理环境开关；Codex CLI 需要跟随上述代理变量时设置为 `1`。
 
-`codex_backend` 模式复用同一个 app-server 进程直接请求 `https://chatgpt.com/backend-api/codex/responses`，从 `auth.json` 读取 access token，并在 access token 过期或上游返回 401 时用 refresh token 刷新后写回 `auth.json`；该模式适合高频 OpenCode 调用。默认策略是 Backend 直连，backend 请求失败时直接返回上游错误，避免把客户端本机工具错误降级为服务端 `codex exec`。确需临时救急时可在后台选择 Backend + CLI 兜底，或设置 `CODEX_UPSTREAM_FALLBACK_ENABLED=true` 作为初始环境口径，仅允许 CLI 能忠实处理的纯文本 / 图片请求 fallback；带工具调用、工具历史或文件输入的请求始终只允许走 backend。`codex_cli` 模式会为每次 `/v1/chat/completions` 或 `/v1/responses` 启动一次 Codex CLI，并串行执行上游请求，稳定但首包和单次延迟较高。usage 记录会同时保存配置模式、实际执行模式、fallback 状态、上下文压缩前后体积和压缩摘要，后台统计表可按上游模式筛选并展示两种模式的请求数。
+`codex_backend` 模式复用同一个 app-server 进程直接请求 `https://chatgpt.com/backend-api/codex/responses`，从 `auth.json` 读取 access token，并在 access token 过期或上游返回 401 时用 refresh token 刷新后写回 `auth.json`；该模式适合高频 OpenCode 调用。默认策略是 Backend 直连，backend 请求失败时直接返回上游错误，避免把客户端本机工具错误降级为服务端 `codex exec`。确需临时救急时可在后台选择 Backend + CLI 兜底，或设置 `CODEX_UPSTREAM_FALLBACK_ENABLED=true` 作为初始环境口径，仅允许 CLI 能忠实处理的纯文本 / 图片请求 fallback；带工具调用、工具历史或文件输入的请求始终只允许走 backend。全局推理档位可在后台「上游策略」页切换，单个 API key 可继承全局、关闭覆盖或覆盖为 Fast / Medium / High / Deep；后台设置会覆盖客户端传入的 `reasoning_effort`，用于约束 Codex / OpenCode 这类会自动带默认 effort 的客户端。`codex_cli` 模式会为每次 `/v1/chat/completions` 或 `/v1/responses` 启动一次 Codex CLI，并串行执行上游请求，稳定但首包和单次延迟较高。usage 记录会同时保存配置模式、实际执行模式、fallback 状态、最终生效的 reasoning effort、上下文压缩前后体积和压缩摘要，后台统计表可按上游模式筛选并展示两种模式的请求数。
 
 网关上下文压缩只保存工程摘要，不保存完整 prompt 或模型输出正文。压缩会尽量保留系统 / developer 指令、最近若干轮未压缩消息和最近完整工具闭环；较早历史会收口为带文件路径、错误线索、命令 / 测试线索和片段摘要的工程摘要。压缩阈值按“模型级配置 > 环境变量运维覆盖 > 内置模型推荐值 > 旧默认兜底”的顺序生效；模型级配置在后台模型管理页保存后立即影响后续请求，不需要重启服务。内置推荐按 Codex 使用体验控制在 `400K` 上下文窗口内，默认 `260K` 开始压缩、`380K` 硬拦截，字节阈值默认 `1M` / `1.9M`；如果确实要使用 API 模型更大的长上下文窗口，应在后台按模型显式覆盖，并接受更高 token 消耗和 long-context 价格档。后台阈值输入支持整数、`K` 和 `M` 单位，例如 `260K` 表示 260000，`0.38M` 表示 380000；保留条数只接受普通整数。若压缩后仍超过硬阈值，网关会在转发前返回 `context_length_exceeded`，避免 Codex CLI 对同一超长请求连续重试。
 

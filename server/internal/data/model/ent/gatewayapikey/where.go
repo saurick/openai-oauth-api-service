@@ -94,6 +94,11 @@ func UpstreamStrategy(v string) predicate.GatewayAPIKey {
 	return predicate.GatewayAPIKey(sql.FieldEQ(FieldUpstreamStrategy, v))
 }
 
+// DefaultReasoningEffort applies equality check predicate on the "default_reasoning_effort" field. It's identical to DefaultReasoningEffortEQ.
+func DefaultReasoningEffort(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldDefaultReasoningEffort, v))
+}
+
 // QuotaRequests applies equality check predicate on the "quota_requests" field. It's identical to QuotaRequestsEQ.
 func QuotaRequests(v int64) predicate.GatewayAPIKey {
 	return predicate.GatewayAPIKey(sql.FieldEQ(FieldQuotaRequests, v))
@@ -607,6 +612,71 @@ func UpstreamStrategyEqualFold(v string) predicate.GatewayAPIKey {
 // UpstreamStrategyContainsFold applies the ContainsFold predicate on the "upstream_strategy" field.
 func UpstreamStrategyContainsFold(v string) predicate.GatewayAPIKey {
 	return predicate.GatewayAPIKey(sql.FieldContainsFold(FieldUpstreamStrategy, v))
+}
+
+// DefaultReasoningEffortEQ applies the EQ predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortEQ(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEQ(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortNEQ applies the NEQ predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortNEQ(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNEQ(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortIn applies the In predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortIn(vs ...string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldIn(FieldDefaultReasoningEffort, vs...))
+}
+
+// DefaultReasoningEffortNotIn applies the NotIn predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortNotIn(vs ...string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldNotIn(FieldDefaultReasoningEffort, vs...))
+}
+
+// DefaultReasoningEffortGT applies the GT predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortGT(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGT(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortGTE applies the GTE predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortGTE(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldGTE(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortLT applies the LT predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortLT(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLT(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortLTE applies the LTE predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortLTE(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldLTE(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortContains applies the Contains predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortContains(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldContains(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortHasPrefix applies the HasPrefix predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortHasPrefix(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldHasPrefix(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortHasSuffix applies the HasSuffix predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortHasSuffix(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldHasSuffix(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortEqualFold applies the EqualFold predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortEqualFold(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldEqualFold(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortContainsFold applies the ContainsFold predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortContainsFold(v string) predicate.GatewayAPIKey {
+	return predicate.GatewayAPIKey(sql.FieldContainsFold(FieldDefaultReasoningEffort, v))
 }
 
 // QuotaRequestsEQ applies the EQ predicate on the "quota_requests" field.

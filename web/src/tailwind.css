@@ -586,7 +586,9 @@
   color: var(--admin-accent);
 }
 
-.admin-frame .admin-view-tab[aria-selected='true'] {
+.admin-frame .admin-view-tab[aria-selected='true'],
+.admin-frame .admin-view-tab[aria-pressed='true'],
+.admin-frame .admin-view-tab-active {
   border-color: var(--admin-border);
   background: var(--admin-surface);
   color: var(--admin-accent);
@@ -651,6 +653,10 @@
 
 .admin-frame .admin-key-table-upstream-col {
   width: 148px;
+}
+
+.admin-frame .admin-key-table-effort-col {
+  width: 132px;
 }
 
 .admin-frame .admin-key-table-quota-col {

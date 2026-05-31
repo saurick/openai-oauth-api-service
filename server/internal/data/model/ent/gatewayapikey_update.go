@@ -154,6 +154,20 @@ func (_u *GatewayAPIKeyUpdate) SetNillableUpstreamStrategy(v *string) *GatewayAP
 	return _u
 }
 
+// SetDefaultReasoningEffort sets the "default_reasoning_effort" field.
+func (_u *GatewayAPIKeyUpdate) SetDefaultReasoningEffort(v string) *GatewayAPIKeyUpdate {
+	_u.mutation.SetDefaultReasoningEffort(v)
+	return _u
+}
+
+// SetNillableDefaultReasoningEffort sets the "default_reasoning_effort" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdate) SetNillableDefaultReasoningEffort(v *string) *GatewayAPIKeyUpdate {
+	if v != nil {
+		_u.SetDefaultReasoningEffort(*v)
+	}
+	return _u
+}
+
 // SetQuotaRequests sets the "quota_requests" field.
 func (_u *GatewayAPIKeyUpdate) SetQuotaRequests(v int64) *GatewayAPIKeyUpdate {
 	_u.mutation.ResetQuotaRequests()
@@ -481,6 +495,11 @@ func (_u *GatewayAPIKeyUpdate) check() error {
 			return &ValidationError{Name: "upstream_strategy", err: fmt.Errorf(`ent: validator failed for field "GatewayAPIKey.upstream_strategy": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.DefaultReasoningEffort(); ok {
+		if err := gatewayapikey.DefaultReasoningEffortValidator(v); err != nil {
+			return &ValidationError{Name: "default_reasoning_effort", err: fmt.Errorf(`ent: validator failed for field "GatewayAPIKey.default_reasoning_effort": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -525,6 +544,9 @@ func (_u *GatewayAPIKeyUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if value, ok := _u.mutation.UpstreamStrategy(); ok {
 		_spec.SetField(gatewayapikey.FieldUpstreamStrategy, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DefaultReasoningEffort(); ok {
+		_spec.SetField(gatewayapikey.FieldDefaultReasoningEffort, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.QuotaRequests(); ok {
 		_spec.SetField(gatewayapikey.FieldQuotaRequests, field.TypeInt64, value)
@@ -747,6 +769,20 @@ func (_u *GatewayAPIKeyUpdateOne) SetUpstreamStrategy(v string) *GatewayAPIKeyUp
 func (_u *GatewayAPIKeyUpdateOne) SetNillableUpstreamStrategy(v *string) *GatewayAPIKeyUpdateOne {
 	if v != nil {
 		_u.SetUpstreamStrategy(*v)
+	}
+	return _u
+}
+
+// SetDefaultReasoningEffort sets the "default_reasoning_effort" field.
+func (_u *GatewayAPIKeyUpdateOne) SetDefaultReasoningEffort(v string) *GatewayAPIKeyUpdateOne {
+	_u.mutation.SetDefaultReasoningEffort(v)
+	return _u
+}
+
+// SetNillableDefaultReasoningEffort sets the "default_reasoning_effort" field if the given value is not nil.
+func (_u *GatewayAPIKeyUpdateOne) SetNillableDefaultReasoningEffort(v *string) *GatewayAPIKeyUpdateOne {
+	if v != nil {
+		_u.SetDefaultReasoningEffort(*v)
 	}
 	return _u
 }
@@ -1091,6 +1127,11 @@ func (_u *GatewayAPIKeyUpdateOne) check() error {
 			return &ValidationError{Name: "upstream_strategy", err: fmt.Errorf(`ent: validator failed for field "GatewayAPIKey.upstream_strategy": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.DefaultReasoningEffort(); ok {
+		if err := gatewayapikey.DefaultReasoningEffortValidator(v); err != nil {
+			return &ValidationError{Name: "default_reasoning_effort", err: fmt.Errorf(`ent: validator failed for field "GatewayAPIKey.default_reasoning_effort": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -1152,6 +1193,9 @@ func (_u *GatewayAPIKeyUpdateOne) sqlSave(ctx context.Context) (_node *GatewayAP
 	}
 	if value, ok := _u.mutation.UpstreamStrategy(); ok {
 		_spec.SetField(gatewayapikey.FieldUpstreamStrategy, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DefaultReasoningEffort(); ok {
+		_spec.SetField(gatewayapikey.FieldDefaultReasoningEffort, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.QuotaRequests(); ok {
 		_spec.SetField(gatewayapikey.FieldQuotaRequests, field.TypeInt64, value)

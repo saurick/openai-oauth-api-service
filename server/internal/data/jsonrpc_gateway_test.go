@@ -16,6 +16,7 @@ func TestMapGatewayAPIKeyForRPCIsStructCompatible(t *testing.T) {
 		PlainKey:                       "ogw_plain",
 		KeyPrefix:                      "ogw_test",
 		KeyLast4:                       "abcd",
+		DefaultReasoningEffort:         "low",
 		AllowedModels:                  []string{"gpt-5.5", "gpt-5.3-codex"},
 		QuotaRequests:                  100,
 		QuotaTotalTokens:               200,
@@ -47,6 +48,9 @@ func TestMapGatewayAPIKeyForRPCIsStructCompatible(t *testing.T) {
 	if s.AsMap()["plain_key"] != "ogw_plain" {
 		t.Fatalf("plain_key should be included for admin payloads: %#v", s.AsMap())
 	}
+	if s.AsMap()["default_reasoning_effort"] != "low" {
+		t.Fatalf("default_reasoning_effort should be included: %#v", s.AsMap())
+	}
 	if s.AsMap()["quota_daily_tokens"] != float64(300) ||
 		s.AsMap()["quota_weekly_tokens"] != float64(900) {
 		t.Fatalf("unexpected quota token windows: %#v", s.AsMap())
@@ -66,6 +70,27 @@ func TestMapGatewayAPIKeyForRPCCanHidePlainKey(t *testing.T) {
 	data := mapGatewayAPIKeyForRPC(item, false)
 	if _, ok := data["plain_key"]; ok {
 		t.Fatalf("plain_key should be hidden for non-admin payloads")
+	}
+}
+
+func TestMapGatewayUpstreamModeForRPCIncludesDefaultReasoningEffort(t *testing.T) {
+	data := mapGatewayUpstreamModeForRPC(
+		biz.GatewayUpstreamStrategyBackendOnly,
+		biz.GatewayUpstreamModeCodexBackend,
+		false,
+		biz.GatewayReasoningEffortLow,
+	)
+	s := newDataStruct(data)
+	if s == nil {
+		t.Fatalf("expected gateway upstream rpc data to be structpb-compatible")
+	}
+	got := s.AsMap()
+	if got["default_reasoning_effort"] != "low" {
+		t.Fatalf("default_reasoning_effort = %#v, want low", got["default_reasoning_effort"])
+	}
+	options, ok := got["reasoning_effort_options"].([]any)
+	if !ok || len(options) < 5 {
+		t.Fatalf("missing reasoning_effort_options: %#v", got["reasoning_effort_options"])
 	}
 }
 

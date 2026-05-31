@@ -29,6 +29,8 @@ const (
 	FieldDisabled = "disabled"
 	// FieldUpstreamStrategy holds the string denoting the upstream_strategy field in the database.
 	FieldUpstreamStrategy = "upstream_strategy"
+	// FieldDefaultReasoningEffort holds the string denoting the default_reasoning_effort field in the database.
+	FieldDefaultReasoningEffort = "default_reasoning_effort"
 	// FieldQuotaRequests holds the string denoting the quota_requests field in the database.
 	FieldQuotaRequests = "quota_requests"
 	// FieldQuotaTotalTokens holds the string denoting the quota_total_tokens field in the database.
@@ -72,6 +74,7 @@ var Columns = []string{
 	FieldKeyLast4,
 	FieldDisabled,
 	FieldUpstreamStrategy,
+	FieldDefaultReasoningEffort,
 	FieldQuotaRequests,
 	FieldQuotaTotalTokens,
 	FieldQuotaDailyTokens,
@@ -117,6 +120,10 @@ var (
 	DefaultUpstreamStrategy string
 	// UpstreamStrategyValidator is a validator for the "upstream_strategy" field. It is called by the builders before save.
 	UpstreamStrategyValidator func(string) error
+	// DefaultDefaultReasoningEffort holds the default value on creation for the "default_reasoning_effort" field.
+	DefaultDefaultReasoningEffort string
+	// DefaultReasoningEffortValidator is a validator for the "default_reasoning_effort" field. It is called by the builders before save.
+	DefaultReasoningEffortValidator func(string) error
 	// DefaultQuotaRequests holds the default value on creation for the "quota_requests" field.
 	DefaultQuotaRequests int64
 	// DefaultQuotaTotalTokens holds the default value on creation for the "quota_total_tokens" field.
@@ -191,6 +198,11 @@ func ByDisabled(opts ...sql.OrderTermOption) OrderOption {
 // ByUpstreamStrategy orders the results by the upstream_strategy field.
 func ByUpstreamStrategy(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpstreamStrategy, opts...).ToFunc()
+}
+
+// ByDefaultReasoningEffort orders the results by the default_reasoning_effort field.
+func ByDefaultReasoningEffort(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDefaultReasoningEffort, opts...).ToFunc()
 }
 
 // ByQuotaRequests orders the results by the quota_requests field.

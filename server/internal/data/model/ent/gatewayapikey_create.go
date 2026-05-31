@@ -100,6 +100,20 @@ func (_c *GatewayAPIKeyCreate) SetNillableUpstreamStrategy(v *string) *GatewayAP
 	return _c
 }
 
+// SetDefaultReasoningEffort sets the "default_reasoning_effort" field.
+func (_c *GatewayAPIKeyCreate) SetDefaultReasoningEffort(v string) *GatewayAPIKeyCreate {
+	_c.mutation.SetDefaultReasoningEffort(v)
+	return _c
+}
+
+// SetNillableDefaultReasoningEffort sets the "default_reasoning_effort" field if the given value is not nil.
+func (_c *GatewayAPIKeyCreate) SetNillableDefaultReasoningEffort(v *string) *GatewayAPIKeyCreate {
+	if v != nil {
+		_c.SetDefaultReasoningEffort(*v)
+	}
+	return _c
+}
+
 // SetQuotaRequests sets the "quota_requests" field.
 func (_c *GatewayAPIKeyCreate) SetQuotaRequests(v int64) *GatewayAPIKeyCreate {
 	_c.mutation.SetQuotaRequests(v)
@@ -335,6 +349,10 @@ func (_c *GatewayAPIKeyCreate) defaults() {
 		v := gatewayapikey.DefaultUpstreamStrategy
 		_c.mutation.SetUpstreamStrategy(v)
 	}
+	if _, ok := _c.mutation.DefaultReasoningEffort(); !ok {
+		v := gatewayapikey.DefaultDefaultReasoningEffort
+		_c.mutation.SetDefaultReasoningEffort(v)
+	}
 	if _, ok := _c.mutation.QuotaRequests(); !ok {
 		v := gatewayapikey.DefaultQuotaRequests
 		_c.mutation.SetQuotaRequests(v)
@@ -438,6 +456,14 @@ func (_c *GatewayAPIKeyCreate) check() error {
 			return &ValidationError{Name: "upstream_strategy", err: fmt.Errorf(`ent: validator failed for field "GatewayAPIKey.upstream_strategy": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.DefaultReasoningEffort(); !ok {
+		return &ValidationError{Name: "default_reasoning_effort", err: errors.New(`ent: missing required field "GatewayAPIKey.default_reasoning_effort"`)}
+	}
+	if v, ok := _c.mutation.DefaultReasoningEffort(); ok {
+		if err := gatewayapikey.DefaultReasoningEffortValidator(v); err != nil {
+			return &ValidationError{Name: "default_reasoning_effort", err: fmt.Errorf(`ent: validator failed for field "GatewayAPIKey.default_reasoning_effort": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.QuotaRequests(); !ok {
 		return &ValidationError{Name: "quota_requests", err: errors.New(`ent: missing required field "GatewayAPIKey.quota_requests"`)}
 	}
@@ -531,6 +557,10 @@ func (_c *GatewayAPIKeyCreate) createSpec() (*GatewayAPIKey, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.UpstreamStrategy(); ok {
 		_spec.SetField(gatewayapikey.FieldUpstreamStrategy, field.TypeString, value)
 		_node.UpstreamStrategy = value
+	}
+	if value, ok := _c.mutation.DefaultReasoningEffort(); ok {
+		_spec.SetField(gatewayapikey.FieldDefaultReasoningEffort, field.TypeString, value)
+		_node.DefaultReasoningEffort = value
 	}
 	if value, ok := _c.mutation.QuotaRequests(); ok {
 		_spec.SetField(gatewayapikey.FieldQuotaRequests, field.TypeInt64, value)

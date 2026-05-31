@@ -47,6 +47,7 @@ func (r *gatewayRepo) CreateAPIKey(ctx context.Context, input biz.CreateGatewayA
 		SetKeyPrefix(secret.KeyPrefix).
 		SetKeyLast4(secret.KeyLast4).
 		SetUpstreamStrategy(input.UpstreamStrategy).
+		SetDefaultReasoningEffort(input.DefaultReasoningEffort).
 		SetQuotaRequests(input.QuotaRequests).
 		SetQuotaTotalTokens(input.QuotaTotalTokens).
 		SetQuotaDailyTokens(input.QuotaDailyTokens).
@@ -144,6 +145,7 @@ func (r *gatewayRepo) UpdateAPIKey(ctx context.Context, input biz.UpdateGatewayA
 	update := r.data.postgres.GatewayAPIKey.UpdateOneID(input.ID).
 		SetName(input.Name).
 		SetUpstreamStrategy(input.UpstreamStrategy).
+		SetDefaultReasoningEffort(input.DefaultReasoningEffort).
 		SetQuotaRequests(input.QuotaRequests).
 		SetQuotaTotalTokens(input.QuotaTotalTokens).
 		SetQuotaDailyTokens(input.QuotaDailyTokens).
@@ -1692,6 +1694,7 @@ func mapGatewayAPIKey(item *ent.GatewayAPIKey) *biz.GatewayAPIKey {
 		KeyLast4:                       item.KeyLast4,
 		Disabled:                       item.Disabled,
 		UpstreamStrategy:               item.UpstreamStrategy,
+		DefaultReasoningEffort:         item.DefaultReasoningEffort,
 		QuotaRequests:                  item.QuotaRequests,
 		QuotaTotalTokens:               item.QuotaTotalTokens,
 		QuotaDailyTokens:               item.QuotaDailyTokens,

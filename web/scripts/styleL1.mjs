@@ -185,6 +185,8 @@ const scenarios = [
       await expectText(page, 'Backend 直连')
       await expectText(page, 'Backend + CLI 兜底')
       await expectText(page, '强制 CLI')
+      await expectText(page, '全局默认推理档位')
+      await expectText(page, '默认关闭')
       await expectNoText(page, '最近上游请求')
       await expectNoText(page, '每日模型汇总')
       await expectNoText(page, '会话聚合')
@@ -202,10 +204,40 @@ const scenarios = [
         )
         return tab?.getAttribute('aria-selected') === 'true'
       })
+      const effortGroup = page.getByRole('group', {
+        name: '全局默认推理档位',
+      })
+      await effortGroup
+        .getByRole('button', { name: 'Fast', exact: true })
+        .click()
+      await page.waitForFunction(() => {
+        const button = [
+          ...document.querySelectorAll(
+            '[aria-label="全局默认推理档位"] button'
+          ),
+        ].find((node) => node.textContent.trim() === 'Fast')
+        return button?.getAttribute('aria-pressed') === 'true'
+      })
+      await effortGroup
+        .getByRole('button', { name: '关闭', exact: true })
+        .click()
+      await page.waitForFunction(() => {
+        const button = [
+          ...document.querySelectorAll(
+            '[aria-label="全局默认推理档位"] button'
+          ),
+        ].find((node) => node.textContent.trim() === '关闭')
+        return button?.getAttribute('aria-pressed') === 'true'
+      })
       const calls = page.__styleL1ApiRpcCalls || []
       assert(
         calls.some((call) => call.method === 'gateway_upstream_get') &&
-          calls.some((call) => call.method === 'gateway_upstream_set'),
+          calls.some((call) => call.method === 'gateway_upstream_set') &&
+          calls.some(
+            (call) =>
+              call.method === 'gateway_upstream_set' &&
+              call.params?.default_reasoning_effort === 'low'
+          ),
         `admin-upstream-desktop 未调用上游策略读写接口: ${JSON.stringify(calls)}`
       )
     },
@@ -2098,9 +2130,13 @@ async function assertKeyTableVisuals(page, scenarioName) {
       hasCreatedAtHeader: document.body.innerText.includes('创建时间'),
       hasUpdatedAtHeader: document.body.innerText.includes('更新时间'),
       hasUpstreamStrategyHeader: document.body.innerText.includes('上游策略'),
+      hasDefaultEffortHeader: document.body.innerText.includes('默认 Effort'),
       hasUpstreamStrategyValue:
         document.body.innerText.includes('Backend + CLI 兜底') &&
         document.body.innerText.includes('继承全局默认'),
+      hasDefaultEffortValue:
+        document.body.innerText.includes('Fast') &&
+        document.body.innerText.includes('关闭默认'),
       hasOperationHeader: Array.from(
         table?.querySelectorAll('thead th') || []
       ).some((node) => node.textContent.trim() === '操作'),
@@ -2175,7 +2211,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
       }),
       statusCells: Array.from(table?.querySelectorAll('tbody tr') || []).map(
         (row) => {
-          const cell = row.children[8]
+          const cell = row.children[9]
           const badge = cell?.querySelector('span')
           const cellRect = cell?.getBoundingClientRect()
           const badgeRect = badge?.getBoundingClientRect()
@@ -2201,9 +2237,14 @@ async function assertKeyTableVisuals(page, scenarioName) {
   assert(metrics.hasCreatedAtHeader, `${scenarioName} 缺少创建时间列`)
   assert(metrics.hasUpdatedAtHeader, `${scenarioName} 缺少更新时间列`)
   assert(metrics.hasUpstreamStrategyHeader, `${scenarioName} 缺少上游策略列`)
+  assert(metrics.hasDefaultEffortHeader, `${scenarioName} 缺少默认 Effort 列`)
   assert(
     metrics.hasUpstreamStrategyValue,
     `${scenarioName} 缺少 key 级上游策略展示`
+  )
+  assert(
+    metrics.hasDefaultEffortValue,
+    `${scenarioName} 缺少 key 级默认推理档位展示`
   )
   assert(
     !metrics.hasOperationHeader,
@@ -2390,7 +2431,9 @@ async function assertKeyCreateModal(page, scenarioName) {
           ?.getAttribute('pattern') || '',
       hasRemarkHint:
         node.innerText.includes('留空时使用默认备注') &&
-        node.innerText.includes('保存备注、额度、模型或上游策略不会重新生成'),
+        node.innerText.includes(
+          '保存备注、额度、模型、上游策略或默认推理档位不会重新生成'
+        ),
       formNoValidate: Boolean(node.querySelector('form')?.noValidate),
       hasNoResetButton: !Array.from(node.querySelectorAll('button')).some(
         (button) => button.textContent.trim() === '重置 API key'
@@ -2409,6 +2452,12 @@ async function assertKeyCreateModal(page, scenarioName) {
       hasUpstreamStrategyHint:
         node.innerText.includes('默认继承全局') &&
         node.innerText.includes('仅对该 API 凭据后续请求生效'),
+      hasDefaultEffortSelect: Boolean(
+        node.querySelector('[role="combobox"][aria-label="默认推理档位"]')
+      ),
+      hasDefaultEffortHint:
+        node.innerText.includes('会覆盖客户端传入的 reasoning_effort') &&
+        node.innerText.includes('关闭默认时保留客户端原始档位'),
       tokenLimitInputCount: node.querySelectorAll(
         'input[placeholder="0 表示不限，1 = 100 万 token"]'
       ).length,
@@ -2452,6 +2501,14 @@ async function assertKeyCreateModal(page, scenarioName) {
   assert(
     metrics.hasUpstreamStrategyHint,
     `${scenarioName} 新建弹窗缺少 key 级上游策略提示`
+  )
+  assert(
+    metrics.hasDefaultEffortSelect,
+    `${scenarioName} 新建弹窗缺少 key 级默认推理档位选择`
+  )
+  assert(
+    metrics.hasDefaultEffortHint,
+    `${scenarioName} 新建弹窗缺少 key 级默认推理档位提示`
   )
   assert(
     metrics.tokenLimitInputCount >= 8,
@@ -2707,6 +2764,13 @@ async function assertKeyDoubleClickEdit(page, scenarioName) {
   assert(
     strategyValue.includes('Backend + CLI 兜底'),
     `${scenarioName} 编辑弹窗未回显 key 级上游策略: ${strategyValue}`
+  )
+  const defaultEffortValue = await dialog
+    .getByRole('combobox', { name: '默认推理档位' })
+    .inputValue()
+  assert(
+    defaultEffortValue.includes('Fast'),
+    `${scenarioName} 编辑弹窗未回显 key 级默认推理档位: ${defaultEffortValue}`
   )
   const resetMetrics = await dialog.evaluate((node) => {
     const resetPanel = Array.from(
@@ -3545,6 +3609,7 @@ function base64UrlJson(value) {
 async function installApiRpcMock(page) {
   const calls = []
   const state = {
+    defaultReasoningEffort: '',
     upstreamMode: 'codex_backend',
     upstreamStrategy: 'backend_only',
   }
@@ -3732,12 +3797,20 @@ function getApiMockData(method, params = {}, state = {}) {
       default_strategy: 'backend_only',
       default_mode: 'codex_backend',
       fallback_enabled: false,
+      default_reasoning_effort: state.defaultReasoningEffort || '',
       mode: state.upstreamMode || 'codex_backend',
       strategy: state.upstreamStrategy || 'backend_only',
       options: [
         { label: 'Backend 直连', value: 'backend_only' },
         { label: 'Backend + CLI 兜底', value: 'backend_with_cli_fallback' },
         { label: '强制 CLI', value: 'codex_cli' },
+      ],
+      reasoning_effort_options: [
+        { label: '关闭', value: '' },
+        { label: 'Fast', value: 'low' },
+        { label: 'Medium', value: 'medium' },
+        { label: 'High', value: 'high' },
+        { label: 'Deep', value: 'xhigh' },
       ],
     }
   }
@@ -3747,16 +3820,29 @@ function getApiMockData(method, params = {}, state = {}) {
     state.upstreamStrategy = strategy
     state.upstreamMode =
       strategy === 'codex_cli' ? 'codex_cli' : 'codex_backend'
+    if (
+      Object.prototype.hasOwnProperty.call(params, 'default_reasoning_effort')
+    ) {
+      state.defaultReasoningEffort = params.default_reasoning_effort || ''
+    }
     return {
       default_strategy: 'backend_only',
       default_mode: 'codex_backend',
       fallback_enabled: strategy === 'backend_with_cli_fallback',
+      default_reasoning_effort: state.defaultReasoningEffort || '',
       mode: state.upstreamMode,
       strategy,
       options: [
         { label: 'Backend 直连', value: 'backend_only' },
         { label: 'Backend + CLI 兜底', value: 'backend_with_cli_fallback' },
         { label: '强制 CLI', value: 'codex_cli' },
+      ],
+      reasoning_effort_options: [
+        { label: '关闭', value: '' },
+        { label: 'Fast', value: 'low' },
+        { label: 'Medium', value: 'medium' },
+        { label: 'High', value: 'high' },
+        { label: 'Deep', value: 'xhigh' },
       ],
     }
   }
@@ -3775,6 +3861,7 @@ function getApiMockData(method, params = {}, state = {}) {
         last_used_at: 1778000000,
         name: 'productionapikey',
         upstream_strategy: 'backend_with_cli_fallback',
+        default_reasoning_effort: 'low',
         quota_daily_billable_input_tokens: 450_000,
         quota_daily_input_tokens: 800_000,
         quota_daily_output_tokens: 200_000,
@@ -3796,6 +3883,7 @@ function getApiMockData(method, params = {}, state = {}) {
         last_used_at: 0,
         name: 'stagingkeylongnameforoverflowcheck',
         upstream_strategy: '',
+        default_reasoning_effort: 'none',
         quota_daily_billable_input_tokens: 0,
         quota_daily_input_tokens: 0,
         quota_daily_output_tokens: 0,
@@ -3820,6 +3908,7 @@ function getApiMockData(method, params = {}, state = {}) {
         last_used_at: 1777990000 - index * 100,
         name: `extraapikey${id}`,
         upstream_strategy: index % 2 === 0 ? 'backend_only' : 'codex_cli',
+        default_reasoning_effort: index % 2 === 0 ? 'medium' : '',
         quota_daily_billable_input_tokens: 0,
         quota_daily_input_tokens: 0,
         quota_daily_output_tokens: 0,
@@ -3855,6 +3944,7 @@ function getApiMockData(method, params = {}, state = {}) {
       updated_at: 1778050000,
       name,
       upstream_strategy: id === 1 ? 'backend_with_cli_fallback' : '',
+      default_reasoning_effort: id === 1 ? 'low' : '',
       quota_daily_tokens: 0,
       quota_weekly_tokens: 0,
     }

@@ -117,6 +117,30 @@ func TestGatewayUsecaseCreateAPIKeyRejectsInvalidRemark(t *testing.T) {
 	}
 }
 
+func TestGatewayUsecaseCreateAPIKeyNormalizesDefaultReasoningEffort(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+
+	if _, err := uc.CreateAPIKey(context.Background(), CreateGatewayAPIKeyInput{
+		Name:                   "client7",
+		DefaultReasoningEffort: "LOW",
+	}); err != nil {
+		t.Fatalf("CreateAPIKey() error = %v", err)
+	}
+	if repo.createdInput.DefaultReasoningEffort != GatewayReasoningEffortLow {
+		t.Fatalf("default reasoning = %q, want low", repo.createdInput.DefaultReasoningEffort)
+	}
+}
+
+func TestGatewayUsecaseCreateAPIKeyRejectsInvalidDefaultReasoningEffort(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+
+	if _, err := uc.CreateAPIKey(context.Background(), CreateGatewayAPIKeyInput{Name: "client7", DefaultReasoningEffort: "extreme"}); err != ErrGatewayReasoningInvalid {
+		t.Fatalf("CreateAPIKey() err = %v, want ErrGatewayReasoningInvalid", err)
+	}
+}
+
 func TestGatewayUsecaseUpdateAPIKeyRejectsInvalidRemark(t *testing.T) {
 	repo := &gatewayPolicyTestRepo{}
 	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
@@ -145,13 +169,14 @@ func TestGatewayUsecaseUpdateAPIKeyDoesNotRewriteSecret(t *testing.T) {
 func TestGatewayUsecaseResetAPIKeySecretRewritesOnlySecret(t *testing.T) {
 	repo := &gatewayPolicyTestRepo{
 		currentKey: &GatewayAPIKey{
-			ID:                7,
-			Name:              "client7",
-			Disabled:          true,
-			UpstreamStrategy:  GatewayUpstreamStrategyCodexCLI,
-			QuotaDailyTokens:  12,
-			QuotaWeeklyTokens: 34,
-			AllowedModels:     []string{"gpt-5.5"},
+			ID:                     7,
+			Name:                   "client7",
+			Disabled:               true,
+			UpstreamStrategy:       GatewayUpstreamStrategyCodexCLI,
+			DefaultReasoningEffort: GatewayReasoningEffortHigh,
+			QuotaDailyTokens:       12,
+			QuotaWeeklyTokens:      34,
+			AllowedModels:          []string{"gpt-5.5"},
 		},
 	}
 	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
@@ -169,7 +194,7 @@ func TestGatewayUsecaseResetAPIKeySecretRewritesOnlySecret(t *testing.T) {
 	if !strings.HasPrefix(created.PlainKey, GatewayAPIKeyPrefix+"client7_") {
 		t.Fatalf("plain key = %q, want current remark prefix", created.PlainKey)
 	}
-	if created.Name != "client7" || !created.Disabled || created.UpstreamStrategy != GatewayUpstreamStrategyCodexCLI {
+	if created.Name != "client7" || !created.Disabled || created.UpstreamStrategy != GatewayUpstreamStrategyCodexCLI || created.DefaultReasoningEffort != GatewayReasoningEffortHigh {
 		t.Fatalf("reset should preserve non-secret fields, got %+v", created.GatewayAPIKey)
 	}
 	if created.QuotaDailyTokens != 12 || created.QuotaWeeklyTokens != 34 || len(created.AllowedModels) != 1 {
@@ -386,6 +411,42 @@ func TestGatewayUsecaseEffectiveCodexUpstreamStrategyUsesAPIKeyOverride(t *testi
 	}
 }
 
+func TestGatewayUsecaseEffectiveReasoningEffortUsesKeyGlobalThenRequest(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+	ctx := context.Background()
+
+	if got, err := uc.GetEffectiveReasoningEffort(ctx, &GatewayAPIKey{DefaultReasoningEffort: GatewayReasoningEffortLow}, GatewayReasoningEffortHigh); err != nil || got != GatewayReasoningEffortLow {
+		t.Fatalf("key override effort = %q err=%v, want low", got, err)
+	}
+	if got, err := uc.GetEffectiveReasoningEffort(ctx, &GatewayAPIKey{DefaultReasoningEffort: GatewayReasoningEffortLow}, ""); err != nil || got != GatewayReasoningEffortLow {
+		t.Fatalf("key effort = %q err=%v, want low", got, err)
+	}
+	if _, err := uc.SetGatewayDefaultReasoningEffort(ctx, GatewayReasoningEffortMed); err != nil {
+		t.Fatalf("SetGatewayDefaultReasoningEffort() error = %v", err)
+	}
+	if got, err := uc.GetEffectiveReasoningEffort(ctx, &GatewayAPIKey{}, GatewayReasoningEffortHigh); err != nil || got != GatewayReasoningEffortMed {
+		t.Fatalf("global effort = %q err=%v, want medium", got, err)
+	}
+	if got, err := uc.GetEffectiveReasoningEffort(ctx, &GatewayAPIKey{DefaultReasoningEffort: GatewayReasoningEffortNone}, GatewayReasoningEffortHigh); err != nil || got != GatewayReasoningEffortHigh {
+		t.Fatalf("key none effort = %q err=%v, want requested high", got, err)
+	}
+	if _, err := uc.SetGatewayDefaultReasoningEffort(ctx, ""); err != nil {
+		t.Fatalf("clear SetGatewayDefaultReasoningEffort() error = %v", err)
+	}
+	if got, err := uc.GetEffectiveReasoningEffort(ctx, &GatewayAPIKey{}, GatewayReasoningEffortHigh); err != nil || got != GatewayReasoningEffortHigh {
+		t.Fatalf("request effort = %q err=%v, want high", got, err)
+	}
+}
+
+func TestGatewayUsecaseSetGatewayDefaultReasoningEffortRejectsInvalidValue(t *testing.T) {
+	uc := NewGatewayUsecase(&gatewayPolicyTestRepo{}, log.NewStdLogger(testWriter{}), nil)
+
+	if _, err := uc.SetGatewayDefaultReasoningEffort(context.Background(), "extreme"); err != ErrGatewayReasoningInvalid {
+		t.Fatalf("SetGatewayDefaultReasoningEffort() err = %v, want ErrGatewayReasoningInvalid", err)
+	}
+}
+
 func TestGatewayUsecaseUpdateModelContextPolicyValidation(t *testing.T) {
 	uc := NewGatewayUsecase(&gatewayPolicyTestRepo{}, log.NewStdLogger(io.Discard), nil)
 	if _, err := uc.UpdateModelContextPolicy(context.Background(), 1, GatewayModelContextPolicy{
@@ -451,10 +512,11 @@ type gatewayPolicyTestRepo struct {
 func (r *gatewayPolicyTestRepo) CreateAPIKey(_ context.Context, input CreateGatewayAPIKeyInput, secret GatewayAPIKeySecret) (*GatewayAPIKey, error) {
 	r.createdInput = input
 	return &GatewayAPIKey{
-		ID:        1,
-		Name:      input.Name,
-		KeyPrefix: secret.KeyPrefix,
-		KeyLast4:  secret.KeyLast4,
+		ID:                     1,
+		Name:                   input.Name,
+		KeyPrefix:              secret.KeyPrefix,
+		KeyLast4:               secret.KeyLast4,
+		DefaultReasoningEffort: input.DefaultReasoningEffort,
 	}, nil
 }
 func (r *gatewayPolicyTestRepo) ListAPIKeys(context.Context, int, int, string) ([]*GatewayAPIKey, int, error) {
@@ -465,7 +527,7 @@ func (r *gatewayPolicyTestRepo) ListAPIKeysByOwner(context.Context, int, int, in
 }
 func (r *gatewayPolicyTestRepo) UpdateAPIKey(_ context.Context, input UpdateGatewayAPIKeyInput) (*GatewayAPIKey, error) {
 	r.updatedInput = input
-	return &GatewayAPIKey{ID: input.ID, Name: input.Name}, nil
+	return &GatewayAPIKey{ID: input.ID, Name: input.Name, DefaultReasoningEffort: input.DefaultReasoningEffort}, nil
 }
 func (r *gatewayPolicyTestRepo) ResetAPIKeySecret(_ context.Context, id int, secret GatewayAPIKeySecret) (*GatewayAPIKey, error) {
 	r.resetID = id

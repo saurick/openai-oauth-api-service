@@ -24,10 +24,17 @@ const (
 	GatewayUpstreamModeCodexCLI     = "codex_cli"
 	GatewaySettingCodexUpstreamMode = "codex_upstream_mode"
 	GatewaySettingCodexFallback     = "codex_upstream_fallback_enabled"
+	GatewaySettingDefaultReasoning  = "gateway_default_reasoning_effort"
 
 	GatewayUpstreamStrategyBackendOnly         = "backend_only"
 	GatewayUpstreamStrategyBackendWithFallback = "backend_with_cli_fallback"
 	GatewayUpstreamStrategyCodexCLI            = "codex_cli"
+
+	GatewayReasoningEffortNone  = "none"
+	GatewayReasoningEffortLow   = "low"
+	GatewayReasoningEffortMed   = "medium"
+	GatewayReasoningEffortHigh  = "high"
+	GatewayReasoningEffortXHigh = "xhigh"
 )
 
 var (
@@ -43,6 +50,7 @@ var (
 	ErrGatewayUpstreamModeInvalid = errors.New("gateway upstream mode invalid")
 	ErrGatewayAPIKeyRemarkInvalid = errors.New("gateway api key remark invalid")
 	ErrGatewayModelContextInvalid = errors.New("gateway model context invalid")
+	ErrGatewayReasoningInvalid    = errors.New("gateway reasoning effort invalid")
 )
 
 type GatewayAPIKey struct {
@@ -54,6 +62,7 @@ type GatewayAPIKey struct {
 	KeyLast4                       string
 	Disabled                       bool
 	UpstreamStrategy               string
+	DefaultReasoningEffort         string
 	QuotaRequests                  int64
 	QuotaTotalTokens               int64
 	QuotaDailyTokens               int64
@@ -368,6 +377,7 @@ type CreateGatewayAPIKeyInput struct {
 	QuotaWeeklyBillableInputTokens int64
 	AllowedModels                  []string
 	UpstreamStrategy               string
+	DefaultReasoningEffort         string
 }
 
 type UpdateGatewayAPIKeyInput struct {
@@ -387,6 +397,7 @@ type UpdateGatewayAPIKeyInput struct {
 	AllowedModels                  []string
 	Disabled                       bool
 	UpstreamStrategy               string
+	DefaultReasoningEffort         string
 }
 
 type GatewayPolicy struct {
@@ -656,6 +667,31 @@ func NormalizeGatewayAPIKeyUpstreamStrategy(strategy string) string {
 	return NormalizeGatewayUpstreamStrategy(strategy)
 }
 
+func NormalizeGatewayReasoningEffort(effort string) string {
+	switch strings.ToLower(strings.TrimSpace(effort)) {
+	case GatewayReasoningEffortLow:
+		return GatewayReasoningEffortLow
+	case GatewayReasoningEffortMed:
+		return GatewayReasoningEffortMed
+	case GatewayReasoningEffortHigh:
+		return GatewayReasoningEffortHigh
+	case GatewayReasoningEffortXHigh:
+		return GatewayReasoningEffortXHigh
+	default:
+		return ""
+	}
+}
+
+func NormalizeGatewayAPIKeyDefaultReasoningEffort(effort string) string {
+	if strings.TrimSpace(effort) == "" {
+		return ""
+	}
+	if strings.EqualFold(strings.TrimSpace(effort), GatewayReasoningEffortNone) {
+		return GatewayReasoningEffortNone
+	}
+	return NormalizeGatewayReasoningEffort(effort)
+}
+
 func GatewayUpstreamStrategy(mode string, fallbackEnabled bool) string {
 	mode = NormalizeGatewayUpstreamMode(mode)
 	if mode == GatewayUpstreamModeCodexCLI {
@@ -706,6 +742,11 @@ func (uc *GatewayUsecase) CreateAPIKey(ctx context.Context, input CreateGatewayA
 	input.UpstreamStrategy = NormalizeGatewayAPIKeyUpstreamStrategy(input.UpstreamStrategy)
 	if rawUpstreamStrategy != "" && input.UpstreamStrategy == "" {
 		return nil, ErrGatewayUpstreamModeInvalid
+	}
+	rawDefaultReasoningEffort := strings.TrimSpace(input.DefaultReasoningEffort)
+	input.DefaultReasoningEffort = NormalizeGatewayAPIKeyDefaultReasoningEffort(input.DefaultReasoningEffort)
+	if rawDefaultReasoningEffort != "" && input.DefaultReasoningEffort == "" {
+		return nil, ErrGatewayReasoningInvalid
 	}
 	allowedModels, err := normalizeAllowedCodexModels(input.AllowedModels)
 	if err != nil {
@@ -765,6 +806,11 @@ func (uc *GatewayUsecase) UpdateAPIKey(ctx context.Context, input UpdateGatewayA
 	input.UpstreamStrategy = NormalizeGatewayAPIKeyUpstreamStrategy(input.UpstreamStrategy)
 	if rawUpstreamStrategy != "" && input.UpstreamStrategy == "" {
 		return nil, ErrGatewayUpstreamModeInvalid
+	}
+	rawDefaultReasoningEffort := strings.TrimSpace(input.DefaultReasoningEffort)
+	input.DefaultReasoningEffort = NormalizeGatewayAPIKeyDefaultReasoningEffort(input.DefaultReasoningEffort)
+	if rawDefaultReasoningEffort != "" && input.DefaultReasoningEffort == "" {
+		return nil, ErrGatewayReasoningInvalid
 	}
 	allowedModels, err := normalizeAllowedCodexModels(input.AllowedModels)
 	if err != nil {
@@ -1193,6 +1239,47 @@ func (uc *GatewayUsecase) GetCodexUpstreamStrategy(ctx context.Context) (string,
 		return "", "", false, err
 	}
 	return GatewayUpstreamStrategy(mode, fallbackEnabled), mode, fallbackEnabled, nil
+}
+
+func (uc *GatewayUsecase) GetGatewayDefaultReasoningEffort(ctx context.Context) (string, error) {
+	value, err := uc.repo.GetGatewaySetting(ctx, GatewaySettingDefaultReasoning)
+	if err != nil {
+		return "", err
+	}
+	return NormalizeGatewayReasoningEffort(value), nil
+}
+
+func (uc *GatewayUsecase) SetGatewayDefaultReasoningEffort(ctx context.Context, effort string) (string, error) {
+	raw := strings.TrimSpace(effort)
+	normalized := NormalizeGatewayReasoningEffort(raw)
+	if raw != "" && normalized == "" {
+		return "", ErrGatewayReasoningInvalid
+	}
+	if err := uc.repo.SetGatewaySetting(ctx, GatewaySettingDefaultReasoning, normalized); err != nil {
+		return "", err
+	}
+	return normalized, nil
+}
+
+func (uc *GatewayUsecase) GetEffectiveReasoningEffort(ctx context.Context, key *GatewayAPIKey, requested string) (string, error) {
+	requested = NormalizeGatewayReasoningEffort(requested)
+	if key != nil {
+		keyDefault := NormalizeGatewayAPIKeyDefaultReasoningEffort(key.DefaultReasoningEffort)
+		switch keyDefault {
+		case GatewayReasoningEffortNone:
+			return requested, nil
+		case GatewayReasoningEffortLow, GatewayReasoningEffortMed, GatewayReasoningEffortHigh, GatewayReasoningEffortXHigh:
+			return keyDefault, nil
+		}
+	}
+	globalDefault, err := uc.GetGatewayDefaultReasoningEffort(ctx)
+	if err != nil {
+		return "", err
+	}
+	if globalDefault != "" {
+		return globalDefault, nil
+	}
+	return requested, nil
 }
 
 func (uc *GatewayUsecase) GetEffectiveCodexUpstreamStrategy(ctx context.Context, key *GatewayAPIKey) (string, string, bool, error) {

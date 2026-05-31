@@ -121,6 +121,34 @@ const KEY_UPSTREAM_STRATEGY_OPTIONS = [
   },
   ...CODEX_UPSTREAM_STRATEGY_OPTIONS,
 ]
+const DEFAULT_REASONING_EFFORT_OPTIONS = [
+  {
+    label: '关闭',
+    value: '',
+    description: '客户端未传 reasoning_effort 时不注入默认档位',
+  },
+  { label: 'Fast', value: 'low', description: '默认使用 low，优先减少延迟' },
+  {
+    label: 'Medium',
+    value: 'medium',
+    description: '默认使用 medium，兼顾速度和推理深度',
+  },
+  { label: 'High', value: 'high', description: '默认使用 high' },
+  { label: 'Deep', value: 'xhigh', description: '默认使用 xhigh' },
+]
+const KEY_DEFAULT_REASONING_EFFORT_OPTIONS = [
+  {
+    label: '继承全局默认',
+    value: '',
+    description: '跟随上游策略页的默认推理档位',
+  },
+  {
+    label: '关闭默认',
+    value: 'none',
+    description: '即使全局开启，也不为该 key 注入默认 effort',
+  },
+  ...DEFAULT_REASONING_EFFORT_OPTIONS.filter((option) => option.value),
+]
 const MODEL_CONTEXT_HELP = {
   window:
     '表格显示当前生效值；弹窗保存的是模型覆盖值。上下文窗口是客户端可看到的模型窗口，默认按 Codex 使用体验取 400K；留空或 0 表示继承，不是无限制。',
@@ -247,6 +275,7 @@ const INITIAL_KEY_FORM = {
   remark: '',
   allowedModels: '',
   upstreamStrategy: '',
+  defaultReasoningEffort: '',
   dailyTokenLimit: '',
   weeklyTokenLimit: '',
   dailyInputTokenLimit: '',
@@ -451,6 +480,14 @@ function upstreamStrategyLabel(value) {
   const item = KEY_UPSTREAM_STRATEGY_OPTIONS.find(
     (option) => option.value === String(value || '')
   )
+  return item?.label || '继承全局默认'
+}
+
+function defaultReasoningEffortLabel(
+  value,
+  options = KEY_DEFAULT_REASONING_EFFORT_OPTIONS
+) {
+  const item = options.find((option) => option.value === String(value || ''))
   return item?.label || '继承全局默认'
 }
 
@@ -1377,6 +1414,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const [usageBuckets, setUsageBuckets] = useState([])
   const [gatewayUpstreamStrategy, setGatewayUpstreamStrategy] =
     useState('backend_only')
+  const [gatewayDefaultReasoningEffort, setGatewayDefaultReasoningEffort] =
+    useState('')
   const [gatewayUpstreamSaving, setGatewayUpstreamSaving] = useState(false)
   const [usageTab, setUsageTab] = useState(DEFAULT_USAGE_TAB)
   const [selectedUsageBucket, setSelectedUsageBucket] = useState(null)
@@ -1540,6 +1579,16 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       )
     ) {
       setGatewayUpstreamStrategy(nextStrategy)
+    }
+    const nextDefaultReasoningEffort = String(
+      res?.data?.default_reasoning_effort || ''
+    )
+    if (
+      DEFAULT_REASONING_EFFORT_OPTIONS.some(
+        (option) => option.value === nextDefaultReasoningEffort
+      )
+    ) {
+      setGatewayDefaultReasoningEffort(nextDefaultReasoningEffort)
     }
   }
 
@@ -1746,11 +1795,39 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     setErrMsg('')
     setGatewayUpstreamSaving(true)
     try {
-      const res = await apiRpc.call('gateway_upstream_set', { strategy })
+      const res = await apiRpc.call('gateway_upstream_set', {
+        strategy,
+        default_reasoning_effort: gatewayDefaultReasoningEffort,
+      })
       setGatewayUpstreamState(res)
       await loadAll()
     } catch (e) {
       setErrMsg(getActionErrorMessage(e, '切换 Codex 上游策略'))
+    } finally {
+      setGatewayUpstreamSaving(false)
+    }
+  }
+
+  const changeGatewayDefaultReasoningEffort = async (
+    defaultReasoningEffort
+  ) => {
+    if (
+      defaultReasoningEffort === gatewayDefaultReasoningEffort ||
+      gatewayUpstreamSaving
+    ) {
+      return
+    }
+    setErrMsg('')
+    setGatewayUpstreamSaving(true)
+    try {
+      const res = await apiRpc.call('gateway_upstream_set', {
+        strategy: gatewayUpstreamStrategy,
+        default_reasoning_effort: defaultReasoningEffort,
+      })
+      setGatewayUpstreamState(res)
+      await loadAll()
+    } catch (e) {
+      setErrMsg(getActionErrorMessage(e, '切换默认推理档位'))
     } finally {
       setGatewayUpstreamSaving(false)
     }
@@ -1860,6 +1937,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
           ),
           allowed_models: splitModels(keyForm.allowedModels),
           upstream_strategy: keyForm.upstreamStrategy,
+          default_reasoning_effort: keyForm.defaultReasoningEffort,
           disabled: !!currentKey?.disabled,
         })
       } else {
@@ -1889,6 +1967,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
           ),
           allowed_models: splitModels(keyForm.allowedModels),
           upstream_strategy: keyForm.upstreamStrategy,
+          default_reasoning_effort: keyForm.defaultReasoningEffort,
         })
         setNewKey(result?.data || null)
       }
@@ -1929,6 +2008,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
           ? allowedModel
           : '',
       upstreamStrategy: item.upstream_strategy || '',
+      defaultReasoningEffort: item.default_reasoning_effort || '',
       dailyTokenLimit: tokenLimitTokensToInput(item.quota_daily_tokens),
       weeklyTokenLimit: tokenLimitTokensToInput(item.quota_weekly_tokens),
       dailyInputTokenLimit: tokenLimitTokensToInput(
@@ -2863,7 +2943,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
           <div className={tableWrapClass}>
             <div className="overflow-auto">
-              <table className={`${keyTableClass} min-w-[1360px]`}>
+              <table className={`${keyTableClass} min-w-[1500px]`}>
                 <colgroup>
                   <col className="admin-key-table-selection-col" />
                   <col className="admin-key-table-remark-col" />
@@ -2872,6 +2952,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   <col className="admin-key-table-key-col" />
                   <col className="admin-key-table-model-col" />
                   <col className="admin-key-table-upstream-col" />
+                  <col className="admin-key-table-effort-col" />
                   <col className="admin-key-table-quota-col" />
                   <col className="admin-key-table-status-col" />
                 </colgroup>
@@ -2897,6 +2978,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     <th className={thClass}>完整凭据</th>
                     <th className={thClass}>模型限制</th>
                     <th className={thClass}>上游策略</th>
+                    <th className={thClass}>默认 Effort</th>
                     <th className={thClass}>Token 日 / 周限制（百万）</th>
                     <th className={thClass}>状态</th>
                   </tr>
@@ -2967,6 +3049,11 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                           </td>
                           <td className={`${tdClass} whitespace-nowrap`}>
                             {upstreamStrategyLabel(item.upstream_strategy)}
+                          </td>
+                          <td className={`${tdClass} whitespace-nowrap`}>
+                            {defaultReasoningEffortLabel(
+                              item.default_reasoning_effort
+                            )}
                           </td>
                           <td className={tdClass}>
                             <div className="grid gap-1 text-sm">
@@ -3368,7 +3455,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 {editingKeyId ? '编辑 API 凭据' : '新建 API 凭据'}
               </h2>
               <p className="admin-modal-description">
-                设置备注、模型限制、上游策略和 token 日 / 周额度。
+                设置备注、模型限制、上游策略、默认推理档位和 token 日 / 周额度。
               </p>
             </div>
             <button
@@ -3398,7 +3485,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 placeholder="例如 team1"
               />
               <span className={fieldHintClass}>
-                仅支持字母和数字；留空时使用默认备注。保存备注、额度、模型或上游策略不会重新生成
+                仅支持字母和数字；留空时使用默认备注。保存备注、额度、模型、上游策略或默认推理档位不会重新生成
                 API key。
               </span>
             </label>
@@ -3465,6 +3552,25 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               />
               <span className={fieldHintClass}>
                 默认继承全局；仅对该 API 凭据后续请求生效。
+              </span>
+            </label>
+            <label className={fieldClass}>
+              默认推理档位
+              <SearchableSelect
+                value={keyForm.defaultReasoningEffort}
+                onChange={(nextValue) =>
+                  setKeyForm((current) => ({
+                    ...current,
+                    defaultReasoningEffort: nextValue,
+                  }))
+                }
+                ariaLabel="默认推理档位"
+                options={KEY_DEFAULT_REASONING_EFFORT_OPTIONS}
+                placeholder="输入默认推理档位"
+              />
+              <span className={fieldHintClass}>
+                该设置会覆盖客户端传入的
+                reasoning_effort；关闭默认时保留客户端原始档位。
               </span>
             </label>
             <div className="grid gap-3 rounded-lg border border-[#e4ece6] bg-[#f7fbf8] p-3">
@@ -4164,35 +4270,71 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
   const renderUpstreamModeControl = () => (
     <SurfacePanel variant="admin" className="p-5 sm:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-[#1f2d25]">
-            Codex 上游策略
-          </h2>
-          <div className="mt-1 text-sm text-[#7b8780]">
-            Backend 直连失败时直接返回错误；CLI 兜底只作为临时救急； 强制 CLI
-            会每次走服务端 codex exec。
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-[#1f2d25]">
+              Codex 上游策略
+            </h2>
+            <div className="mt-1 text-sm text-[#7b8780]">
+              Backend 直连失败时直接返回错误；CLI 兜底只作为临时救急； 强制 CLI
+              会每次走服务端 codex exec。
+            </div>
+          </div>
+          <div
+            className="admin-view-tabs"
+            role="tablist"
+            aria-label="Codex 上游策略"
+          >
+            {CODEX_UPSTREAM_STRATEGY_OPTIONS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                role="tab"
+                aria-selected={gatewayUpstreamStrategy === item.value}
+                title={item.description}
+                onClick={() => changeGatewayUpstreamStrategy(item.value)}
+                disabled={loading || gatewayUpstreamSaving}
+                className="admin-view-tab"
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
         </div>
-        <div
-          className="admin-view-tabs"
-          role="tablist"
-          aria-label="Codex 上游策略"
-        >
-          {CODEX_UPSTREAM_STRATEGY_OPTIONS.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              role="tab"
-              aria-selected={gatewayUpstreamStrategy === item.value}
-              title={item.description}
-              onClick={() => changeGatewayUpstreamStrategy(item.value)}
-              disabled={loading || gatewayUpstreamSaving}
-              className="admin-view-tab"
-            >
-              {item.label}
-            </button>
-          ))}
+        <div className="flex flex-col gap-4 border-t border-[#e4ece6] pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-[#1f2d25]">
+              全局默认推理档位
+            </h3>
+            <div className="mt-1 text-sm text-[#7b8780]">
+              默认关闭；开启后会覆盖客户端传入的 reasoning_effort，key
+              可单独覆盖或关闭。
+            </div>
+          </div>
+          <div
+            className="admin-view-tabs"
+            role="group"
+            aria-label="全局默认推理档位"
+          >
+            {DEFAULT_REASONING_EFFORT_OPTIONS.map((item) => (
+              <button
+                key={item.value || 'off'}
+                type="button"
+                aria-pressed={gatewayDefaultReasoningEffort === item.value}
+                title={item.description}
+                onClick={() => changeGatewayDefaultReasoningEffort(item.value)}
+                disabled={loading || gatewayUpstreamSaving}
+                className={`admin-view-tab ${
+                  gatewayDefaultReasoningEffort === item.value
+                    ? 'admin-view-tab-active'
+                    : ''
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </SurfacePanel>

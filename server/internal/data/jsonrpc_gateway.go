@@ -52,23 +52,57 @@ func (d *JsonrpcData) handleGateway(
 		if err != nil {
 			return id, d.mapGatewayError(ctx, err), nil
 		}
-		return id, okResult("获取 Codex 上游策略成功", mapGatewayUpstreamModeForRPC(strategy, mode, fallbackEnabled)), nil
+		defaultReasoningEffort, err := d.gatewayUC.GetGatewayDefaultReasoningEffort(ctx)
+		if err != nil {
+			return id, d.mapGatewayError(ctx, err), nil
+		}
+		return id, okResult("获取 Codex 上游策略成功", mapGatewayUpstreamModeForRPC(strategy, mode, fallbackEnabled, defaultReasoningEffort)), nil
 
 	case "gateway_upstream_set":
 		strategyInput := getString(pm, "strategy")
 		if strategyInput == "" {
-			strategyInput = gatewayUpstreamStrategyFromLegacyParams(getString(pm, "mode"), getBool(pm, "fallback_enabled", false))
+			_, hasMode := pm["mode"]
+			_, hasFallbackEnabled := pm["fallback_enabled"]
+			if hasMode || hasFallbackEnabled {
+				strategyInput = gatewayUpstreamStrategyFromLegacyParams(getString(pm, "mode"), getBool(pm, "fallback_enabled", false))
+			} else {
+				currentStrategy, _, _, err := d.gatewayUC.GetCodexUpstreamStrategy(ctx)
+				if err != nil {
+					return id, d.mapGatewayError(ctx, err), nil
+				}
+				strategyInput = currentStrategy
+			}
+		}
+		defaultReasoningEffortInput := getString(pm, "default_reasoning_effort")
+		hasDefaultReasoningEffort := false
+		if _, ok := pm["default_reasoning_effort"]; ok {
+			hasDefaultReasoningEffort = true
+			rawDefaultReasoningEffort := strings.TrimSpace(defaultReasoningEffortInput)
+			if rawDefaultReasoningEffort != "" && biz.NormalizeGatewayReasoningEffort(rawDefaultReasoningEffort) == "" {
+				return id, d.mapGatewayError(ctx, biz.ErrGatewayReasoningInvalid), nil
+			}
 		}
 		strategy, mode, fallbackEnabled, err := d.gatewayUC.SetCodexUpstreamStrategy(ctx, strategyInput)
 		if err != nil {
 			return id, d.mapGatewayError(ctx, err), nil
 		}
+		defaultReasoningEffort, err := d.gatewayUC.GetGatewayDefaultReasoningEffort(ctx)
+		if err != nil {
+			return id, d.mapGatewayError(ctx, err), nil
+		}
+		if hasDefaultReasoningEffort {
+			defaultReasoningEffort, err = d.gatewayUC.SetGatewayDefaultReasoningEffort(ctx, defaultReasoningEffortInput)
+			if err != nil {
+				return id, d.mapGatewayError(ctx, err), nil
+			}
+		}
 		d.auditGateway(ctx, "api.gateway_upstream_set", "gateway_setting", biz.GatewaySettingCodexUpstreamMode, map[string]any{
-			"strategy":         strategy,
-			"mode":             mode,
-			"fallback_enabled": fallbackEnabled,
+			"strategy":                 strategy,
+			"mode":                     mode,
+			"fallback_enabled":         fallbackEnabled,
+			"default_reasoning_effort": defaultReasoningEffort,
 		})
-		return id, okResult("切换 Codex 上游策略成功", mapGatewayUpstreamModeForRPC(strategy, mode, fallbackEnabled)), nil
+		return id, okResult("切换 Codex 上游策略成功", mapGatewayUpstreamModeForRPC(strategy, mode, fallbackEnabled, defaultReasoningEffort)), nil
 
 	case "key_list":
 		limit := getInt(pm, "limit", 30)
@@ -106,6 +140,7 @@ func (d *JsonrpcData) handleGateway(
 			QuotaWeeklyBillableInputTokens: getInt64(pm, "quota_weekly_billable_input_tokens", 0),
 			AllowedModels:                  getStringList(pm, "allowed_models"),
 			UpstreamStrategy:               getString(pm, "upstream_strategy"),
+			DefaultReasoningEffort:         getString(pm, "default_reasoning_effort"),
 		})
 		if err != nil {
 			return id, d.mapGatewayError(ctx, err), nil
@@ -136,6 +171,7 @@ func (d *JsonrpcData) handleGateway(
 			AllowedModels:                  getStringList(pm, "allowed_models"),
 			Disabled:                       getBool(pm, "disabled", false),
 			UpstreamStrategy:               getString(pm, "upstream_strategy"),
+			DefaultReasoningEffort:         getString(pm, "default_reasoning_effort"),
 		})
 		if err != nil {
 			return id, d.mapGatewayError(ctx, err), nil
@@ -525,6 +561,8 @@ func (d *JsonrpcData) mapGatewayError(ctx context.Context, err error) *v1.Jsonrp
 		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "导出时间范围过大"}
 	case errors.Is(err, biz.ErrGatewayUpstreamModeInvalid):
 		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "Codex 上游策略参数错误"}
+	case errors.Is(err, biz.ErrGatewayReasoningInvalid):
+		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "默认推理档位参数错误"}
 	case errors.Is(err, biz.ErrGatewayModelContextInvalid):
 		return &v1.JsonrpcResult{Code: errcode.InvalidParam.Code, Message: "模型上下文策略参数错误"}
 	case errors.Is(err, biz.ErrGatewayAPIKeyRemarkInvalid):
@@ -803,6 +841,7 @@ func mapGatewayAPIKeyForRPC(item *biz.GatewayAPIKey, includePlainKey bool) map[s
 		"key_last4":                          item.KeyLast4,
 		"disabled":                           item.Disabled,
 		"upstream_strategy":                  item.UpstreamStrategy,
+		"default_reasoning_effort":           item.DefaultReasoningEffort,
 		"quota_requests":                     item.QuotaRequests,
 		"quota_total_tokens":                 item.QuotaTotalTokens,
 		"quota_daily_tokens":                 item.QuotaDailyTokens,
@@ -1008,7 +1047,7 @@ func gatewayUpstreamStrategyFromLegacyParams(mode string, fallbackEnabled bool) 
 	return biz.GatewayUpstreamStrategyBackendOnly
 }
 
-func mapGatewayUpstreamModeForRPC(strategy string, mode string, fallbackEnabled bool) map[string]any {
+func mapGatewayUpstreamModeForRPC(strategy string, mode string, fallbackEnabled bool, defaultReasoningEffort string) map[string]any {
 	mode = biz.NormalizeGatewayUpstreamMode(mode)
 	if mode == "" {
 		mode = biz.DefaultGatewayUpstreamMode()
@@ -1017,12 +1056,14 @@ func mapGatewayUpstreamModeForRPC(strategy string, mode string, fallbackEnabled 
 	if strategy == "" {
 		strategy = biz.GatewayUpstreamStrategy(mode, fallbackEnabled)
 	}
+	defaultReasoningEffort = biz.NormalizeGatewayReasoningEffort(defaultReasoningEffort)
 	return map[string]any{
-		"strategy":         strategy,
-		"mode":             mode,
-		"fallback_enabled": fallbackEnabled,
-		"default_strategy": biz.GatewayUpstreamStrategyBackendOnly,
-		"default_mode":     biz.DefaultGatewayUpstreamMode(),
+		"strategy":                 strategy,
+		"mode":                     mode,
+		"fallback_enabled":         fallbackEnabled,
+		"default_strategy":         biz.GatewayUpstreamStrategyBackendOnly,
+		"default_mode":             biz.DefaultGatewayUpstreamMode(),
+		"default_reasoning_effort": defaultReasoningEffort,
 		"options": []any{
 			map[string]any{
 				"label":       "Backend 直连",
@@ -1041,6 +1082,33 @@ func mapGatewayUpstreamModeForRPC(strategy string, mode string, fallbackEnabled 
 				"value":       biz.GatewayUpstreamStrategyCodexCLI,
 				"mode":        biz.GatewayUpstreamModeCodexCLI,
 				"description": "每次请求都走服务端 codex exec。",
+			},
+		},
+		"reasoning_effort_options": []any{
+			map[string]any{
+				"label":       "关闭",
+				"value":       "",
+				"description": "不注入全局默认 reasoning_effort。",
+			},
+			map[string]any{
+				"label":       "Fast",
+				"value":       biz.GatewayReasoningEffortLow,
+				"description": "客户端未传 effort 时默认使用 low。",
+			},
+			map[string]any{
+				"label":       "Medium",
+				"value":       biz.GatewayReasoningEffortMed,
+				"description": "客户端未传 effort 时默认使用 medium。",
+			},
+			map[string]any{
+				"label":       "High",
+				"value":       biz.GatewayReasoningEffortHigh,
+				"description": "客户端未传 effort 时默认使用 high。",
+			},
+			map[string]any{
+				"label":       "Deep",
+				"value":       biz.GatewayReasoningEffortXHigh,
+				"description": "客户端未传 effort 时默认使用 xhigh。",
 			},
 		},
 	}

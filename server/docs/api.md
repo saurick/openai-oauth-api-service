@@ -79,7 +79,7 @@ HTTP 路由：
 - `user_usage_summary`
 - `user_usage_list`
 
-用途：管理员管理下游 API key、组织用户归属、key+model 策略、key 级上游策略覆盖、固定官方模型列表启停、模型级上下文压缩策略、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；若创建参数 `name` 非空，备注必须只包含字母和数字，并会生成 `ogw_<name>_<random>` 形式的明文 key。管理员 `api.key_list` / `api.key_update` 返回完整 `plain_key` 供后台展示和复制；普通组织用户接口不返回完整明文。`api.key_update` 只保存备注、额度、模型权限、上游策略和禁用状态，不会重新生成 key；key 泄密或需要轮换时调用 `api.key_reset_secret` 单独重置。鉴权继续使用 `key_hash`，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
+用途：管理员管理下游 API key、组织用户归属、key+model 策略、key 级上游策略覆盖、key 级默认推理档位、固定官方模型列表启停、模型级上下文压缩策略、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；若创建参数 `name` 非空，备注必须只包含字母和数字，并会生成 `ogw_<name>_<random>` 形式的明文 key。管理员 `api.key_list` / `api.key_update` 返回完整 `plain_key` 供后台展示和复制；普通组织用户接口不返回完整明文。`api.key_update` 只保存备注、额度、模型权限、上游策略、默认推理档位和禁用状态，不会重新生成 key；key 泄密或需要轮换时调用 `api.key_reset_secret` 单独重置。鉴权继续使用 `key_hash`，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
 
 模型目录以服务端代码中的官方 Codex 列表为真源，管理端只允许读取、启停和调整上下文压缩策略；`model_upsert` / `model_delete` 不作为正式管理接口开放。`api.model_context_update` 支持按模型保存 `context_window_tokens`、`context_compact_tokens`、`context_hard_tokens`、`context_compact_bytes`、`context_hard_bytes` 和 `context_keep_items`，阈值字段可传整数或 `260K` / `0.38M` 这类字符串，`K=1000`、`M=1000000`；`0` 表示使用服务端推荐 / 运维覆盖值；保存后仅影响后续请求，不改写历史 usage。内置推荐按 Codex 使用体验控制在 `400K` 上下文窗口内，默认 `260K` 开始压缩、`380K` 硬拦截，避免默认进入 API long-context 高消耗区间。
 
@@ -108,11 +108,11 @@ HTTP 路由：
 usage 记录：
 
 - 成功和失败请求都会记录 usage log
-- 默认记录 endpoint、model、reasoning_effort、可选 session_id、HTTP 状态、耗时、请求/响应字节数和 token usage；未传 reasoning effort 或历史旧数据保持空值，不按 token 反推
-- 上游策略可在管理后台「上游策略」页通过 `api.gateway_upstream_get` / `api.gateway_upstream_set` 读取和切换全局默认；单个 API key 可通过 `upstream_strategy` 覆盖全局默认，空值表示继承全局。未保存运行时设置时，默认 Backend 直连。`codex_backend` 会直接请求 Codex backend `/responses`，backend 失败时默认直接返回上游错误；只有显式选择 Backend + CLI 兜底策略时，纯文本 / 图片请求才允许 fallback 到 `codex_cli`。带工具调用、工具历史或文件输入的 backend-only 请求始终不会 fallback 到 CLI；显式切到强制 CLI 时只走 CLI。
+- 默认记录 endpoint、model、最终生效的 reasoning_effort、可选 session_id、HTTP 状态、耗时、请求/响应字节数和 token usage；请求未传且后台没有覆盖档位、或历史旧数据保持空值，不按 token 反推
+- 上游策略可在管理后台「上游策略」页通过 `api.gateway_upstream_get` / `api.gateway_upstream_set` 读取和切换全局默认；同页也可设置全局推理档位开关，默认关闭。单个 API key 可通过 `upstream_strategy` 覆盖全局上游策略，空值表示继承全局；也可通过 `default_reasoning_effort` 继承全局、关闭覆盖或覆盖为 `low`、`medium`、`high`、`xhigh`。未保存运行时设置时，默认 Backend 直连且不覆盖 reasoning effort。`codex_backend` 会直接请求 Codex backend `/responses`，backend 失败时默认直接返回上游错误；只有显式选择 Backend + CLI 兜底策略时，纯文本 / 图片请求才允许 fallback 到 `codex_cli`。带工具调用、工具历史或文件输入的 backend-only 请求始终不会 fallback 到 CLI；显式切到强制 CLI 时只走 CLI。
 - `codex_cli` 模式 token 优先读取 Codex JSON 事件里的 usage，没有事件时才退回字符数估算；`codex_backend` 模式优先读取 Responses SSE `response.completed.usage`
 - usage log 会记录 `upstream_configured_mode`、`upstream_mode`、`upstream_fallback`、细分 `upstream_error_type` 和统一 `error_type`，用于区分配置模式、实际执行模式、fallback 情况和最终失败类型；后台表格按 `error_type` 保留原始错误码并展示简短中文说明，完整含义见下方“错误类型”。聚合统计中的 `failed_requests` 表示服务 / 上游 / 网关错误数，默认不包含 `client_canceled`；客户端主动断开以 `client_canceled_requests` 单独返回。
-- OpenAI-compatible 请求体支持 `reasoning_effort`、`reasoningEffort` 和 `reasoning.effort`，可选值为 `low`、`medium`、`high`、`xhigh`；direct backend 会转为 OpenAI Responses 口径的 `reasoning.effort`，并默认补 `reasoning.summary=detailed` 以便自定义 Codex provider 展示 reasoning summary；客户端显式传 `auto`、`concise` 或 `detailed` 时会保留，缺失、`none` 或非法值会回补为 `detailed`；CLI 模式会转为 Codex CLI `model_reasoning_effort`
+- OpenAI-compatible 请求体支持 `reasoning_effort`、`reasoningEffort` 和 `reasoning.effort`，可选值为 `low`、`medium`、`high`、`xhigh`；最终值按“key 覆盖档位 > 全局覆盖档位 > 客户端请求档位”决定，key 级 `none` 表示强制不使用全局覆盖。direct backend 会转为 OpenAI Responses 口径的 `reasoning.effort`，并默认补 `reasoning.summary=detailed` 以便自定义 Codex provider 展示 reasoning summary；客户端显式传 `auto`、`concise` 或 `detailed` 时会保留，缺失、`none` 或非法值会回补为 `detailed`；CLI 模式会转为 Codex CLI `model_reasoning_effort`
 - direct backend 模式会把 `system` / `developer` 消息合并为 `instructions`；若请求没有这类消息，会补一个最小默认 instructions，因为 Codex backend 要求该字段非空；同时会追加服务端级 Codex 运行规则：
   - 可见过程说明：非平凡工具调用、读文件、shell 命令、SSH、浏览器操作或外部请求前，先输出一到两句简体中文用户可见 commentary / process summary，说明即将做什么和为什么。这是执行过程摘要，不是隐藏 chain-of-thought；不要输出完整私有思考链。
   - 压缩恢复续跑：模型在收到 compacted context、reasoning summary 或 history summary 恢复时继续未完成任务，避免只机械回复“已读取上下文，请告诉我下一步”。
@@ -218,7 +218,7 @@ HTTP 路由：
 
 ### `api.key_create`
 
-创建参数 `name` 可留空；非空时只允许 ASCII 字母和数字。留空时后端使用 `key<hash>` 形式的默认备注，并同样写入新 key 明文前缀。`api.key_update` 更新备注时沿用同一限制；普通编辑只更新备注、额度、模型权限、上游策略和禁用状态，不改写 `key_hash`、`plain_key`、`key_prefix` 或 `key_last4`。管理员列表和编辑响应会返回完整 `plain_key`。
+创建参数 `name` 可留空；非空时只允许 ASCII 字母和数字。留空时后端使用 `key<hash>` 形式的默认备注，并同样写入新 key 明文前缀。`api.key_create` / `api.key_update` 可传 `default_reasoning_effort`：空字符串表示继承全局覆盖，`none` 表示关闭该 key 的覆盖，`low`、`medium`、`high`、`xhigh` 表示该 key 覆盖档位。`api.key_update` 更新备注时沿用同一限制；普通编辑只更新备注、额度、模型权限、上游策略、默认推理档位和禁用状态，不改写 `key_hash`、`plain_key`、`key_prefix` 或 `key_last4`。管理员列表和编辑响应会返回完整 `plain_key`。
 
 返回创建后的 key 元数据和完整明文：
 
@@ -295,8 +295,10 @@ HTTP 路由：
 - `fallback_enabled`：当前策略是否允许 backend 失败后 CLI 兜底；工具调用、工具历史和文件输入始终不会兜底
 - `default_strategy` / `default_mode`：未保存设置时的默认策略与模式
 - `options[]`：前端开关可展示的策略列表
+- `default_reasoning_effort`：当前全局推理档位覆盖值，空字符串表示关闭
+- `reasoning_effort_options[]`：前端开关可展示的全局档位列表
 
-`api.gateway_upstream_set` 参数优先使用 `strategy`。为兼容旧前端，仍接受旧的 `mode` 与 `fallback_enabled` 参数并转换为对应策略。保存后立即影响未设置 key 级覆盖的后续 `/v1/chat/completions` 与 `/v1/responses` 请求；历史 usage 不会改写。
+`api.gateway_upstream_set` 参数优先使用 `strategy`。为兼容旧前端，仍接受旧的 `mode` 与 `fallback_enabled` 参数并转换为对应策略。可同时传 `default_reasoning_effort` 保存全局推理档位覆盖，支持空字符串、`low`、`medium`、`high`、`xhigh`；空字符串表示关闭。保存后立即影响未设置 key 级关闭或覆盖的后续 `/v1/chat/completions` 与 `/v1/responses` 请求；历史 usage 不会改写。
 
 ### `api.usage_list`
 
