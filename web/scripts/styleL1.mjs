@@ -451,6 +451,21 @@ const scenarios = [
     },
   },
   {
+    name: 'admin-dashboard-narrow-desktop',
+    path: '/admin-dashboard',
+    viewport: { width: 973, height: 994 },
+    adminAuth: true,
+    mockApiRpc: true,
+    verify: async (page) => {
+      await expectText(page, 'API 管理后台')
+      await expectText(page, '业务看板')
+      await expectText(page, '用量趋势')
+      await expectText(page, '最近调用')
+      await assertAdminChrome(page, 'admin-dashboard-narrow-desktop')
+      await assertApiVisuals(page, 'admin-dashboard-narrow-desktop')
+    },
+  },
+  {
     name: 'admin-dashboard-mobile',
     path: '/admin-dashboard',
     viewport: { width: 390, height: 844 },
@@ -985,9 +1000,24 @@ async function assertApiVisuals(page, scenarioName) {
     const table = main?.querySelector('table')
     const tableRect = table?.getBoundingClientRect()
     const tableText = table?.innerText || ''
+    const rectFromNode = (node) => {
+      const rect = node?.getBoundingClientRect()
+      if (!rect) return null
+      return {
+        bottom: rect.bottom,
+        height: rect.height,
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        width: rect.width,
+      }
+    }
+    const rectOf = (selector) => rectFromNode(main?.querySelector(selector))
+    const timeRangeSelectRect = rectOf('select[aria-label="趋势时间范围"]')
 
     return {
       barCount: barTitles.length,
+      mainRect: rectFromNode(main),
       hasCoreCards: [
         '今日消费',
         '今日请求',
@@ -1018,6 +1048,7 @@ async function assertApiVisuals(page, scenarioName) {
       hasTrendPanel: headings.includes('用量趋势'),
       trendTimeRangeValue:
         main?.querySelector('select[aria-label="趋势时间范围"]')?.value || '',
+      trendTimeRangeSelectRect: timeRangeSelectRect,
       hasTrendTimeRangeDescription: document.body.innerText.includes(
         '当前 30 天 窗口按天聚合请求、错误、费用、延迟和 Token'
       ),
@@ -1054,6 +1085,16 @@ async function assertApiVisuals(page, scenarioName) {
   assert(
     metrics.hasTrendTimeRangeDescription,
     `${scenarioName} 业务看板趋势缺少当前窗口说明: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.mainRect &&
+      metrics.trendTimeRangeSelectRect &&
+      metrics.trendTimeRangeSelectRect.width >= 128 &&
+      metrics.trendTimeRangeSelectRect.right <= metrics.mainRect.right + 1,
+    `${scenarioName} 业务看板趋势时间范围下拉宽度或位置异常: ${JSON.stringify({
+      mainRect: metrics.mainRect,
+      trendTimeRangeSelectRect: metrics.trendTimeRangeSelectRect,
+    })}`
   )
   assert(metrics.hasTokenPanel, `${scenarioName} 缺少 Token 构成面板`)
   assert(metrics.hasDistributionPanels, `${scenarioName} 缺少用量分布面板`)

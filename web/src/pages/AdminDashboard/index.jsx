@@ -1013,12 +1013,12 @@ export default function AdminDashboardPage() {
                 窗口按天聚合请求、错误、费用、延迟和 Token。
               </div>
             </div>
-            <div className="flex flex-col gap-2 sm:items-end">
-              <label className="flex flex-col gap-1 text-sm font-medium text-[#365141] sm:items-end">
+            <div className="flex min-w-0 flex-col gap-2 sm:items-end">
+              <label className="flex w-32 max-w-full flex-col gap-1 text-sm font-medium text-[#365141] sm:items-end">
                 时间范围
                 <select
                   aria-label="趋势时间范围"
-                  className={selectClass}
+                  className={`${selectClass} w-full`}
                   value={trendTimeRange}
                   onChange={(e) => setTrendTimeRange(e.target.value)}
                 >
