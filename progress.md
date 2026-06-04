@@ -8,7 +8,9 @@
 - 前端：`/admin-usage` 新增“调用客户端”筛选、调用明细客户端列、汇总卡“客户端分布”，每日模型和会话聚合表展示 Codex / OpenCode / 其他分布；`style:l1` mock 和断言已覆盖客户端筛选入参和桌面 / 移动 usage 视图。
 - 文档：同步更新 `docs/architecture.md`、`server/docs/api.md` 和 `web/README.md` 的 usage 记录、API 字段、导出字段和后台展示口径。
 - 验证通过：`cd server && go test ./internal/biz ./internal/data ./internal/server`、`cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4382 NODE_USE_ENV_PROXY=0 STYLE_L1_SCENARIOS=admin-usage-desktop,admin-usage-mobile pnpm style:l1`。
-- 风险：历史 usage 在 migration 后默认归 `other`，不会反推旧请求真实客户端；后续客户端若不带可识别 header / User-Agent 也会归 `other`。本轮只完成本地代码与迁移文件，生产数据库仍需发布时执行 Atlas migration。
+- 部署：已提交并推送 `1c557bb feat: 完善后台用量统计`，本地构建 linux/amd64 镜像 `oauth-api-service-server:20260604T055322-1c557bb6-usage-client-type` 并上传到 `192.168.0.133:/data/openai-oauth-api-service/releases/20260604T055322-1c557bb6-usage-client-type`；远端只执行 `docker load`、宿主机 Atlas migration、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建。Atlas 从 `20260531143157` 应用到 `20260604051355`，待执行 migration 为 0；本机与公网 `/healthz` / `/readyz` 通过，管理员 `admin/adminadmin` 登录、`api.summary`、`api.usage_list client_type=opencode` 和临时 key `/v1/models` smoke 通过，临时 key 已删除。
+- 清理：部署成功后记录 `df -h /`、`docker system df` 与运行容器；执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除旧镜像 `oauth-api-service-server:20260531T150828-619b8785-fast-effort`，未清理 volume。根分区使用率保持 20%，当前 app-server 运行镜像为 `oauth-api-service-server:20260604T055322-1c557bb6-usage-client-type`。
+- 风险：历史 usage 在 migration 后默认归 `other`，不会反推旧请求真实客户端；后续客户端若不带可识别 header / User-Agent 也会归 `other`。
 
 ## 2026-06-04 业务看板折线点位对齐
 - 修复：业务看板 30 天趋势折线图的可见圆点改为和 SVG 折线共用同一绘图区坐标，折线模式下 grid hit area 改为无间隙列，避免圆点按列中心、折线按边缘插值导致部分点位偏离线段。
