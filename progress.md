@@ -8,6 +8,9 @@
 - 完成：凭据统计表最小宽度从 1040px 调整为 1240px，新增列后在窄屏继续走横向滚动，不强行压缩列内容。
 - 文档：同步更新 `web/README.md`，明确凭据统计固定窗口包含 `今天/24h/7 天/30 天/180 天/360 天/1 年/3 年/5 年`。
 - 验证：已执行 `pnpm --dir web exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`node --check web/scripts/styleL1.mjs`、`git diff --check -- web/src/pages/AdminApi/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`、`STYLE_L1_PORT=4347 STYLE_L1_SCENARIOS=admin-usage-desktop,admin-usage-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`、`pnpm --dir web test`、`pnpm --dir web css`、`pnpm --dir web build`，均通过。
+- 部署：已提交并推送 `6195576 fix: 补充凭据统计今天窗口`；本地构建 linux/amd64 镜像 `oauth-api-service-server:20260604T195047-61955762-key-token-today`，上传到 `192.168.0.133:/data/openai-oauth-api-service/releases/20260604T195047-61955762-key-token-today`。远端只执行 `docker load`、宿主机 Atlas status、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建。Atlas 当前版本 `20260604051355`、pending 0；远端本机与公网 `/healthz` / `/readyz` 通过，管理员 `admin/adminadmin` 登录、`api.summary` 与 `api.usage_key_summaries` smoke 通过。
+- 验证：线上 `/admin-usage` 通过 Playwright 登录后台并切到「凭据统计」后，DOM 表头包含「今天 Token / 24h Token / 7 天 Token / 30 天 Token / 180 天 Token / 360 天 Token / 1 年 Token / 3 年 Token / 5 年 Token」，页面发出的 `usage_key_summaries` 请求包含今天窗口。
+- 清理：部署成功后记录远端 `/` 使用率、`docker system df` 与运行容器；删除远端 release 镜像 tar 包，执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260604T192636-bbdc18cf-usage-today-range`，回收 353.2MB，未清理 volume。清理后根分区使用率 21%，当前 app-server 运行镜像为 `oauth-api-service-server:20260604T195047-61955762-key-token-today`。
 - 阻塞/风险：本轮只补凭据统计固定窗口表，不改顶部筛选时间范围、每日模型、会话聚合或后端聚合口径。
 
 ## 2026-06-04 Usage 时间范围今天选项
