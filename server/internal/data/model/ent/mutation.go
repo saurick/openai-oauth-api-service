@@ -10272,6 +10272,7 @@ type GatewayUsageLogMutation struct {
 	addapi_key_id            *int
 	api_key_prefix           *string
 	client_type              *string
+	client_ip                *string
 	session_id               *string
 	request_id               *string
 	method                   *string
@@ -10550,6 +10551,42 @@ func (m *GatewayUsageLogMutation) OldClientType(ctx context.Context) (v string, 
 // ResetClientType resets all changes to the "client_type" field.
 func (m *GatewayUsageLogMutation) ResetClientType() {
 	m.client_type = nil
+}
+
+// SetClientIP sets the "client_ip" field.
+func (m *GatewayUsageLogMutation) SetClientIP(s string) {
+	m.client_ip = &s
+}
+
+// ClientIP returns the value of the "client_ip" field in the mutation.
+func (m *GatewayUsageLogMutation) ClientIP() (r string, exists bool) {
+	v := m.client_ip
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClientIP returns the old "client_ip" field's value of the GatewayUsageLog entity.
+// If the GatewayUsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayUsageLogMutation) OldClientIP(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClientIP is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClientIP requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClientIP: %w", err)
+	}
+	return oldValue.ClientIP, nil
+}
+
+// ResetClientIP resets all changes to the "client_ip" field.
+func (m *GatewayUsageLogMutation) ResetClientIP() {
+	m.client_ip = nil
 }
 
 // SetSessionID sets the "session_id" field.
@@ -11679,7 +11716,7 @@ func (m *GatewayUsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GatewayUsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 28)
+	fields := make([]string, 0, 29)
 	if m.api_key_id != nil {
 		fields = append(fields, gatewayusagelog.FieldAPIKeyID)
 	}
@@ -11688,6 +11725,9 @@ func (m *GatewayUsageLogMutation) Fields() []string {
 	}
 	if m.client_type != nil {
 		fields = append(fields, gatewayusagelog.FieldClientType)
+	}
+	if m.client_ip != nil {
+		fields = append(fields, gatewayusagelog.FieldClientIP)
 	}
 	if m.session_id != nil {
 		fields = append(fields, gatewayusagelog.FieldSessionID)
@@ -11778,6 +11818,8 @@ func (m *GatewayUsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.APIKeyPrefix()
 	case gatewayusagelog.FieldClientType:
 		return m.ClientType()
+	case gatewayusagelog.FieldClientIP:
+		return m.ClientIP()
 	case gatewayusagelog.FieldSessionID:
 		return m.SessionID()
 	case gatewayusagelog.FieldRequestID:
@@ -11843,6 +11885,8 @@ func (m *GatewayUsageLogMutation) OldField(ctx context.Context, name string) (en
 		return m.OldAPIKeyPrefix(ctx)
 	case gatewayusagelog.FieldClientType:
 		return m.OldClientType(ctx)
+	case gatewayusagelog.FieldClientIP:
+		return m.OldClientIP(ctx)
 	case gatewayusagelog.FieldSessionID:
 		return m.OldSessionID(ctx)
 	case gatewayusagelog.FieldRequestID:
@@ -11922,6 +11966,13 @@ func (m *GatewayUsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetClientType(v)
+		return nil
+	case gatewayusagelog.FieldClientIP:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClientIP(v)
 		return nil
 	case gatewayusagelog.FieldSessionID:
 		v, ok := value.(string)
@@ -12293,6 +12344,9 @@ func (m *GatewayUsageLogMutation) ResetField(name string) error {
 		return nil
 	case gatewayusagelog.FieldClientType:
 		m.ResetClientType()
+		return nil
+	case gatewayusagelog.FieldClientIP:
+		m.ResetClientIP()
 		return nil
 	case gatewayusagelog.FieldSessionID:
 		m.ResetSessionID()

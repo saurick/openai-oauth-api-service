@@ -56,7 +56,7 @@ func (h *adminExportHandler) handleUsageCSV(ctx context.Context, w stdhttp.Respo
 	w.Header().Set("Content-Disposition", `attachment; filename="gateway-usage.csv"`)
 	writer := csv.NewWriter(w)
 	_ = writer.Write([]string{
-		"created_at", "api_key_id", "api_key_prefix", "api_key_name", "endpoint", "model", "reasoning_effort", "status_code", "success",
+		"created_at", "api_key_id", "api_key_prefix", "api_key_name", "client_ip", "endpoint", "model", "reasoning_effort", "status_code", "success",
 		"input_tokens", "billable_input_tokens", "cached_input_tokens", "cached_tokens", "output_tokens", "reasoning_tokens", "total_tokens",
 		"estimated_cost_usd", "duration_ms", "error_type",
 	})
@@ -70,6 +70,7 @@ func (h *adminExportHandler) handleUsageCSV(ctx context.Context, w stdhttp.Respo
 			strconv.Itoa(item.APIKeyID),
 			item.APIKeyPrefix,
 			item.APIKeyName,
+			item.ClientIP,
 			item.Endpoint,
 			item.Model,
 			item.ReasoningEffort,
@@ -124,6 +125,7 @@ func (h *adminExportHandler) requireAdminAndBuildFilter(ctx context.Context, w s
 		Limit:            200,
 		KeyID:            queryInt(r, "key_id"),
 		KeyIDs:           queryIntList(r, "key_ids"),
+		ClientIP:         strings.TrimSpace(r.URL.Query().Get("client_ip")),
 		Model:            strings.TrimSpace(r.URL.Query().Get("model")),
 		ReasoningEffort:  strings.TrimSpace(r.URL.Query().Get("reasoning_effort")),
 		Endpoint:         strings.TrimSpace(r.URL.Query().Get("endpoint")),
@@ -182,6 +184,7 @@ func (h *adminExportHandler) auditExport(ctx context.Context, format string, cou
 			"key_id":           filter.KeyID,
 			"key_ids":          filter.KeyIDs,
 			"client_type":      filter.ClientType,
+			"client_ip":        filter.ClientIP,
 			"model":            filter.Model,
 			"reasoning_effort": filter.ReasoningEffort,
 			"endpoint":         filter.Endpoint,
@@ -249,6 +252,7 @@ func mapUsageExportRow(item *biz.GatewayUsageLog) map[string]any {
 		"cached_input_tokens":      item.CachedTokens,
 		"cached_tokens":            item.CachedTokens,
 		"client_type":              item.ClientType,
+		"client_ip":                item.ClientIP,
 		"created_at":               item.CreatedAt.Format(time.RFC3339),
 		"duration_ms":              item.DurationMS,
 		"endpoint":                 item.Endpoint,

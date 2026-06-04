@@ -31,6 +31,7 @@
 
 - 下游 key id / key 前缀
 - 客户端类型 `client_type`，仅归类为 `codex` / `opencode` / `other`
+- 客户端 IP `client_ip`，用于排障和异常调用定位；反代头只在可信代理来源下采信
 - endpoint、method、model
 - 上游状态码、错误类型
 - 可选 session_id，用于客户端显式传入会话标识后的会话聚合

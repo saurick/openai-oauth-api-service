@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	stdhttp "net/http"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -240,7 +242,7 @@ func (h *openAIGatewayHandler) handleModels(w stdhttp.ResponseWriter, r *stdhttp
 		_, _ = w.Write(body)
 	}
 
-	h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+	h.recordUsage(r, key, &biz.GatewayUsageLog{
 		APIKeyID:      key.ID,
 		APIKeyPrefix:  key.KeyPrefix,
 		SessionID:     sessionIDFromHeaders(r),
@@ -283,7 +285,7 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 	if parseErr != nil {
 		status := stdhttp.StatusBadRequest
 		h.writeGatewayError(w, status, parseErr, "gateway_reasoning_effort_invalid")
-		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+		h.recordUsage(r, key, &biz.GatewayUsageLog{
 			APIKeyID:        key.ID,
 			APIKeyPrefix:    key.KeyPrefix,
 			SessionID:       sessionID,
@@ -307,7 +309,7 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 	if err := h.gatewayUC.ValidateModelAccess(r.Context(), key, requestModel); err != nil {
 		status := stdhttp.StatusForbidden
 		h.writeGatewayError(w, status, err, gatewayErrorType(err))
-		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+		h.recordUsage(r, key, &biz.GatewayUsageLog{
 			APIKeyID:        key.ID,
 			APIKeyPrefix:    key.KeyPrefix,
 			SessionID:       sessionID,
@@ -332,7 +334,7 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		if err := h.gatewayUC.CheckAPIKeyTokenQuota(r.Context(), key, time.Now()); err != nil {
 			status := stdhttp.StatusTooManyRequests
 			h.writeGatewayError(w, status, err, gatewayErrorType(err))
-			h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+			h.recordUsage(r, key, &biz.GatewayUsageLog{
 				APIKeyID:        key.ID,
 				APIKeyPrefix:    key.KeyPrefix,
 				SessionID:       sessionID,
@@ -368,7 +370,7 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		if err := h.gatewayUC.CheckPolicy(r.Context(), key, requestModel, time.Now()); err != nil {
 			status := stdhttp.StatusTooManyRequests
 			h.writeGatewayError(w, status, err, gatewayErrorType(err))
-			h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+			h.recordUsage(r, key, &biz.GatewayUsageLog{
 				APIKeyID:        key.ID,
 				APIKeyPrefix:    key.KeyPrefix,
 				SessionID:       sessionID,
@@ -409,7 +411,7 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		status := stdhttp.StatusRequestEntityTooLarge
 		errorType := gatewayContextErrorType
 		h.writeGatewayError(w, status, prepareErr, errorType)
-		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+		h.recordUsage(r, key, &biz.GatewayUsageLog{
 			APIKeyID:               key.ID,
 			APIKeyPrefix:           key.KeyPrefix,
 			SessionID:              sessionID,
@@ -486,7 +488,7 @@ func (h *openAIGatewayHandler) handleCodexBackendResponsesStream(
 		if !result.Started {
 			h.writeGatewayError(w, status, err, errorType)
 		}
-		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+		h.recordUsage(r, key, &biz.GatewayUsageLog{
 			APIKeyID:               key.ID,
 			APIKeyPrefix:           key.KeyPrefix,
 			SessionID:              sessionID,
@@ -515,7 +517,7 @@ func (h *openAIGatewayHandler) handleCodexBackendResponsesStream(
 	if metrics.Model == "" {
 		metrics.Model = requestModel
 	}
-	h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+	h.recordUsage(r, key, &biz.GatewayUsageLog{
 		APIKeyID:               key.ID,
 		APIKeyPrefix:           key.KeyPrefix,
 		SessionID:              sessionID,
@@ -926,7 +928,7 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 		if responseBytes > 0 {
 			diagnostic.ResponseBytes = responseBytes
 		}
-		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+		h.recordUsage(r, key, &biz.GatewayUsageLog{
 			APIKeyID:               key.ID,
 			APIKeyPrefix:           key.KeyPrefix,
 			SessionID:              sessionID,
@@ -968,7 +970,7 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 		} else {
 			responseBytes = h.writeCodexCLIChatStream(w, metrics.Model, content, toolCalls, metrics)
 		}
-		h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+		h.recordUsage(r, key, &biz.GatewayUsageLog{
 			APIKeyID:               key.ID,
 			APIKeyPrefix:           key.KeyPrefix,
 			SessionID:              sessionID,
@@ -1014,7 +1016,7 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(stdhttp.StatusOK)
 	_, _ = w.Write(responseBody)
-	h.recordUsage(r.Context(), key, &biz.GatewayUsageLog{
+	h.recordUsage(r, key, &biz.GatewayUsageLog{
 		APIKeyID:               key.ID,
 		APIKeyPrefix:           key.KeyPrefix,
 		SessionID:              sessionID,
@@ -2763,12 +2765,19 @@ func responsesUsagePayload(metrics openAIUsageMetrics) map[string]any {
 	}
 }
 
-func (h *openAIGatewayHandler) recordUsage(ctx context.Context, key *biz.GatewayAPIKey, item *biz.GatewayUsageLog) {
+func (h *openAIGatewayHandler) recordUsage(r *stdhttp.Request, key *biz.GatewayAPIKey, item *biz.GatewayUsageLog) {
 	if item == nil || h.gatewayUC == nil {
 		return
 	}
+	ctx := context.Background()
+	if r != nil {
+		ctx = r.Context()
+	}
 	if item.ClientType == "" {
 		item.ClientType = gatewayClientTypeFromContext(ctx)
+	}
+	if item.ClientIP == "" {
+		item.ClientIP = gatewayClientIPFromRequest(r)
 	}
 	writeCtx, cancel := context.WithTimeout(context.Background(), gatewayUsageWriteTimeout)
 	defer cancel()
@@ -2780,6 +2789,75 @@ func (h *openAIGatewayHandler) recordUsage(ctx context.Context, key *biz.Gateway
 			h.log.WithContext(ctx).Warnf("touch gateway key failed: %v", err)
 		}
 	}
+}
+
+func gatewayClientIPFromRequest(r *stdhttp.Request) string {
+	if r == nil {
+		return ""
+	}
+	remoteIP := parseGatewayIP(r.RemoteAddr)
+	if !remoteIP.IsValid() {
+		return ""
+	}
+	if gatewayRemoteAddrAllowsForwardedHeaders(remoteIP) {
+		if ip := firstGatewayForwardedIP(r.Header.Get("X-Forwarded-For")); ip != "" {
+			return ip
+		}
+		if ip := normalizedGatewayIPString(r.Header.Get("X-Real-IP")); ip != "" {
+			return ip
+		}
+	}
+	return remoteIP.Unmap().String()
+}
+
+func gatewayRemoteAddrAllowsForwardedHeaders(addr netip.Addr) bool {
+	if !addr.IsValid() {
+		return false
+	}
+	if raw := strings.TrimSpace(os.Getenv("GATEWAY_TRUSTED_PROXY_CIDRS")); raw != "" {
+		for _, part := range strings.Split(raw, ",") {
+			prefix, err := netip.ParsePrefix(strings.TrimSpace(part))
+			if err == nil && prefix.Contains(addr) {
+				return true
+			}
+		}
+		return false
+	}
+	unmapped := addr.Unmap()
+	return unmapped.IsLoopback() || unmapped.IsPrivate() || unmapped.IsLinkLocalUnicast()
+}
+
+func firstGatewayForwardedIP(raw string) string {
+	for _, part := range strings.Split(raw, ",") {
+		if ip := normalizedGatewayIPString(part); ip != "" {
+			return ip
+		}
+	}
+	return ""
+}
+
+func normalizedGatewayIPString(raw string) string {
+	addr := parseGatewayIP(raw)
+	if !addr.IsValid() {
+		return ""
+	}
+	return addr.Unmap().String()
+}
+
+func parseGatewayIP(raw string) netip.Addr {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return netip.Addr{}
+	}
+	if addr, err := netip.ParseAddr(value); err == nil {
+		return addr
+	}
+	if host, _, err := net.SplitHostPort(value); err == nil {
+		if addr, parseErr := netip.ParseAddr(strings.Trim(host, "[]")); parseErr == nil {
+			return addr
+		}
+	}
+	return netip.Addr{}
 }
 
 func (h *openAIGatewayHandler) writeGatewayError(w stdhttp.ResponseWriter, status int, err error, errorType string) {

@@ -283,6 +283,7 @@ func (r *gatewayRepo) CreateUsageLog(ctx context.Context, item *biz.GatewayUsage
 	create := r.data.postgres.GatewayUsageLog.Create().
 		SetAPIKeyPrefix(item.APIKeyPrefix).
 		SetClientType(item.ClientType).
+		SetClientIP(item.ClientIP).
 		SetSessionID(item.SessionID).
 		SetRequestID(item.RequestID).
 		SetMethod(item.Method).
@@ -1352,6 +1353,9 @@ func (r *gatewayRepo) applyUsageFilter(ctx context.Context, q *ent.GatewayUsageL
 	if filter.ClientType != "" {
 		q = q.Where(gatewayusagelog.ClientTypeEQ(filter.ClientType))
 	}
+	if filter.ClientIP != "" {
+		q = q.Where(gatewayusagelog.ClientIPEQ(filter.ClientIP))
+	}
 	if filter.Model != "" {
 		q = q.Where(gatewayusagelog.ModelEQ(filter.Model))
 	}
@@ -1428,6 +1432,9 @@ func buildUsageWhereClauseWithPrefix(filter biz.GatewayUsageFilter, columnPrefix
 	}
 	if filter.ClientType != "" {
 		add(col("client_type")+" = $%d", filter.ClientType)
+	}
+	if filter.ClientIP != "" {
+		add(col("client_ip")+" = $%d", filter.ClientIP)
 	}
 	if filter.Model != "" {
 		add(col("model")+" = $%d", filter.Model)
@@ -1863,6 +1870,7 @@ func mapGatewayUsageLog(item *ent.GatewayUsageLog) *biz.GatewayUsageLog {
 		APIKeyID:               apiKeyID,
 		APIKeyPrefix:           item.APIKeyPrefix,
 		ClientType:             item.ClientType,
+		ClientIP:               item.ClientIP,
 		SessionID:              item.SessionID,
 		RequestID:              item.RequestID,
 		Method:                 item.Method,

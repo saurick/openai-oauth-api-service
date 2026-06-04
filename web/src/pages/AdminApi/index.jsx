@@ -2597,6 +2597,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                       <div className="mt-1 break-all text-xs text-[#9aa39e]">
                         Session：{item.session_id || '未传入'}
                       </div>
+                      <div className="mt-1 break-all text-xs text-[#9aa39e]">
+                        IP：{item.client_ip || '未记录'}
+                      </div>
                     </td>
                   ) : null}
                   <td className={tdClass}>
@@ -4238,6 +4241,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     <tr>
                       <th className={thClass}>时间</th>
                       <th className={thClass}>请求 ID</th>
+                      <th className={thClass}>客户端 IP</th>
                       <th className={thClass}>接口</th>
                       <th className={thClass}>模型</th>
                       <th className={thClass}>Effort</th>
@@ -4260,6 +4264,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                           <td className={tdClass}>{fmtTs(item.created_at)}</td>
                           <td className={`${tdClass} font-mono text-xs`}>
                             {item.request_id || '-'}
+                          </td>
+                          <td className={`${tdClass} font-mono text-xs`}>
+                            {item.client_ip || '-'}
                           </td>
                           <td className={tdClass}>
                             {item.endpoint || item.path || '-'}
@@ -4320,7 +4327,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     ) : (
                       <tr>
                         <td
-                          colSpan={11}
+                          colSpan={12}
                           className="px-4 py-8 text-center text-sm text-[#9aa39e]"
                         >
                           {usageSessionDetailLoading

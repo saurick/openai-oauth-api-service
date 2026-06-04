@@ -69,6 +69,11 @@ func ClientType(v string) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldEQ(FieldClientType, v))
 }
 
+// ClientIP applies equality check predicate on the "client_ip" field. It's identical to ClientIPEQ.
+func ClientIP(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldClientIP, v))
+}
+
 // SessionID applies equality check predicate on the "session_id" field. It's identical to SessionIDEQ.
 func SessionID(v string) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldEQ(FieldSessionID, v))
@@ -367,6 +372,71 @@ func ClientTypeEqualFold(v string) predicate.GatewayUsageLog {
 // ClientTypeContainsFold applies the ContainsFold predicate on the "client_type" field.
 func ClientTypeContainsFold(v string) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldContainsFold(FieldClientType, v))
+}
+
+// ClientIPEQ applies the EQ predicate on the "client_ip" field.
+func ClientIPEQ(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldClientIP, v))
+}
+
+// ClientIPNEQ applies the NEQ predicate on the "client_ip" field.
+func ClientIPNEQ(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNEQ(FieldClientIP, v))
+}
+
+// ClientIPIn applies the In predicate on the "client_ip" field.
+func ClientIPIn(vs ...string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldIn(FieldClientIP, vs...))
+}
+
+// ClientIPNotIn applies the NotIn predicate on the "client_ip" field.
+func ClientIPNotIn(vs ...string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNotIn(FieldClientIP, vs...))
+}
+
+// ClientIPGT applies the GT predicate on the "client_ip" field.
+func ClientIPGT(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldGT(FieldClientIP, v))
+}
+
+// ClientIPGTE applies the GTE predicate on the "client_ip" field.
+func ClientIPGTE(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldGTE(FieldClientIP, v))
+}
+
+// ClientIPLT applies the LT predicate on the "client_ip" field.
+func ClientIPLT(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldLT(FieldClientIP, v))
+}
+
+// ClientIPLTE applies the LTE predicate on the "client_ip" field.
+func ClientIPLTE(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldLTE(FieldClientIP, v))
+}
+
+// ClientIPContains applies the Contains predicate on the "client_ip" field.
+func ClientIPContains(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldContains(FieldClientIP, v))
+}
+
+// ClientIPHasPrefix applies the HasPrefix predicate on the "client_ip" field.
+func ClientIPHasPrefix(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldHasPrefix(FieldClientIP, v))
+}
+
+// ClientIPHasSuffix applies the HasSuffix predicate on the "client_ip" field.
+func ClientIPHasSuffix(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldHasSuffix(FieldClientIP, v))
+}
+
+// ClientIPEqualFold applies the EqualFold predicate on the "client_ip" field.
+func ClientIPEqualFold(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEqualFold(FieldClientIP, v))
+}
+
+// ClientIPContainsFold applies the ContainsFold predicate on the "client_ip" field.
+func ClientIPContainsFold(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldContainsFold(FieldClientIP, v))
 }
 
 // SessionIDEQ applies the EQ predicate on the "session_id" field.

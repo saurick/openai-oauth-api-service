@@ -2,6 +2,16 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-04 用量日志客户端 IP 记录
+
+- 完成：`gateway_usage_logs` 新增 `client_ip` 字段和 `client_ip + created_at` 索引，OpenAI-compatible `/v1` 网关请求在统一 usage 写入点记录客户端 IP；默认只在直连来源为本机、内网或 link-local 时采信 `X-Forwarded-For` / `X-Real-IP`，也支持用 `GATEWAY_TRUSTED_PROXY_CIDRS` 显式收紧可信反代 CIDR。
+- 完成：管理端 `usage_list` RPC、CSV/JSON 导出和后台调用明细 / 会话请求级明细已带出 `client_ip`；本轮不记录请求体、响应体、prompt、模型输出正文或完整认证信息。
+- 完成：`server/Makefile` 的 `GO_BUILDER_IMAGE` 默认值对齐 `server/Dockerfile` 的 `golang:1.26.4`，避免 `make build_server` 覆盖回旧 Go builder 导致部署构建失败。
+- 文档：同步更新 `docs/architecture.md`、`server/docs/config.md`、`server/deploy/compose/prod/.env.example` 和 `web/README.md`，明确 usage IP 口径和可信反代配置。
+- 验证：已执行 `make data`、`atlas migrate validate --dir "file://internal/data/model/migrate"`、`go test ./internal/server ./internal/data ./internal/biz -count=1`、`pnpm --dir web exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`node --check web/scripts/styleL1.mjs`、`pnpm --dir web test`、`pnpm --dir web css`、`pnpm --dir web build`、`STYLE_L1_SCENARIOS=admin-usage-desktop,admin-usage-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`、`gitleaks detect --redact --no-git --source .`、`git diff --check`，均通过。第一次后端窄测遇到本机 `httptest` 临时端口 `can't assign requested address`，单独重跑失败相关用例和全包重跑均通过；`gitleaks detect --redact --source .` 默认扫描 Git 历史时命中 5 个历史记录，非本轮工作树新增。
+- 浏览器：本地 `web/` Vite 服务在 `127.0.0.1:5179` 启动后，HTTP 访问 `/admin-usage` 可返回前端应用；内置 Browser 未登录访问 `/admin-usage` 按既有鉴权回跳 `/admin-login`，页面非空且无横向溢出。完整管理态和 IP 展示以 `style:l1` mock RPC 回归为准。
+- 阻塞/风险：本轮只完成 schema / usage 写入 / 管理端展示与导出，不做 IP 风控、GeoIP、黑名单、保留期清理或线上迁移 apply；生产部署时仍需按既有宿主机 Atlas 流程应用新 migration。
+
 ## 2026-06-04 看板与用量日志指标说明
 
 - 完成：`/admin-dashboard` 顶部核心指标卡和 `/admin-usage` 用量日志摘要指标卡新增问号说明，复用现有后台 tooltip 交互与暗色主题变量；说明范围覆盖今日 Token / 请求数、服务错误率、响应耗时、RPM/TPM、上游分布、客户端分布、费用估算和 API 凭据状态。

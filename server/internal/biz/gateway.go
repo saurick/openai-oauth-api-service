@@ -208,6 +208,7 @@ type GatewayUsageLog struct {
 	APIKeyID               int
 	APIKeyPrefix           string
 	ClientType             string
+	ClientIP               string
 	APIKeyName             string
 	SessionID              string
 	RequestID              string
@@ -243,6 +244,7 @@ type GatewayUsageFilter struct {
 	KeyID             int
 	KeyIDs            []int
 	ClientType        string
+	ClientIP          string
 	OwnerUserID       int
 	SessionID         string
 	Model             string

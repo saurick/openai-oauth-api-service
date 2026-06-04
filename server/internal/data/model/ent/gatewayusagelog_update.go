@@ -82,6 +82,20 @@ func (_u *GatewayUsageLogUpdate) SetNillableClientType(v *string) *GatewayUsageL
 	return _u
 }
 
+// SetClientIP sets the "client_ip" field.
+func (_u *GatewayUsageLogUpdate) SetClientIP(v string) *GatewayUsageLogUpdate {
+	_u.mutation.SetClientIP(v)
+	return _u
+}
+
+// SetNillableClientIP sets the "client_ip" field if the given value is not nil.
+func (_u *GatewayUsageLogUpdate) SetNillableClientIP(v *string) *GatewayUsageLogUpdate {
+	if v != nil {
+		_u.SetClientIP(*v)
+	}
+	return _u
+}
+
 // SetSessionID sets the "session_id" field.
 func (_u *GatewayUsageLogUpdate) SetSessionID(v string) *GatewayUsageLogUpdate {
 	_u.mutation.SetSessionID(v)
@@ -523,6 +537,11 @@ func (_u *GatewayUsageLogUpdate) check() error {
 			return &ValidationError{Name: "client_type", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.client_type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ClientIP(); ok {
+		if err := gatewayusagelog.ClientIPValidator(v); err != nil {
+			return &ValidationError{Name: "client_ip", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.client_ip": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.SessionID(); ok {
 		if err := gatewayusagelog.SessionIDValidator(v); err != nil {
 			return &ValidationError{Name: "session_id", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.session_id": %w`, err)}
@@ -607,6 +626,9 @@ func (_u *GatewayUsageLogUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.ClientType(); ok {
 		_spec.SetField(gatewayusagelog.FieldClientType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ClientIP(); ok {
+		_spec.SetField(gatewayusagelog.FieldClientIP, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.SessionID(); ok {
 		_spec.SetField(gatewayusagelog.FieldSessionID, field.TypeString, value)
@@ -781,6 +803,20 @@ func (_u *GatewayUsageLogUpdateOne) SetClientType(v string) *GatewayUsageLogUpda
 func (_u *GatewayUsageLogUpdateOne) SetNillableClientType(v *string) *GatewayUsageLogUpdateOne {
 	if v != nil {
 		_u.SetClientType(*v)
+	}
+	return _u
+}
+
+// SetClientIP sets the "client_ip" field.
+func (_u *GatewayUsageLogUpdateOne) SetClientIP(v string) *GatewayUsageLogUpdateOne {
+	_u.mutation.SetClientIP(v)
+	return _u
+}
+
+// SetNillableClientIP sets the "client_ip" field if the given value is not nil.
+func (_u *GatewayUsageLogUpdateOne) SetNillableClientIP(v *string) *GatewayUsageLogUpdateOne {
+	if v != nil {
+		_u.SetClientIP(*v)
 	}
 	return _u
 }
@@ -1239,6 +1275,11 @@ func (_u *GatewayUsageLogUpdateOne) check() error {
 			return &ValidationError{Name: "client_type", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.client_type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ClientIP(); ok {
+		if err := gatewayusagelog.ClientIPValidator(v); err != nil {
+			return &ValidationError{Name: "client_ip", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.client_ip": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.SessionID(); ok {
 		if err := gatewayusagelog.SessionIDValidator(v); err != nil {
 			return &ValidationError{Name: "session_id", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.session_id": %w`, err)}
@@ -1340,6 +1381,9 @@ func (_u *GatewayUsageLogUpdateOne) sqlSave(ctx context.Context) (_node *Gateway
 	}
 	if value, ok := _u.mutation.ClientType(); ok {
 		_spec.SetField(gatewayusagelog.FieldClientType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ClientIP(); ok {
+		_spec.SetField(gatewayusagelog.FieldClientIP, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.SessionID(); ok {
 		_spec.SetField(gatewayusagelog.FieldSessionID, field.TypeString, value)

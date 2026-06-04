@@ -36,6 +36,37 @@ func TestStatusCapturingResponseWriterPreservesFlush(t *testing.T) {
 	}
 }
 
+func TestGatewayClientIPFromTrustedProxyHeader(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	req.RemoteAddr = "10.0.0.8:43210"
+	req.Header.Set("X-Forwarded-For", "203.0.113.9, 10.0.0.8")
+
+	if got := gatewayClientIPFromRequest(req); got != "203.0.113.9" {
+		t.Fatalf("client ip = %q, want forwarded client ip", got)
+	}
+}
+
+func TestGatewayClientIPIgnoresForwardedHeaderFromUntrustedRemote(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	req.RemoteAddr = "198.51.100.20:43210"
+	req.Header.Set("X-Forwarded-For", "203.0.113.9")
+
+	if got := gatewayClientIPFromRequest(req); got != "198.51.100.20" {
+		t.Fatalf("client ip = %q, want direct remote ip", got)
+	}
+}
+
+func TestGatewayClientIPTrustedProxyCIDREnvRestrictsDefaults(t *testing.T) {
+	t.Setenv("GATEWAY_TRUSTED_PROXY_CIDRS", "127.0.0.0/8")
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	req.RemoteAddr = "10.0.0.8:43210"
+	req.Header.Set("X-Real-IP", "203.0.113.9")
+
+	if got := gatewayClientIPFromRequest(req); got != "10.0.0.8" {
+		t.Fatalf("client ip = %q, want direct remote ip when cidr override does not match", got)
+	}
+}
+
 func TestUpstreamErrorTypeClassifiesBackendErrors(t *testing.T) {
 	tests := []struct {
 		name string

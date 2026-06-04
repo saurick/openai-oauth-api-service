@@ -223,6 +223,7 @@ func TestMapGatewayUsageForRPCIncludesKeyName(t *testing.T) {
 		APIKeyPrefix:    "ogw_test",
 		APIKeyName:      "production",
 		ClientType:      "codex",
+		ClientIP:        "203.0.113.9",
 		ReasoningEffort: "high",
 		Diagnostic: biz.GatewayUsageDiagnostic{
 			RequestBytes:          4096,
@@ -253,6 +254,7 @@ func TestMapGatewayUsageForRPCIncludesKeyName(t *testing.T) {
 		got["api_key_prefix"] != "ogw_test" ||
 		got["api_key_name"] != "production" ||
 		got["client_type"] != "codex" ||
+		got["client_ip"] != "203.0.113.9" ||
 		got["reasoning_effort"] != "high" {
 		t.Fatalf("unexpected key fields: %#v", got)
 	}

@@ -62,6 +62,20 @@ func (_c *GatewayUsageLogCreate) SetNillableClientType(v *string) *GatewayUsageL
 	return _c
 }
 
+// SetClientIP sets the "client_ip" field.
+func (_c *GatewayUsageLogCreate) SetClientIP(v string) *GatewayUsageLogCreate {
+	_c.mutation.SetClientIP(v)
+	return _c
+}
+
+// SetNillableClientIP sets the "client_ip" field if the given value is not nil.
+func (_c *GatewayUsageLogCreate) SetNillableClientIP(v *string) *GatewayUsageLogCreate {
+	if v != nil {
+		_c.SetClientIP(*v)
+	}
+	return _c
+}
+
 // SetSessionID sets the "session_id" field.
 func (_c *GatewayUsageLogCreate) SetSessionID(v string) *GatewayUsageLogCreate {
 	_c.mutation.SetSessionID(v)
@@ -431,6 +445,10 @@ func (_c *GatewayUsageLogCreate) defaults() {
 		v := gatewayusagelog.DefaultClientType
 		_c.mutation.SetClientType(v)
 	}
+	if _, ok := _c.mutation.ClientIP(); !ok {
+		v := gatewayusagelog.DefaultClientIP
+		_c.mutation.SetClientIP(v)
+	}
 	if _, ok := _c.mutation.SessionID(); !ok {
 		v := gatewayusagelog.DefaultSessionID
 		_c.mutation.SetSessionID(v)
@@ -537,6 +555,14 @@ func (_c *GatewayUsageLogCreate) check() error {
 	if v, ok := _c.mutation.ClientType(); ok {
 		if err := gatewayusagelog.ClientTypeValidator(v); err != nil {
 			return &ValidationError{Name: "client_type", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.client_type": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ClientIP(); !ok {
+		return &ValidationError{Name: "client_ip", err: errors.New(`ent: missing required field "GatewayUsageLog.client_ip"`)}
+	}
+	if v, ok := _c.mutation.ClientIP(); ok {
+		if err := gatewayusagelog.ClientIPValidator(v); err != nil {
+			return &ValidationError{Name: "client_ip", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.client_ip": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.SessionID(); !ok {
@@ -703,6 +729,10 @@ func (_c *GatewayUsageLogCreate) createSpec() (*GatewayUsageLog, *sqlgraph.Creat
 	if value, ok := _c.mutation.ClientType(); ok {
 		_spec.SetField(gatewayusagelog.FieldClientType, field.TypeString, value)
 		_node.ClientType = value
+	}
+	if value, ok := _c.mutation.ClientIP(); ok {
+		_spec.SetField(gatewayusagelog.FieldClientIP, field.TypeString, value)
+		_node.ClientIP = value
 	}
 	if value, ok := _c.mutation.SessionID(); ok {
 		_spec.SetField(gatewayusagelog.FieldSessionID, field.TypeString, value)

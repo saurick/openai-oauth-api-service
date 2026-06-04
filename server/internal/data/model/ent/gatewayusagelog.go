@@ -24,6 +24,8 @@ type GatewayUsageLog struct {
 	APIKeyPrefix string `json:"api_key_prefix,omitempty"`
 	// ClientType holds the value of the "client_type" field.
 	ClientType string `json:"client_type,omitempty"`
+	// ClientIP holds the value of the "client_ip" field.
+	ClientIP string `json:"client_ip,omitempty"`
 	// SessionID holds the value of the "session_id" field.
 	SessionID string `json:"session_id,omitempty"`
 	// RequestID holds the value of the "request_id" field.
@@ -88,7 +90,7 @@ func (*GatewayUsageLog) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case gatewayusagelog.FieldID, gatewayusagelog.FieldAPIKeyID, gatewayusagelog.FieldStatusCode, gatewayusagelog.FieldInputTokens, gatewayusagelog.FieldOutputTokens, gatewayusagelog.FieldTotalTokens, gatewayusagelog.FieldCachedTokens, gatewayusagelog.FieldReasoningTokens, gatewayusagelog.FieldRequestBytes, gatewayusagelog.FieldResponseBytes, gatewayusagelog.FieldDurationMs:
 			values[i] = new(sql.NullInt64)
-		case gatewayusagelog.FieldAPIKeyPrefix, gatewayusagelog.FieldClientType, gatewayusagelog.FieldSessionID, gatewayusagelog.FieldRequestID, gatewayusagelog.FieldMethod, gatewayusagelog.FieldPath, gatewayusagelog.FieldEndpoint, gatewayusagelog.FieldModel, gatewayusagelog.FieldReasoningEffort, gatewayusagelog.FieldUpstreamConfiguredMode, gatewayusagelog.FieldUpstreamMode, gatewayusagelog.FieldUpstreamErrorType, gatewayusagelog.FieldErrorType:
+		case gatewayusagelog.FieldAPIKeyPrefix, gatewayusagelog.FieldClientType, gatewayusagelog.FieldClientIP, gatewayusagelog.FieldSessionID, gatewayusagelog.FieldRequestID, gatewayusagelog.FieldMethod, gatewayusagelog.FieldPath, gatewayusagelog.FieldEndpoint, gatewayusagelog.FieldModel, gatewayusagelog.FieldReasoningEffort, gatewayusagelog.FieldUpstreamConfiguredMode, gatewayusagelog.FieldUpstreamMode, gatewayusagelog.FieldUpstreamErrorType, gatewayusagelog.FieldErrorType:
 			values[i] = new(sql.NullString)
 		case gatewayusagelog.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -131,6 +133,12 @@ func (_m *GatewayUsageLog) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field client_type", values[i])
 			} else if value.Valid {
 				_m.ClientType = value.String
+			}
+		case gatewayusagelog.FieldClientIP:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field client_ip", values[i])
+			} else if value.Valid {
+				_m.ClientIP = value.String
 			}
 		case gatewayusagelog.FieldSessionID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -330,6 +338,9 @@ func (_m *GatewayUsageLog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("client_type=")
 	builder.WriteString(_m.ClientType)
+	builder.WriteString(", ")
+	builder.WriteString("client_ip=")
+	builder.WriteString(_m.ClientIP)
 	builder.WriteString(", ")
 	builder.WriteString("session_id=")
 	builder.WriteString(_m.SessionID)
