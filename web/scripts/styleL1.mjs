@@ -1302,25 +1302,10 @@ async function assertDashboardTrendTooltip(page, scenarioName) {
 }
 
 async function assertDashboardTrendTimeRangeInteraction(page, scenarioName) {
+  await page.getByRole('button', { name: '柱状', exact: true }).click()
   await page.locator('select[aria-label="趋势时间范围"]').selectOption('7d')
   const expectedSeconds = 7 * 24 * 60 * 60
-  let bucketsCall = null
-  const deadline = Date.now() + 5000
-  while (Date.now() < deadline) {
-    bucketsCall = [...(page.__styleL1ApiRpcCalls || [])]
-      .reverse()
-      .find((call) => {
-        if (call.method !== 'usage_buckets') return false
-        const seconds =
-          Number(call.params?.end_time) - Number(call.params?.start_time)
-        return (
-          call.params?.group_by === 'day' &&
-          Math.abs(seconds - expectedSeconds) <= 2
-        )
-      })
-    if (bucketsCall) break
-    await delay(100)
-  }
+  const bucketsCall = await waitForDashboardBucketsCall(page, expectedSeconds)
   const callSeconds =
     Number(bucketsCall?.params?.end_time) -
     Number(bucketsCall?.params?.start_time)
@@ -1358,6 +1343,113 @@ async function assertDashboardTrendTimeRangeInteraction(page, scenarioName) {
     !metrics.bodyHasHorizontalOverflow && metrics.chartFitsMain,
     `${scenarioName} 趋势时间范围切换后布局溢出: ${JSON.stringify(metrics)}`
   )
+
+  await page.locator('select[aria-label="趋势时间范围"]').selectOption('3y')
+  const expectedLongSeconds = 3 * 365 * 24 * 60 * 60
+  const longBucketsCall = await waitForDashboardBucketsCall(
+    page,
+    expectedLongSeconds
+  )
+  const longCallSeconds =
+    Number(longBucketsCall?.params?.end_time) -
+    Number(longBucketsCall?.params?.start_time)
+  const longMetrics = await page.evaluate(() => {
+    const rectOf = (node) => {
+      const rect = node?.getBoundingClientRect()
+      if (!rect) return null
+      return {
+        bottom: rect.bottom,
+        height: rect.height,
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        width: rect.width,
+      }
+    }
+    const mainRect = rectOf(document.querySelector('main'))
+    const chartRect = rectOf(document.querySelector('main [data-trend-chart]'))
+    const barRects = Array.from(
+      document.querySelectorAll('main [data-trend-bar]')
+    ).map(rectOf)
+    const axisLabelRects = Array.from(
+      document.querySelectorAll('main [data-trend-axis-label]')
+    ).map(rectOf)
+    const statusText = Array.from(
+      document.querySelectorAll('main [data-trend-chart] + div > div')
+    )
+      .map((node) => node.textContent.trim())
+      .filter(Boolean)
+    return {
+      axisLabelCount: axisLabelRects.length,
+      bodyHasHorizontalOverflow:
+        document.body.scrollWidth > window.innerWidth + 2,
+      chartFitsMain:
+        !mainRect ||
+        !chartRect ||
+        (chartRect.left >= mainRect.left - 1 &&
+          chartRect.right <= mainRect.right + 1),
+      chartRect,
+      description: document.body.innerText.includes('当前 3 年 窗口按天聚合'),
+      maxBarWidth: Math.max(0, ...barRects.map((rect) => rect?.width || 0)),
+      minBarWidth: Math.min(...barRects.map((rect) => rect?.width || 0)),
+      renderedBars: barRects.length,
+      selected: document.querySelector('select[aria-label="趋势时间范围"]')
+        ?.value,
+      statusText,
+    }
+  })
+  assert.equal(
+    longMetrics.selected,
+    '3y',
+    `${scenarioName} 趋势时间范围选择未保持 3 年: ${JSON.stringify(longMetrics)}`
+  )
+  assert(
+    longMetrics.description &&
+      Math.abs(longCallSeconds - expectedLongSeconds) <= 2,
+    `${scenarioName} 3 年趋势时间范围未同步到 usage_buckets: ${JSON.stringify({
+      ...longMetrics,
+      longCallSeconds,
+    })}`
+  )
+  assert(
+    !longMetrics.bodyHasHorizontalOverflow && longMetrics.chartFitsMain,
+    `${scenarioName} 3 年趋势图布局溢出: ${JSON.stringify(longMetrics)}`
+  )
+  assert(
+    longMetrics.renderedBars >= 20 &&
+      longMetrics.renderedBars <= 72 &&
+      longMetrics.axisLabelCount >= 3 &&
+      longMetrics.axisLabelCount <= 5 &&
+      Number.isFinite(longMetrics.minBarWidth) &&
+      longMetrics.minBarWidth >= 3 &&
+      longMetrics.maxBarWidth >= longMetrics.minBarWidth,
+    `${scenarioName} 3 年趋势图密度不可读: ${JSON.stringify(longMetrics)}`
+  )
+  assert(
+    longMetrics.statusText.some((text) => text.includes('按Token展示')),
+    `${scenarioName} 3 年趋势图状态文案未独立展示: ${JSON.stringify(longMetrics)}`
+  )
+}
+
+async function waitForDashboardBucketsCall(page, expectedSeconds) {
+  let bucketsCall = null
+  const deadline = Date.now() + 5000
+  while (Date.now() < deadline) {
+    bucketsCall = [...(page.__styleL1ApiRpcCalls || [])]
+      .reverse()
+      .find((call) => {
+        if (call.method !== 'usage_buckets') return false
+        const seconds =
+          Number(call.params?.end_time) - Number(call.params?.start_time)
+        return (
+          call.params?.group_by === 'day' &&
+          Math.abs(seconds - expectedSeconds) <= 2
+        )
+      })
+    if (bucketsCall) break
+    await delay(100)
+  }
+  return bucketsCall
 }
 
 function assertDashboardCompactRequests(page, scenarioName) {

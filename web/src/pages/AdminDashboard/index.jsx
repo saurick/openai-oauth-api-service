@@ -45,6 +45,8 @@ const TREND_CHART_TYPES = [
   { key: 'bar', label: '柱状' },
   { key: 'line', label: '折线' },
 ]
+const MAX_TREND_DISPLAY_BUCKETS = 72
+const TREND_AXIS_TICK_COUNT = 5
 const CODEX_UPSTREAM_MODE_OPTIONS = [
   { label: 'Backend', value: 'codex_backend' },
   { label: '强制 CLI', value: 'codex_cli' },
@@ -238,6 +240,7 @@ function sumBuckets(buckets) {
   const out = buckets.reduce(
     (acc, item) => {
       const requests = asInt(item.total_requests, 0)
+      const cost = Number(item.estimated_cost_usd)
       return {
         average_duration_ms: 0,
         billable_input_tokens:
@@ -261,6 +264,8 @@ function sumBuckets(buckets) {
           acc.reasoning_tokens + asInt(item.reasoning_tokens, 0),
         success_requests:
           acc.success_requests + asInt(item.success_requests, 0),
+        estimated_cost_usd:
+          acc.estimated_cost_usd + (Number.isFinite(cost) ? cost : 0),
         total_requests: acc.total_requests + requests,
         total_tokens: acc.total_tokens + asInt(item.total_tokens, 0),
       }
@@ -273,6 +278,7 @@ function sumBuckets(buckets) {
       client_canceled_requests: 0,
       cli_requests: 0,
       duration_weighted_ms: 0,
+      estimated_cost_usd: 0,
       fallback_requests: 0,
       failed_requests: 0,
       input_tokens: 0,
@@ -442,17 +448,81 @@ function ApiKeyUsageCell({ item }) {
   )
 }
 
+function fmtTrendBucketLabel(item) {
+  const start = fmtShortDate(item?.bucket_start)
+  const end = fmtShortDate(item?.bucket_end || item?.bucket_start)
+  return start === end ? start : `${start} - ${end}`
+}
+
+function aggregateTrendBuckets(buckets) {
+  if (buckets.length <= MAX_TREND_DISPLAY_BUCKETS) {
+    return buckets.map((item) => ({
+      ...item,
+      bucket_end: item.bucket_end || item.bucket_start,
+    }))
+  }
+
+  const groupSize = Math.ceil(buckets.length / MAX_TREND_DISPLAY_BUCKETS)
+  const displayBuckets = []
+
+  for (let index = 0; index < buckets.length; index += groupSize) {
+    const group = buckets.slice(index, index + groupSize)
+    const stats = sumBuckets(group)
+    displayBuckets.push({
+      ...stats,
+      bucket_start: group[0]?.bucket_start,
+      bucket_end: group[group.length - 1]?.bucket_start,
+    })
+  }
+
+  return displayBuckets
+}
+
+function getTrendAxisTicks(buckets) {
+  if (buckets.length === 0) return []
+  const tickCount = Math.min(TREND_AXIS_TICK_COUNT, buckets.length)
+  const seen = new Set()
+
+  return Array.from({ length: tickCount }, (_, index) => {
+    const bucketIndex =
+      tickCount === 1
+        ? 0
+        : Math.round((index / (tickCount - 1)) * (buckets.length - 1))
+    return bucketIndex
+  })
+    .filter((bucketIndex) => {
+      if (seen.has(bucketIndex)) return false
+      seen.add(bucketIndex)
+      return true
+    })
+    .map((bucketIndex) => ({
+      align:
+        bucketIndex === 0
+          ? 'text-left'
+          : bucketIndex === buckets.length - 1
+            ? 'text-right'
+            : 'text-center',
+      bucketIndex,
+      label: fmtShortDate(buckets[bucketIndex]?.bucket_start),
+    }))
+}
+
 function UsageTrendChart({ buckets, chartType, metric }) {
   const [activeIndex, setActiveIndex] = useState(null)
   const metricConfig =
     TREND_METRICS.find((item) => item.key === metric) || TREND_METRICS[0]
-  const values = buckets.map((item) => getTrendValue(item, metricConfig))
+  const displayBuckets = aggregateTrendBuckets(buckets)
+  const values = displayBuckets.map((item) => getTrendValue(item, metricConfig))
   const maxValue = Math.max(1, ...values)
   const hasData = values.some((value) => value > 0)
   const isLineChart = chartType === 'line'
-  const columnMinWidth = buckets.length > 120 ? '1px' : '6px'
+  const isDenseChart = displayBuckets.length > 48
+  const axisTicks = getTrendAxisTicks(displayBuckets)
   const linePoints = values.map((value, index) => ({
-    x: buckets.length <= 1 ? 50 : ((index + 0.5) / buckets.length) * 100,
+    x:
+      displayBuckets.length <= 1
+        ? 50
+        : ((index + 0.5) / displayBuckets.length) * 100,
     y: 96 - (value / maxValue) * 88,
   }))
   const linePointText = linePoints
@@ -461,7 +531,7 @@ function UsageTrendChart({ buckets, chartType, metric }) {
   const activeBucket =
     activeIndex == null
       ? null
-      : buckets[Math.min(activeIndex, buckets.length - 1)]
+      : displayBuckets[Math.min(activeIndex, displayBuckets.length - 1)]
   const activeValue =
     activeIndex == null ? 0 : values[Math.min(activeIndex, values.length - 1)]
   const tooltipRows = getTrendTooltipRows(activeBucket, metricConfig)
@@ -470,12 +540,12 @@ function UsageTrendChart({ buckets, chartType, metric }) {
     <div className="min-w-0">
       <div
         className={`relative grid h-64 items-end rounded-lg bg-[#f7faf8] px-3 pb-8 pt-4 ${
-          isLineChart ? 'gap-0' : 'gap-1'
+          isLineChart ? 'gap-0' : isDenseChart ? 'gap-px' : 'gap-1'
         }`}
         data-trend-chart=""
         onMouseLeave={() => setActiveIndex(null)}
         style={{
-          gridTemplateColumns: `repeat(${Math.max(1, buckets.length)}, minmax(${columnMinWidth}, 1fr))`,
+          gridTemplateColumns: `repeat(${Math.max(1, displayBuckets.length)}, minmax(3px, 1fr))`,
         }}
       >
         {isLineChart && linePoints.length > 0 ? (
@@ -502,7 +572,7 @@ function UsageTrendChart({ buckets, chartType, metric }) {
             </svg>
             {linePoints.map((point, index) => (
               <span
-                key={`point-${buckets[index]?.bucket_start ?? index}`}
+                key={`point-${displayBuckets[index]?.bucket_start ?? index}`}
                 aria-hidden="true"
                 className={`absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(20,52,35,0.18)] transition-transform ${
                   activeIndex === index ? 'scale-125' : ''
@@ -524,7 +594,7 @@ function UsageTrendChart({ buckets, chartType, metric }) {
           >
             <div className="mb-2 flex items-center justify-between gap-3">
               <span className="font-semibold">
-                {fmtShortDate(activeBucket.bucket_start)}
+                {fmtTrendBucketLabel(activeBucket)}
               </span>
               <span className="font-semibold text-[#1478ff]">
                 {metricConfig.label}{' '}
@@ -544,7 +614,7 @@ function UsageTrendChart({ buckets, chartType, metric }) {
             </div>
           </div>
         ) : null}
-        {buckets.map((item, index) => {
+        {displayBuckets.map((item, index) => {
           const metricValue = values[index]
           const metricHeight = Math.max(
             metricValue > 0 ? 4 : 0,
@@ -552,15 +622,15 @@ function UsageTrendChart({ buckets, chartType, metric }) {
           )
           return (
             <button
-              key={item.bucket_start}
+              key={`${item.bucket_start}-${item.bucket_end}`}
               type="button"
-              aria-label={`${fmtShortDate(item.bucket_start)} ${metricConfig.label} ${fmtTrendValue(metricConfig.key, metricValue)}`}
+              aria-label={`${fmtTrendBucketLabel(item)} ${metricConfig.label} ${fmtTrendValue(metricConfig.key, metricValue)}`}
               className="group relative z-[1] flex h-full min-w-0 items-end justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-[#1478ff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f7faf8]"
               data-trend-bar=""
               onBlur={() => setActiveIndex(null)}
               onFocus={() => setActiveIndex(index)}
               onMouseEnter={() => setActiveIndex(index)}
-              title={`${fmtShortDate(item.bucket_start)} ${metricConfig.label} ${fmtTrendValue(metricConfig.key, metricValue)}`}
+              title={`${fmtTrendBucketLabel(item)} ${metricConfig.label} ${fmtTrendValue(metricConfig.key, metricValue)}`}
             >
               <div className="relative flex h-full w-full max-w-6 items-end">
                 {!isLineChart ? (
@@ -578,14 +648,29 @@ function UsageTrendChart({ buckets, chartType, metric }) {
           )
         })}
       </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-[#7b8780]">
-        <span>{fmtShortDate(buckets[0]?.bucket_start)}</span>
-        <span>
+      <div className="mt-3 space-y-2 text-xs text-[#7b8780]">
+        <div
+          className="grid min-w-0 gap-2"
+          style={{
+            gridTemplateColumns: `repeat(${Math.max(1, axisTicks.length)}, minmax(0, 1fr))`,
+          }}
+        >
+          {axisTicks.map((item) => (
+            <span
+              key={item.bucketIndex}
+              className={`min-w-0 truncate ${item.align}`}
+              data-trend-axis-label=""
+              title={fmtTrendBucketLabel(displayBuckets[item.bucketIndex])}
+            >
+              {item.label}
+            </span>
+          ))}
+        </div>
+        <div className="text-center">
           {hasData
             ? `按${metricConfig.label}展示`
             : `暂无${metricConfig.label}记录`}
-        </span>
-        <span>{fmtShortDate(buckets[buckets.length - 1]?.bucket_start)}</span>
+        </div>
       </div>
     </div>
   )
@@ -1004,7 +1089,7 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.55fr)]">
-        <SurfacePanel variant="admin" className="p-5">
+        <SurfacePanel variant="admin" className="min-w-0 p-5">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-base font-bold text-[#1f2d25]">用量趋势</h2>
@@ -1072,7 +1157,7 @@ export default function AdminDashboardPage() {
           />
         </SurfacePanel>
 
-        <SurfacePanel variant="admin" className="p-5">
+        <SurfacePanel variant="admin" className="min-w-0 p-5">
           <div className="mb-5">
             <h2 className="text-base font-bold text-[#1f2d25]">Token 构成</h2>
             <div className="mt-1 text-sm text-[#7b8780]">

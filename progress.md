@@ -2,6 +2,13 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-04 业务看板长窗口趋势图可读性
+
+- 完成：修复 `/admin-dashboard` 用量趋势在 1 年以上时间范围下按天渲染过密的问题；长窗口仍按完整 `usage_buckets group_by=day` 请求取数，但前端图表会把相邻日期聚合成最多 72 个可交互展示桶，tooltip 展示聚合日期范围与汇总指标。
+- 完成：趋势图底部日期刻度改为独立的少量刻度行，状态文案单独居中显示，避免长窗口下出现“6/5 按请求展示 6/4”挤在一起看不清。
+- 验证：已执行 `pnpm --dir web exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`node --check web/scripts/styleL1.mjs`、`git diff --check -- web/src/pages/AdminDashboard/index.jsx web/scripts/styleL1.mjs progress.md`、`STYLE_L1_PORT=4343 STYLE_L1_SCENARIOS=admin-dashboard-desktop,admin-dashboard-narrow-desktop,admin-dashboard-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`、`pnpm --dir web build`，均通过。内置 Browser 在用户当前 `http://localhost:5176/admin-dashboard` 页面刷新验证，切换到 3 年窗口后渲染 69 个展示桶、5 个日期刻度，图表无横向溢出；控制台仅有 React Router v7 future flag 既有 warning。
+- 阻塞/风险：本轮只改前端展示层与浏览器级回归脚本，不改后端 `usage_buckets` 聚合 SQL、usage 真源、schema、迁移、部署脚本或生产配置。
+
 ## 2026-06-04 Go 漏洞依赖升级
 
 - 完成：修复 `govulncheck` 可达漏洞告警，升级 `server/go.mod` 的 Go patch 指令到 `1.25.11` 并显式固定 `toolchain go1.26.4`，同步升级 `go.opentelemetry.io/otel/*` 到 `v1.43.0`、`golang.org/x/net` 到 `v0.53.0` 及相关间接依赖。未改 OAuth、网关转发、usage 统计、schema、迁移、前端页面、部署脚本或生产配置。
