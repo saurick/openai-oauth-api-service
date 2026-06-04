@@ -756,6 +756,29 @@
   transform: translate(-50%, 0);
 }
 
+.admin-summary-card .admin-th-help[data-tooltip-align='start']::after {
+  left: 0;
+  transform: translate(0, -4px);
+}
+
+.admin-summary-card .admin-th-help[data-tooltip-align='start']:hover::after,
+.admin-summary-card
+  .admin-th-help[data-tooltip-align='start']:focus-visible::after {
+  transform: translate(0, 0);
+}
+
+.admin-summary-card .admin-th-help[data-tooltip-align='end']::after {
+  right: 0;
+  left: auto;
+  transform: translate(0, -4px);
+}
+
+.admin-summary-card .admin-th-help[data-tooltip-align='end']:hover::after,
+.admin-summary-card
+  .admin-th-help[data-tooltip-align='end']:focus-visible::after {
+  transform: translate(0, 0);
+}
+
 .admin-table-pagination {
   display: flex;
   flex-wrap: wrap;

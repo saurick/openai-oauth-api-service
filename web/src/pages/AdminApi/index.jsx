@@ -1152,11 +1152,13 @@ function mergeKeyTokenStats(keys, statsByWindow) {
   })
 }
 
-function SummaryCard({ label, value, sub }) {
+function SummaryCard({ label, value, sub, help, helpAlign = 'start' }) {
   return (
-    <SurfacePanel variant="admin" className="p-4">
+    <SurfacePanel variant="admin" className="admin-summary-card p-4">
       <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#7b8780]">
-        {label}
+        <HeaderWithHelp help={help} align={helpAlign}>
+          {label}
+        </HeaderWithHelp>
       </div>
       <div className="mt-3 text-2xl font-semibold text-[#1f2d25]">{value}</div>
       {sub ? <div className="mt-1 text-sm text-[#7b8780]">{sub}</div> : null}
@@ -1185,7 +1187,7 @@ function StatusBadge({
   )
 }
 
-function HeaderWithHelp({ children, help }) {
+function HeaderWithHelp({ children, help, align }) {
   if (!help) return children
   return (
     <span className="admin-th-help-wrap">
@@ -1195,6 +1197,7 @@ function HeaderWithHelp({ children, help }) {
         className="admin-th-help"
         aria-label={`说明：${help}`}
         data-tooltip={help}
+        data-tooltip-align={align || undefined}
       >
         ?
       </button>
@@ -4342,31 +4345,38 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         label="请求数"
         value={fmtNumber(summary.total_requests)}
         sub={`${fmtNumber(summary.success_requests)} 成功 / ${fmtNumber(summary.failed_requests)} 服务错误 / ${fmtNumber(summary.client_canceled_requests)} 取消`}
+        help="请求数按当前用量日志筛选窗口统计；成功、服务错误和客户端取消分别按 usage 真源归类。"
       />
       <SummaryCard
         label="总 Token"
         value={fmtNumber(summary.total_tokens)}
         sub={`${fmtNumber(summary.input_tokens)} 输入（非缓存 ${fmtNumber(billableInputTokens(summary))}） / ${fmtNumber(summary.output_tokens)} 输出`}
+        help="总 Token = 输入 Token + 输出 Token；非缓存输入用于估算实际计费输入。"
       />
       <SummaryCard
         label="费用估算"
         value={fmtCost(summary.estimated_cost_usd)}
         sub="按当前模型价格口径估算"
+        help="费用按当前模型价格表估算；未配置价格的模型不会被伪造成真实费用。"
       />
       <SummaryCard
         label="上游分布"
         value={`${fmtNumber(summary.backend_requests)} / ${fmtNumber(summary.cli_requests)}`}
         sub={`${fmtNumber(summary.fallback_requests)} 次 fallback`}
+        help="主值依次为 Backend 直连 / CLI 执行次数；fallback 表示从主上游切到兜底上游的次数。"
       />
       <SummaryCard
         label="客户端分布"
         value={`${fmtNumber(summary.codex_requests)} / ${fmtNumber(summary.opencode_requests)}`}
         sub={`${fmtNumber(summary.other_client_requests)} 次其他客户端`}
+        help="主值依次为 Codex / OpenCode 请求数；其他客户端单独汇总。"
       />
       <SummaryCard
         label="服务错误率"
         value={fmtRate(summary.failed_requests, summary.total_requests)}
         sub={`${fmtNumber(summary.client_canceled_requests)} 次客户端取消 / ${fmtNumber(summary.average_duration_ms)} ms 平均耗时`}
+        help="服务错误率 = 服务端或上游错误请求 / 当前筛选窗口请求总数；客户端取消单独展示。"
+        helpAlign="end"
       />
     </div>
   )

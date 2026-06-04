@@ -2,6 +2,12 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-04 看板与用量日志指标说明
+
+- 完成：`/admin-dashboard` 顶部核心指标卡和 `/admin-usage` 用量日志摘要指标卡新增问号说明，复用现有后台 tooltip 交互与暗色主题变量；说明范围覆盖今日 Token / 请求数、服务错误率、响应耗时、RPM/TPM、上游分布、客户端分布、费用估算和 API 凭据状态。
+- 验证：已执行 `pnpm --dir web exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`node --check web/scripts/styleL1.mjs`、`pnpm --dir web lint`、`pnpm --dir web css`、`pnpm --dir web test`、`pnpm --dir web build`、`STYLE_L1_SCENARIOS=admin-dashboard-desktop,admin-usage-desktop NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`、`STYLE_L1_SCENARIOS=admin-dashboard-mobile,admin-usage-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`、`git diff --check -- web/src/pages/AdminDashboard/index.jsx web/src/pages/AdminApi/index.jsx web/src/tailwind.css web/scripts/styleL1.mjs progress.md`，均通过。`style:l1` 已覆盖 dashboard / usage 桌面与移动端目标页、tooltip hover 可见态、usage 暗色主题对比和既有表格盒模型；内置 Browser 已连接本地 Vite，但普通 dev mock 不覆盖 `/rpc/api` 管理数据且页面脚本沙箱不能直接写入管理 token，完整管理态以 `style:l1` mock RPC 回归为准。
+- 阻塞/风险：本轮只改前端说明与回归断言，不改后端 summary / usage_list / usage_buckets 真源、schema、历史 usage 数据或部署配置。
+
 ## 2026-06-04 凭据统计今天 Token 列
 
 - 完成：`/admin-usage` 的「凭据统计」固定窗口表新增「今天 Token」列；今天窗口同样按本地当天 00:00 到当前时间计算，区别于滚动 `24h`。对应 `usage_key_summaries` 请求新增今天窗口，不改后端接口、usage 真源、schema 或迁移。

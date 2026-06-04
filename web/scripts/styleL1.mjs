@@ -1031,6 +1031,10 @@ async function assertApiVisuals(page, scenarioName) {
       hasTodayTokenSummary:
         document.body.innerText.includes('今日 Token') &&
         document.body.innerText.includes('24h 148,932'),
+      hasSummaryCardTooltips:
+        main?.querySelectorAll(
+          '.admin-summary-card .admin-th-help[data-tooltip]'
+        ).length >= 7,
       hasDetailsLink: Boolean(main?.querySelector('a[href="/admin-usage"]')),
       hasDistributionPanels:
         headings.includes('模型用量分布') && headings.includes('接口分布'),
@@ -1083,6 +1087,16 @@ async function assertApiVisuals(page, scenarioName) {
   assert(
     metrics.hasTodayTokenSummary && !metrics.hasLegacyTodayCostCard,
     `${scenarioName} 今日指标卡未切换到 Token 口径: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.hasSummaryCardTooltips,
+    `${scenarioName} 核心指标卡缺少说明 tooltip`
+  )
+  await assertSummaryHelpTooltipVisible(
+    page,
+    scenarioName,
+    'main .admin-summary-card .admin-th-help[data-tooltip]',
+    '今日 Token'
   )
   assert(metrics.hasTrendPanel, `${scenarioName} 缺少用量趋势面板`)
   assert.equal(
@@ -1640,6 +1654,10 @@ async function assertUsageTableVisuals(page, scenarioName) {
           '凭据统计',
           '每日模型',
         ]),
+      hasSummaryCardTooltips:
+        main?.querySelectorAll(
+          '.admin-summary-card .admin-th-help[data-tooltip]'
+        ).length >= 6,
       hasUsageWindowSummary: document.body.innerText.includes('24h 范围内第'),
       mainHeight: mainRect?.height || 0,
       tableHeight: tableRect?.height || 0,
@@ -1666,6 +1684,16 @@ async function assertUsageTableVisuals(page, scenarioName) {
     `${scenarioName} usage 摘要未显示当前时间窗口`
   )
   assert(
+    metrics.hasSummaryCardTooltips,
+    `${scenarioName} usage 摘要指标卡缺少说明 tooltip`
+  )
+  await assertSummaryHelpTooltipVisible(
+    page,
+    scenarioName,
+    'main .admin-summary-card .admin-th-help[data-tooltip]',
+    '请求数'
+  )
+  assert(
     !metrics.hasTableRefreshAction,
     `${scenarioName} 主内容区不应再显示表格级刷新按钮`
   )
@@ -1685,6 +1713,31 @@ async function assertUsageTableVisuals(page, scenarioName) {
   await assertUsageSessionTab(page, scenarioName)
   await assertUsageKeyStatsTab(page, scenarioName)
   await assertUsageDailyModelDetail(page, scenarioName)
+}
+
+async function assertSummaryHelpTooltipVisible(
+  page,
+  scenarioName,
+  selector,
+  expectedText
+) {
+  const help = page.locator(selector).filter({ hasText: '?' }).first()
+  await help.hover()
+  await delay(80)
+  const metrics = await help.evaluate((node) => {
+    const style = window.getComputedStyle(node, '::after')
+    return {
+      align: node.getAttribute('data-tooltip-align') || '',
+      content: style.content || '',
+      opacity: style.opacity || '',
+      tooltip: node.getAttribute('data-tooltip') || '',
+    }
+  })
+  const opacity = Number(metrics.opacity)
+  assert(
+    opacity >= 0.9 && metrics.tooltip.includes(expectedText),
+    `${scenarioName} 指标卡说明 hover 未显示预期内容: ${JSON.stringify(metrics)}`
+  )
 }
 
 async function assertUsageClientStatsDarkMode(page, scenarioName) {

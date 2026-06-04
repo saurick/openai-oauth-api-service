@@ -359,7 +359,14 @@ function getTrendTooltipRows(item, metricConfig) {
   ]
 }
 
-function SummaryCard({ label, value, sub, tone = 'green' }) {
+function SummaryCard({
+  label,
+  value,
+  sub,
+  tone = 'green',
+  help,
+  helpAlign = 'start',
+}) {
   const toneClass =
     tone === 'red'
       ? 'border-rose-200 bg-rose-50'
@@ -369,9 +376,13 @@ function SummaryCard({ label, value, sub, tone = 'green' }) {
           ? 'border-amber-200 bg-amber-50'
           : 'border-[#dce8df] bg-[#f7faf8]'
   return (
-    <SurfacePanel variant="admin" className="p-5">
+    <SurfacePanel variant="admin" className="admin-summary-card p-5">
       <div className={`mb-4 h-1.5 w-14 rounded-full border ${toneClass}`} />
-      <div className="text-sm font-semibold text-[#7b8780]">{label}</div>
+      <div className="text-sm font-semibold text-[#7b8780]">
+        <HeaderWithHelp help={help} align={helpAlign}>
+          {label}
+        </HeaderWithHelp>
+      </div>
       <div className="mt-3 truncate text-2xl font-semibold text-[#1f2d25]">
         {value}
       </div>
@@ -395,7 +406,7 @@ function StatusBadge({ active, text, neutral = false }) {
   )
 }
 
-function HeaderWithHelp({ children, help }) {
+function HeaderWithHelp({ children, help, align }) {
   if (!help) return children
   return (
     <span className="admin-th-help-wrap">
@@ -405,6 +416,7 @@ function HeaderWithHelp({ children, help }) {
         className="admin-th-help"
         aria-label={`${children}说明：${help}`}
         data-tooltip={help}
+        data-tooltip-align={align || undefined}
       >
         ?
       </button>
@@ -1050,12 +1062,14 @@ export default function AdminDashboardPage() {
           tone="green"
           value={fmtNumber(todaySummary.total_tokens)}
           sub={`24h ${fmtNumber(summary.total_tokens)}`}
+          help="今日 Token 只统计今天自然日窗口；副文案的 24h 是最近 24 小时滚动窗口。"
         />
         <SummaryCard
           label="今日请求"
           tone="blue"
           value={fmtNumber(todaySummary.total_requests)}
           sub={`${fmtNumber(todaySummary.success_requests)} 成功 / ${fmtNumber(todaySummary.failed_requests)} 服务错误 / ${fmtNumber(todaySummary.client_canceled_requests)} 取消`}
+          help="今日请求按今天自然日统计；成功、服务错误和客户端取消分别按后端 usage 真源归类。"
         />
         <SummaryCard
           label="服务错误率"
@@ -1065,29 +1079,35 @@ export default function AdminDashboardPage() {
             todaySummary.total_requests
           )}
           sub={`取消 ${fmtNumber(todaySummary.client_canceled_requests)} / 成功率 ${fmtRate(todaySummary.success_requests, todaySummary.total_requests)}`}
+          help="服务错误率 = 服务端或上游错误请求 / 今日请求总数；客户端取消单独展示，不并入成功率。"
         />
         <SummaryCard
           label="响应耗时"
           tone="amber"
           value={fmtDuration(todaySummary.average_duration_ms)}
           sub={`最近样本 P95 ${fmtDuration(sampleP95Duration)}`}
+          help="主值是今日平均响应耗时；P95 来自最近调用样本，用于快速观察长尾延迟。"
         />
         <SummaryCard
           label="当前 RPM / TPM"
           tone="blue"
           value={`${fmtNumber(minuteSummary.total_requests)} RPM`}
           sub={`${fmtNumber(minuteSummary.total_tokens)} TPM`}
+          help="当前 RPM / TPM 使用最近 60 秒窗口，表示实时请求速率和 Token 速率。"
         />
         <SummaryCard
           label="上游分布"
           tone="amber"
           value={`${fmtNumber(summary.backend_requests)} / ${fmtNumber(summary.cli_requests)}`}
           sub={`${fmtNumber(summary.fallback_requests)} 次 fallback`}
+          help="主值依次为 Backend 直连 / CLI 执行次数；fallback 表示从主上游切到兜底上游的次数。"
         />
         <SummaryCard
           label="API 凭据"
           value={fmtNumber(keys.length)}
           sub={`${fmtNumber(activeKeys)} 启用 / ${fmtNumber(keys.length - activeKeys)} 禁用`}
+          help="API 凭据统计当前已加载凭据数量，并按启用和禁用状态拆分。"
+          helpAlign="end"
         />
       </div>
 
