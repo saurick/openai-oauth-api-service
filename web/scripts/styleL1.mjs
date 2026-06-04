@@ -1557,6 +1557,7 @@ async function assertAnalyticsVisuals(page, scenarioName) {
         main?.querySelector('[role="combobox"][aria-label="按状态筛选"]')
       ),
       hasTokenStatsWindows: [
+        '今天 Token',
         '24h Token',
         '7 天 Token',
         '30 天 Token',
@@ -1772,7 +1773,7 @@ function assertUsageAggregationRequests(page, scenarioName) {
     `${scenarioName} 未请求会话 usage 聚合: ${JSON.stringify(calls)}`
   )
   assert(
-    calls.filter((call) => call.method === 'usage_key_summaries').length >= 8,
+    calls.filter((call) => call.method === 'usage_key_summaries').length >= 9,
     `${scenarioName} 未请求凭据 token 窗口: ${JSON.stringify(calls)}`
   )
 }
@@ -3057,7 +3058,7 @@ function assertKeyTokenStatsRequests(page, scenarioName) {
       Number.isFinite(Number(call.params?.end_time))
   )
   assert(
-    windowCalls.length >= 8,
+    windowCalls.length >= 9 && windowCalls.some(isTodayWindowCall),
     `${scenarioName} 凭据 token 统计未请求完整时间窗口: ${JSON.stringify(calls)}`
   )
 }

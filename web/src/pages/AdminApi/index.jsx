@@ -37,6 +37,7 @@ const TABLE_PAGE_SIZE_SELECT_OPTIONS = TABLE_PAGE_SIZE_OPTIONS.map((value) => ({
 }))
 const MAX_TABLE_FETCH_SIZE = 200
 const KEY_TOKEN_WINDOWS = [
+  { key: 'today', label: '今天' },
   { key: '24h', label: '24h', seconds: DAY_SECONDS },
   { key: '7d', label: '7 天', seconds: 7 * DAY_SECONDS },
   { key: '30d', label: '30 天', seconds: 30 * DAY_SECONDS },
@@ -46,6 +47,17 @@ const KEY_TOKEN_WINDOWS = [
   { key: '3y', label: '3 年', seconds: 3 * 365 * DAY_SECONDS },
   { key: '5y', label: '5 年', seconds: 5 * 365 * DAY_SECONDS },
 ]
+
+function getKeyTokenTimeWindow(windowItem, now) {
+  if (windowItem.key === 'today') {
+    return getUsageTimeWindow('today', now)
+  }
+  return {
+    endTime: now,
+    startTime: now - windowItem.seconds,
+  }
+}
+
 const tableWrapClass = 'overflow-hidden rounded-lg border border-[#dde8df]'
 const tableClass = 'admin-data-table text-left text-sm text-[#1f2d25]'
 const keyTableClass =
@@ -1639,10 +1651,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     }
   }
 
-  const buildUsageWindowParams = (filters, now, seconds) => {
-    const timeWindow = seconds
-      ? { endTime: now, startTime: now - seconds }
-      : getUsageTimeWindow(filters.timeRange, now)
+  const buildUsageWindowParams = (filters, now, timeWindowOverride) => {
+    const timeWindow =
+      timeWindowOverride || getUsageTimeWindow(filters.timeRange, now)
     const params = {
       end_time: timeWindow.endTime,
       start_time: timeWindow.startTime,
@@ -1740,14 +1751,15 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               limit: MAX_TABLE_FETCH_SIZE,
               offset: 0,
             }),
-            ...KEY_TOKEN_WINDOWS.map((windowItem) =>
-              apiRpc.call('usage_key_summaries', {
-                end_time: now,
+            ...KEY_TOKEN_WINDOWS.map((windowItem) => {
+              const window = getKeyTokenTimeWindow(windowItem, now)
+              return apiRpc.call('usage_key_summaries', {
+                end_time: window.endTime,
                 limit: MAX_TABLE_FETCH_SIZE,
                 offset: 0,
-                start_time: now - windowItem.seconds,
+                start_time: window.startTime,
               })
-            ),
+            }),
           ]
         )
         setKeyListState(keysRes)
@@ -1811,7 +1823,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             ...buildUsageWindowParams(
               effectiveUsageFilters,
               now,
-              windowItem.seconds
+              getKeyTokenTimeWindow(windowItem, now)
             ),
             limit: MAX_TABLE_FETCH_SIZE,
             offset: 0,
@@ -2824,7 +2836,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
       <div className={tableWrapClass}>
         <div className="overflow-auto">
-          <table className={`${tableClass} min-w-[1040px]`}>
+          <table className={`${tableClass} min-w-[1240px]`}>
             <thead>
               <tr>
                 <th className={thClass}>备注</th>

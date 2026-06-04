@@ -2,6 +2,14 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-04 凭据统计今天 Token 列
+
+- 完成：`/admin-usage` 的「凭据统计」固定窗口表新增「今天 Token」列；今天窗口同样按本地当天 00:00 到当前时间计算，区别于滚动 `24h`。对应 `usage_key_summaries` 请求新增今天窗口，不改后端接口、usage 真源、schema 或迁移。
+- 完成：凭据统计表最小宽度从 1040px 调整为 1240px，新增列后在窄屏继续走横向滚动，不强行压缩列内容。
+- 文档：同步更新 `web/README.md`，明确凭据统计固定窗口包含 `今天/24h/7 天/30 天/180 天/360 天/1 年/3 年/5 年`。
+- 验证：已执行 `pnpm --dir web exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`node --check web/scripts/styleL1.mjs`、`git diff --check -- web/src/pages/AdminApi/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`、`STYLE_L1_PORT=4347 STYLE_L1_SCENARIOS=admin-usage-desktop,admin-usage-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`、`pnpm --dir web test`、`pnpm --dir web css`、`pnpm --dir web build`，均通过。
+- 阻塞/风险：本轮只补凭据统计固定窗口表，不改顶部筛选时间范围、每日模型、会话聚合或后端聚合口径。
+
 ## 2026-06-04 Usage 时间范围今天选项
 
 - 完成：`/admin-dashboard` 趋势时间范围与 `/admin-usage` 用量日志时间范围新增「今天」选项；今天窗口按本地当天 00:00 到当前时间计算，区别于滚动 `24h`。
@@ -10,7 +18,7 @@
 - 验证：已执行 `pnpm --dir web exec eslint --ext .js --ext .jsx src/common/utils/usageTimeRange.js src/pages/AdminDashboard/index.jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`node --check web/scripts/styleL1.mjs`、`pnpm --dir web test`、`pnpm --dir web css`、`pnpm --dir web build`、`git diff --check -- web/src/common/utils/usageTimeRange.js web/src/pages/AdminDashboard/index.jsx web/src/pages/AdminApi/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`、`STYLE_L1_PORT=4346 STYLE_L1_SCENARIOS=admin-dashboard-desktop,admin-dashboard-mobile,admin-usage-desktop,admin-usage-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`，均通过；第一次同组 `style:l1` 在 `admin-usage-mobile` 等待后台壳标题时超时，单跑该场景和随后同组重跑均通过，判断为加载偶发。内置 Browser 在 `http://127.0.0.1:5177/admin-dashboard` 登录后确认趋势时间范围包含「今天」，选择后文案变为「当前 今天 窗口」，select 宽度 128px、页面无横向溢出；`/admin-usage` 页面可达且时间范围 combobox 存在，Browser 对该自定义输入控件的 `fill` 受虚拟剪贴板限制，具体下拉交互以 `style:l1` mock RPC 回归为准。Browser 控制台仅有 React Router v7 future flag 既有 warning。
 - 部署：已提交并推送 `bbdc18c feat: 增加今天用量时间范围`；本地构建 linux/amd64 镜像 `oauth-api-service-server:20260604T192636-bbdc18cf-usage-today-range`，上传到 `192.168.0.133:/data/openai-oauth-api-service/releases/20260604T192636-bbdc18cf-usage-today-range`。远端只执行 `docker load`、宿主机 Atlas status、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建。Atlas 当前版本 `20260604051355`、pending 0；第一次远端重建时 release 变量被 `.env` 覆盖导致仍跑旧镜像，已立即用独立 `NEW_APP_IMAGE` 显式修正并重建。远端本机和公网 `/healthz` / `/readyz` 通过，容器环境 `GIT_SHA_SHORT=bbdc18cf`、`IMAGE_TAG=20260604T192636-bbdc18cf-usage-today-range`，公网 `/admin-dashboard` 静态产物包含「今天」/ `today`，管理员 `admin/adminadmin` 登录、`api.summary` 与 `api.usage_buckets` smoke 通过。
 - 清理：部署成功后记录远端 `/` 使用率、`docker system df` 与运行容器；删除远端 release 镜像 tar 包，执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260604T082133-eda95418-dashboard-trend-readable`，回收 353.2MB，未清理 volume。清理后根分区使用率 21%，当前 app-server 运行镜像为 `oauth-api-service-server:20260604T192636-bbdc18cf-usage-today-range`。
-- 阻塞/风险：本轮只给可手动选择的 usage 时间范围补「今天」；凭据 Token 统计表的固定窗口列不是日期选择器，仍保留既有 `24h/7 天/30 天/180 天/360 天/1 年/3 年/5 年`。
+- 阻塞/风险：本轮先只给可手动选择的 usage 时间范围补「今天」；凭据 Token 统计表的固定窗口列已在后续「凭据统计今天 Token 列」中补齐。
 
 ## 2026-06-04 业务看板今日 Token 指标
 
