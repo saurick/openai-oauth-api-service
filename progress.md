@@ -2,6 +2,21 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-04 Usage 时间范围今天选项
+
+- 完成：`/admin-dashboard` 趋势时间范围与 `/admin-usage` 用量日志时间范围新增「今天」选项；今天窗口按本地当天 00:00 到当前时间计算，区别于滚动 `24h`。
+- 完成：新增共享 `getUsageTimeWindow` / `startOfLocalDayUnix` 作为前端 usage 时间窗口计算入口，避免 dashboard 与 usage 页各自写日期分支；不改后端 `usage_list` / `usage_buckets` 接口、usage 真源、schema 或迁移。
+- 文档：同步更新 `web/README.md` 的可选时间窗口列表。
+- 验证：已执行 `pnpm --dir web exec eslint --ext .js --ext .jsx src/common/utils/usageTimeRange.js src/pages/AdminDashboard/index.jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`node --check web/scripts/styleL1.mjs`、`pnpm --dir web test`、`pnpm --dir web css`、`pnpm --dir web build`、`git diff --check -- web/src/common/utils/usageTimeRange.js web/src/pages/AdminDashboard/index.jsx web/src/pages/AdminApi/index.jsx web/scripts/styleL1.mjs web/README.md progress.md`、`STYLE_L1_PORT=4346 STYLE_L1_SCENARIOS=admin-dashboard-desktop,admin-dashboard-mobile,admin-usage-desktop,admin-usage-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`，均通过；第一次同组 `style:l1` 在 `admin-usage-mobile` 等待后台壳标题时超时，单跑该场景和随后同组重跑均通过，判断为加载偶发。内置 Browser 在 `http://127.0.0.1:5177/admin-dashboard` 登录后确认趋势时间范围包含「今天」，选择后文案变为「当前 今天 窗口」，select 宽度 128px、页面无横向溢出；`/admin-usage` 页面可达且时间范围 combobox 存在，Browser 对该自定义输入控件的 `fill` 受虚拟剪贴板限制，具体下拉交互以 `style:l1` mock RPC 回归为准。Browser 控制台仅有 React Router v7 future flag 既有 warning。
+- 阻塞/风险：本轮只给可手动选择的 usage 时间范围补「今天」；凭据 Token 统计表的固定窗口列不是日期选择器，仍保留既有 `24h/7 天/30 天/180 天/360 天/1 年/3 年/5 年`。
+
+## 2026-06-04 业务看板今日 Token 指标
+
+- 完成：将 `/admin-dashboard` 顶部核心卡片从「今日消费」改为「今日 Token」，主值使用本地今日起点的 `summary.total_tokens`，副标题保留过去 24h 的 `summary.total_tokens` 对照；不改后端 summary 接口、usage 真源、schema 或迁移。
+- 文档：同步更新 `web/README.md` 的业务看板指标说明，避免继续把首页首卡描述为费用口径。
+- 验证：已随本轮时间范围变更一起执行前端 lint、`pnpm --dir web test`、`pnpm --dir web css`、`pnpm --dir web build`、目标页面 `style:l1` 和 `git diff --check`，均通过；`style:l1` 已断言首页核心卡片存在「今日 Token」且不再显示「今日消费」。内置 Browser 在 `http://127.0.0.1:5177/admin-dashboard` 登录后确认页面标题正确、内容非空、首卡显示「今日 Token」、页面无横向溢出；控制台仅有 React Router v7 future flag 既有 warning。
+- 阻塞/风险：本轮只改首页展示口径；费用估算仍保留在用量趋势「费用」指标、最近调用和用量日志等既有入口。
+
 ## 2026-06-04 业务看板长窗口趋势图可读性
 
 - 完成：修复 `/admin-dashboard` 用量趋势在 1 年以上时间范围下按天渲染过密的问题；长窗口仍按完整 `usage_buckets group_by=day` 请求取数，但前端图表会把相邻日期聚合成最多 72 个可交互展示桶，tooltip 展示聚合日期范围与汇总指标。

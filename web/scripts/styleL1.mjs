@@ -1019,7 +1019,7 @@ async function assertApiVisuals(page, scenarioName) {
       barCount: barTitles.length,
       mainRect: rectFromNode(main),
       hasCoreCards: [
-        '今日消费',
+        '今日 Token',
         '今日请求',
         '服务错误率',
         '响应耗时',
@@ -1027,6 +1027,10 @@ async function assertApiVisuals(page, scenarioName) {
         '上游分布',
         'API 凭据',
       ].every((text) => document.body.innerText.includes(text)),
+      hasLegacyTodayCostCard: document.body.innerText.includes('今日消费'),
+      hasTodayTokenSummary:
+        document.body.innerText.includes('今日 Token') &&
+        document.body.innerText.includes('24h 148,932'),
       hasDetailsLink: Boolean(main?.querySelector('a[href="/admin-usage"]')),
       hasDistributionPanels:
         headings.includes('模型用量分布') && headings.includes('接口分布'),
@@ -1076,6 +1080,10 @@ async function assertApiVisuals(page, scenarioName) {
   })
 
   assert(metrics.hasCoreCards, `${scenarioName} 缺少业务看板核心指标卡`)
+  assert(
+    metrics.hasTodayTokenSummary && !metrics.hasLegacyTodayCostCard,
+    `${scenarioName} 今日指标卡未切换到 Token 口径: ${JSON.stringify(metrics)}`
+  )
   assert(metrics.hasTrendPanel, `${scenarioName} 缺少用量趋势面板`)
   assert.equal(
     metrics.trendTimeRangeValue,
@@ -1303,6 +1311,34 @@ async function assertDashboardTrendTooltip(page, scenarioName) {
 
 async function assertDashboardTrendTimeRangeInteraction(page, scenarioName) {
   await page.getByRole('button', { name: '柱状', exact: true }).click()
+  const optionTexts = await page
+    .locator('select[aria-label="趋势时间范围"] option')
+    .allTextContents()
+  assert(
+    optionTexts.some((text) => text.trim() === '今天'),
+    `${scenarioName} 趋势时间范围缺少今天: ${JSON.stringify(optionTexts)}`
+  )
+  await page.locator('select[aria-label="趋势时间范围"]').selectOption('today')
+  const todayBucketsCall = await waitForDashboardTodayBucketsCall(page)
+  assert(
+    todayBucketsCall,
+    `${scenarioName} 趋势时间范围未按今天请求 usage_buckets`
+  )
+  const todayMetrics = await page.evaluate(() => ({
+    description: document.body.innerText.includes('当前 今天 窗口按天聚合'),
+    selected: document.querySelector('select[aria-label="趋势时间范围"]')
+      ?.value,
+  }))
+  assert.equal(
+    todayMetrics.selected,
+    'today',
+    `${scenarioName} 趋势时间范围选择未保持今天: ${JSON.stringify(todayMetrics)}`
+  )
+  assert(
+    todayMetrics.description,
+    `${scenarioName} 趋势时间范围今天说明未更新: ${JSON.stringify(todayMetrics)}`
+  )
+
   await page.locator('select[aria-label="趋势时间范围"]').selectOption('7d')
   const expectedSeconds = 7 * 24 * 60 * 60
   const bucketsCall = await waitForDashboardBucketsCall(page, expectedSeconds)
@@ -1450,6 +1486,41 @@ async function waitForDashboardBucketsCall(page, expectedSeconds) {
     await delay(100)
   }
   return bucketsCall
+}
+
+async function waitForDashboardTodayBucketsCall(page) {
+  let bucketsCall = null
+  const deadline = Date.now() + 5000
+  while (Date.now() < deadline) {
+    bucketsCall = [...(page.__styleL1ApiRpcCalls || [])]
+      .reverse()
+      .find(
+        (call) => call.method === 'usage_buckets' && isTodayWindowCall(call)
+      )
+    if (bucketsCall) break
+    await delay(100)
+  }
+  return bucketsCall
+}
+
+function isTodayWindowCall(call) {
+  const startTime = Number(call.params?.start_time)
+  const endTime = Number(call.params?.end_time)
+  if (!Number.isFinite(startTime) || !Number.isFinite(endTime)) return false
+  const endDate = new Date(endTime * 1000)
+  const todayStart = Math.floor(
+    new Date(
+      endDate.getFullYear(),
+      endDate.getMonth(),
+      endDate.getDate()
+    ).getTime() / 1000
+  )
+  if (call.params?.group_by && call.params.group_by !== 'day') return false
+  return (
+    Math.abs(startTime - todayStart) <= 2 &&
+    endTime >= startTime &&
+    endTime - startTime <= 24 * 60 * 60
+  )
 }
 
 function assertDashboardCompactRequests(page, scenarioName) {
@@ -2182,6 +2253,7 @@ async function assertUsageTimeRangeRequest(page, scenarioName) {
   await page.getByRole('combobox', { name: '时间范围' }).click()
   const optionTexts = await page.getByRole('option').allTextContents()
   for (const text of [
+    '今天',
     '24h',
     '30 天',
     '180 天',
@@ -2195,6 +2267,40 @@ async function assertUsageTimeRangeRequest(page, scenarioName) {
       `${scenarioName} usage 时间范围缺少 ${text}: ${JSON.stringify(optionTexts)}`
     )
   }
+  await page.getByRole('option', { name: '今天', exact: true }).click()
+  await page.getByRole('button', { name: '应用筛选', exact: true }).click()
+
+  const todayDeadline = Date.now() + 5_000
+  while (Date.now() < todayDeadline) {
+    const matched = calls.slice(startIndex).some((call) => {
+      return (
+        call.method === 'usage_list' &&
+        call.params?.offset === 0 &&
+        isTodayWindowCall(call)
+      )
+    })
+    const hasSummary = await page.evaluate(() =>
+      document.body.innerText.includes('今天 范围内第')
+    )
+    if (matched && hasSummary) {
+      break
+    }
+    await delay(100)
+  }
+  assert(
+    calls.slice(startIndex).some((call) => {
+      return (
+        call.method === 'usage_list' &&
+        call.params?.offset === 0 &&
+        isTodayWindowCall(call)
+      )
+    }),
+    `${scenarioName} 切换 usage 时间范围后未请求今天窗口: ${JSON.stringify(
+      calls.slice(startIndex)
+    )}`
+  )
+
+  await page.getByRole('combobox', { name: '时间范围' }).click()
   await page.getByRole('option', { name: '180 天', exact: true }).click()
   await page.getByRole('button', { name: '应用筛选', exact: true }).click()
 

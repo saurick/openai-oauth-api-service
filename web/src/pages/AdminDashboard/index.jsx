@@ -14,6 +14,8 @@ import {
   DAY_SECONDS,
   DEFAULT_DAILY_USAGE_TIME_RANGE,
   getUsageTimeRange,
+  getUsageTimeWindow,
+  startOfLocalDayUnix,
   USAGE_TIME_RANGE_OPTIONS,
 } from '@/common/utils/usageTimeRange'
 
@@ -158,13 +160,6 @@ function localDateKey(ts) {
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
-}
-
-function startOfLocalDayUnix(date) {
-  return Math.floor(
-    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() /
-      1000
-  )
 }
 
 function pct(part, total) {
@@ -935,7 +930,11 @@ export default function AdminDashboardPage() {
     [trendTimeRange]
   )
   const trendEndTime = Math.floor(Date.now() / 1000)
-  const trendStartTime = trendEndTime - activeTrendTimeRange.seconds
+  const trendStartTime = getUsageTimeWindow(
+    trendTimeRange,
+    trendEndTime,
+    DEFAULT_DAILY_USAGE_TIME_RANGE
+  ).startTime
 
   const dailyBuckets = useMemo(
     () => fillDailyBuckets(usageBuckets, trendStartTime, trendEndTime),
@@ -979,7 +978,11 @@ export default function AdminDashboardPage() {
       const startTime = now - DAY_SECONDS
       const todayStartTime = startOfLocalDayUnix(new Date())
       const minuteStartTime = now - 60
-      const activeTrendStartTime = now - activeTrendTimeRange.seconds
+      const activeTrendWindow = getUsageTimeWindow(
+        trendTimeRange,
+        now,
+        DEFAULT_DAILY_USAGE_TIME_RANGE
+      )
       const [
         summaryRes,
         todaySummaryRes,
@@ -1001,9 +1004,9 @@ export default function AdminDashboardPage() {
           start_time: startTime,
         }),
         apiRpc.call('usage_buckets', {
-          end_time: now,
+          end_time: activeTrendWindow.endTime,
           group_by: 'day',
-          start_time: activeTrendStartTime,
+          start_time: activeTrendWindow.startTime,
         }),
       ])
 
@@ -1023,7 +1026,7 @@ export default function AdminDashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [activeTrendTimeRange.seconds, apiRpc])
+  }, [apiRpc, trendTimeRange])
 
   useEffect(() => {
     loadAll()
@@ -1043,10 +1046,10 @@ export default function AdminDashboardPage() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
         <SummaryCard
-          label="今日消费"
+          label="今日 Token"
           tone="green"
-          value={fmtCost(todaySummary.estimated_cost_usd)}
-          sub={`24h ${fmtCost(summary.estimated_cost_usd)}`}
+          value={fmtNumber(todaySummary.total_tokens)}
+          sub={`24h ${fmtNumber(summary.total_tokens)}`}
         />
         <SummaryCard
           label="今日请求"

@@ -23,6 +23,7 @@ import {
   DEFAULT_DAILY_USAGE_TIME_RANGE,
   DEFAULT_USAGE_TIME_RANGE,
   getUsageTimeRange,
+  getUsageTimeWindow,
   USAGE_TIME_RANGE_OPTIONS,
 } from '@/common/utils/usageTimeRange'
 
@@ -1639,11 +1640,12 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   }
 
   const buildUsageWindowParams = (filters, now, seconds) => {
-    const timeRange = getUsageTimeRange(filters.timeRange)
-    const windowSeconds = seconds || timeRange.seconds
+    const timeWindow = seconds
+      ? { endTime: now, startTime: now - seconds }
+      : getUsageTimeWindow(filters.timeRange, now)
     const params = {
-      end_time: now,
-      start_time: now - windowSeconds,
+      end_time: timeWindow.endTime,
+      start_time: timeWindow.startTime,
     }
     const keyIds = normalizeSelectedValues(filters.keyIds)
       .map((item) => asInt(item, 0))
