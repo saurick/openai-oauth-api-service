@@ -67,6 +67,48 @@ func TestOfficialModelPriceMapContainsStandardTokenRates(t *testing.T) {
 	}
 }
 
+func TestDetectGatewayClientType(t *testing.T) {
+	tests := []struct {
+		name   string
+		values []string
+		want   string
+	}{
+		{
+			name:   "explicit codex",
+			values: []string{"codex"},
+			want:   GatewayClientTypeCodex,
+		},
+		{
+			name:   "explicit opencode wins before user agent",
+			values: []string{"opencode", "codex-cli/0.133.0"},
+			want:   GatewayClientTypeOpenCode,
+		},
+		{
+			name:   "open code user agent",
+			values: []string{"", "OpenCode/1.14.48"},
+			want:   GatewayClientTypeOpenCode,
+		},
+		{
+			name:   "codex user agent",
+			values: []string{"", "codex-cli/0.133.0"},
+			want:   GatewayClientTypeCodex,
+		},
+		{
+			name:   "unknown",
+			values: []string{"curl/8.0"},
+			want:   GatewayClientTypeOther,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := DetectGatewayClientType(tt.values...); got != tt.want {
+				t.Fatalf("DetectGatewayClientType(%v) = %q, want %q", tt.values, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGatewayUsecaseCreateAPIKeyAllowsBlankRemark(t *testing.T) {
 	repo := &gatewayPolicyTestRepo{}
 	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
@@ -339,6 +381,22 @@ func TestGatewayUsecaseDeleteAPIKeysRejectsEmptyIDs(t *testing.T) {
 	}
 }
 
+func TestGatewayUsecaseDisableAllAPIKeysDelegatesToRepo(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{disableAllCount: 4}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+
+	updated, err := uc.DisableAllAPIKeys(context.Background())
+	if err != nil {
+		t.Fatalf("DisableAllAPIKeys() error = %v", err)
+	}
+	if updated != 4 {
+		t.Fatalf("updated = %d, want 4", updated)
+	}
+	if !repo.disableAllCalled {
+		t.Fatalf("expected repo DisableAllAPIKeys to be called")
+	}
+}
+
 func TestGatewayUsecaseRejectsNonCodexModels(t *testing.T) {
 	uc := NewGatewayUsecase(&gatewayPolicyTestRepo{}, log.NewStdLogger(testWriter{}), nil)
 
@@ -498,15 +556,17 @@ type testWriter struct{}
 func (testWriter) Write(p []byte) (int, error) { return len(p), nil }
 
 type gatewayPolicyTestRepo struct {
-	policy         *GatewayPolicy
-	summaryByStart map[time.Time]*GatewayUsageSummary
-	settings       map[string]string
-	createdInput   CreateGatewayAPIKeyInput
-	updatedInput   UpdateGatewayAPIKeyInput
-	currentKey     *GatewayAPIKey
-	resetID        int
-	resetSecret    GatewayAPIKeySecret
-	deletedIDs     []int
+	policy           *GatewayPolicy
+	summaryByStart   map[time.Time]*GatewayUsageSummary
+	settings         map[string]string
+	createdInput     CreateGatewayAPIKeyInput
+	updatedInput     UpdateGatewayAPIKeyInput
+	currentKey       *GatewayAPIKey
+	resetID          int
+	resetSecret      GatewayAPIKeySecret
+	deletedIDs       []int
+	disableAllCount  int
+	disableAllCalled bool
 }
 
 func (r *gatewayPolicyTestRepo) CreateAPIKey(_ context.Context, input CreateGatewayAPIKeyInput, secret GatewayAPIKeySecret) (*GatewayAPIKey, error) {
@@ -554,6 +614,10 @@ func (r *gatewayPolicyTestRepo) DeleteAPIKeys(_ context.Context, ids []int) (int
 	return len(ids), nil
 }
 func (r *gatewayPolicyTestRepo) SetAPIKeyDisabled(context.Context, int, bool) error { return nil }
+func (r *gatewayPolicyTestRepo) DisableAllAPIKeys(context.Context) (int, error) {
+	r.disableAllCalled = true
+	return r.disableAllCount, nil
+}
 func (r *gatewayPolicyTestRepo) GetAPIKeyByHash(context.Context, string) (*GatewayAPIKey, error) {
 	return nil, nil
 }

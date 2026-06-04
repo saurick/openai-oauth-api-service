@@ -1131,6 +1131,43 @@ async function assertDashboardTrendChartTypeInteraction(page, scenarioName) {
         width: rect.width,
       }
     }
+    const lineBox = document.querySelector('main [data-trend-line-box]')
+    const lineBoxRect = lineBox?.getBoundingClientRect()
+    const svgPoints = (
+      document
+        .querySelector('main [data-trend-line] polyline')
+        ?.getAttribute('points') || ''
+    )
+      .trim()
+      .split(/\s+/u)
+      .filter(Boolean)
+      .map((item) => {
+        const [x, y] = item.split(',').map(Number)
+        return { x, y }
+      })
+      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+    const pointAlignmentDeltas =
+      lineBoxRect && svgPoints.length > 0
+        ? Array.from(document.querySelectorAll('main [data-trend-point]')).map(
+            (node, index) => {
+              const rect = node.getBoundingClientRect()
+              const svgPoint = svgPoints[index]
+              if (!svgPoint) return { x: Infinity, y: Infinity }
+              const expectedX =
+                lineBoxRect.left + (svgPoint.x / 100) * lineBoxRect.width
+              const expectedY =
+                lineBoxRect.top + (svgPoint.y / 100) * lineBoxRect.height
+              return {
+                x: Math.abs(rect.left + rect.width / 2 - expectedX),
+                y: Math.abs(rect.top + rect.height / 2 - expectedY),
+              }
+            }
+          )
+        : []
+    const maxPointAlignmentDelta = pointAlignmentDeltas.reduce(
+      (max, item) => Math.max(max, item.x, item.y),
+      0
+    )
     const pressed = Array.from(
       document.querySelectorAll('[aria-label="图表类型"] button')
     )
@@ -1141,7 +1178,9 @@ async function assertDashboardTrendChartTypeInteraction(page, scenarioName) {
       lineBoxRect: rectOf('main [data-trend-line-box]'),
       lineRect: rectOf('main [data-trend-line]'),
       lineCount: document.querySelectorAll('main [data-trend-line]').length,
+      maxPointAlignmentDelta,
       pointCount: document.querySelectorAll('main [data-trend-point]').length,
+      svgPointCount: svgPoints.length,
       pressed,
     }
   })
@@ -1149,7 +1188,8 @@ async function assertDashboardTrendChartTypeInteraction(page, scenarioName) {
     metrics.pressed.length === 1 &&
       metrics.pressed[0] === '折线' &&
       metrics.lineCount === 1 &&
-      metrics.pointCount >= 20,
+      metrics.pointCount >= 20 &&
+      metrics.pointCount === metrics.svgPointCount,
     `${scenarioName} 趋势图切换折线后状态异常: ${JSON.stringify(metrics)}`
   )
   assert(
@@ -1162,6 +1202,10 @@ async function assertDashboardTrendChartTypeInteraction(page, scenarioName) {
       metrics.lineRect.bottom <= metrics.lineBoxRect.bottom &&
       metrics.lineRect.height <= metrics.chartRect.height,
     `${scenarioName} 趋势折线绘图区溢出: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.maxPointAlignmentDelta <= 1.5,
+    `${scenarioName} 趋势折线圆点未贴合折点: ${JSON.stringify(metrics)}`
   )
 }
 
@@ -1298,10 +1342,16 @@ async function assertUsageTableVisuals(page, scenarioName) {
       hasUpstreamFilter: Boolean(
         main?.querySelector('[role="combobox"][aria-label="实际执行上游"]')
       ),
+      hasClientTypeFilter: Boolean(
+        main?.querySelector('[role="combobox"][aria-label="调用客户端"]')
+      ),
       hasErrorTypeFilter: Boolean(
         main?.querySelector('[role="combobox"][aria-label="错误或中断类型"]')
       ),
       hasUpstreamStats: document.body.innerText.includes('上游分布'),
+      hasClientStats:
+        document.body.innerText.includes('客户端分布') &&
+        document.body.innerText.includes('OpenCode'),
       hasUsageTabs:
         JSON.stringify(tabTexts) ===
         JSON.stringify([
@@ -1322,8 +1372,10 @@ async function assertUsageTableVisuals(page, scenarioName) {
   assert(metrics.hasTimeRangeFilter, `${scenarioName} 缺少 usage 时间范围筛选`)
   assert(metrics.hasStatusCodeFilter, `${scenarioName} 缺少 HTTP 状态码筛选`)
   assert(metrics.hasUpstreamFilter, `${scenarioName} 缺少实际上游筛选`)
+  assert(metrics.hasClientTypeFilter, `${scenarioName} 缺少调用客户端筛选`)
   assert(metrics.hasErrorTypeFilter, `${scenarioName} 缺少错误 / 中断类型筛选`)
   assert(metrics.hasUpstreamStats, `${scenarioName} 缺少上游分布统计`)
+  assert(metrics.hasClientStats, `${scenarioName} 缺少客户端分布统计`)
   assert(metrics.hasUsageTabs, `${scenarioName} usage 分段视图顺序异常`)
   assert(
     metrics.activeUsageTab === '调用明细',
@@ -1341,16 +1393,90 @@ async function assertUsageTableVisuals(page, scenarioName) {
   assert(metrics.mainHeight > 0, `${scenarioName} 后台内容区高度异常`)
   assert(metrics.tableHeight > 0, `${scenarioName} usage 表格高度异常`)
   assert(metrics.tableWidth > 0, `${scenarioName} usage 表格宽度异常`)
+  await assertUsageClientStatsDarkMode(page, scenarioName)
   assertUsageAggregationRequests(page, scenarioName)
   await assertUsageDetailsTab(page, scenarioName)
   await assertUsageKeyMultiFilterRequest(page, scenarioName)
   await assertUsageTimeRangeRequest(page, scenarioName)
   await assertUsageStatusCodeFilterRequest(page, scenarioName)
+  await assertUsageClientTypeFilterRequest(page, scenarioName)
   await assertUsagePaginationRequest(page, scenarioName)
   await assertUsageErrorsTab(page, scenarioName)
   await assertUsageSessionTab(page, scenarioName)
   await assertUsageKeyStatsTab(page, scenarioName)
   await assertUsageDailyModelDetail(page, scenarioName)
+}
+
+async function assertUsageClientStatsDarkMode(page, scenarioName) {
+  await page.locator('[data-admin-theme-option="dark"]').click()
+  await page.waitForFunction(
+    () => document.documentElement.dataset.adminTheme === 'dark'
+  )
+  await delay(120)
+
+  const metrics = await page.evaluate(() => {
+    function rgb(color) {
+      const match = String(color || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/u)
+      if (!match) return null
+      return [Number(match[1]), Number(match[2]), Number(match[3])]
+    }
+    function luminance(color) {
+      const value = rgb(color)
+      if (!value) return 0
+      const channels = value.map((channel) => {
+        const normalized = channel / 255
+        return normalized <= 0.03928
+          ? normalized / 12.92
+          : ((normalized + 0.055) / 1.055) ** 2.4
+      })
+      return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
+    }
+    function contrast(foreground, background) {
+      const lighter = Math.max(luminance(foreground), luminance(background))
+      const darker = Math.min(luminance(foreground), luminance(background))
+      return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    const main = document.querySelector('main')
+    const card = Array.from(main?.querySelectorAll('*') || []).find((node) =>
+      node.textContent.includes('客户端分布')
+    )
+    const clientFilter = main?.querySelector(
+      '[role="combobox"][aria-label="调用客户端"]'
+    )
+    const cardStyle = card ? window.getComputedStyle(card) : null
+    const panelStyle = main ? window.getComputedStyle(main) : null
+    const filterStyle = clientFilter
+      ? window.getComputedStyle(clientFilter)
+      : null
+    return {
+      cardContrast:
+        cardStyle && panelStyle
+          ? contrast(cardStyle.color, panelStyle.backgroundColor)
+          : 0,
+      filterContrast: filterStyle
+        ? contrast(filterStyle.color, filterStyle.backgroundColor)
+        : 0,
+      hasCard: Boolean(card),
+      hasFilter: Boolean(clientFilter),
+      theme: document.documentElement.dataset.adminTheme,
+    }
+  })
+
+  assert.equal(metrics.theme, 'dark', `${scenarioName} usage 未切到暗色主题`)
+  assert(
+    metrics.hasCard &&
+      metrics.hasFilter &&
+      metrics.cardContrast >= 3 &&
+      metrics.filterContrast >= 4.5,
+    `${scenarioName} usage 客户端字段暗色对比异常: ${JSON.stringify(metrics)}`
+  )
+
+  await page.locator('[data-admin-theme-option="system"]').click()
+  await page.waitForFunction(
+    () => document.documentElement.dataset.adminThemeMode === 'system'
+  )
+  await delay(120)
 }
 
 function assertUsageAggregationRequests(page, scenarioName) {
@@ -1373,8 +1499,17 @@ function assertUsageAggregationRequests(page, scenarioName) {
 }
 
 async function assertUsageDailyModelDetail(page, scenarioName) {
+  const calls = page.__styleL1ApiRpcCalls || []
+  const startIndex = calls.length
   await page.getByRole('tab', { name: '每日模型', exact: true }).click()
   await expectText(page, '每日模型汇总')
+  await expectText(page, '当前 30 天 窗口')
+  await waitForUsageBucketWindow(
+    page,
+    scenarioName,
+    startIndex,
+    30 * 24 * 60 * 60
+  )
   await expectText(page, 'gpt-5.4')
   await page.getByRole('button', { name: '详情', exact: true }).first().click()
   await expectText(page, '输入 Tokens')
@@ -1540,6 +1675,38 @@ async function assertUsageKeyMultiFilterRequest(page, scenarioName) {
   )
 }
 
+async function waitForUsageBucketWindow(
+  page,
+  scenarioName,
+  startIndex,
+  expectedWindowSeconds
+) {
+  const calls = page.__styleL1ApiRpcCalls || []
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    const matched = calls.slice(startIndex).some((call) => {
+      const startTime = Number(call.params?.start_time)
+      const endTime = Number(call.params?.end_time)
+      return (
+        call.method === 'usage_buckets' &&
+        call.params?.group_by === 'day_model' &&
+        Number.isFinite(startTime) &&
+        Number.isFinite(endTime) &&
+        Math.abs(endTime - startTime - expectedWindowSeconds) <= 2
+      )
+    })
+    if (matched) {
+      return
+    }
+    await delay(100)
+  }
+  assert.fail(
+    `${scenarioName} 每日模型未请求 ${expectedWindowSeconds}s 窗口: ${JSON.stringify(
+      calls.slice(startIndex)
+    )}`
+  )
+}
+
 async function assertUsageErrorsTab(page, scenarioName) {
   const calls = page.__styleL1ApiRpcCalls || []
   const startIndex = calls.length
@@ -1604,6 +1771,43 @@ async function assertUsageStatusCodeFilterRequest(page, scenarioName) {
 
   assert.fail(
     `${scenarioName} 状态码筛选未按 499 查询: ${JSON.stringify(
+      calls.slice(startIndex)
+    )}`
+  )
+}
+
+async function assertUsageClientTypeFilterRequest(page, scenarioName) {
+  const calls = page.__styleL1ApiRpcCalls || []
+  const startIndex = calls.length
+  await page.getByRole('combobox', { name: '调用客户端' }).click()
+  await page.getByRole('option', { name: 'OpenCode', exact: true }).click()
+  await page.getByRole('button', { name: '应用筛选', exact: true }).click()
+
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    const matched = calls.slice(startIndex).some((call) => {
+      return (
+        call.method === 'usage_list' &&
+        call.params?.offset === 0 &&
+        call.params?.client_type === 'opencode'
+      )
+    })
+    const hasSelected = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('[role="combobox"]')).some(
+        (node) =>
+          node.getAttribute('aria-label') === '调用客户端' &&
+          node.value === 'OpenCode'
+      )
+    )
+    if (matched && hasSelected) {
+      await page.getByRole('button', { name: '重置', exact: true }).click()
+      return
+    }
+    await delay(100)
+  }
+
+  assert.fail(
+    `${scenarioName} 客户端筛选未按 opencode 查询: ${JSON.stringify(
       calls.slice(startIndex)
     )}`
   )
@@ -2372,6 +2576,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
   })
   await assertKeySearchAutoQuery(page, scenarioName)
   await assertKeyTableSelectionInteraction(page, scenarioName)
+  await assertDisableAllKeysConfirm(page, scenarioName)
 }
 
 function assertKeyTokenStatsRequests(page, scenarioName) {
@@ -3306,6 +3511,70 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
   )
 }
 
+async function assertDisableAllKeysConfirm(page, scenarioName) {
+  const calls = page.__styleL1ApiRpcCalls || []
+  const startIndex = calls.length
+  const nativeDialogMessages = []
+  const nativeDialogHandler = async (dialog) => {
+    nativeDialogMessages.push(dialog.message())
+    await dialog.dismiss().catch(() => {})
+  }
+  page.on('dialog', nativeDialogHandler)
+  try {
+    await page.getByRole('button', { name: '禁用全部 key' }).click()
+    const disableDialog = page.getByRole('dialog', { name: '禁用全部 API key' })
+    await disableDialog.waitFor({ state: 'visible' })
+    const metrics = await disableDialog.evaluate((node) => ({
+      hasDescription:
+        node.innerText.includes('全站所有 API 凭据') &&
+        node.innerText.includes('不限于当前页或当前筛选') &&
+        node.innerText.includes('历史调用记录和 key 本身会保留'),
+      hasCancel: Array.from(node.querySelectorAll('button')).some(
+        (button) => button.textContent.trim() === '取消'
+      ),
+      hasConfirm: Array.from(node.querySelectorAll('button')).some(
+        (button) => button.textContent.trim() === '禁用全部 key'
+      ),
+      rect: {
+        width: node.getBoundingClientRect().width,
+        height: node.getBoundingClientRect().height,
+      },
+    }))
+    assert.equal(
+      nativeDialogMessages.length,
+      0,
+      `${scenarioName} 禁用全部 key 不应触发浏览器原生确认框: ${nativeDialogMessages.join(' | ')}`
+    )
+    assert(
+      metrics.hasDescription && metrics.hasCancel && metrics.hasConfirm,
+      `${scenarioName} 禁用全部 key 确认弹窗内容异常: ${JSON.stringify(metrics)}`
+    )
+    assert(
+      metrics.rect.width > 0 && metrics.rect.height > 0,
+      `${scenarioName} 禁用全部 key 确认弹窗盒模型异常: ${JSON.stringify(metrics)}`
+    )
+    await disableDialog.getByRole('button', { name: '禁用全部 key' }).click()
+    const deadline = Date.now() + 5_000
+    while (Date.now() < deadline) {
+      if (
+        calls
+          .slice(startIndex)
+          .some((call) => call.method === 'key_disable_all')
+      ) {
+        return
+      }
+      await delay(100)
+    }
+    assert.fail(
+      `${scenarioName} 未调用 key_disable_all: ${JSON.stringify(
+        calls.slice(startIndex)
+      )}`
+    )
+  } finally {
+    page.off('dialog', nativeDialogHandler)
+  }
+}
+
 async function readKeyTableSelectionState(page) {
   return page.evaluate(() => ({
     checked: Array.from(
@@ -3764,10 +4033,13 @@ function getApiMockData(method, params = {}, state = {}) {
           average_duration_ms: 640,
           backend_requests: 3,
           cli_requests: 1,
+          codex_requests: 2,
           estimated_cost_usd: 0.0312,
           fallback_requests: 0,
           failed_requests: 0,
           input_tokens: 1860,
+          opencode_requests: 1,
+          other_client_requests: 1,
           output_tokens: 520,
           success_requests: 4,
           total_requests: 4,
@@ -3780,10 +4052,13 @@ function getApiMockData(method, params = {}, state = {}) {
         average_duration_ms: 842,
         backend_requests: 206,
         cli_requests: 92,
+        codex_requests: 168,
         estimated_cost_usd: 1.4288,
         fallback_requests: 7,
         failed_requests: 11,
         input_tokens: 86410,
+        opencode_requests: 96,
+        other_client_requests: 34,
         output_tokens: 62522,
         success_requests: 287,
         total_requests: 298,
@@ -3950,6 +4225,13 @@ function getApiMockData(method, params = {}, state = {}) {
     }
   }
 
+  if (method === 'key_disable_all') {
+    return {
+      disabled: true,
+      updated: 6,
+    }
+  }
+
   if (method === 'model_list') {
     const contextByModel = {
       'gpt-5.5': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
@@ -4058,6 +4340,7 @@ function getApiMockData(method, params = {}, state = {}) {
           api_key_name: 'productionapikey',
           api_key_prefix: 'ogw_production',
           cached_tokens: model === 'gpt-5.4' ? 272640 : 1200,
+          client_type: params.client_type || 'codex',
           created_at: 1778000000,
           duration_ms: 813,
           endpoint: '/v1/responses',
@@ -4100,6 +4383,7 @@ function getApiMockData(method, params = {}, state = {}) {
           api_key_name: 'productionapikey',
           api_key_prefix: 'ogw_production',
           cached_tokens: model === 'gpt-5.4' ? 272512 : 40800,
+          client_type: 'opencode',
           created_at: 1777999000,
           duration_ms: 1240,
           endpoint: '/v1/chat/completions',
@@ -4127,6 +4411,7 @@ function getApiMockData(method, params = {}, state = {}) {
           api_key_name: 'stagingkeylongnameforoverflowcheck',
           api_key_prefix: 'ogw_stagingke',
           cached_tokens: 0,
+          client_type: 'other',
           created_at: 1777998000,
           duration_ms: 330,
           endpoint: '/v1/responses',
@@ -4178,8 +4463,11 @@ function getApiMockData(method, params = {}, state = {}) {
           failed_requests: 0,
           backend_requests: 1,
           cli_requests: 1,
+          codex_requests: 1,
           fallback_requests: 1,
           input_tokens: 61900,
+          opencode_requests: 1,
+          other_client_requests: 0,
           output_tokens: 3510,
           success_requests: 2,
           total_requests: 2,
@@ -4196,8 +4484,11 @@ function getApiMockData(method, params = {}, state = {}) {
           failed_requests: 1,
           backend_requests: 0,
           cli_requests: 1,
+          codex_requests: 0,
           fallback_requests: 0,
           input_tokens: 1000,
+          opencode_requests: 0,
+          other_client_requests: 1,
           output_tokens: 80,
           success_requests: 0,
           total_requests: 1,
@@ -4220,10 +4511,13 @@ function getApiMockData(method, params = {}, state = {}) {
           failed_requests: 0,
           backend_requests: 1,
           cli_requests: 1,
+          codex_requests: 1,
           fallback_requests: 1,
           first_seen_at: 1777999000,
           input_tokens: 61900,
           last_seen_at: 1778000000,
+          opencode_requests: 1,
+          other_client_requests: 0,
           output_tokens: 3510,
           reasoning_tokens: 320,
           session_id: 'session-style-l1',
@@ -4249,10 +4543,13 @@ function getApiMockData(method, params = {}, state = {}) {
           failed_requests: 1,
           backend_requests: 0,
           cli_requests: 1,
+          codex_requests: 0,
           fallback_requests: 0,
           first_seen_at: 1777998000,
           input_tokens: 1000,
           last_seen_at: 1777998000,
+          opencode_requests: 0,
+          other_client_requests: 1,
           output_tokens: 80,
           reasoning_tokens: 0,
           session_id: 'session-style-l1-error',
@@ -4334,6 +4631,12 @@ function createMockUsageBuckets() {
     const outputTokens = calls * (220 + index * 16)
     const reasoningTokens = calls * (40 + index * 3)
     const model = index % 5 === 0 ? 'gpt-5.4-mini' : 'gpt-5.4'
+    const otherClientRequests = index % 3 === 0 ? 1 : 0
+    const openCodeRequests = Math.ceil(calls / 4)
+    const codexRequests = Math.max(
+      0,
+      calls - openCodeRequests - otherClientRequests
+    )
 
     return {
       bucket_start: Math.floor(d.getTime() / 1000),
@@ -4341,11 +4644,14 @@ function createMockUsageBuckets() {
       backend_requests: Math.max(0, calls - Math.ceil(calls / 3)),
       cached_tokens: cachedTokens,
       cli_requests: Math.ceil(calls / 3),
+      codex_requests: codexRequests,
       estimated_cost_usd: Number((calls * (0.018 + index * 0.001)).toFixed(4)),
       failed_requests: index % 4 === 0 ? 2 : 0,
       fallback_requests: index % 5 === 0 ? 1 : 0,
       input_tokens: inputTokens,
       model,
+      opencode_requests: openCodeRequests,
+      other_client_requests: otherClientRequests,
       output_tokens: outputTokens,
       reasoning_tokens: reasoningTokens,
       success_requests: calls - (index % 4 === 0 ? 2 : 0),

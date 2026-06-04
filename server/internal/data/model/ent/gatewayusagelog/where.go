@@ -64,6 +64,11 @@ func APIKeyPrefix(v string) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldEQ(FieldAPIKeyPrefix, v))
 }
 
+// ClientType applies equality check predicate on the "client_type" field. It's identical to ClientTypeEQ.
+func ClientType(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldClientType, v))
+}
+
 // SessionID applies equality check predicate on the "session_id" field. It's identical to SessionIDEQ.
 func SessionID(v string) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldEQ(FieldSessionID, v))
@@ -297,6 +302,71 @@ func APIKeyPrefixEqualFold(v string) predicate.GatewayUsageLog {
 // APIKeyPrefixContainsFold applies the ContainsFold predicate on the "api_key_prefix" field.
 func APIKeyPrefixContainsFold(v string) predicate.GatewayUsageLog {
 	return predicate.GatewayUsageLog(sql.FieldContainsFold(FieldAPIKeyPrefix, v))
+}
+
+// ClientTypeEQ applies the EQ predicate on the "client_type" field.
+func ClientTypeEQ(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEQ(FieldClientType, v))
+}
+
+// ClientTypeNEQ applies the NEQ predicate on the "client_type" field.
+func ClientTypeNEQ(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNEQ(FieldClientType, v))
+}
+
+// ClientTypeIn applies the In predicate on the "client_type" field.
+func ClientTypeIn(vs ...string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldIn(FieldClientType, vs...))
+}
+
+// ClientTypeNotIn applies the NotIn predicate on the "client_type" field.
+func ClientTypeNotIn(vs ...string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldNotIn(FieldClientType, vs...))
+}
+
+// ClientTypeGT applies the GT predicate on the "client_type" field.
+func ClientTypeGT(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldGT(FieldClientType, v))
+}
+
+// ClientTypeGTE applies the GTE predicate on the "client_type" field.
+func ClientTypeGTE(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldGTE(FieldClientType, v))
+}
+
+// ClientTypeLT applies the LT predicate on the "client_type" field.
+func ClientTypeLT(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldLT(FieldClientType, v))
+}
+
+// ClientTypeLTE applies the LTE predicate on the "client_type" field.
+func ClientTypeLTE(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldLTE(FieldClientType, v))
+}
+
+// ClientTypeContains applies the Contains predicate on the "client_type" field.
+func ClientTypeContains(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldContains(FieldClientType, v))
+}
+
+// ClientTypeHasPrefix applies the HasPrefix predicate on the "client_type" field.
+func ClientTypeHasPrefix(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldHasPrefix(FieldClientType, v))
+}
+
+// ClientTypeHasSuffix applies the HasSuffix predicate on the "client_type" field.
+func ClientTypeHasSuffix(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldHasSuffix(FieldClientType, v))
+}
+
+// ClientTypeEqualFold applies the EqualFold predicate on the "client_type" field.
+func ClientTypeEqualFold(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldEqualFold(FieldClientType, v))
+}
+
+// ClientTypeContainsFold applies the ContainsFold predicate on the "client_type" field.
+func ClientTypeContainsFold(v string) predicate.GatewayUsageLog {
+	return predicate.GatewayUsageLog(sql.FieldContainsFold(FieldClientType, v))
 }
 
 // SessionIDEQ applies the EQ predicate on the "session_id" field.

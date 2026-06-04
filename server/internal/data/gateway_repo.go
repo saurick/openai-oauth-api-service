@@ -209,6 +209,13 @@ func (r *gatewayRepo) SetAPIKeyDisabled(ctx context.Context, id int, disabled bo
 		Exec(ctx)
 }
 
+func (r *gatewayRepo) DisableAllAPIKeys(ctx context.Context) (int, error) {
+	return r.data.postgres.GatewayAPIKey.Update().
+		Where(gatewayapikey.DisabledEQ(false)).
+		SetDisabled(true).
+		Save(ctx)
+}
+
 func (r *gatewayRepo) GetAPIKeyByHash(ctx context.Context, keyHash string) (*biz.GatewayAPIKey, error) {
 	item, err := r.data.postgres.GatewayAPIKey.Query().
 		Where(gatewayapikey.KeyHashEQ(keyHash)).
@@ -275,6 +282,7 @@ func (r *gatewayRepo) CreateUsageLog(ctx context.Context, item *biz.GatewayUsage
 
 	create := r.data.postgres.GatewayUsageLog.Create().
 		SetAPIKeyPrefix(item.APIKeyPrefix).
+		SetClientType(item.ClientType).
 		SetSessionID(item.SessionID).
 		SetRequestID(item.RequestID).
 		SetMethod(item.Method).
@@ -406,6 +414,9 @@ COALESCE(SUM(response_bytes), 0),
 COALESCE(SUM(CASE WHEN upstream_mode = 'codex_backend' THEN 1 ELSE 0 END), 0),
 COALESCE(SUM(CASE WHEN upstream_mode = 'codex_cli' THEN 1 ELSE 0 END), 0),
 COALESCE(SUM(CASE WHEN upstream_fallback THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN client_type = 'codex' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN client_type = 'opencode' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN client_type NOT IN ('codex', 'opencode') THEN 1 ELSE 0 END), 0),
 COALESCE(AVG(duration_ms)::bigint, 0)
 FROM gateway_usage_logs` + where
 
@@ -425,6 +436,9 @@ FROM gateway_usage_logs` + where
 		&out.BackendRequests,
 		&out.CLIRequests,
 		&out.FallbackRequests,
+		&out.CodexRequests,
+		&out.OpenCodeRequests,
+		&out.OtherRequests,
 		&out.AverageDurationMS,
 	); err != nil {
 		return nil, err
@@ -464,6 +478,9 @@ COALESCE(SUM(response_bytes), 0),
 COALESCE(SUM(CASE WHEN upstream_mode = 'codex_backend' THEN 1 ELSE 0 END), 0),
 COALESCE(SUM(CASE WHEN upstream_mode = 'codex_cli' THEN 1 ELSE 0 END), 0),
 COALESCE(SUM(CASE WHEN upstream_fallback THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN client_type = 'codex' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN client_type = 'opencode' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN client_type NOT IN ('codex', 'opencode') THEN 1 ELSE 0 END), 0),
 COALESCE(AVG(duration_ms)::bigint, 0)
 FROM gateway_usage_logs` + where + `
 GROUP BY bucket_start` + modelGroup + `
@@ -499,6 +516,9 @@ ORDER BY bucket_start ASC` + modelOrder
 			&item.BackendRequests,
 			&item.CLIRequests,
 			&item.FallbackRequests,
+			&item.CodexRequests,
+			&item.OpenCodeRequests,
+			&item.OtherRequests,
 			&item.AverageDurationMS,
 		); err != nil {
 			return nil, err
@@ -554,6 +574,9 @@ COALESCE(SUM(l.reasoning_tokens), 0),
 COALESCE(SUM(CASE WHEN l.upstream_mode = 'codex_backend' THEN 1 ELSE 0 END), 0),
 COALESCE(SUM(CASE WHEN l.upstream_mode = 'codex_cli' THEN 1 ELSE 0 END), 0),
 COALESCE(SUM(CASE WHEN l.upstream_fallback THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN l.client_type = 'codex' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN l.client_type = 'opencode' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN l.client_type NOT IN ('codex', 'opencode') THEN 1 ELSE 0 END), 0),
 COALESCE(AVG(l.duration_ms)::bigint, 0)
 FROM gateway_usage_logs l
 LEFT JOIN gateway_api_keys k ON k.id = l.api_key_id` + where + `
@@ -591,6 +614,9 @@ LIMIT $` + fmt.Sprint(len(args))
 			&item.BackendRequests,
 			&item.CLIRequests,
 			&item.FallbackRequests,
+			&item.CodexRequests,
+			&item.OpenCodeRequests,
+			&item.OtherRequests,
 			&item.AverageDurationMS,
 		); err != nil {
 			return nil, err
@@ -643,6 +669,9 @@ COALESCE(SUM(l.reasoning_tokens), 0),
 COALESCE(SUM(CASE WHEN l.upstream_mode = 'codex_backend' THEN 1 ELSE 0 END), 0),
 COALESCE(SUM(CASE WHEN l.upstream_mode = 'codex_cli' THEN 1 ELSE 0 END), 0),
 COALESCE(SUM(CASE WHEN l.upstream_fallback THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN l.client_type = 'codex' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN l.client_type = 'opencode' THEN 1 ELSE 0 END), 0),
+COALESCE(SUM(CASE WHEN l.client_type NOT IN ('codex', 'opencode') THEN 1 ELSE 0 END), 0),
 COALESCE(AVG(l.duration_ms)::bigint, 0),
 MIN(l.created_at),
 MAX(l.created_at),
@@ -691,6 +720,9 @@ LIMIT $` + fmt.Sprint(limitPlaceholder) + ` OFFSET $` + fmt.Sprint(offsetPlaceho
 			&item.BackendRequests,
 			&item.CLIRequests,
 			&item.FallbackRequests,
+			&item.CodexRequests,
+			&item.OpenCodeRequests,
+			&item.OtherRequests,
 			&item.AverageDurationMS,
 			&item.FirstSeenAt,
 			&item.LastSeenAt,
@@ -1317,6 +1349,9 @@ func (r *gatewayRepo) applyUsageFilter(ctx context.Context, q *ent.GatewayUsageL
 	if filter.SessionID != "" {
 		q = q.Where(gatewayusagelog.SessionIDEQ(filter.SessionID))
 	}
+	if filter.ClientType != "" {
+		q = q.Where(gatewayusagelog.ClientTypeEQ(filter.ClientType))
+	}
 	if filter.Model != "" {
 		q = q.Where(gatewayusagelog.ModelEQ(filter.Model))
 	}
@@ -1390,6 +1425,9 @@ func buildUsageWhereClauseWithPrefix(filter biz.GatewayUsageFilter, columnPrefix
 	}
 	if filter.SessionID != "" {
 		add(col("session_id")+" = $%d", filter.SessionID)
+	}
+	if filter.ClientType != "" {
+		add(col("client_type")+" = $%d", filter.ClientType)
 	}
 	if filter.Model != "" {
 		add(col("model")+" = $%d", filter.Model)
@@ -1824,6 +1862,7 @@ func mapGatewayUsageLog(item *ent.GatewayUsageLog) *biz.GatewayUsageLog {
 		ID:                     item.ID,
 		APIKeyID:               apiKeyID,
 		APIKeyPrefix:           item.APIKeyPrefix,
+		ClientType:             item.ClientType,
 		SessionID:              item.SessionID,
 		RequestID:              item.RequestID,
 		Method:                 item.Method,

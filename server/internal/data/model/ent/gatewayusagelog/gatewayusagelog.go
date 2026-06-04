@@ -17,6 +17,8 @@ const (
 	FieldAPIKeyID = "api_key_id"
 	// FieldAPIKeyPrefix holds the string denoting the api_key_prefix field in the database.
 	FieldAPIKeyPrefix = "api_key_prefix"
+	// FieldClientType holds the string denoting the client_type field in the database.
+	FieldClientType = "client_type"
 	// FieldSessionID holds the string denoting the session_id field in the database.
 	FieldSessionID = "session_id"
 	// FieldRequestID holds the string denoting the request_id field in the database.
@@ -76,6 +78,7 @@ var Columns = []string{
 	FieldID,
 	FieldAPIKeyID,
 	FieldAPIKeyPrefix,
+	FieldClientType,
 	FieldSessionID,
 	FieldRequestID,
 	FieldMethod,
@@ -118,6 +121,10 @@ var (
 	DefaultAPIKeyPrefix string
 	// APIKeyPrefixValidator is a validator for the "api_key_prefix" field. It is called by the builders before save.
 	APIKeyPrefixValidator func(string) error
+	// DefaultClientType holds the default value on creation for the "client_type" field.
+	DefaultClientType string
+	// ClientTypeValidator is a validator for the "client_type" field. It is called by the builders before save.
+	ClientTypeValidator func(string) error
 	// DefaultSessionID holds the default value on creation for the "session_id" field.
 	DefaultSessionID string
 	// SessionIDValidator is a validator for the "session_id" field. It is called by the builders before save.
@@ -202,6 +209,11 @@ func ByAPIKeyID(opts ...sql.OrderTermOption) OrderOption {
 // ByAPIKeyPrefix orders the results by the api_key_prefix field.
 func ByAPIKeyPrefix(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAPIKeyPrefix, opts...).ToFunc()
+}
+
+// ByClientType orders the results by the client_type field.
+func ByClientType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldClientType, opts...).ToFunc()
 }
 
 // BySessionID orders the results by the session_id field.

@@ -1755,6 +1755,56 @@ func TestSessionIDFromGatewayRequest(t *testing.T) {
 	}
 }
 
+func TestGatewayClientTypeFromRequest(t *testing.T) {
+	tests := []struct {
+		name    string
+		headers map[string]string
+		want    string
+	}{
+		{
+			name: "explicit opencode",
+			headers: map[string]string{
+				"X-Client-Type": "opencode",
+				"User-Agent":    "codex-cli/0.133.0",
+			},
+			want: biz.GatewayClientTypeOpenCode,
+		},
+		{
+			name: "app name codex",
+			headers: map[string]string{
+				"X-App-Name": "Codex Desktop",
+			},
+			want: biz.GatewayClientTypeCodex,
+		},
+		{
+			name: "user agent open code",
+			headers: map[string]string{
+				"User-Agent": "OpenCode/1.14.48",
+			},
+			want: biz.GatewayClientTypeOpenCode,
+		},
+		{
+			name: "unknown",
+			headers: map[string]string{
+				"User-Agent": "curl/8.7.1",
+			},
+			want: biz.GatewayClientTypeOther,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/v1/responses", nil)
+			for key, value := range tt.headers {
+				req.Header.Set(key, value)
+			}
+			if got := gatewayClientTypeFromRequest(req); got != tt.want {
+				t.Fatalf("gatewayClientTypeFromRequest() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGatewayUsageDiagnosticForBackendOnlyFailure(t *testing.T) {
 	body := []byte(`{
 		"model":"gpt-5.5",

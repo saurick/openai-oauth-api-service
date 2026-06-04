@@ -26,6 +26,10 @@ const (
 	GatewaySettingCodexFallback     = "codex_upstream_fallback_enabled"
 	GatewaySettingDefaultReasoning  = "gateway_default_reasoning_effort"
 
+	GatewayClientTypeCodex    = "codex"
+	GatewayClientTypeOpenCode = "opencode"
+	GatewayClientTypeOther    = "other"
+
 	GatewayUpstreamStrategyBackendOnly         = "backend_only"
 	GatewayUpstreamStrategyBackendWithFallback = "backend_with_cli_fallback"
 	GatewayUpstreamStrategyCodexCLI            = "codex_cli"
@@ -203,6 +207,7 @@ type GatewayUsageLog struct {
 	ID                     int
 	APIKeyID               int
 	APIKeyPrefix           string
+	ClientType             string
 	APIKeyName             string
 	SessionID              string
 	RequestID              string
@@ -237,6 +242,7 @@ type GatewayUsageFilter struct {
 	Offset            int
 	KeyID             int
 	KeyIDs            []int
+	ClientType        string
 	OwnerUserID       int
 	SessionID         string
 	Model             string
@@ -269,6 +275,9 @@ type GatewayUsageSummary struct {
 	BackendRequests   int64
 	CLIRequests       int64
 	FallbackRequests  int64
+	CodexRequests     int64
+	OpenCodeRequests  int64
+	OtherRequests     int64
 	EstimatedCostUSD  *float64
 }
 
@@ -290,6 +299,9 @@ type GatewayUsageBucket struct {
 	BackendRequests   int64
 	CLIRequests       int64
 	FallbackRequests  int64
+	CodexRequests     int64
+	OpenCodeRequests  int64
+	OtherRequests     int64
 	EstimatedCostUSD  *float64
 }
 
@@ -311,6 +323,9 @@ type GatewayUsageKeySummary struct {
 	BackendRequests   int64
 	CLIRequests       int64
 	FallbackRequests  int64
+	CodexRequests     int64
+	OpenCodeRequests  int64
+	OtherRequests     int64
 	EstimatedCostUSD  *float64
 }
 
@@ -332,6 +347,9 @@ type GatewayUsageSessionSummary struct {
 	BackendRequests        int64
 	CLIRequests            int64
 	FallbackRequests       int64
+	CodexRequests          int64
+	OpenCodeRequests       int64
+	OtherRequests          int64
 	FirstSeenAt            time.Time
 	LastSeenAt             time.Time
 	EstimatedCostUSD       *float64
@@ -478,6 +496,7 @@ type GatewayRepo interface {
 	DeleteAPIKey(ctx context.Context, id int) error
 	DeleteAPIKeys(ctx context.Context, ids []int) (int, error)
 	SetAPIKeyDisabled(ctx context.Context, id int, disabled bool) error
+	DisableAllAPIKeys(ctx context.Context) (int, error)
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (*GatewayAPIKey, error)
 	TouchAPIKeyUsed(ctx context.Context, id int, usedAt time.Time) error
 
@@ -682,6 +701,39 @@ func NormalizeGatewayReasoningEffort(effort string) string {
 	}
 }
 
+func NormalizeGatewayClientType(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case GatewayClientTypeCodex:
+		return GatewayClientTypeCodex
+	case GatewayClientTypeOpenCode:
+		return GatewayClientTypeOpenCode
+	case GatewayClientTypeOther:
+		return GatewayClientTypeOther
+	default:
+		return ""
+	}
+}
+
+func DetectGatewayClientType(values ...string) string {
+	for _, value := range values {
+		normalized := NormalizeGatewayClientType(value)
+		if normalized != "" {
+			return normalized
+		}
+		lower := strings.ToLower(strings.TrimSpace(value))
+		if lower == "" {
+			continue
+		}
+		if strings.Contains(lower, "opencode") || strings.Contains(lower, "open-code") {
+			return GatewayClientTypeOpenCode
+		}
+		if strings.Contains(lower, "codex") {
+			return GatewayClientTypeCodex
+		}
+	}
+	return GatewayClientTypeOther
+}
+
 func NormalizeGatewayAPIKeyDefaultReasoningEffort(effort string) string {
 	if strings.TrimSpace(effort) == "" {
 		return ""
@@ -880,6 +932,10 @@ func (uc *GatewayUsecase) SetAPIKeyDisabled(ctx context.Context, id int, disable
 		return ErrBadParam
 	}
 	return uc.repo.SetAPIKeyDisabled(ctx, id, disabled)
+}
+
+func (uc *GatewayUsecase) DisableAllAPIKeys(ctx context.Context) (int, error) {
+	return uc.repo.DisableAllAPIKeys(ctx)
 }
 
 func (uc *GatewayUsecase) AuthenticateAPIKey(ctx context.Context, plain string) (*GatewayAPIKey, error) {
@@ -1108,6 +1164,10 @@ func (uc *GatewayUsecase) CreateUsageLog(ctx context.Context, item *GatewayUsage
 	if item == nil {
 		return ErrBadParam
 	}
+	item.ClientType = NormalizeGatewayClientType(item.ClientType)
+	if item.ClientType == "" {
+		item.ClientType = GatewayClientTypeOther
+	}
 	item.UpstreamConfiguredMode = NormalizeGatewayUpstreamMode(item.UpstreamConfiguredMode)
 	item.UpstreamMode = NormalizeGatewayUpstreamMode(item.UpstreamMode)
 	if err := uc.repo.CreateUsageLog(ctx, item); err != nil {
@@ -1122,6 +1182,7 @@ func normalizeUsageFilter(filter GatewayUsageFilter) GatewayUsageFilter {
 	if len(filter.KeyIDs) == 0 && filter.KeyID > 0 {
 		filter.KeyIDs = []int{filter.KeyID}
 	}
+	filter.ClientType = NormalizeGatewayClientType(filter.ClientType)
 	filter.SessionID = strings.TrimSpace(filter.SessionID)
 	filter.Model = strings.TrimSpace(filter.Model)
 	filter.Endpoint = strings.TrimSpace(filter.Endpoint)

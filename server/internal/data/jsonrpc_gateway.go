@@ -233,6 +233,19 @@ func (d *JsonrpcData) handleGateway(
 			"disabled": disabled,
 		}), nil
 
+	case "key_disable_all":
+		updated, err := d.gatewayUC.DisableAllAPIKeys(ctx)
+		if err != nil {
+			return id, d.mapGatewayError(ctx, err), nil
+		}
+		d.auditGateway(ctx, "api.key_disable_all", "api_key", "all", map[string]any{
+			"updated": updated,
+		})
+		return id, okResult("全部 API key 已禁用", map[string]any{
+			"updated":  updated,
+			"disabled": true,
+		}), nil
+
 	case "usage_list":
 		filter := gatewayUsageFilterFromParams(pm)
 		list, total, err := d.gatewayUC.ListUsageLogs(ctx, filter)
@@ -666,6 +679,7 @@ func gatewayUsageFilterFromParams(pm map[string]any) biz.GatewayUsageFilter {
 		Offset:            getInt(pm, "offset", 0),
 		KeyID:             getInt(pm, "key_id", 0),
 		KeyIDs:            getIntList(pm, "key_ids"),
+		ClientType:        getString(pm, "client_type"),
 		SessionID:         getString(pm, "session_id"),
 		Model:             getString(pm, "model"),
 		ReasoningEffort:   getString(pm, "reasoning_effort"),
@@ -915,6 +929,7 @@ func mapGatewayUsageForRPC(item *biz.GatewayUsageLog) map[string]any {
 		"id":                       item.ID,
 		"api_key_id":               item.APIKeyID,
 		"api_key_prefix":           item.APIKeyPrefix,
+		"client_type":              item.ClientType,
 		"api_key_name":             item.APIKeyName,
 		"session_id":               item.SessionID,
 		"request_id":               item.RequestID,
@@ -1137,6 +1152,9 @@ func mapGatewaySummary(item *biz.GatewayUsageSummary) map[string]any {
 		"backend_requests":         item.BackendRequests,
 		"cli_requests":             item.CLIRequests,
 		"fallback_requests":        item.FallbackRequests,
+		"codex_requests":           item.CodexRequests,
+		"opencode_requests":        item.OpenCodeRequests,
+		"other_client_requests":    item.OtherRequests,
 	}
 	if item.EstimatedCostUSD != nil {
 		data["estimated_cost_usd"] = *item.EstimatedCostUSD
@@ -1171,6 +1189,9 @@ func mapGatewayUsageBucketForRPC(item *biz.GatewayUsageBucket) map[string]any {
 		"backend_requests":         item.BackendRequests,
 		"cli_requests":             item.CLIRequests,
 		"fallback_requests":        item.FallbackRequests,
+		"codex_requests":           item.CodexRequests,
+		"opencode_requests":        item.OpenCodeRequests,
+		"other_client_requests":    item.OtherRequests,
 	}
 	if item.EstimatedCostUSD != nil {
 		data["estimated_cost_usd"] = *item.EstimatedCostUSD
@@ -1205,6 +1226,9 @@ func mapGatewayUsageKeySummaryForRPC(item *biz.GatewayUsageKeySummary) map[strin
 		"backend_requests":         item.BackendRequests,
 		"cli_requests":             item.CLIRequests,
 		"fallback_requests":        item.FallbackRequests,
+		"codex_requests":           item.CodexRequests,
+		"opencode_requests":        item.OpenCodeRequests,
+		"other_client_requests":    item.OtherRequests,
 	}
 	if item.EstimatedCostUSD != nil {
 		data["estimated_cost_usd"] = *item.EstimatedCostUSD
@@ -1239,6 +1263,9 @@ func mapGatewayUsageSessionSummaryForRPC(item *biz.GatewayUsageSessionSummary) m
 		"backend_requests":         item.BackendRequests,
 		"cli_requests":             item.CLIRequests,
 		"fallback_requests":        item.FallbackRequests,
+		"codex_requests":           item.CodexRequests,
+		"opencode_requests":        item.OpenCodeRequests,
+		"other_client_requests":    item.OtherRequests,
 		"first_seen_at":            item.FirstSeenAt.Unix(),
 		"last_seen_at":             item.LastSeenAt.Unix(),
 		"context_compaction_count": item.ContextCompactionCount,

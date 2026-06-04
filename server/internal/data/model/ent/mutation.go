@@ -10271,6 +10271,7 @@ type GatewayUsageLogMutation struct {
 	api_key_id               *int
 	addapi_key_id            *int
 	api_key_prefix           *string
+	client_type              *string
 	session_id               *string
 	request_id               *string
 	method                   *string
@@ -10513,6 +10514,42 @@ func (m *GatewayUsageLogMutation) OldAPIKeyPrefix(ctx context.Context) (v string
 // ResetAPIKeyPrefix resets all changes to the "api_key_prefix" field.
 func (m *GatewayUsageLogMutation) ResetAPIKeyPrefix() {
 	m.api_key_prefix = nil
+}
+
+// SetClientType sets the "client_type" field.
+func (m *GatewayUsageLogMutation) SetClientType(s string) {
+	m.client_type = &s
+}
+
+// ClientType returns the value of the "client_type" field in the mutation.
+func (m *GatewayUsageLogMutation) ClientType() (r string, exists bool) {
+	v := m.client_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClientType returns the old "client_type" field's value of the GatewayUsageLog entity.
+// If the GatewayUsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayUsageLogMutation) OldClientType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClientType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClientType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClientType: %w", err)
+	}
+	return oldValue.ClientType, nil
+}
+
+// ResetClientType resets all changes to the "client_type" field.
+func (m *GatewayUsageLogMutation) ResetClientType() {
+	m.client_type = nil
 }
 
 // SetSessionID sets the "session_id" field.
@@ -11642,12 +11679,15 @@ func (m *GatewayUsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GatewayUsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 27)
+	fields := make([]string, 0, 28)
 	if m.api_key_id != nil {
 		fields = append(fields, gatewayusagelog.FieldAPIKeyID)
 	}
 	if m.api_key_prefix != nil {
 		fields = append(fields, gatewayusagelog.FieldAPIKeyPrefix)
+	}
+	if m.client_type != nil {
+		fields = append(fields, gatewayusagelog.FieldClientType)
 	}
 	if m.session_id != nil {
 		fields = append(fields, gatewayusagelog.FieldSessionID)
@@ -11736,6 +11776,8 @@ func (m *GatewayUsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.APIKeyID()
 	case gatewayusagelog.FieldAPIKeyPrefix:
 		return m.APIKeyPrefix()
+	case gatewayusagelog.FieldClientType:
+		return m.ClientType()
 	case gatewayusagelog.FieldSessionID:
 		return m.SessionID()
 	case gatewayusagelog.FieldRequestID:
@@ -11799,6 +11841,8 @@ func (m *GatewayUsageLogMutation) OldField(ctx context.Context, name string) (en
 		return m.OldAPIKeyID(ctx)
 	case gatewayusagelog.FieldAPIKeyPrefix:
 		return m.OldAPIKeyPrefix(ctx)
+	case gatewayusagelog.FieldClientType:
+		return m.OldClientType(ctx)
 	case gatewayusagelog.FieldSessionID:
 		return m.OldSessionID(ctx)
 	case gatewayusagelog.FieldRequestID:
@@ -11871,6 +11915,13 @@ func (m *GatewayUsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAPIKeyPrefix(v)
+		return nil
+	case gatewayusagelog.FieldClientType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClientType(v)
 		return nil
 	case gatewayusagelog.FieldSessionID:
 		v, ok := value.(string)
@@ -12239,6 +12290,9 @@ func (m *GatewayUsageLogMutation) ResetField(name string) error {
 		return nil
 	case gatewayusagelog.FieldAPIKeyPrefix:
 		m.ResetAPIKeyPrefix()
+		return nil
+	case gatewayusagelog.FieldClientType:
+		m.ResetClientType()
 		return nil
 	case gatewayusagelog.FieldSessionID:
 		m.ResetSessionID()

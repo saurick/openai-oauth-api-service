@@ -20,6 +20,9 @@ func (GatewayUsageLog) Fields() []ent.Field {
 		field.String("api_key_prefix").
 			Default("").
 			MaxLen(16),
+		field.String("client_type").
+			Default("other").
+			MaxLen(32),
 		field.String("session_id").
 			Default("").
 			MaxLen(128),
@@ -89,6 +92,7 @@ func (GatewayUsageLog) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("created_at"),
 		index.Fields("api_key_id", "created_at"),
+		index.Fields("client_type", "created_at"),
 		index.Fields("session_id", "created_at"),
 		index.Fields("model", "created_at"),
 		index.Fields("reasoning_effort", "created_at"),

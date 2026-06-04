@@ -114,6 +114,8 @@ type openAIGatewayHandler struct {
 	dataCfg   *conf.Data
 }
 
+type gatewayClientTypeContextKey struct{}
+
 func newOpenAIGatewayHandler(log *log.Helper, gatewayUC *biz.GatewayUsecase, dataCfg *conf.Data) *openAIGatewayHandler {
 	return &openAIGatewayHandler{
 		log:       log,
@@ -128,6 +130,7 @@ func (h *openAIGatewayHandler) ServeHTTP(w stdhttp.ResponseWriter, r *stdhttp.Re
 	if requestID == "" {
 		requestID = traceIDFromContext(r.Context())
 	}
+	r = r.WithContext(context.WithValue(r.Context(), gatewayClientTypeContextKey{}, gatewayClientTypeFromRequest(r)))
 
 	key, authErr := h.authenticate(r)
 	if authErr != nil {
@@ -2764,6 +2767,9 @@ func (h *openAIGatewayHandler) recordUsage(ctx context.Context, key *biz.Gateway
 	if item == nil || h.gatewayUC == nil {
 		return
 	}
+	if item.ClientType == "" {
+		item.ClientType = gatewayClientTypeFromContext(ctx)
+	}
 	writeCtx, cancel := context.WithTimeout(context.Background(), gatewayUsageWriteTimeout)
 	defer cancel()
 	if err := h.gatewayUC.CreateUsageLog(writeCtx, item); err != nil && h.log != nil {
@@ -2898,6 +2904,26 @@ func sessionIDFromHeaders(r *stdhttp.Request) string {
 		}
 	}
 	return ""
+}
+
+func gatewayClientTypeFromRequest(r *stdhttp.Request) string {
+	if r == nil {
+		return biz.GatewayClientTypeOther
+	}
+	return biz.DetectGatewayClientType(
+		r.Header.Get("X-Client-Type"),
+		r.Header.Get("X-Client-Name"),
+		r.Header.Get("X-App-Name"),
+		r.Header.Get("User-Agent"),
+	)
+}
+
+func gatewayClientTypeFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return biz.GatewayClientTypeOther
+	}
+	value, _ := ctx.Value(gatewayClientTypeContextKey{}).(string)
+	return biz.DetectGatewayClientType(value)
 }
 
 func normalizeGatewaySessionID(value string) string {

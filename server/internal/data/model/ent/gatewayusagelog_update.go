@@ -68,6 +68,20 @@ func (_u *GatewayUsageLogUpdate) SetNillableAPIKeyPrefix(v *string) *GatewayUsag
 	return _u
 }
 
+// SetClientType sets the "client_type" field.
+func (_u *GatewayUsageLogUpdate) SetClientType(v string) *GatewayUsageLogUpdate {
+	_u.mutation.SetClientType(v)
+	return _u
+}
+
+// SetNillableClientType sets the "client_type" field if the given value is not nil.
+func (_u *GatewayUsageLogUpdate) SetNillableClientType(v *string) *GatewayUsageLogUpdate {
+	if v != nil {
+		_u.SetClientType(*v)
+	}
+	return _u
+}
+
 // SetSessionID sets the "session_id" field.
 func (_u *GatewayUsageLogUpdate) SetSessionID(v string) *GatewayUsageLogUpdate {
 	_u.mutation.SetSessionID(v)
@@ -504,6 +518,11 @@ func (_u *GatewayUsageLogUpdate) check() error {
 			return &ValidationError{Name: "api_key_prefix", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.api_key_prefix": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ClientType(); ok {
+		if err := gatewayusagelog.ClientTypeValidator(v); err != nil {
+			return &ValidationError{Name: "client_type", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.client_type": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.SessionID(); ok {
 		if err := gatewayusagelog.SessionIDValidator(v); err != nil {
 			return &ValidationError{Name: "session_id", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.session_id": %w`, err)}
@@ -585,6 +604,9 @@ func (_u *GatewayUsageLogUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.APIKeyPrefix(); ok {
 		_spec.SetField(gatewayusagelog.FieldAPIKeyPrefix, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ClientType(); ok {
+		_spec.SetField(gatewayusagelog.FieldClientType, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.SessionID(); ok {
 		_spec.SetField(gatewayusagelog.FieldSessionID, field.TypeString, value)
@@ -745,6 +767,20 @@ func (_u *GatewayUsageLogUpdateOne) SetAPIKeyPrefix(v string) *GatewayUsageLogUp
 func (_u *GatewayUsageLogUpdateOne) SetNillableAPIKeyPrefix(v *string) *GatewayUsageLogUpdateOne {
 	if v != nil {
 		_u.SetAPIKeyPrefix(*v)
+	}
+	return _u
+}
+
+// SetClientType sets the "client_type" field.
+func (_u *GatewayUsageLogUpdateOne) SetClientType(v string) *GatewayUsageLogUpdateOne {
+	_u.mutation.SetClientType(v)
+	return _u
+}
+
+// SetNillableClientType sets the "client_type" field if the given value is not nil.
+func (_u *GatewayUsageLogUpdateOne) SetNillableClientType(v *string) *GatewayUsageLogUpdateOne {
+	if v != nil {
+		_u.SetClientType(*v)
 	}
 	return _u
 }
@@ -1198,6 +1234,11 @@ func (_u *GatewayUsageLogUpdateOne) check() error {
 			return &ValidationError{Name: "api_key_prefix", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.api_key_prefix": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ClientType(); ok {
+		if err := gatewayusagelog.ClientTypeValidator(v); err != nil {
+			return &ValidationError{Name: "client_type", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.client_type": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.SessionID(); ok {
 		if err := gatewayusagelog.SessionIDValidator(v); err != nil {
 			return &ValidationError{Name: "session_id", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.session_id": %w`, err)}
@@ -1296,6 +1337,9 @@ func (_u *GatewayUsageLogUpdateOne) sqlSave(ctx context.Context) (_node *Gateway
 	}
 	if value, ok := _u.mutation.APIKeyPrefix(); ok {
 		_spec.SetField(gatewayusagelog.FieldAPIKeyPrefix, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ClientType(); ok {
+		_spec.SetField(gatewayusagelog.FieldClientType, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.SessionID(); ok {
 		_spec.SetField(gatewayusagelog.FieldSessionID, field.TypeString, value)

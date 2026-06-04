@@ -53,6 +53,7 @@ HTTP 路由：
 - `key_reset_secret`
 - `key_delete`
 - `key_set_disabled`
+- `key_disable_all`
 - `gateway_upstream_get`
 - `gateway_upstream_set`
 - `usage_list`
@@ -79,7 +80,7 @@ HTTP 路由：
 - `user_usage_summary`
 - `user_usage_list`
 
-用途：管理员管理下游 API key、组织用户归属、key+model 策略、key 级上游策略覆盖、key 级默认推理档位、固定官方模型列表启停、模型级上下文压缩策略、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；若创建参数 `name` 非空，备注必须只包含字母和数字，并会生成 `ogw_<name>_<random>` 形式的明文 key。管理员 `api.key_list` / `api.key_update` 返回完整 `plain_key` 供后台展示和复制；普通组织用户接口不返回完整明文。`api.key_update` 只保存备注、额度、模型权限、上游策略、默认推理档位和禁用状态，不会重新生成 key；key 泄密或需要轮换时调用 `api.key_reset_secret` 单独重置。鉴权继续使用 `key_hash`，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
+用途：管理员管理下游 API key、组织用户归属、key+model 策略、key 级上游策略覆盖、key 级默认推理档位、固定官方模型列表启停、模型级上下文压缩策略、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；若创建参数 `name` 非空，备注必须只包含字母和数字，并会生成 `ogw_<name>_<random>` 形式的明文 key。管理员 `api.key_list` / `api.key_update` 返回完整 `plain_key` 供后台展示和复制；普通组织用户接口不返回完整明文。`api.key_update` 只保存备注、额度、模型权限、上游策略、默认推理档位和禁用状态，不会重新生成 key；key 泄密或需要轮换时调用 `api.key_reset_secret` 单独重置。额度紧张或需要临时停服时，管理员可调用 `api.key_disable_all` 一次性禁用所有当前启用的下游 key；该操作不删除 key、不改历史 usage，可后续逐个重新启用。鉴权继续使用 `key_hash`，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
 
 模型目录以服务端代码中的官方 Codex 列表为真源，管理端只允许读取、启停和调整上下文压缩策略；`model_upsert` / `model_delete` 不作为正式管理接口开放。`api.model_context_update` 支持按模型保存 `context_window_tokens`、`context_compact_tokens`、`context_hard_tokens`、`context_compact_bytes`、`context_hard_bytes` 和 `context_keep_items`，阈值字段可传整数或 `260K` / `0.38M` 这类字符串，`K=1000`、`M=1000000`；`0` 表示使用服务端推荐 / 运维覆盖值；保存后仅影响后续请求，不改写历史 usage。内置推荐按 Codex 使用体验控制在 `400K` 上下文窗口内，默认 `260K` 开始压缩、`380K` 硬拦截，避免默认进入 API long-context 高消耗区间。
 
@@ -90,7 +91,7 @@ HTTP 管理导出：
 - `GET /admin/exports/usage.csv`
 - `GET /admin/exports/usage.json`
 
-导出要求管理员登录态，筛选条件与 `api.usage_list` 保持一致：时间范围、key、模型、reasoning_effort、endpoint、success、status_code、upstream_mode、error_type。导出行包含 `api_key_name` 和 `reasoning_effort`，API 凭据备注按当前 key 表回补；凭据已删除时为空。导出会写审计日志。
+导出要求管理员登录态，筛选条件与 `api.usage_list` 保持一致：时间范围、key、模型、reasoning_effort、endpoint、success、status_code、upstream_mode、client_type、error_type。导出行包含 `api_key_name`、`reasoning_effort` 和 `client_type`，API 凭据备注按当前 key 表回补；凭据已删除时为空。导出会写审计日志。
 
 ## OpenAI 兼容入口
 
@@ -108,7 +109,8 @@ HTTP 路由：
 usage 记录：
 
 - 成功和失败请求都会记录 usage log
-- 默认记录 endpoint、model、最终生效的 reasoning_effort、可选 session_id、HTTP 状态、耗时、请求/响应字节数和 token usage；请求未传且后台没有覆盖档位、或历史旧数据保持空值，不按 token 反推
+- 默认记录 endpoint、model、最终生效的 reasoning_effort、客户端类型、可选 session_id、HTTP 状态、耗时、请求/响应字节数和 token usage；请求未传且后台没有覆盖档位、或历史旧数据保持空值，不按 token 反推
+- 客户端类型字段为 `client_type`，只归类为 `codex`、`opencode` 和 `other`。网关优先读取 `X-Client-Type`、`X-Client-Name`、`X-App-Name`，再从 `User-Agent` 识别 Codex / OpenCode；无法识别或历史旧数据默认归 `other`。
 - 上游策略可在管理后台「上游策略」页通过 `api.gateway_upstream_get` / `api.gateway_upstream_set` 读取和切换全局默认；同页也可设置全局推理档位开关，默认关闭。单个 API key 可通过 `upstream_strategy` 覆盖全局上游策略，空值表示继承全局；也可通过 `default_reasoning_effort` 继承全局、关闭覆盖或覆盖为 `low`、`medium`、`high`、`xhigh`。未保存运行时设置时，默认 Backend 直连且不覆盖 reasoning effort。`codex_backend` 会直接请求 Codex backend `/responses`，backend 失败时默认直接返回上游错误；只有显式选择 Backend + CLI 兜底策略时，纯文本 / 图片请求才允许 fallback 到 `codex_cli`。带工具调用、工具历史或文件输入的 backend-only 请求始终不会 fallback 到 CLI；显式切到强制 CLI 时只走 CLI。
 - `codex_cli` 模式 token 优先读取 Codex JSON 事件里的 usage，没有事件时才退回字符数估算；`codex_backend` 模式优先读取 Responses SSE `response.completed.usage`
 - usage log 会记录 `upstream_configured_mode`、`upstream_mode`、`upstream_fallback`、细分 `upstream_error_type` 和统一 `error_type`，用于区分配置模式、实际执行模式、fallback 情况和最终失败类型；后台表格按 `error_type` 保留原始错误码并展示简短中文说明，完整含义见下方“错误类型”。聚合统计中的 `failed_requests` 表示服务 / 上游 / 网关错误数，默认不包含 `client_canceled`；客户端主动断开以 `client_canceled_requests` 单独返回。
@@ -310,6 +312,7 @@ HTTP 路由：
 - `items[].api_key_id`
 - `items[].api_key_name`
 - `items[].api_key_prefix`
+- `items[].client_type`
 - `items[].reasoning_effort`
 - `items[].upstream_mode`
 - `items[].upstream_fallback`
@@ -329,10 +332,13 @@ HTTP 路由：
 - `summary.backend_requests`
 - `summary.cli_requests`
 - `summary.fallback_requests`
+- `summary.codex_requests`
+- `summary.opencode_requests`
+- `summary.other_client_requests`
 - `summary.average_duration_ms`
 - `summary.estimated_cost_usd`
 
-筛选条件支持 `key_id` 单凭据兼容参数、`key_ids` 多凭据数组或逗号分隔值、`reasoning_effort=low|medium|high|xhigh`、`status_code`、`upstream_mode=codex_backend|codex_cli`、`error_type` 和 `exclude_error_type`。未传时不按对应维度过滤；同时传 `key_ids` 与 `key_id` 时优先按 `key_ids` 过滤。`upstream_error_type` 仍保留兼容，但前端“错误 / 中断类型”筛选使用 `error_type`，可覆盖客户端取消、上下文超限、网关预检和上游失败等统一错误码；异常请求视图默认传 `exclude_error_type=client_canceled`，避免把 HTTP 499 计入服务错误排查。
+筛选条件支持 `key_id` 单凭据兼容参数、`key_ids` 多凭据数组或逗号分隔值、`reasoning_effort=low|medium|high|xhigh`、`status_code`、`upstream_mode=codex_backend|codex_cli`、`client_type=codex|opencode|other`、`error_type` 和 `exclude_error_type`。未传时不按对应维度过滤；同时传 `key_ids` 与 `key_id` 时优先按 `key_ids` 过滤。`upstream_error_type` 仍保留兼容，但前端“错误 / 中断类型”筛选使用 `error_type`，可覆盖客户端取消、上下文超限、网关预检和上游失败等统一错误码；异常请求视图默认传 `exclude_error_type=client_canceled`，避免把 HTTP 499 计入服务错误排查。
 
 ### `api.usage_buckets`
 
@@ -354,6 +360,9 @@ HTTP 路由：
 - `items[].backend_requests`
 - `items[].cli_requests`
 - `items[].fallback_requests`
+- `items[].codex_requests`
+- `items[].opencode_requests`
+- `items[].other_client_requests`
 - `items[].estimated_cost_usd`
 
 当前支持 `group_by=day` 和 `group_by=day_model`。`day_model` 会按日期 + 模型拆分聚合，前端可点击详情后用同一天的 `start_time/end_time` 和 `model` 调用 `api.usage_list` 下钻请求明细。费用估算优先读取数据库模型价格覆盖值，未配置时回落到服务端内置 OpenAI Codex 模型价格表；仍无价格时返回 `null`，前端显示“未配置价格”。reasoning tokens 作为输出 tokens 子集展示，不重复计费。
@@ -379,10 +388,13 @@ HTTP 路由：
 - `items[].backend_requests`
 - `items[].cli_requests`
 - `items[].fallback_requests`
+- `items[].codex_requests`
+- `items[].opencode_requests`
+- `items[].other_client_requests`
 - `items[].average_duration_ms`
 - `items[].estimated_cost_usd`
 
-筛选条件与 `api.usage_list` 保持一致，包括 `key_ids` 多凭据过滤。费用估算优先使用数据库价格覆盖值，再回落到内置官方价格表；窗口内存在未配置价格的模型时，对应 key 的 `estimated_cost_usd` 返回 `null`。
+筛选条件与 `api.usage_list` 保持一致，包括 `key_ids` 多凭据过滤和 `client_type` 客户端过滤。费用估算优先使用数据库价格覆盖值，再回落到内置官方价格表；窗口内存在未配置价格的模型时，对应 key 的 `estimated_cost_usd` 返回 `null`。
 
 ### `api.usage_session_summaries`
 
@@ -406,6 +418,9 @@ HTTP 路由：
 - `items[].backend_requests`
 - `items[].cli_requests`
 - `items[].fallback_requests`
+- `items[].codex_requests`
+- `items[].opencode_requests`
+- `items[].other_client_requests`
 - `items[].average_duration_ms`
 - `items[].first_seen_at`
 - `items[].last_seen_at`
@@ -418,7 +433,7 @@ HTTP 路由：
 - `items[].context_compacted_tokens`
 - `items[].context_compacted_at`
 
-筛选条件与 `api.usage_list` 保持一致，包括 `key_ids` 多凭据过滤，并支持用 `session_id` 继续下钻请求级明细。`session_id` 来自客户端请求头 `X-Session-ID` / `X-Conversation-ID` / `X-Thread-ID`，或请求 JSON 顶层及 `metadata` 里的 `session_id` / `conversation_id` / `thread_id`。没有会话标识的历史记录不会伪造成会话聚合行。
+筛选条件与 `api.usage_list` 保持一致，包括 `key_ids` 多凭据过滤和 `client_type` 客户端过滤，并支持用 `session_id` 继续下钻请求级明细。`session_id` 来自客户端请求头 `X-Session-ID` / `X-Conversation-ID` / `X-Thread-ID`，或请求 JSON 顶层及 `metadata` 里的 `session_id` / `conversation_id` / `thread_id`。没有会话标识的历史记录不会伪造成会话聚合行。
 
 ### `api.official_model_price_list`
 

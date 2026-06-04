@@ -100,6 +100,7 @@ func TestGatewayUsageFilterFromParamsSupportsKeyIDs(t *testing.T) {
 		"key_ids":             []any{2, float64(3), "4", 0, "bad"},
 		"error_type":          "client_canceled",
 		"exclude_error_type":  "gateway_error",
+		"client_type":         "opencode",
 		"status_code":         499,
 		"upstream_error_type": "codex_backend_http_5xx",
 	})
@@ -122,6 +123,9 @@ func TestGatewayUsageFilterFromParamsSupportsKeyIDs(t *testing.T) {
 	if filter.ExcludeErrorType != "gateway_error" {
 		t.Fatalf("ExcludeErrorType = %q, want gateway_error", filter.ExcludeErrorType)
 	}
+	if filter.ClientType != "opencode" {
+		t.Fatalf("ClientType = %q, want opencode", filter.ClientType)
+	}
 	if filter.StatusCode != 499 {
 		t.Fatalf("StatusCode = %d, want 499", filter.StatusCode)
 	}
@@ -142,6 +146,9 @@ func TestMapGatewayUsageBucketForRPCIsStructCompatible(t *testing.T) {
 		ReasoningTokens:   20,
 		TotalBytesIn:      1024,
 		TotalBytesOut:     2048,
+		CodexRequests:     7,
+		OpenCodeRequests:  3,
+		OtherRequests:     2,
 		AverageDurationMS: 818,
 	}
 
@@ -161,6 +168,11 @@ func TestMapGatewayUsageBucketForRPCIsStructCompatible(t *testing.T) {
 	if got["cached_tokens"] != float64(40) || got["reasoning_tokens"] != float64(20) {
 		t.Fatalf("unexpected token fields: %#v", got)
 	}
+	if got["codex_requests"] != float64(7) ||
+		got["opencode_requests"] != float64(3) ||
+		got["other_client_requests"] != float64(2) {
+		t.Fatalf("unexpected client fields: %#v", got)
+	}
 }
 
 func TestMapGatewayUsageKeySummaryForRPCIsStructCompatible(t *testing.T) {
@@ -177,6 +189,9 @@ func TestMapGatewayUsageKeySummaryForRPCIsStructCompatible(t *testing.T) {
 		OutputTokens:      250,
 		CachedTokens:      120,
 		ReasoningTokens:   50,
+		CodexRequests:     4,
+		OpenCodeRequests:  2,
+		OtherRequests:     1,
 		AverageDurationMS: 321,
 		EstimatedCostUSD:  &cost,
 	}
@@ -194,6 +209,11 @@ func TestMapGatewayUsageKeySummaryForRPCIsStructCompatible(t *testing.T) {
 	if got["estimated_cost_usd"] != cost {
 		t.Fatalf("estimated_cost_usd = %#v, want %v", got["estimated_cost_usd"], cost)
 	}
+	if got["codex_requests"] != float64(4) ||
+		got["opencode_requests"] != float64(2) ||
+		got["other_client_requests"] != float64(1) {
+		t.Fatalf("unexpected client fields: %#v", got)
+	}
 }
 
 func TestMapGatewayUsageForRPCIncludesKeyName(t *testing.T) {
@@ -202,6 +222,7 @@ func TestMapGatewayUsageForRPCIncludesKeyName(t *testing.T) {
 		APIKeyID:        3,
 		APIKeyPrefix:    "ogw_test",
 		APIKeyName:      "production",
+		ClientType:      "codex",
 		ReasoningEffort: "high",
 		Diagnostic: biz.GatewayUsageDiagnostic{
 			RequestBytes:          4096,
@@ -231,6 +252,7 @@ func TestMapGatewayUsageForRPCIncludesKeyName(t *testing.T) {
 	if got["api_key_id"] != float64(3) ||
 		got["api_key_prefix"] != "ogw_test" ||
 		got["api_key_name"] != "production" ||
+		got["client_type"] != "codex" ||
 		got["reasoning_effort"] != "high" {
 		t.Fatalf("unexpected key fields: %#v", got)
 	}
@@ -264,6 +286,9 @@ func TestMapGatewayUsageSessionSummaryForRPCIsStructCompatible(t *testing.T) {
 		OutputTokens:      300,
 		CachedTokens:      100,
 		ReasoningTokens:   50,
+		CodexRequests:     2,
+		OpenCodeRequests:  1,
+		OtherRequests:     1,
 		AverageDurationMS: 456,
 		FirstSeenAt:       first,
 		LastSeenAt:        last,
@@ -285,6 +310,11 @@ func TestMapGatewayUsageSessionSummaryForRPCIsStructCompatible(t *testing.T) {
 	if got["first_seen_at"] != float64(first.Unix()) ||
 		got["last_seen_at"] != float64(last.Unix()) {
 		t.Fatalf("unexpected time fields: %#v", got)
+	}
+	if got["codex_requests"] != float64(2) ||
+		got["opencode_requests"] != float64(1) ||
+		got["other_client_requests"] != float64(1) {
+		t.Fatalf("unexpected client fields: %#v", got)
 	}
 }
 

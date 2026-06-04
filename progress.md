@@ -2,6 +2,34 @@
 - 2026-05-10 之前历史流水：`docs/archive/progress-2026-05-10-pre-docker-cleanup-constraint.md`。
 - 当前文件保留 2026-05-10 以来新增记录；归档文件只作追溯线索，不作为当前正式需求真源。
 
+## 2026-06-04 usage 客户端类型统计
+- 完成：`gateway_usage_logs` 新增 `client_type`，网关按 `X-Client-Type`、`X-Client-Name`、`X-App-Name` 和 `User-Agent` 识别并归类为 `codex`、`opencode`、`other`；创建 usage 时兜底为 `other`，不保存更细的客户端指纹。
+- 数据/API：已生成 Ent 代码与 Atlas migration `20260604051355_migrate.sql`；`api.usage_list`、`usage_buckets`、`usage_key_summaries`、`usage_session_summaries`、CSV/JSON 导出均支持 `client_type` 字段或筛选，并返回 Codex / OpenCode / 其他请求数。
+- 前端：`/admin-usage` 新增“调用客户端”筛选、调用明细客户端列、汇总卡“客户端分布”，每日模型和会话聚合表展示 Codex / OpenCode / 其他分布；`style:l1` mock 和断言已覆盖客户端筛选入参和桌面 / 移动 usage 视图。
+- 文档：同步更新 `docs/architecture.md`、`server/docs/api.md` 和 `web/README.md` 的 usage 记录、API 字段、导出字段和后台展示口径。
+- 验证通过：`cd server && go test ./internal/biz ./internal/data ./internal/server`、`cd server && go test ./...`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4382 NODE_USE_ENV_PROXY=0 STYLE_L1_SCENARIOS=admin-usage-desktop,admin-usage-mobile pnpm style:l1`。
+- 风险：历史 usage 在 migration 后默认归 `other`，不会反推旧请求真实客户端；后续客户端若不带可识别 header / User-Agent 也会归 `other`。本轮只完成本地代码与迁移文件，生产数据库仍需发布时执行 Atlas migration。
+
+## 2026-06-04 业务看板折线点位对齐
+- 修复：业务看板 30 天趋势折线图的可见圆点改为和 SVG 折线共用同一绘图区坐标，折线模式下 grid hit area 改为无间隙列，避免圆点按列中心、折线按边缘插值导致部分点位偏离线段。
+- 验证补充：`style:l1` 的看板折线回归新增圆点中心与 polyline 折点坐标偏差断言，并继续覆盖折线绘图区不溢出、Token 指标 hover 明细和桌面 / 移动端看板。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && STYLE_L1_SCENARIOS=admin-dashboard-desktop,admin-dashboard-mobile NODE_USE_ENV_PROXY=0 pnpm style:l1`。
+- 风险：本轮只修复前端折线坐标与视觉点位，不修改 usage 聚合、指标计算、tooltip 文案或线上数据。
+
+## 2026-06-04 每日模型默认窗口
+- 现场判断：线上「每日模型」只有 3 组，是因为该 tab 复用了用量日志默认 `24h` 时间范围；截图中的 `6/4 gpt-5.5`、`6/4 gpt-5.4-mini`、`6/3 gpt-5.5` 正好是最近 24 小时跨两天的日期 + 模型组合。后端 `usage_buckets group_by=day_model` 本身按当前筛选窗口返回全部组合，不是 SQL 只取 3 条。
+- 完成：切换到「每日模型」时，若用户尚未手动调整时间范围，默认改为 `30d`；切回其它 usage tab 时恢复 `24h` 排障默认。若用户手动选择了时间范围，则后续遵循当前筛选，不强制覆盖。每日模型说明同步展示当前窗口，避免误读。
+- 文档：同步更新 `web/README.md` 的每日模型默认窗口口径。
+- 验证通过：`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs && pnpm test`、`cd web && pnpm build`、`cd web && STYLE_L1_SCENARIOS=admin-usage-desktop,admin-usage-mobile NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check`。Browser 打开本地 `/admin-usage` 后确认默认明细仍是 `24h`，切到「每日模型」后页面显示 `当前 30 天 窗口` 且 mock 表格展示 12 组；Browser 截图通道两次 `Page.captureScreenshot` 超时，未取得截图。
+- 剩余：本轮不改后端聚合 SQL 和 usage 数据；线上需要部署前端构建产物后才会生效。
+
+## 2026-06-04 全站禁用 API key
+- 完成：新增管理员 RPC `api.key_disable_all`，一次性把当前未禁用的下游 API key 置为禁用并返回实际变更数量；该操作不删除 key、不改历史 usage，也不生成新密钥。
+- 前端：`/admin-keys` 新增「禁用全部 key」危险按钮，使用现有站内确认弹窗，文案明确这是全站操作，不限于当前页、筛选或选中项；确认后刷新列表并清空已选。
+- 文档：同步更新 `server/docs/api.md` 与 `web/README.md` 的 key 管理口径。
+- 验证通过：`cd server && go test -count=1 ./...`、`cd server && make build`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && STYLE_L1_PORT=4382 NODE_USE_ENV_PROXY=0 STYLE_L1_SCENARIOS=admin-keys-desktop,admin-keys-mobile pnpm style:l1`、`cd server && atlas migrate validate --dir "file://internal/data/model/migrate"`、`cd web && pnpm build`、`git diff --check`。
+- 风险：本轮只新增管理员手动全站禁用入口；没有做自动余额阈值触发、定时恢复或部署。
+
 ## 2026-05-31 默认推理档位开关
 - 完成：新增全局推理档位运行时设置，默认关闭；后台「上游策略」页可切换关闭 / Fast / Medium / High / Deep。单个 API 凭据新增默认推理档位，支持继承全局、关闭覆盖或覆盖为 `low` / `medium` / `high` / `xhigh`。最终生效顺序为 key 覆盖档位、全局覆盖档位、客户端请求档位；key 级 `none` 会阻止全局覆盖生效。
 - 数据：`gateway_api_keys` 新增 `default_reasoning_effort` 字段，已生成 Ent 代码与 Atlas migration `20260531143157_migrate.sql`。全局默认值继续走 gateway settings，不新增环境变量。

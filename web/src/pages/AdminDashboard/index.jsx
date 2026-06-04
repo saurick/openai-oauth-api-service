@@ -437,7 +437,7 @@ function UsageTrendChart({ buckets, chartType, metric }) {
   const hasData = values.some((value) => value > 0)
   const isLineChart = chartType === 'line'
   const linePoints = values.map((value, index) => ({
-    x: buckets.length <= 1 ? 50 : (index / (buckets.length - 1)) * 100,
+    x: buckets.length <= 1 ? 50 : ((index + 0.5) / buckets.length) * 100,
     y: 96 - (value / maxValue) * 88,
   }))
   const linePointText = linePoints
@@ -454,7 +454,9 @@ function UsageTrendChart({ buckets, chartType, metric }) {
   return (
     <div className="min-w-0">
       <div
-        className="relative grid h-64 items-end gap-1 rounded-lg bg-[#f7faf8] px-3 pb-8 pt-4"
+        className={`relative grid h-64 items-end rounded-lg bg-[#f7faf8] px-3 pb-8 pt-4 ${
+          isLineChart ? 'gap-0' : 'gap-1'
+        }`}
         data-trend-chart=""
         onMouseLeave={() => setActiveIndex(null)}
         style={{
@@ -483,6 +485,21 @@ function UsageTrendChart({ buckets, chartType, metric }) {
                 vectorEffect="non-scaling-stroke"
               />
             </svg>
+            {linePoints.map((point, index) => (
+              <span
+                key={`point-${buckets[index]?.bucket_start ?? index}`}
+                aria-hidden="true"
+                className={`absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(20,52,35,0.18)] transition-transform ${
+                  activeIndex === index ? 'scale-125' : ''
+                }`}
+                data-trend-point=""
+                style={{
+                  backgroundColor: metricConfig.color,
+                  left: `${point.x}%`,
+                  top: `${point.y}%`,
+                }}
+              />
+            ))}
           </div>
         ) : null}
         {activeBucket ? (
@@ -531,16 +548,7 @@ function UsageTrendChart({ buckets, chartType, metric }) {
               title={`${fmtShortDate(item.bucket_start)} ${metricConfig.label} ${fmtTrendValue(metricConfig.key, metricValue)}`}
             >
               <div className="relative flex h-full w-full max-w-6 items-end">
-                {isLineChart ? (
-                  <span
-                    className="absolute left-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(20,52,35,0.18)] transition-transform group-hover:scale-125 group-focus-visible:scale-125"
-                    data-trend-point=""
-                    style={{
-                      backgroundColor: metricConfig.color,
-                      top: `${linePoints[index]?.y ?? 96}%`,
-                    }}
-                  />
-                ) : (
+                {!isLineChart ? (
                   <div
                     className="w-full rounded-t transition-[filter,opacity] group-hover:brightness-110 group-focus-visible:brightness-110"
                     style={{
@@ -549,7 +557,7 @@ function UsageTrendChart({ buckets, chartType, metric }) {
                       opacity: metricValue > 0 ? 1 : 0.28,
                     }}
                   />
-                )}
+                ) : null}
               </div>
             </button>
           )

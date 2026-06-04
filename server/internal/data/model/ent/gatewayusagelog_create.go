@@ -48,6 +48,20 @@ func (_c *GatewayUsageLogCreate) SetNillableAPIKeyPrefix(v *string) *GatewayUsag
 	return _c
 }
 
+// SetClientType sets the "client_type" field.
+func (_c *GatewayUsageLogCreate) SetClientType(v string) *GatewayUsageLogCreate {
+	_c.mutation.SetClientType(v)
+	return _c
+}
+
+// SetNillableClientType sets the "client_type" field if the given value is not nil.
+func (_c *GatewayUsageLogCreate) SetNillableClientType(v *string) *GatewayUsageLogCreate {
+	if v != nil {
+		_c.SetClientType(*v)
+	}
+	return _c
+}
+
 // SetSessionID sets the "session_id" field.
 func (_c *GatewayUsageLogCreate) SetSessionID(v string) *GatewayUsageLogCreate {
 	_c.mutation.SetSessionID(v)
@@ -413,6 +427,10 @@ func (_c *GatewayUsageLogCreate) defaults() {
 		v := gatewayusagelog.DefaultAPIKeyPrefix
 		_c.mutation.SetAPIKeyPrefix(v)
 	}
+	if _, ok := _c.mutation.ClientType(); !ok {
+		v := gatewayusagelog.DefaultClientType
+		_c.mutation.SetClientType(v)
+	}
 	if _, ok := _c.mutation.SessionID(); !ok {
 		v := gatewayusagelog.DefaultSessionID
 		_c.mutation.SetSessionID(v)
@@ -511,6 +529,14 @@ func (_c *GatewayUsageLogCreate) check() error {
 	if v, ok := _c.mutation.APIKeyPrefix(); ok {
 		if err := gatewayusagelog.APIKeyPrefixValidator(v); err != nil {
 			return &ValidationError{Name: "api_key_prefix", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.api_key_prefix": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ClientType(); !ok {
+		return &ValidationError{Name: "client_type", err: errors.New(`ent: missing required field "GatewayUsageLog.client_type"`)}
+	}
+	if v, ok := _c.mutation.ClientType(); ok {
+		if err := gatewayusagelog.ClientTypeValidator(v); err != nil {
+			return &ValidationError{Name: "client_type", err: fmt.Errorf(`ent: validator failed for field "GatewayUsageLog.client_type": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.SessionID(); !ok {
@@ -673,6 +699,10 @@ func (_c *GatewayUsageLogCreate) createSpec() (*GatewayUsageLog, *sqlgraph.Creat
 	if value, ok := _c.mutation.APIKeyPrefix(); ok {
 		_spec.SetField(gatewayusagelog.FieldAPIKeyPrefix, field.TypeString, value)
 		_node.APIKeyPrefix = value
+	}
+	if value, ok := _c.mutation.ClientType(); ok {
+		_spec.SetField(gatewayusagelog.FieldClientType, field.TypeString, value)
+		_node.ClientType = value
 	}
 	if value, ok := _c.mutation.SessionID(); ok {
 		_spec.SetField(gatewayusagelog.FieldSessionID, field.TypeString, value)

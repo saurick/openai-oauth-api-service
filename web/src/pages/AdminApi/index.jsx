@@ -164,6 +164,12 @@ const USAGE_UPSTREAM_FILTER_OPTIONS = [
   { label: '全部上游', value: '' },
   ...CODEX_UPSTREAM_MODE_OPTIONS,
 ]
+const USAGE_CLIENT_TYPE_OPTIONS = [
+  { label: '全部客户端', value: '' },
+  { label: 'Codex', value: 'codex' },
+  { label: 'OpenCode', value: 'opencode' },
+  { label: '其他', value: 'other' },
+]
 const USAGE_ERROR_FILTER_OPTIONS = [
   { label: '全部错误 / 中断类型', value: '' },
   { label: '客户端 / 入口代理取消', value: 'client_canceled' },
@@ -209,6 +215,7 @@ const USAGE_REASONING_EFFORT_FILTER_OPTIONS = [
   ...CODEX_REASONING_EFFORT_OPTIONS,
 ]
 const DEFAULT_USAGE_TIME_RANGE = '24h'
+const DEFAULT_DAILY_USAGE_TIME_RANGE = '30d'
 const USAGE_TIME_RANGE_OPTIONS = [
   { label: '24h', value: '24h', seconds: DAY_SECONDS },
   { label: '7 天', value: '7d', seconds: 7 * DAY_SECONDS },
@@ -307,6 +314,7 @@ const INITIAL_USAGE_FILTERS = {
   success: '',
   statusCode: '',
   upstreamMode: '',
+  clientType: '',
   errorType: '',
   timeRange: DEFAULT_USAGE_TIME_RANGE,
 }
@@ -476,6 +484,13 @@ function upstreamModeLabel(value) {
   return item?.label || '未记录'
 }
 
+function clientTypeLabel(value) {
+  const item = USAGE_CLIENT_TYPE_OPTIONS.find(
+    (option) => option.value === String(value || '')
+  )
+  return item?.label || '其他'
+}
+
 function upstreamStrategyLabel(value) {
   const item = KEY_UPSTREAM_STRATEGY_OPTIONS.find(
     (option) => option.value === String(value || '')
@@ -510,6 +525,19 @@ function renderUpstreamStats(item) {
         CLI {fmtNumber(item?.cli_requests)}
         <span className="mx-1 text-[#c0c9c4]">/</span>
         fallback {fmtNumber(item?.fallback_requests)}
+      </div>
+    </div>
+  )
+}
+
+function renderClientStats(item) {
+  return (
+    <div className="text-xs leading-5">
+      <div>Codex {fmtNumber(item?.codex_requests)}</div>
+      <div className="text-[#9aa39e]">
+        OpenCode {fmtNumber(item?.opencode_requests)}
+        <span className="mx-1 text-[#c0c9c4]">/</span>
+        其他 {fmtNumber(item?.other_client_requests)}
       </div>
     </div>
   )
@@ -595,6 +623,25 @@ function usageFiltersForTab(filters, tab) {
         filters.errorType || filters.statusCode === '499'
           ? ''
           : 'client_canceled',
+    }
+  }
+  return filters
+}
+
+function applyUsageTabDefaultTimeRange(filters, tab, timeRangeTouched) {
+  if (timeRangeTouched) {
+    return filters
+  }
+  if (tab === 'daily' && filters.timeRange === DEFAULT_USAGE_TIME_RANGE) {
+    return {
+      ...filters,
+      timeRange: DEFAULT_DAILY_USAGE_TIME_RANGE,
+    }
+  }
+  if (tab !== 'daily' && filters.timeRange === DEFAULT_DAILY_USAGE_TIME_RANGE) {
+    return {
+      ...filters,
+      timeRange: DEFAULT_USAGE_TIME_RANGE,
     }
   }
   return filters
@@ -1461,6 +1508,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const [appliedUsageFilters, setAppliedUsageFilters] = useState(
     INITIAL_USAGE_FILTERS
   )
+  const [usageTimeRangeTouched, setUsageTimeRangeTouched] = useState(false)
   const pageKeySelectionRef = useRef(null)
   const selectedKeyIdSet = useMemo(
     () => new Set(selectedKeyIds),
@@ -1610,6 +1658,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     if (filters.success) params.success = filters.success === 'true'
     if (filters.statusCode) params.status_code = asInt(filters.statusCode, 0)
     if (filters.upstreamMode) params.upstream_mode = filters.upstreamMode
+    if (filters.clientType) params.client_type = filters.clientType
     if (filters.errorType) {
       params.error_type = filters.errorType
     }
@@ -2217,6 +2266,32 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     })
   }
 
+  const performDisableAllKeys = async () => {
+    setErrMsg('')
+    setNewKey(null)
+    setNewKeyBatch([])
+    try {
+      await apiRpc.call('key_disable_all')
+      setSelectedKeyIds([])
+      await loadAll()
+    } catch (err) {
+      setErrMsg(getActionErrorMessage(err, '禁用全部 API key'))
+    }
+  }
+
+  const disableAllKeys = () => {
+    if (keyTotal === 0) return
+    const activeCount = keys.filter((item) => !item.disabled).length
+    openConfirmDialog({
+      title: '禁用全部 API key',
+      description: '确认禁用全站所有 API 凭据吗？',
+      detail: `这会立即拦截所有下游客户端调用，不限于当前页或当前筛选；历史调用记录和 key 本身会保留。当前已加载列表里有 ${activeCount} 个启用凭据。`,
+      confirmText: '禁用全部 key',
+      pendingText: '禁用中...',
+      onConfirm: performDisableAllKeys,
+    })
+  }
+
   const selectKeyRow = (keyId) => {
     setSelectedKeyIds((current) => getTableSelectionAfterClick(current, keyId))
   }
@@ -2327,13 +2402,21 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
   const switchUsageTab = (nextTab) => {
     if (nextTab === usageTab) return
+    const nextFilters = applyUsageTabDefaultTimeRange(
+      appliedUsageFilters,
+      nextTab,
+      usageTimeRangeTouched
+    )
     const nextPagination = {
       ...usagePagination,
       current: 1,
     }
     setUsageTab(nextTab)
+    setUsageFilters(nextFilters)
+    setAppliedUsageFilters(nextFilters)
     setUsagePagination(nextPagination)
     loadAll({
+      usageFilterOverride: nextFilters,
       usagePaginationOverride: nextPagination,
       usageTabOverride: nextTab,
     })
@@ -2417,7 +2500,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     <div className={tableWrapClass}>
       <div className="overflow-auto">
         <table
-          className={`${tableClass} ${compact ? 'min-w-[900px]' : 'min-w-[2180px]'}`}
+          className={`${tableClass} ${compact ? 'min-w-[900px]' : 'min-w-[2280px]'}`}
         >
           <thead>
             <tr>
@@ -2428,6 +2511,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               <th className={thClass}>模型</th>
               {!compact ? <th className={thClass}>Effort</th> : null}
               {!compact ? <th className={thClass}>上游</th> : null}
+              {!compact ? <th className={thClass}>客户端</th> : null}
               <th className={thClass}>状态</th>
               <th className={thClass}>
                 <HeaderWithHelp help="总 Token = 输入 Token + 输出 Token；非缓存输入 = 输入 Token - 缓存输入。">
@@ -2522,6 +2606,11 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                       </div>
                     </td>
                   ) : null}
+                  {!compact ? (
+                    <td className={`${tdClass} whitespace-nowrap text-xs`}>
+                      {clientTypeLabel(item.client_type)}
+                    </td>
+                  ) : null}
                   <td className={tdClass}>
                     <StatusBadge
                       active={!!item.success}
@@ -2594,7 +2683,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             ) : (
               <tr>
                 <td
-                  colSpan={compact ? 6 : 15}
+                  colSpan={compact ? 6 : 16}
                   className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                 >
                   {loading ? '加载中...' : '暂无调用记录'}
@@ -2875,6 +2964,14 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 >
                   新建 API 凭据
                 </button>
+                <button
+                  type="button"
+                  onClick={disableAllKeys}
+                  disabled={loading || keyTotal === 0}
+                  className={dangerButtonClass}
+                >
+                  禁用全部 key
+                </button>
               </div>
             </div>
             <div className={selectionRowClass}>
@@ -3096,7 +3193,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   ) : (
                     <tr>
                       <td
-                        colSpan={9}
+                        colSpan={10}
                         className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                       >
                         {hasActiveKeyFilters
@@ -4072,6 +4169,12 @@ export default function AdminApiPage({ view = 'dashboard' }) {
           selectedUsageSession.cli_requests
         )}`,
       ],
+      [
+        'Codex / OpenCode / 其他',
+        `${fmtNumber(selectedUsageSession.codex_requests)} / ${fmtNumber(
+          selectedUsageSession.opencode_requests
+        )} / ${fmtNumber(selectedUsageSession.other_client_requests)}`,
+      ],
       ['Fallback', fmtNumber(selectedUsageSession.fallback_requests)],
       ['输入 Token', fmtNumber(selectedUsageSession.input_tokens)],
       [
@@ -4239,7 +4342,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   }
 
   const renderUsageSummaryCards = () => (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
       <SummaryCard
         label="请求数"
         value={fmtNumber(summary.total_requests)}
@@ -4259,6 +4362,11 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         label="上游分布"
         value={`${fmtNumber(summary.backend_requests)} / ${fmtNumber(summary.cli_requests)}`}
         sub={`${fmtNumber(summary.fallback_requests)} 次 fallback`}
+      />
+      <SummaryCard
+        label="客户端分布"
+        value={`${fmtNumber(summary.codex_requests)} / ${fmtNumber(summary.opencode_requests)}`}
+        sub={`${fmtNumber(summary.other_client_requests)} 次其他客户端`}
       />
       <SummaryCard
         label="服务错误率"
@@ -4342,6 +4450,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
   const renderDailyUsage = () => {
     const rows = [...usageBuckets].reverse()
+    const activeTimeRange = getUsageTimeRange(appliedUsageFilters.timeRange)
 
     return (
       <SurfacePanel variant="admin" className="p-5 sm:p-6">
@@ -4351,7 +4460,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               每日模型汇总
             </h2>
             <div className="mt-1 text-sm text-[#7b8780]">
-              按日期和模型聚合请求、Token、费用估算和服务错误率；点击详情后只在当天该模型的请求内分页。
+              当前 {activeTimeRange.label}{' '}
+              窗口按日期和模型聚合请求、Token、费用估算和服务错误率；点击详情后只在当天该模型的请求内分页。
             </div>
           </div>
           <div className="text-sm text-[#7b8780]">
@@ -4360,13 +4470,14 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         </div>
         <div className={tableWrapClass}>
           <div className="overflow-auto">
-            <table className={`${tableClass} min-w-[1300px]`}>
+            <table className={`${tableClass} min-w-[1420px]`}>
               <thead>
                 <tr>
                   <th className={thClass}>日期</th>
                   <th className={thClass}>模型</th>
                   <th className={thClass}>请求</th>
                   <th className={thClass}>上游</th>
+                  <th className={thClass}>客户端</th>
                   <th className={thClass}>输入 Tokens</th>
                   <th className={thClass}>非缓存输入</th>
                   <th className={thClass}>输出 Tokens</th>
@@ -4408,6 +4519,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                           </div>
                         </td>
                         <td className={tdClass}>{renderUpstreamStats(item)}</td>
+                        <td className={tdClass}>{renderClientStats(item)}</td>
                         <td className={tdClass}>
                           {fmtNumber(item.input_tokens)}
                         </td>
@@ -4449,7 +4561,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 ) : (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={11}
                       className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                     >
                       {loading ? '加载中...' : '暂无每日模型汇总'}
@@ -4479,7 +4591,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
       </div>
       <div className={tableWrapClass}>
         <div className="overflow-auto">
-          <table className={`${tableClass} min-w-[1620px]`}>
+          <table className={`${tableClass} min-w-[1740px]`}>
             <thead>
               <tr>
                 <th className={thClass}>最近调用</th>
@@ -4487,6 +4599,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 <th className={thClass}>凭据</th>
                 <th className={thClass}>请求</th>
                 <th className={thClass}>上游</th>
+                <th className={thClass}>客户端</th>
                 <th className={thClass}>Token</th>
                 <th className={thClass}>上下文压缩</th>
                 <th className={thClass}>费用估算</th>
@@ -4525,6 +4638,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                       </div>
                     </td>
                     <td className={tdClass}>{renderUpstreamStats(item)}</td>
+                    <td className={tdClass}>{renderClientStats(item)}</td>
                     <td className={tdClass}>
                       {fmtNumber(item.total_tokens)}
                       <div className="mt-1 text-xs text-[#9aa39e]">
@@ -4581,7 +4695,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               ) : (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={11}
                     className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                   >
                     {loading ? '加载中...' : '暂无带 session_id 的会话记录'}
@@ -4664,12 +4778,13 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   时间范围
                   <SearchableSelect
                     value={usageFilters.timeRange}
-                    onChange={(nextValue) =>
+                    onChange={(nextValue) => {
+                      setUsageTimeRangeTouched(true)
                       setUsageFilters((current) => ({
                         ...current,
                         timeRange: nextValue,
                       }))
-                    }
+                    }}
                     ariaLabel="时间范围"
                     options={USAGE_TIME_RANGE_OPTIONS}
                     placeholder="输入时间范围"
@@ -4776,6 +4891,21 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   />
                 </label>
                 <label className={fieldClass}>
+                  调用客户端
+                  <SearchableSelect
+                    value={usageFilters.clientType}
+                    onChange={(nextValue) =>
+                      setUsageFilters((current) => ({
+                        ...current,
+                        clientType: nextValue,
+                      }))
+                    }
+                    ariaLabel="调用客户端"
+                    options={USAGE_CLIENT_TYPE_OPTIONS}
+                    placeholder="输入客户端"
+                  />
+                </label>
+                <label className={fieldClass}>
                   错误 / 中断类型
                   <SearchableSelect
                     value={usageFilters.errorType}
@@ -4802,15 +4932,21 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 <button
                   type="button"
                   onClick={() => {
+                    const nextFilters = applyUsageTabDefaultTimeRange(
+                      INITIAL_USAGE_FILTERS,
+                      usageTab,
+                      false
+                    )
                     const nextPagination = {
                       ...usagePagination,
                       current: 1,
                     }
-                    setUsageFilters(INITIAL_USAGE_FILTERS)
-                    setAppliedUsageFilters(INITIAL_USAGE_FILTERS)
+                    setUsageTimeRangeTouched(false)
+                    setUsageFilters(nextFilters)
+                    setAppliedUsageFilters(nextFilters)
                     setUsagePagination(nextPagination)
                     loadAll({
-                      usageFilterOverride: INITIAL_USAGE_FILTERS,
+                      usageFilterOverride: nextFilters,
                       usagePaginationOverride: nextPagination,
                     })
                   }}
