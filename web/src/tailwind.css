@@ -1018,6 +1018,11 @@
   font-size: 14px;
 }
 
+.admin-usage-day-model-footer .admin-table-pagination {
+  width: 100%;
+  padding-top: 0;
+}
+
 .admin-model-pill {
   display: inline-flex;
   max-width: 180px;

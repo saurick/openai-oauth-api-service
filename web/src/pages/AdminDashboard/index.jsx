@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import AdminFrame from '@/common/components/layout/AdminFrame'
 import SurfacePanel from '@/common/components/layout/SurfacePanel'
 import { AUTH_SCOPE } from '@/common/auth/auth'
@@ -10,10 +10,14 @@ import {
   GATEWAY_ERROR_TYPE_HELP,
 } from '@/common/utils/gatewayErrorTypes'
 import { JsonRpc } from '@/common/utils/jsonRpc'
+import {
+  DAY_SECONDS,
+  DEFAULT_DAILY_USAGE_TIME_RANGE,
+  getUsageTimeRange,
+  USAGE_TIME_RANGE_OPTIONS,
+} from '@/common/utils/usageTimeRange'
 
 const PAGE_SIZE = 12
-const DAY_SECONDS = 24 * 60 * 60
-const TREND_DAYS = 30
 const DASHBOARD_KEY_FETCH_LIMIT = 200
 const TREND_METRICS = [
   { key: 'requests', label: '请求', field: 'total_requests', color: '#1478ff' },
@@ -57,6 +61,8 @@ const tableClass = 'min-w-full text-left text-sm text-[#1f2d25]'
 const thClass =
   'whitespace-nowrap bg-[#f5fbf7] px-4 py-3 font-semibold text-[#66736b]'
 const tdClass = 'px-4 py-4 text-[#1f2d25]'
+const selectClass =
+  'rounded-md border border-[#d6ded8] bg-white px-3 py-2 text-sm font-semibold text-[#1f2d25] outline-none transition focus:border-[#238a43] focus:ring-2 focus:ring-[#238a43]/15'
 
 function asInt(v, fallback = 0) {
   const n = Number(v)
@@ -167,23 +173,31 @@ function pct(part, total) {
   )
 }
 
-function fillDailyBuckets(items, days) {
+function fillDailyBuckets(items, startTime, endTime) {
   const byDay = new Map(
     (Array.isArray(items) ? items : []).map((item) => [
       localDateKey(item.bucket_start),
       item,
     ])
   )
-  const today = new Date()
-  const todayStart = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
+  const startDate = new Date(Number(startTime) * 1000)
+  const endDate = new Date(Number(endTime) * 1000)
+  const cursor = Number.isNaN(startDate.getTime()) ? new Date() : startDate
+  const end = Number.isNaN(endDate.getTime()) ? new Date() : endDate
+  const cursorDay = new Date(
+    cursor.getFullYear(),
+    cursor.getMonth(),
+    cursor.getDate()
   )
+  const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate())
+  const days = []
 
-  return Array.from({ length: days }, (_, index) => {
-    const d = new Date(todayStart)
-    d.setDate(todayStart.getDate() - (days - 1 - index))
+  while (cursorDay <= endDay) {
+    days.push(new Date(cursorDay))
+    cursorDay.setDate(cursorDay.getDate() + 1)
+  }
+
+  return days.map((d) => {
     const bucketStart = startOfLocalDayUnix(d)
     const source = byDay.get(localDateKey(bucketStart))
     const hasSource = Boolean(source)
@@ -436,6 +450,7 @@ function UsageTrendChart({ buckets, chartType, metric }) {
   const maxValue = Math.max(1, ...values)
   const hasData = values.some((value) => value > 0)
   const isLineChart = chartType === 'line'
+  const columnMinWidth = buckets.length > 120 ? '1px' : '6px'
   const linePoints = values.map((value, index) => ({
     x: buckets.length <= 1 ? 50 : ((index + 0.5) / buckets.length) * 100,
     y: 96 - (value / maxValue) * 88,
@@ -460,7 +475,7 @@ function UsageTrendChart({ buckets, chartType, metric }) {
         data-trend-chart=""
         onMouseLeave={() => setActiveIndex(null)}
         style={{
-          gridTemplateColumns: `repeat(${Math.max(1, buckets.length)}, minmax(6px, 1fr))`,
+          gridTemplateColumns: `repeat(${Math.max(1, buckets.length)}, minmax(${columnMinWidth}, 1fr))`,
         }}
       >
         {isLineChart && linePoints.length > 0 ? (
@@ -826,10 +841,20 @@ export default function AdminDashboardPage() {
   const [usageTotal, setUsageTotal] = useState(0)
   const [trendChartType, setTrendChartType] = useState('bar')
   const [trendMetric, setTrendMetric] = useState('requests')
+  const [trendTimeRange, setTrendTimeRange] = useState(
+    DEFAULT_DAILY_USAGE_TIME_RANGE
+  )
+
+  const activeTrendTimeRange = useMemo(
+    () => getUsageTimeRange(trendTimeRange, DEFAULT_DAILY_USAGE_TIME_RANGE),
+    [trendTimeRange]
+  )
+  const trendEndTime = Math.floor(Date.now() / 1000)
+  const trendStartTime = trendEndTime - activeTrendTimeRange.seconds
 
   const dailyBuckets = useMemo(
-    () => fillDailyBuckets(usageBuckets, TREND_DAYS),
-    [usageBuckets]
+    () => fillDailyBuckets(usageBuckets, trendStartTime, trendEndTime),
+    [trendEndTime, trendStartTime, usageBuckets]
   )
   const trendStats = useMemo(() => sumBuckets(dailyBuckets), [dailyBuckets])
   const activeKeys = useMemo(
@@ -861,7 +886,7 @@ export default function AdminDashboardPage() {
     [usageItems]
   )
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true)
     setErrMsg('')
     try {
@@ -869,7 +894,7 @@ export default function AdminDashboardPage() {
       const startTime = now - DAY_SECONDS
       const todayStartTime = startOfLocalDayUnix(new Date())
       const minuteStartTime = now - 60
-      const trendStartTime = now - TREND_DAYS * DAY_SECONDS
+      const activeTrendStartTime = now - activeTrendTimeRange.seconds
       const [
         summaryRes,
         todaySummaryRes,
@@ -893,7 +918,7 @@ export default function AdminDashboardPage() {
         apiRpc.call('usage_buckets', {
           end_time: now,
           group_by: 'day',
-          start_time: trendStartTime,
+          start_time: activeTrendStartTime,
         }),
       ])
 
@@ -913,11 +938,11 @@ export default function AdminDashboardPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [activeTrendTimeRange.seconds, apiRpc])
 
   useEffect(() => {
     loadAll()
-  }, [])
+  }, [loadAll])
 
   return (
     <AdminFrame
@@ -982,12 +1007,28 @@ export default function AdminDashboardPage() {
         <SurfacePanel variant="admin" className="p-5">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-base font-bold text-[#1f2d25]">30 天趋势</h2>
+              <h2 className="text-base font-bold text-[#1f2d25]">用量趋势</h2>
               <div className="mt-1 text-sm text-[#7b8780]">
-                按天聚合请求、错误、费用、延迟和 Token。
+                当前 {activeTrendTimeRange.label}{' '}
+                窗口按天聚合请求、错误、费用、延迟和 Token。
               </div>
             </div>
             <div className="flex flex-col gap-2 sm:items-end">
+              <label className="flex flex-col gap-1 text-sm font-medium text-[#365141] sm:items-end">
+                时间范围
+                <select
+                  aria-label="趋势时间范围"
+                  className={selectClass}
+                  value={trendTimeRange}
+                  onChange={(e) => setTrendTimeRange(e.target.value)}
+                >
+                  {USAGE_TIME_RANGE_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <div className="flex flex-wrap gap-2" aria-label="图表类型">
                 {TREND_CHART_TYPES.map((item) => (
                   <button
@@ -1035,7 +1076,7 @@ export default function AdminDashboardPage() {
           <div className="mb-5">
             <h2 className="text-base font-bold text-[#1f2d25]">Token 构成</h2>
             <div className="mt-1 text-sm text-[#7b8780]">
-              30 天窗口内的主要 Token 类型占比。
+              当前 {activeTrendTimeRange.label} 窗口内的主要 Token 类型占比。
             </div>
           </div>
           <TokenComposition stats={trendStats} />

@@ -5,6 +5,7 @@ import { AUTH_SCOPE } from '@/common/auth/auth'
 import { ADMIN_BASE_PATH } from '@/common/utils/adminRpc'
 import { getActionErrorMessage } from '@/common/utils/errorMessage'
 import {
+  gatewayErrorTypeFilterLabel,
   gatewayErrorTypeLabel,
   gatewayErrorTypeTitle,
   GATEWAY_ERROR_TYPE_HELP,
@@ -17,10 +18,16 @@ import {
   toggleTablePageSelection,
   toggleTableSelection,
 } from '@/common/utils/tableInteraction'
+import {
+  DAY_SECONDS,
+  DEFAULT_DAILY_USAGE_TIME_RANGE,
+  DEFAULT_USAGE_TIME_RANGE,
+  getUsageTimeRange,
+  USAGE_TIME_RANGE_OPTIONS,
+} from '@/common/utils/usageTimeRange'
 
 const PAGE_SIZE = 30
 const DASHBOARD_USAGE_SIZE = 8
-const DAY_SECONDS = 24 * 60 * 60
 const DEFAULT_TABLE_PAGE_SIZE = 8
 const TABLE_PAGE_SIZE_OPTIONS = [8, 10, 20, 50, 100]
 const TABLE_PAGE_SIZE_SELECT_OPTIONS = TABLE_PAGE_SIZE_OPTIONS.map((value) => ({
@@ -170,39 +177,39 @@ const USAGE_CLIENT_TYPE_OPTIONS = [
   { label: 'OpenCode', value: 'opencode' },
   { label: '其他', value: 'other' },
 ]
+const USAGE_ERROR_FILTER_BASE_OPTIONS = [
+  { label: '客户端 / 入口代理取消', value: 'client_canceled' },
+  { value: 'context_length_exceeded' },
+  { value: 'gateway_api_key_invalid' },
+  { value: 'gateway_api_key_disabled' },
+  { value: 'gateway_model_disabled' },
+  { value: 'gateway_model_not_allowed' },
+  { value: 'gateway_rate_limited' },
+  { value: 'gateway_quota_exceeded' },
+  { value: 'gateway_reasoning_effort_invalid' },
+  { value: 'gateway_error' },
+  { value: 'codex_backend_auth_failed' },
+  { value: 'codex_backend_rate_limited' },
+  { value: 'codex_backend_http_5xx' },
+  { value: 'codex_backend_timeout' },
+  { value: 'codex_backend_response_failed' },
+  { value: 'codex_backend_response_incomplete' },
+  { value: 'codex_backend_stream_error' },
+  { value: 'codex_backend_stream_interrupted' },
+  { value: 'codex_backend_http_error' },
+  { value: 'codex_backend_upstream_failed' },
+  { value: 'codex_cli_timeout' },
+  { value: 'codex_cli_not_found' },
+  { value: 'codex_cli_empty_prompt' },
+  { value: 'codex_cli_empty_answer' },
+  { value: 'codex_cli_upstream_failed' },
+]
 const USAGE_ERROR_FILTER_OPTIONS = [
   { label: '全部错误 / 中断类型', value: '' },
-  { label: '客户端 / 入口代理取消', value: 'client_canceled' },
-  { label: '上下文超限', value: 'context_length_exceeded' },
-  { label: 'API key 无效', value: 'gateway_api_key_invalid' },
-  { label: 'API key 已禁用', value: 'gateway_api_key_disabled' },
-  { label: '模型已禁用', value: 'gateway_model_disabled' },
-  { label: '模型未授权', value: 'gateway_model_not_allowed' },
-  { label: '网关限流', value: 'gateway_rate_limited' },
-  { label: '凭据额度超限', value: 'gateway_quota_exceeded' },
-  { label: 'Effort 非法', value: 'gateway_reasoning_effort_invalid' },
-  { label: '网关错误', value: 'gateway_error' },
-  { label: 'Backend 鉴权失败', value: 'codex_backend_auth_failed' },
-  { label: 'Backend 限流', value: 'codex_backend_rate_limited' },
-  { label: 'Backend 5xx', value: 'codex_backend_http_5xx' },
-  { label: 'Backend 超时', value: 'codex_backend_timeout' },
-  { label: 'Backend response failed', value: 'codex_backend_response_failed' },
-  {
-    label: 'Backend response incomplete',
-    value: 'codex_backend_response_incomplete',
-  },
-  { label: 'Backend 流中断', value: 'codex_backend_stream_error' },
-  {
-    label: 'Backend 流中途断开',
-    value: 'codex_backend_stream_interrupted',
-  },
-  { label: 'Backend HTTP 错误', value: 'codex_backend_http_error' },
-  { label: 'Backend 未分类失败', value: 'codex_backend_upstream_failed' },
-  { label: 'CLI 超时', value: 'codex_cli_timeout' },
-  { label: 'CLI 不存在', value: 'codex_cli_not_found' },
-  { label: 'CLI 空输入', value: 'codex_cli_empty_prompt' },
-  { label: 'CLI 空回复', value: 'codex_cli_empty_answer' },
-  { label: 'CLI 未分类失败', value: 'codex_cli_upstream_failed' },
+  ...USAGE_ERROR_FILTER_BASE_OPTIONS.map((option) => ({
+    label: gatewayErrorTypeFilterLabel(option.value, option.label),
+    value: option.value,
+  })),
 ]
 const CODEX_REASONING_EFFORT_OPTIONS = [
   { label: 'Low', value: 'low' },
@@ -213,19 +220,6 @@ const CODEX_REASONING_EFFORT_OPTIONS = [
 const USAGE_REASONING_EFFORT_FILTER_OPTIONS = [
   { label: '全部 Effort', value: '' },
   ...CODEX_REASONING_EFFORT_OPTIONS,
-]
-const DEFAULT_USAGE_TIME_RANGE = '24h'
-const DEFAULT_DAILY_USAGE_TIME_RANGE = '30d'
-const USAGE_TIME_RANGE_OPTIONS = [
-  { label: '24h', value: '24h', seconds: DAY_SECONDS },
-  { label: '7 天', value: '7d', seconds: 7 * DAY_SECONDS },
-  { label: '30 天', value: '30d', seconds: 30 * DAY_SECONDS },
-  { label: '90 天', value: '90d', seconds: 90 * DAY_SECONDS },
-  { label: '180 天', value: '180d', seconds: 180 * DAY_SECONDS },
-  { label: '1 年', value: '1y', seconds: 365 * DAY_SECONDS },
-  { label: '2 年', value: '2y', seconds: 2 * 365 * DAY_SECONDS },
-  { label: '3 年', value: '3y', seconds: 3 * 365 * DAY_SECONDS },
-  { label: '5 年', value: '5y', seconds: 5 * 365 * DAY_SECONDS },
 ]
 const USAGE_TAB_OPTIONS = [
   { key: 'details', label: '调用明细' },
@@ -605,13 +599,6 @@ function getVisiblePaginationItems(current, totalPages) {
     'next-gap',
     totalPages,
   ]
-}
-
-function getUsageTimeRange(value) {
-  return (
-    USAGE_TIME_RANGE_OPTIONS.find((item) => item.value === value) ||
-    USAGE_TIME_RANGE_OPTIONS[0]
-  )
 }
 
 function usageFiltersForTab(filters, tab) {
@@ -1503,6 +1490,9 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const [usagePagination, setUsagePagination] = useState(
     createInitialPagination
   )
+  const [dailyUsagePagination, setDailyUsagePagination] = useState(
+    createInitialPagination
+  )
   const [selectedKeyIds, setSelectedKeyIds] = useState([])
   const [usageFilters, setUsageFilters] = useState(INITIAL_USAGE_FILTERS)
   const [appliedUsageFilters, setAppliedUsageFilters] = useState(
@@ -1582,6 +1572,14 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const paginatedModels = useMemo(
     () => paginateItems(models, modelPagination),
     [modelPagination, models]
+  )
+  const dailyUsageRows = useMemo(
+    () => [...usageBuckets].reverse(),
+    [usageBuckets]
+  )
+  const paginatedDailyUsageRows = useMemo(
+    () => paginateItems(dailyUsageRows, dailyUsagePagination),
+    [dailyUsagePagination, dailyUsageRows]
   )
 
   const setKeyListState = (res) => {
@@ -1935,6 +1933,16 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         : next
     })
   }, [usageTotal])
+
+  useEffect(() => {
+    setDailyUsagePagination((current) => {
+      const next = clampPagination(current, dailyUsageRows.length)
+      return next.current === current.current &&
+        next.pageSize === current.pageSize
+        ? current
+        : next
+    })
+  }, [dailyUsageRows.length])
 
   useEffect(() => {
     if (pageKeySelectionRef.current) {
@@ -2415,6 +2423,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     setUsageFilters(nextFilters)
     setAppliedUsageFilters(nextFilters)
     setUsagePagination(nextPagination)
+    setDailyUsagePagination((current) => ({ ...current, current: 1 }))
     loadAll({
       usageFilterOverride: nextFilters,
       usagePaginationOverride: nextPagination,
@@ -2482,18 +2491,14 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     await loadUsageBucketDetail(bucketItem, nextPagination)
   }
 
-  const changeUsageBucketDetailPage = async (nextCurrent) => {
+  const changeUsageBucketDetailPagination = async (nextPagination) => {
     if (!selectedUsageBucket) return
-    const totalPages = Math.max(
-      1,
-      Math.ceil(selectedUsageBucketTotal / usageBucketDetailPagination.pageSize)
+    const safePagination = clampPagination(
+      nextPagination,
+      selectedUsageBucketTotal
     )
-    const nextPagination = {
-      ...usageBucketDetailPagination,
-      current: Math.min(Math.max(nextCurrent, 1), totalPages),
-    }
-    setUsageBucketDetailPagination(nextPagination)
-    await loadUsageBucketDetail(selectedUsageBucket, nextPagination)
+    setUsageBucketDetailPagination(safePagination)
+    await loadUsageBucketDetail(selectedUsageBucket, safePagination)
   }
 
   const renderUsageTable = (compact = false) => (
@@ -3983,15 +3988,6 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const renderUsageBucketDetailModal = () => {
     if (!selectedUsageBucket) return null
 
-    const totalPages = Math.max(
-      1,
-      Math.ceil(selectedUsageBucketTotal / usageBucketDetailPagination.pageSize)
-    )
-    const currentPage = Math.min(
-      usageBucketDetailPagination.current,
-      totalPages
-    )
-
     return (
       <div className="admin-modal-backdrop">
         <button
@@ -4105,7 +4101,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     ) : (
                       <tr>
                         <td
-                          colSpan={11}
+                          colSpan={12}
                           className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                         >
                           {usageBucketDetailLoading
@@ -4120,27 +4116,12 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             </div>
           </div>
           <div className="admin-usage-day-model-footer">
-            <div>
-              第 {currentPage} 共 {totalPages}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="admin-page-button"
-                disabled={usageBucketDetailLoading || currentPage <= 1}
-                onClick={() => changeUsageBucketDetailPage(currentPage - 1)}
-              >
-                上一页
-              </button>
-              <button
-                type="button"
-                className="admin-page-button"
-                disabled={usageBucketDetailLoading || currentPage >= totalPages}
-                onClick={() => changeUsageBucketDetailPage(currentPage + 1)}
-              >
-                下一页
-              </button>
-            </div>
+            <TablePagination
+              total={selectedUsageBucketTotal}
+              pagination={usageBucketDetailPagination}
+              onChange={changeUsageBucketDetailPagination}
+              disabled={usageBucketDetailLoading}
+            />
           </div>
         </div>
       </div>
@@ -4449,7 +4430,6 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   )
 
   const renderDailyUsage = () => {
-    const rows = [...usageBuckets].reverse()
     const activeTimeRange = getUsageTimeRange(appliedUsageFilters.timeRange)
 
     return (
@@ -4465,7 +4445,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             </div>
           </div>
           <div className="text-sm text-[#7b8780]">
-            {fmtNumber(rows.length)} 组
+            {fmtNumber(dailyUsageRows.length)} 组
           </div>
         </div>
         <div className={tableWrapClass}>
@@ -4487,8 +4467,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e7efe9] bg-white">
-                {rows.length > 0 ? (
-                  rows.map((item) => {
+                {paginatedDailyUsageRows.length > 0 ? (
+                  paginatedDailyUsageRows.map((item) => {
                     const failedRequests = asInt(item.failed_requests, 0)
                     const canceledRequests = asInt(
                       item.client_canceled_requests,
@@ -4572,6 +4552,12 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             </table>
           </div>
         </div>
+        <TablePagination
+          total={dailyUsageRows.length}
+          pagination={dailyUsagePagination}
+          onChange={setDailyUsagePagination}
+          disabled={loading}
+        />
       </SurfacePanel>
     )
   }
@@ -4764,6 +4750,10 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                 }
                 setAppliedUsageFilters(nextFilters)
                 setUsagePagination(nextPagination)
+                setDailyUsagePagination((current) => ({
+                  ...current,
+                  current: 1,
+                }))
                 loadAll({
                   usageFilterOverride: nextFilters,
                   usagePaginationOverride: nextPagination,
@@ -4945,6 +4935,10 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     setUsageFilters(nextFilters)
                     setAppliedUsageFilters(nextFilters)
                     setUsagePagination(nextPagination)
+                    setDailyUsagePagination((current) => ({
+                      ...current,
+                      current: 1,
+                    }))
                     loadAll({
                       usageFilterOverride: nextFilters,
                       usagePaginationOverride: nextPagination,

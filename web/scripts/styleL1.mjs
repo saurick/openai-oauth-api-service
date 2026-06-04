@@ -443,7 +443,7 @@ const scenarios = [
     verify: async (page) => {
       await expectText(page, 'API 管理后台')
       await expectText(page, '业务看板')
-      await expectText(page, '30 天趋势')
+      await expectText(page, '用量趋势')
       await expectText(page, '最近调用')
       await assertAdminChrome(page, 'admin-dashboard-desktop')
       await assertThemeToggle(page, 'admin-dashboard-desktop', '.admin-frame')
@@ -459,7 +459,7 @@ const scenarios = [
     verify: async (page) => {
       await expectText(page, 'API 管理后台')
       await expectText(page, '业务看板')
-      await expectText(page, '30 天趋势')
+      await expectText(page, '用量趋势')
       await expectText(page, '最近调用')
       await assertAdminChrome(page, 'admin-dashboard-mobile')
       await assertApiVisuals(page, 'admin-dashboard-mobile')
@@ -1015,7 +1015,12 @@ async function assertApiVisuals(page, scenarioName) {
       hasRecentCallsHeaderTooltips:
         table?.querySelectorAll('.admin-th-help[data-tooltip]').length >= 4,
       hasTokenPanel: headings.includes('Token 构成'),
-      hasTrendPanel: headings.includes('30 天趋势'),
+      hasTrendPanel: headings.includes('用量趋势'),
+      trendTimeRangeValue:
+        main?.querySelector('select[aria-label="趋势时间范围"]')?.value || '',
+      hasTrendTimeRangeDescription: document.body.innerText.includes(
+        '当前 30 天 窗口按天聚合请求、错误、费用、延迟和 Token'
+      ),
       trendBarCount: main?.querySelectorAll('[data-trend-bar]').length || 0,
       trendChartTypeButtons: Array.from(
         main?.querySelectorAll('[aria-label="图表类型"] button') || []
@@ -1040,7 +1045,16 @@ async function assertApiVisuals(page, scenarioName) {
   })
 
   assert(metrics.hasCoreCards, `${scenarioName} 缺少业务看板核心指标卡`)
-  assert(metrics.hasTrendPanel, `${scenarioName} 缺少 30 天趋势面板`)
+  assert(metrics.hasTrendPanel, `${scenarioName} 缺少用量趋势面板`)
+  assert.equal(
+    metrics.trendTimeRangeValue,
+    '30d',
+    `${scenarioName} 业务看板趋势默认时间范围异常: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.hasTrendTimeRangeDescription,
+    `${scenarioName} 业务看板趋势缺少当前窗口说明: ${JSON.stringify(metrics)}`
+  )
   assert(metrics.hasTokenPanel, `${scenarioName} 缺少 Token 构成面板`)
   assert(metrics.hasDistributionPanels, `${scenarioName} 缺少用量分布面板`)
   assert(metrics.hasRecentCalls, `${scenarioName} 缺少最近调用面板`)
@@ -1088,6 +1102,7 @@ async function assertApiVisuals(page, scenarioName) {
   await assertDashboardTrendMetricInteraction(page, scenarioName)
   await assertDashboardTrendChartTypeInteraction(page, scenarioName)
   await assertDashboardTrendTooltip(page, scenarioName)
+  await assertDashboardTrendTimeRangeInteraction(page, scenarioName)
   assertDashboardCompactRequests(page, scenarioName)
 }
 
@@ -1245,6 +1260,65 @@ async function assertDashboardTrendTooltip(page, scenarioName) {
   )
 }
 
+async function assertDashboardTrendTimeRangeInteraction(page, scenarioName) {
+  await page.locator('select[aria-label="趋势时间范围"]').selectOption('7d')
+  const expectedSeconds = 7 * 24 * 60 * 60
+  let bucketsCall = null
+  const deadline = Date.now() + 5000
+  while (Date.now() < deadline) {
+    bucketsCall = [...(page.__styleL1ApiRpcCalls || [])]
+      .reverse()
+      .find((call) => {
+        if (call.method !== 'usage_buckets') return false
+        const seconds =
+          Number(call.params?.end_time) - Number(call.params?.start_time)
+        return (
+          call.params?.group_by === 'day' &&
+          Math.abs(seconds - expectedSeconds) <= 2
+        )
+      })
+    if (bucketsCall) break
+    await delay(100)
+  }
+  const callSeconds =
+    Number(bucketsCall?.params?.end_time) -
+    Number(bucketsCall?.params?.start_time)
+  const metrics = await page.evaluate(() => {
+    const mainRect = document.querySelector('main')?.getBoundingClientRect()
+    const chartRect = document
+      .querySelector('main [data-trend-chart]')
+      ?.getBoundingClientRect()
+    return {
+      bodyHasHorizontalOverflow:
+        document.body.scrollWidth > window.innerWidth + 2,
+      chartFitsMain:
+        !mainRect ||
+        !chartRect ||
+        (chartRect.left >= mainRect.left - 1 &&
+          chartRect.right <= mainRect.right + 1),
+      description: document.body.innerText.includes('当前 7 天 窗口按天聚合'),
+      selected: document.querySelector('select[aria-label="趋势时间范围"]')
+        ?.value,
+    }
+  })
+  assert.equal(
+    metrics.selected,
+    '7d',
+    `${scenarioName} 趋势时间范围选择未保持 7 天: ${JSON.stringify(metrics)}`
+  )
+  assert(
+    metrics.description && Math.abs(callSeconds - expectedSeconds) <= 2,
+    `${scenarioName} 趋势时间范围未同步到 usage_buckets: ${JSON.stringify({
+      ...metrics,
+      callSeconds,
+    })}`
+  )
+  assert(
+    !metrics.bodyHasHorizontalOverflow && metrics.chartFitsMain,
+    `${scenarioName} 趋势时间范围切换后布局溢出: ${JSON.stringify(metrics)}`
+  )
+}
+
 function assertDashboardCompactRequests(page, scenarioName) {
   const calls = page.__styleL1ApiRpcCalls || []
   assert(
@@ -1399,6 +1473,7 @@ async function assertUsageTableVisuals(page, scenarioName) {
   await assertUsageKeyMultiFilterRequest(page, scenarioName)
   await assertUsageTimeRangeRequest(page, scenarioName)
   await assertUsageStatusCodeFilterRequest(page, scenarioName)
+  await assertUsageErrorTypeStatusHintRequest(page, scenarioName)
   await assertUsageClientTypeFilterRequest(page, scenarioName)
   await assertUsagePaginationRequest(page, scenarioName)
   await assertUsageErrorsTab(page, scenarioName)
@@ -1511,12 +1586,13 @@ async function assertUsageDailyModelDetail(page, scenarioName) {
     30 * 24 * 60 * 60
   )
   await expectText(page, 'gpt-5.4')
+  await assertUsageDailyModelPagination(page, scenarioName)
   await page.getByRole('button', { name: '详情', exact: true }).first().click()
   await expectText(page, '输入 Tokens')
   await expectText(page, '凭据备注')
   await expectText(page, 'productionapikey')
   await expectText(page, 'Reasoning Tokens')
-  await expectText(page, '下一页')
+  await assertUsageDailyModelDetailPagination(page, scenarioName)
   const metrics = await page.evaluate(() => {
     const modal = document.querySelector('.admin-usage-day-model-modal')
     const rect = modal?.getBoundingClientRect()
@@ -1548,6 +1624,116 @@ async function assertUsageDailyModelDetail(page, scenarioName) {
     `${scenarioName} 每日模型详情弹窗盒模型异常: ${JSON.stringify(metrics)}`
   )
   await page.getByRole('button', { name: '关闭弹窗' }).click()
+}
+
+async function assertUsageDailyModelDetailPagination(page, scenarioName) {
+  const calls = page.__styleL1ApiRpcCalls || []
+  const startIndex = calls.length
+  const modal = page.locator('.admin-usage-day-model-modal')
+  const pagination = modal.locator('.admin-table-pagination')
+  await expectText(page, '共 12 条')
+  const firstPageMetrics = await pagination.evaluate((node) => {
+    const pageSize = node.querySelector('.admin-table-page-size-input')
+    const rect = node.getBoundingClientRect()
+    const pageSizeRect = pageSize?.getBoundingClientRect()
+    return {
+      currentPageLabel:
+        node.querySelector('.admin-page-button-current')?.textContent.trim() ||
+        '',
+      hasPageSize: pageSize?.value === '8 条/页',
+      isVisible: rect.width > 0 && rect.height > 0,
+      overflowsX: pageSize
+        ? pageSize.scrollWidth > pageSize.clientWidth + 1
+        : true,
+      pageSizeHeight: Math.round(pageSizeRect?.height || 0),
+      pageSizeWidth: Math.round(pageSizeRect?.width || 0),
+    }
+  })
+  assert(
+    firstPageMetrics.isVisible &&
+      firstPageMetrics.currentPageLabel === '1' &&
+      firstPageMetrics.hasPageSize &&
+      firstPageMetrics.pageSizeWidth >= 118 &&
+      firstPageMetrics.pageSizeWidth <= 122 &&
+      firstPageMetrics.pageSizeHeight <= 38 &&
+      !firstPageMetrics.overflowsX,
+    `${scenarioName} 每日模型详情分页器初始状态异常: ${JSON.stringify(
+      firstPageMetrics
+    )}`
+  )
+  await pagination.getByRole('button', { name: '下一页' }).click()
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    const matched = calls.slice(startIndex).some((call) => {
+      return (
+        call.method === 'usage_list' &&
+        call.params?.model === 'gpt-5.4' &&
+        call.params?.limit === 8 &&
+        call.params?.offset === 8
+      )
+    })
+    if (matched) {
+      break
+    }
+    await delay(100)
+  }
+  assert(
+    calls.slice(startIndex).some((call) => {
+      return (
+        call.method === 'usage_list' &&
+        call.params?.model === 'gpt-5.4' &&
+        call.params?.limit === 8 &&
+        call.params?.offset === 8
+      )
+    }),
+    `${scenarioName} 每日模型详情点击下一页后未请求 offset=8: ${JSON.stringify(
+      calls.slice(startIndex)
+    )}`
+  )
+  const secondPageLabel = await pagination
+    .locator('.admin-page-button-current')
+    .textContent()
+  assert.equal(
+    secondPageLabel?.trim(),
+    '2',
+    `${scenarioName} 每日模型详情下一页后当前页不是 2`
+  )
+}
+
+async function assertUsageDailyModelPagination(page, scenarioName) {
+  const dailyPagination = page.locator('.admin-table-pagination').last()
+  await expectText(page, '共 12 条')
+  await dailyPagination.getByRole('button', { name: '下一页' }).click()
+  await expectText(page, 'gpt-5.3-codex')
+  const metrics = await dailyPagination.evaluate((node) => {
+    const pageSize = node.querySelector('.admin-table-page-size-input')
+    const rect = node.getBoundingClientRect()
+    const pageSizeRect = pageSize?.getBoundingClientRect()
+    return {
+      currentPageLabel:
+        node.querySelector('.admin-page-button-current')?.textContent.trim() ||
+        '',
+      hasPageSize: pageSize?.value === '8 条/页',
+      isVisible: rect.width > 0 && rect.height > 0,
+      overflowsX: pageSize
+        ? pageSize.scrollWidth > pageSize.clientWidth + 1
+        : true,
+      pageSizeHeight: Math.round(pageSizeRect?.height || 0),
+      pageSizeWidth: Math.round(pageSizeRect?.width || 0),
+    }
+  })
+  assert(
+    metrics.isVisible &&
+      metrics.currentPageLabel === '2' &&
+      metrics.hasPageSize &&
+      metrics.pageSizeWidth >= 118 &&
+      metrics.pageSizeWidth <= 122 &&
+      metrics.pageSizeHeight <= 38 &&
+      !metrics.overflowsX,
+    `${scenarioName} 每日模型分页器盒模型或状态异常: ${JSON.stringify(metrics)}`
+  )
+  await dailyPagination.getByRole('button', { name: '上一页' }).click()
+  await expectText(page, 'gpt-5.4')
 }
 
 async function assertUsageKeyStatsTab(page, scenarioName) {
@@ -1771,6 +1957,50 @@ async function assertUsageStatusCodeFilterRequest(page, scenarioName) {
 
   assert.fail(
     `${scenarioName} 状态码筛选未按 499 查询: ${JSON.stringify(
+      calls.slice(startIndex)
+    )}`
+  )
+}
+
+async function assertUsageErrorTypeStatusHintRequest(page, scenarioName) {
+  const calls = page.__styleL1ApiRpcCalls || []
+  const startIndex = calls.length
+  await page.getByRole('combobox', { name: '错误或中断类型' }).click()
+  await expectText(page, '499 · 客户端 / 入口代理取消')
+  await expectText(page, '413 / SSE 502 · 上下文超限')
+  await page
+    .getByRole('option', {
+      name: '413 / SSE 502 · 上下文超限',
+      exact: true,
+    })
+    .click()
+  await page.getByRole('button', { name: '应用筛选', exact: true }).click()
+
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    const matched = calls.slice(startIndex).some((call) => {
+      return (
+        call.method === 'usage_list' &&
+        call.params?.offset === 0 &&
+        call.params?.error_type === 'context_length_exceeded'
+      )
+    })
+    const hasSelected = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('[role="combobox"]')).some(
+        (node) =>
+          node.getAttribute('aria-label') === '错误或中断类型' &&
+          node.value === '413 / SSE 502 · 上下文超限'
+      )
+    )
+    if (matched && hasSelected) {
+      await page.getByRole('button', { name: '重置', exact: true }).click()
+      return
+    }
+    await delay(100)
+  }
+
+  assert.fail(
+    `${scenarioName} 错误类型筛选未显示状态码或未按 error_type 查询: ${JSON.stringify(
       calls.slice(startIndex)
     )}`
   )
@@ -4630,7 +4860,12 @@ function createMockUsageBuckets() {
     const cachedTokens = Math.round(inputTokens * 0.72)
     const outputTokens = calls * (220 + index * 16)
     const reasoningTokens = calls * (40 + index * 3)
-    const model = index % 5 === 0 ? 'gpt-5.4-mini' : 'gpt-5.4'
+    const model =
+      index === 2
+        ? 'gpt-5.3-codex'
+        : index % 5 === 0
+          ? 'gpt-5.4-mini'
+          : 'gpt-5.4'
     const otherClientRequests = index % 3 === 0 ? 1 : 0
     const openCodeRequests = Math.ceil(calls / 4)
     const codexRequests = Math.max(
