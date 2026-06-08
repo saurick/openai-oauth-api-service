@@ -8,6 +8,9 @@
 - 完成：用量日志筛选区新增“客户端 IP”输入框，按完整 IP 传递 `client_ip` 到后端 `usage_list`，便于直接定位某个来源。
 - 文档：同步更新 `web/README.md`，明确顶部最近请求、调用明细和会话请求级明细均展示客户端 IP。
 - 验证：已执行 `pnpm --dir web exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`node --check web/scripts/styleL1.mjs`、`pnpm --dir web test`、`pnpm --dir web css`、`pnpm --dir web build`、`STYLE_L1_SCENARIOS=admin-usage-desktop,admin-usage-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1` 和 `git diff --check`，均通过；`style:l1` 已新增断言，确认“客户端 IP”独立列表头、mock IP 值和 IP 筛选输入存在。另用 in-app Browser 打开本地 `http://127.0.0.1:5189/admin-usage`，未登录状态按预期回到 `/admin-login`，页面非空、标题为“API 管理后台”且横向溢出为 0；未启动后端，因此登录页的 `/auth/oauth/config` 代理请求出现预期连接失败。
+- 部署：已提交并推送 `8312987 fix: 显示用量日志客户端 IP`；本地构建 linux/amd64 镜像 `oauth-api-service-server:20260608T135652-83129878`，上传到 `/data/openai-oauth-api-service/releases/20260608T135652-83129878-usage-ip-ui`。远端只执行 `docker load`、宿主机 Atlas status、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建。Atlas 当前版本 `20260604123931`、pending 0。
+- 线上验证：远端本机和公网 `/healthz` / `/readyz` 均通过；当前 `app-server` 运行镜像为 `oauth-api-service-server:20260608T135652-83129878`，容器环境 `GIT_SHA_SHORT=83129878`、`IMAGE_TAG=20260608T135652-83129878`。公网 `/admin-usage` 返回 200 并加载新前端资源 `index.DoEg5sfX.js`，bundle 已包含“客户端 IP”和“输入完整 IP”；管理员 RPC `admin_login`、`summary` 和 `usage_list` smoke 通过，近 5 天 usage 返回 `client_ip` 示例 `120.234.136.227`。
+- 清理：部署成功后记录远端 `/` 使用率、`docker system df` 与运行容器；删除远端 release 镜像 tar 包和 migration tar 包，执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未被任何容器使用的旧镜像并回收 353.3MB，未清理 volume。清理后根分区使用率 21%，当前 app-server 仍运行新镜像。
 - 阻塞/风险：本轮只改管理端展示和筛选，不改后端 IP 记录口径、schema、导出、部署配置或历史 usage 数据。
 
 ## 2026-06-08 全站启用全部 API key
