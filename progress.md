@@ -2,6 +2,14 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-08 API 凭据最近使用时间回归
+
+- 完成：确认 API 凭据最近使用时间沿既有 `gateway_api_keys.last_used_at` 主路径维护，网关统一 usage 写入后调用 `TouchAPIKeyUsed` 更新，`key_list` 已返回 `last_used_at`，`/admin-keys` 在备注下方展示“最近使用”；本轮不新增 schema、不从前端伪造时间，也不改 usage 记录口径。
+- 完成：`style:l1` 的 `/admin-keys` 桌面 / 移动端回归新增最近使用时间断言，覆盖有使用记录和无使用记录显示 `-` 两种状态。
+- 文档：同步更新 `web/README.md`，明确 API 凭据列表展示完整凭据和最近使用时间。
+- 验证：已执行 `node --check web/scripts/styleL1.mjs`、`pnpm --dir web exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`pnpm --dir web test`、`pnpm --dir web css`、`pnpm --dir web build`、`STYLE_L1_BASE_URL=http://127.0.0.1:4392 STYLE_L1_SCENARIOS=admin-keys-desktop,admin-keys-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`，均通过；`style:l1` 使用本地生产预览验证 `/admin-keys` 桌面和移动端列表、盒模型、完整凭据复制按钮、最近使用时间有值 / 无值展示。
+- 阻塞/风险：直接由 `style:l1` 拉起 Vite dev server 时，本机 Playwright 对 HMR WebSocket 报 `net::ERR_ADDRESS_INVALID` 并被脚本当作 console error 拦截；本轮改用已构建产物的 `vite preview` 完成无 HMR 回归。未部署到远端，生产环境需发布后才能看到本轮新增的回归保护和文档更新；现有功能代码本身已在当前 `main`。
+
 ## 2026-06-08 用量日志客户端 IP 显示强化
 
 - 完成：`/admin-usage` 调用明细表把 `client_ip` 从“请求”单元格内的附属信息提升为独立“客户端 IP”列；顶部最近请求紧凑表也展示该列，避免只能在完整表格或会话详情里找到 IP。

@@ -2870,6 +2870,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
       hasKeyIdentityHeader: document.body.innerText.includes('完整凭据'),
       hasCreatedAtHeader: document.body.innerText.includes('创建时间'),
       hasUpdatedAtHeader: document.body.innerText.includes('更新时间'),
+      hasLastUsedLabel: document.body.innerText.includes('最近使用：'),
       hasUpstreamStrategyHeader: document.body.innerText.includes('上游策略'),
       hasDefaultEffortHeader: document.body.innerText.includes('默认 Effort'),
       hasUpstreamStrategyValue:
@@ -2886,6 +2887,9 @@ async function assertKeyTableVisuals(page, scenarioName) {
         .filter(Boolean),
       updatedAtCells: Array.from(main?.querySelectorAll('table tbody tr') || [])
         .map((row) => row.children[3]?.textContent.trim() || '')
+        .filter(Boolean),
+      lastUsedTexts: Array.from(main?.querySelectorAll('table tbody tr') || [])
+        .map((row) => row.children[1]?.textContent.trim() || '')
         .filter(Boolean),
       hasSearchInput: Boolean(
         main?.querySelector('input[placeholder="搜索备注、前缀或后四位"]')
@@ -2977,6 +2981,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
   assert(metrics.hasKeyIdentityHeader, `${scenarioName} 缺少完整凭据列`)
   assert(metrics.hasCreatedAtHeader, `${scenarioName} 缺少创建时间列`)
   assert(metrics.hasUpdatedAtHeader, `${scenarioName} 缺少更新时间列`)
+  assert(metrics.hasLastUsedLabel, `${scenarioName} 缺少最近使用时间展示`)
   assert(metrics.hasUpstreamStrategyHeader, `${scenarioName} 缺少上游策略列`)
   assert(metrics.hasDefaultEffortHeader, `${scenarioName} 缺少默认 Effort 列`)
   assert(
@@ -3004,6 +3009,12 @@ async function assertKeyTableVisuals(page, scenarioName) {
         (value) => value !== '-' && /\d/.test(value)
       ),
     `${scenarioName} 更新时间列展示异常: ${JSON.stringify(metrics.updatedAtCells)}`
+  )
+  assert(
+    metrics.lastUsedTexts.length === 8 &&
+      metrics.lastUsedTexts.some((value) => /最近使用：[^-]/.test(value)) &&
+      metrics.lastUsedTexts.some((value) => value.includes('最近使用：-')),
+    `${scenarioName} 最近使用时间展示异常: ${JSON.stringify(metrics.lastUsedTexts)}`
   )
   assert(metrics.hasTableToolbar, `${scenarioName} 缺少表格筛选工具条`)
   assert(metrics.hasPagination, `${scenarioName} 缺少 key 表格分页器`)
