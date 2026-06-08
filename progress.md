@@ -2,6 +2,14 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-08 用量日志客户端 IP 显示强化
+
+- 完成：`/admin-usage` 调用明细表把 `client_ip` 从“请求”单元格内的附属信息提升为独立“客户端 IP”列；顶部最近请求紧凑表也展示该列，避免只能在完整表格或会话详情里找到 IP。
+- 完成：用量日志筛选区新增“客户端 IP”输入框，按完整 IP 传递 `client_ip` 到后端 `usage_list`，便于直接定位某个来源。
+- 文档：同步更新 `web/README.md`，明确顶部最近请求、调用明细和会话请求级明细均展示客户端 IP。
+- 验证：已执行 `pnpm --dir web exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`node --check web/scripts/styleL1.mjs`、`pnpm --dir web test`、`pnpm --dir web css`、`pnpm --dir web build`、`STYLE_L1_SCENARIOS=admin-usage-desktop,admin-usage-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1` 和 `git diff --check`，均通过；`style:l1` 已新增断言，确认“客户端 IP”独立列表头、mock IP 值和 IP 筛选输入存在。另用 in-app Browser 打开本地 `http://127.0.0.1:5189/admin-usage`，未登录状态按预期回到 `/admin-login`，页面非空、标题为“API 管理后台”且横向溢出为 0；未启动后端，因此登录页的 `/auth/oauth/config` 代理请求出现预期连接失败。
+- 阻塞/风险：本轮只改管理端展示和筛选，不改后端 IP 记录口径、schema、导出、部署配置或历史 usage 数据。
+
 ## 2026-06-08 全站启用全部 API key
 
 - 完成：新增管理员 RPC `api.key_enable_all`，沿既有 `server -> service -> biz -> data` 主路径批量把当前禁用的 `gateway_api_keys.disabled` 改为 `false`；不改 schema、不删除 key、不改历史 usage。

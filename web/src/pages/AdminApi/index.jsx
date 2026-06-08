@@ -322,6 +322,7 @@ const INITIAL_USAGE_FILTERS = {
   statusCode: '',
   upstreamMode: '',
   clientType: '',
+  clientIP: '',
   errorType: '',
   timeRange: DEFAULT_USAGE_TIME_RANGE,
 }
@@ -1673,6 +1674,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     if (filters.statusCode) params.status_code = asInt(filters.statusCode, 0)
     if (filters.upstreamMode) params.upstream_mode = filters.upstreamMode
     if (filters.clientType) params.client_type = filters.clientType
+    if (filters.clientIP.trim()) params.client_ip = filters.clientIP.trim()
     if (filters.errorType) {
       params.error_type = filters.errorType
     }
@@ -2549,12 +2551,13 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     <div className={tableWrapClass}>
       <div className="overflow-auto">
         <table
-          className={`${tableClass} ${compact ? 'min-w-[900px]' : 'min-w-[2280px]'}`}
+          className={`${tableClass} ${compact ? 'min-w-[1040px]' : 'min-w-[2380px]'}`}
         >
           <thead>
             <tr>
               <th className={thClass}>时间</th>
               {!compact ? <th className={thClass}>请求</th> : null}
+              <th className={thClass}>客户端 IP</th>
               <th className={thClass}>凭据</th>
               <th className={thClass}>接口</th>
               <th className={thClass}>模型</th>
@@ -2624,11 +2627,13 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                       <div className="mt-1 break-all text-xs text-[#9aa39e]">
                         Session：{item.session_id || '未传入'}
                       </div>
-                      <div className="mt-1 break-all text-xs text-[#9aa39e]">
-                        IP：{item.client_ip || '未记录'}
-                      </div>
                     </td>
                   ) : null}
+                  <td
+                    className={`${tdClass} max-w-[180px] break-all font-mono text-xs`}
+                  >
+                    {item.client_ip || '未记录'}
+                  </td>
                   <td className={tdClass}>
                     <ApiKeyUsageCell item={item} />
                   </td>
@@ -2735,7 +2740,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             ) : (
               <tr>
                 <td
-                  colSpan={compact ? 6 : 16}
+                  colSpan={compact ? 7 : 17}
                   className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                 >
                   {loading ? '加载中...' : '暂无调用记录'}
@@ -4959,6 +4964,22 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     ariaLabel="调用客户端"
                     options={USAGE_CLIENT_TYPE_OPTIONS}
                     placeholder="输入客户端"
+                  />
+                </label>
+                <label className={fieldClass}>
+                  客户端 IP
+                  <input
+                    type="search"
+                    value={usageFilters.clientIP}
+                    onChange={(e) =>
+                      setUsageFilters((current) => ({
+                        ...current,
+                        clientIP: e.target.value,
+                      }))
+                    }
+                    className={inputClass}
+                    placeholder="输入完整 IP"
+                    autoComplete="off"
                   />
                 </label>
                 <label className={fieldClass}>

@@ -1042,6 +1042,8 @@ async function assertApiVisuals(page, scenarioName) {
       hasRecentCallsDetailFields:
         tableText.includes('req_style_l1_prod_1') &&
         tableText.includes('Session：session-style-l1') &&
+        tableText.includes('客户端 IP') &&
+        tableText.includes('203.0.113.9') &&
         tableText.includes('productionapikey') &&
         tableText.includes('ogw_production') &&
         tableText.includes('缓存输入 / 推理输出') &&
@@ -1638,9 +1640,15 @@ async function assertUsageTableVisuals(page, scenarioName) {
       hasClientTypeFilter: Boolean(
         main?.querySelector('[role="combobox"][aria-label="调用客户端"]')
       ),
+      hasClientIPFilter: Boolean(
+        main?.querySelector('input[placeholder="输入完整 IP"]')
+      ),
       hasErrorTypeFilter: Boolean(
         main?.querySelector('[role="combobox"][aria-label="错误或中断类型"]')
       ),
+      hasClientIPColumn:
+        document.body.innerText.includes('客户端 IP') &&
+        document.body.innerText.includes('203.0.113.9'),
       hasUpstreamStats: document.body.innerText.includes('上游分布'),
       hasClientStats:
         document.body.innerText.includes('客户端分布') &&
@@ -1670,7 +1678,9 @@ async function assertUsageTableVisuals(page, scenarioName) {
   assert(metrics.hasStatusCodeFilter, `${scenarioName} 缺少 HTTP 状态码筛选`)
   assert(metrics.hasUpstreamFilter, `${scenarioName} 缺少实际上游筛选`)
   assert(metrics.hasClientTypeFilter, `${scenarioName} 缺少调用客户端筛选`)
+  assert(metrics.hasClientIPFilter, `${scenarioName} 缺少客户端 IP 筛选`)
   assert(metrics.hasErrorTypeFilter, `${scenarioName} 缺少错误 / 中断类型筛选`)
+  assert(metrics.hasClientIPColumn, `${scenarioName} 缺少客户端 IP 独立列`)
   assert(metrics.hasUpstreamStats, `${scenarioName} 缺少上游分布统计`)
   assert(metrics.hasClientStats, `${scenarioName} 缺少客户端分布统计`)
   assert(metrics.hasUsageTabs, `${scenarioName} usage 分段视图顺序异常`)
@@ -2048,6 +2058,8 @@ async function assertUsageDetailsTab(page, scenarioName) {
   await expectText(page, '调用明细')
   await expectText(page, '费用估算')
   await expectText(page, '请求')
+  await expectText(page, '客户端 IP')
+  await expectText(page, '203.0.113.9')
   await expectText(page, 'Session：session-style-l1')
   await expectText(page, 'productionapikey')
   await expectText(page, '缓存输入 / 推理输出')
@@ -2066,6 +2078,7 @@ async function assertUsageDetailsTab(page, scenarioName) {
     hasPagination: document.body.innerText.includes('共 12 条'),
     hasRequestID: document.body.innerText.includes('req_style_l1_prod_1'),
     hasSessionID: document.body.innerText.includes('session-style-l1'),
+    hasClientIP: document.body.innerText.includes('203.0.113.9'),
     hasTable: Boolean(document.querySelector('main table')),
   }))
   assert(!metrics.hasDetailButton, `${scenarioName} 调用明细不应再有详情按钮`)
@@ -2076,6 +2089,7 @@ async function assertUsageDetailsTab(page, scenarioName) {
   assert(metrics.hasPagination, `${scenarioName} 调用明细缺少分页器`)
   assert(metrics.hasRequestID, `${scenarioName} 调用明细缺少 request_id`)
   assert(metrics.hasSessionID, `${scenarioName} 调用明细缺少 session_id`)
+  assert(metrics.hasClientIP, `${scenarioName} 调用明细缺少客户端 IP`)
   assert(metrics.hasTable, `${scenarioName} 调用明细缺少表格`)
 }
 
