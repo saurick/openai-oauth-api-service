@@ -246,6 +246,19 @@ func (d *JsonrpcData) handleGateway(
 			"disabled": true,
 		}), nil
 
+	case "key_enable_all":
+		updated, err := d.gatewayUC.EnableAllAPIKeys(ctx)
+		if err != nil {
+			return id, d.mapGatewayError(ctx, err), nil
+		}
+		d.auditGateway(ctx, "api.key_enable_all", "api_key", "all", map[string]any{
+			"updated": updated,
+		})
+		return id, okResult("全部 API key 已启用", map[string]any{
+			"updated":  updated,
+			"disabled": false,
+		}), nil
+
 	case "usage_list":
 		filter := gatewayUsageFilterFromParams(pm)
 		list, total, err := d.gatewayUC.ListUsageLogs(ctx, filter)

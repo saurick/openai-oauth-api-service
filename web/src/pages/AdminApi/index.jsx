@@ -2317,6 +2317,33 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     })
   }
 
+  const performEnableAllKeys = async () => {
+    setErrMsg('')
+    setNewKey(null)
+    setNewKeyBatch([])
+    try {
+      await apiRpc.call('key_enable_all')
+      setSelectedKeyIds([])
+      await loadAll()
+    } catch (err) {
+      setErrMsg(getActionErrorMessage(err, '启用全部 API key'))
+    }
+  }
+
+  const enableAllKeys = () => {
+    if (keyTotal === 0) return
+    const disabledCount = keys.filter((item) => item.disabled).length
+    openConfirmDialog({
+      title: '启用全部 API key',
+      description: '确认启用全站所有 API 凭据吗？',
+      detail: `这会立即恢复所有下游客户端调用，不限于当前页或当前筛选；历史调用记录和 key 本身会保留。当前已加载列表里有 ${disabledCount} 个禁用凭据。`,
+      confirmText: '启用全部 key',
+      pendingText: '启用中...',
+      tone: 'primary',
+      onConfirm: performEnableAllKeys,
+    })
+  }
+
   const selectKeyRow = (keyId) => {
     setSelectedKeyIds((current) => getTableSelectionAfterClick(current, keyId))
   }
@@ -2988,6 +3015,14 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   className={primaryButtonClass}
                 >
                   新建 API 凭据
+                </button>
+                <button
+                  type="button"
+                  onClick={enableAllKeys}
+                  disabled={loading || keyTotal === 0}
+                  className={secondaryButtonClass}
+                >
+                  启用全部 key
                 </button>
                 <button
                   type="button"

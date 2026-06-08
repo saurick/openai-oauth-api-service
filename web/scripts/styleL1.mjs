@@ -3099,6 +3099,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
   })
   await assertKeySearchAutoQuery(page, scenarioName)
   await assertKeyTableSelectionInteraction(page, scenarioName)
+  await assertEnableAllKeysConfirm(page, scenarioName)
   await assertDisableAllKeysConfirm(page, scenarioName)
 }
 
@@ -4098,6 +4099,68 @@ async function assertDisableAllKeysConfirm(page, scenarioName) {
   }
 }
 
+async function assertEnableAllKeysConfirm(page, scenarioName) {
+  const calls = page.__styleL1ApiRpcCalls || []
+  const startIndex = calls.length
+  const nativeDialogMessages = []
+  const nativeDialogHandler = async (dialog) => {
+    nativeDialogMessages.push(dialog.message())
+    await dialog.dismiss().catch(() => {})
+  }
+  page.on('dialog', nativeDialogHandler)
+  try {
+    await page.getByRole('button', { name: '启用全部 key' }).click()
+    const enableDialog = page.getByRole('dialog', { name: '启用全部 API key' })
+    await enableDialog.waitFor({ state: 'visible' })
+    const metrics = await enableDialog.evaluate((node) => ({
+      hasDescription:
+        node.innerText.includes('全站所有 API 凭据') &&
+        node.innerText.includes('不限于当前页或当前筛选') &&
+        node.innerText.includes('历史调用记录和 key 本身会保留'),
+      hasCancel: Array.from(node.querySelectorAll('button')).some(
+        (button) => button.textContent.trim() === '取消'
+      ),
+      hasConfirm: Array.from(node.querySelectorAll('button')).some(
+        (button) => button.textContent.trim() === '启用全部 key'
+      ),
+      rect: {
+        width: node.getBoundingClientRect().width,
+        height: node.getBoundingClientRect().height,
+      },
+    }))
+    assert.equal(
+      nativeDialogMessages.length,
+      0,
+      `${scenarioName} 启用全部 key 不应触发浏览器原生确认框: ${nativeDialogMessages.join(' | ')}`
+    )
+    assert(
+      metrics.hasDescription && metrics.hasCancel && metrics.hasConfirm,
+      `${scenarioName} 启用全部 key 确认弹窗内容异常: ${JSON.stringify(metrics)}`
+    )
+    assert(
+      metrics.rect.width > 0 && metrics.rect.height > 0,
+      `${scenarioName} 启用全部 key 确认弹窗盒模型异常: ${JSON.stringify(metrics)}`
+    )
+    await enableDialog.getByRole('button', { name: '启用全部 key' }).click()
+    const deadline = Date.now() + 5_000
+    while (Date.now() < deadline) {
+      if (
+        calls.slice(startIndex).some((call) => call.method === 'key_enable_all')
+      ) {
+        return
+      }
+      await delay(100)
+    }
+    assert.fail(
+      `${scenarioName} 未调用 key_enable_all: ${JSON.stringify(
+        calls.slice(startIndex)
+      )}`
+    )
+  } finally {
+    page.off('dialog', nativeDialogHandler)
+  }
+}
+
 async function readKeyTableSelectionState(page) {
   return page.evaluate(() => ({
     checked: Array.from(
@@ -4751,6 +4814,13 @@ function getApiMockData(method, params = {}, state = {}) {
   if (method === 'key_disable_all') {
     return {
       disabled: true,
+      updated: 6,
+    }
+  }
+
+  if (method === 'key_enable_all') {
+    return {
+      disabled: false,
       updated: 6,
     }
   }

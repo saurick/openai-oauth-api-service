@@ -397,6 +397,22 @@ func TestGatewayUsecaseDisableAllAPIKeysDelegatesToRepo(t *testing.T) {
 	}
 }
 
+func TestGatewayUsecaseEnableAllAPIKeysDelegatesToRepo(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{enableAllCount: 3}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+
+	updated, err := uc.EnableAllAPIKeys(context.Background())
+	if err != nil {
+		t.Fatalf("EnableAllAPIKeys() error = %v", err)
+	}
+	if updated != 3 {
+		t.Fatalf("updated = %d, want 3", updated)
+	}
+	if !repo.enableAllCalled {
+		t.Fatalf("expected repo EnableAllAPIKeys to be called")
+	}
+}
+
 func TestGatewayUsecaseRejectsNonCodexModels(t *testing.T) {
 	uc := NewGatewayUsecase(&gatewayPolicyTestRepo{}, log.NewStdLogger(testWriter{}), nil)
 
@@ -567,6 +583,8 @@ type gatewayPolicyTestRepo struct {
 	deletedIDs       []int
 	disableAllCount  int
 	disableAllCalled bool
+	enableAllCount   int
+	enableAllCalled  bool
 }
 
 func (r *gatewayPolicyTestRepo) CreateAPIKey(_ context.Context, input CreateGatewayAPIKeyInput, secret GatewayAPIKeySecret) (*GatewayAPIKey, error) {
@@ -617,6 +635,10 @@ func (r *gatewayPolicyTestRepo) SetAPIKeyDisabled(context.Context, int, bool) er
 func (r *gatewayPolicyTestRepo) DisableAllAPIKeys(context.Context) (int, error) {
 	r.disableAllCalled = true
 	return r.disableAllCount, nil
+}
+func (r *gatewayPolicyTestRepo) EnableAllAPIKeys(context.Context) (int, error) {
+	r.enableAllCalled = true
+	return r.enableAllCount, nil
 }
 func (r *gatewayPolicyTestRepo) GetAPIKeyByHash(context.Context, string) (*GatewayAPIKey, error) {
 	return nil, nil

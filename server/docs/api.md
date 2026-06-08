@@ -54,6 +54,7 @@ HTTP 路由：
 - `key_delete`
 - `key_set_disabled`
 - `key_disable_all`
+- `key_enable_all`
 - `gateway_upstream_get`
 - `gateway_upstream_set`
 - `usage_list`
@@ -80,7 +81,7 @@ HTTP 路由：
 - `user_usage_summary`
 - `user_usage_list`
 
-用途：管理员管理下游 API key、组织用户归属、key+model 策略、key 级上游策略覆盖、key 级默认推理档位、固定官方模型列表启停、模型级上下文压缩策略、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；若创建参数 `name` 非空，备注必须只包含字母和数字，并会生成 `ogw_<name>_<random>` 形式的明文 key。管理员 `api.key_list` / `api.key_update` 返回完整 `plain_key` 供后台展示和复制；普通组织用户接口不返回完整明文。`api.key_update` 只保存备注、额度、模型权限、上游策略、默认推理档位和禁用状态，不会重新生成 key；key 泄密或需要轮换时调用 `api.key_reset_secret` 单独重置。额度紧张或需要临时停服时，管理员可调用 `api.key_disable_all` 一次性禁用所有当前启用的下游 key；该操作不删除 key、不改历史 usage，可后续逐个重新启用。鉴权继续使用 `key_hash`，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
+用途：管理员管理下游 API key、组织用户归属、key+model 策略、key 级上游策略覆盖、key 级默认推理档位、固定官方模型列表启停、模型级上下文压缩策略、模型价格、站内告警、usage 汇总、按天聚合、按 key 聚合和最近请求。创建 key 时会随机生成完整 key；若创建参数 `name` 非空，备注必须只包含字母和数字，并会生成 `ogw_<name>_<random>` 形式的明文 key。管理员 `api.key_list` / `api.key_update` 返回完整 `plain_key` 供后台展示和复制；普通组织用户接口不返回完整明文。`api.key_update` 只保存备注、额度、模型权限、上游策略、默认推理档位和禁用状态，不会重新生成 key；key 泄密或需要轮换时调用 `api.key_reset_secret` 单独重置。额度紧张或需要临时停服时，管理员可调用 `api.key_disable_all` 一次性禁用所有当前启用的下游 key；需要恢复调用时，可调用 `api.key_enable_all` 一次性启用所有当前禁用的下游 key；两类全站操作都不删除 key、不改历史 usage。鉴权继续使用 `key_hash`，`key_prefix` 和 `key_last4` 用于 usage 归属与人工识别。
 
 模型目录以服务端代码中的官方 Codex 列表为真源，管理端只允许读取、启停和调整上下文压缩策略；`model_upsert` / `model_delete` 不作为正式管理接口开放。`api.model_context_update` 支持按模型保存 `context_window_tokens`、`context_compact_tokens`、`context_hard_tokens`、`context_compact_bytes`、`context_hard_bytes` 和 `context_keep_items`，阈值字段可传整数或 `260K` / `0.38M` 这类字符串，`K=1000`、`M=1000000`；`0` 表示使用服务端推荐 / 运维覆盖值；保存后仅影响后续请求，不改写历史 usage。内置推荐按 Codex 使用体验控制在 `400K` 上下文窗口内，默认 `260K` 开始压缩、`380K` 硬拦截，避免默认进入 API long-context 高消耗区间。
 

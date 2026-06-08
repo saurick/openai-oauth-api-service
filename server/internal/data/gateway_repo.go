@@ -216,6 +216,13 @@ func (r *gatewayRepo) DisableAllAPIKeys(ctx context.Context) (int, error) {
 		Save(ctx)
 }
 
+func (r *gatewayRepo) EnableAllAPIKeys(ctx context.Context) (int, error) {
+	return r.data.postgres.GatewayAPIKey.Update().
+		Where(gatewayapikey.DisabledEQ(true)).
+		SetDisabled(false).
+		Save(ctx)
+}
+
 func (r *gatewayRepo) GetAPIKeyByHash(ctx context.Context, keyHash string) (*biz.GatewayAPIKey, error) {
 	item, err := r.data.postgres.GatewayAPIKey.Query().
 		Where(gatewayapikey.KeyHashEQ(keyHash)).

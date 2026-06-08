@@ -499,6 +499,7 @@ type GatewayRepo interface {
 	DeleteAPIKeys(ctx context.Context, ids []int) (int, error)
 	SetAPIKeyDisabled(ctx context.Context, id int, disabled bool) error
 	DisableAllAPIKeys(ctx context.Context) (int, error)
+	EnableAllAPIKeys(ctx context.Context) (int, error)
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (*GatewayAPIKey, error)
 	TouchAPIKeyUsed(ctx context.Context, id int, usedAt time.Time) error
 
@@ -938,6 +939,10 @@ func (uc *GatewayUsecase) SetAPIKeyDisabled(ctx context.Context, id int, disable
 
 func (uc *GatewayUsecase) DisableAllAPIKeys(ctx context.Context) (int, error) {
 	return uc.repo.DisableAllAPIKeys(ctx)
+}
+
+func (uc *GatewayUsecase) EnableAllAPIKeys(ctx context.Context) (int, error) {
+	return uc.repo.EnableAllAPIKeys(ctx)
 }
 
 func (uc *GatewayUsecase) AuthenticateAPIKey(ctx context.Context, plain string) (*GatewayAPIKey, error) {

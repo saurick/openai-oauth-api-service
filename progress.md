@@ -2,6 +2,17 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-08 全站启用全部 API key
+
+- 完成：新增管理员 RPC `api.key_enable_all`，沿既有 `server -> service -> biz -> data` 主路径批量把当前禁用的 `gateway_api_keys.disabled` 改为 `false`；不改 schema、不删除 key、不改历史 usage。
+- 完成：`/admin-keys` 增加「启用全部 key」按钮，复用后台内确认弹窗，明确操作是全站范围且不限于当前页或当前筛选；确认后清空当前选择并刷新列表。
+- 文档：同步更新 `server/docs/api.md` 和 `web/README.md`，把全站禁用 / 启用都记录为只切换禁用状态的管理操作。
+- 验证：已执行 `go test -count=1 ./internal/biz ./internal/data`、`go test -count=1 ./...`、`pnpm --dir web exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`node --check web/scripts/styleL1.mjs`、`pnpm --dir web test`、`pnpm --dir web css`、`pnpm --dir web build`、`STYLE_L1_SCENARIOS=admin-keys-desktop,admin-keys-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1` 和 `git diff --check`，均通过；`style:l1` 已覆盖新增启用全部按钮、确认弹窗内容、非浏览器原生 confirm、盒模型和 `key_enable_all` RPC 调用。另用 in-app Browser 打开本地 `http://127.0.0.1:5188/admin-keys`，未登录状态按预期回到 `/admin-login`，页面非空、标题正确且横向溢出为 0；未启动后端，因此登录页的 `/auth/oauth/config` 代理请求出现预期连接失败。
+- 部署：已按低配服务器路径部署到 `192.168.0.133`。本地构建 linux/amd64 镜像 `oauth-api-service-server:20260608T051344-34295339-enable-all-keys`，上传到 `/data/openai-oauth-api-service/releases/20260608T051344-34295339-enable-all-keys`；远端只执行 `docker load`、宿主机 Atlas status、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建。Atlas 当前版本 `20260604123931`、pending 0；远端本机和公网 `/healthz` / `/readyz` 通过，当前容器镜像为新 tag，容器环境 `GIT_SHA_SHORT=34295339-dirty`、`IMAGE_TAG=20260608T051344-34295339-enable-all-keys`。
+- 线上操作：已用管理员 RPC 调用 `api.key_enable_all`，执行前加载到 11 个 key 且 11 个均为禁用，执行返回 `updated=11`，执行后禁用数为 0；`api.summary` smoke 通过，近 5 分钟容器日志未见 `panic` / `fatal`。
+- 清理：部署成功后记录远端 `/` 使用率、`docker system df` 与运行容器；删除远端 release 镜像 tar 包和 migration tar 包，执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未被任何容器使用的旧镜像并回收 353.2MB，未清理 volume。清理后根分区使用率 21%，当前 app-server 仍运行新镜像。
+- 阻塞/风险：本轮只加全站恢复开关，不改单 key 启停、批量删除、key 重置、usage 真源、部署脚本或生产配置。
+
 ## 2026-06-04 用量日志客户端 IP 记录
 
 - 完成：`gateway_usage_logs` 新增 `client_ip` 字段和 `client_ip + created_at` 索引，OpenAI-compatible `/v1` 网关请求在统一 usage 写入点记录客户端 IP；默认只在直连来源为本机、内网或 link-local 时采信 `X-Forwarded-For` / `X-Real-IP`，也支持用 `GATEWAY_TRUSTED_PROXY_CIDRS` 显式收紧可信反代 CIDR。
