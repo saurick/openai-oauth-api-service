@@ -2870,7 +2870,9 @@ async function assertKeyTableVisuals(page, scenarioName) {
       hasKeyIdentityHeader: document.body.innerText.includes('完整凭据'),
       hasCreatedAtHeader: document.body.innerText.includes('创建时间'),
       hasUpdatedAtHeader: document.body.innerText.includes('更新时间'),
-      hasLastUsedLabel: document.body.innerText.includes('最近使用：'),
+      hasLastUsedHeader: Array.from(
+        table?.querySelectorAll('thead th') || []
+      ).some((node) => node.textContent.trim() === '最近使用时间'),
       hasUpstreamStrategyHeader: document.body.innerText.includes('上游策略'),
       hasDefaultEffortHeader: document.body.innerText.includes('默认 Effort'),
       hasUpstreamStrategyValue:
@@ -2888,8 +2890,8 @@ async function assertKeyTableVisuals(page, scenarioName) {
       updatedAtCells: Array.from(main?.querySelectorAll('table tbody tr') || [])
         .map((row) => row.children[3]?.textContent.trim() || '')
         .filter(Boolean),
-      lastUsedTexts: Array.from(main?.querySelectorAll('table tbody tr') || [])
-        .map((row) => row.children[1]?.textContent.trim() || '')
+      lastUsedCells: Array.from(main?.querySelectorAll('table tbody tr') || [])
+        .map((row) => row.children[4]?.textContent.trim() || '')
         .filter(Boolean),
       hasSearchInput: Boolean(
         main?.querySelector('input[placeholder="搜索备注、前缀或后四位"]')
@@ -2923,7 +2925,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
       tableWidth: tableRect?.width || 0,
       keyCells: Array.from(table?.querySelectorAll('tbody tr') || []).map(
         (row) => {
-          const cell = row.children[4]
+          const cell = row.children[5]
           const value = cell?.querySelector('.admin-key-value-text')
           const button = cell?.querySelector('button')
           const cellRect = cell?.getBoundingClientRect()
@@ -2956,7 +2958,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
       }),
       statusCells: Array.from(table?.querySelectorAll('tbody tr') || []).map(
         (row) => {
-          const cell = row.children[9]
+          const cell = row.children[10]
           const badge = cell?.querySelector('span')
           const cellRect = cell?.getBoundingClientRect()
           const badgeRect = badge?.getBoundingClientRect()
@@ -2981,7 +2983,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
   assert(metrics.hasKeyIdentityHeader, `${scenarioName} 缺少完整凭据列`)
   assert(metrics.hasCreatedAtHeader, `${scenarioName} 缺少创建时间列`)
   assert(metrics.hasUpdatedAtHeader, `${scenarioName} 缺少更新时间列`)
-  assert(metrics.hasLastUsedLabel, `${scenarioName} 缺少最近使用时间展示`)
+  assert(metrics.hasLastUsedHeader, `${scenarioName} 缺少最近使用时间列`)
   assert(metrics.hasUpstreamStrategyHeader, `${scenarioName} 缺少上游策略列`)
   assert(metrics.hasDefaultEffortHeader, `${scenarioName} 缺少默认 Effort 列`)
   assert(
@@ -3011,10 +3013,12 @@ async function assertKeyTableVisuals(page, scenarioName) {
     `${scenarioName} 更新时间列展示异常: ${JSON.stringify(metrics.updatedAtCells)}`
   )
   assert(
-    metrics.lastUsedTexts.length === 8 &&
-      metrics.lastUsedTexts.some((value) => /最近使用：[^-]/.test(value)) &&
-      metrics.lastUsedTexts.some((value) => value.includes('最近使用：-')),
-    `${scenarioName} 最近使用时间展示异常: ${JSON.stringify(metrics.lastUsedTexts)}`
+    metrics.lastUsedCells.length === 8 &&
+      metrics.lastUsedCells.some(
+        (value) => value !== '-' && /\d/.test(value)
+      ) &&
+      metrics.lastUsedCells.some((value) => value === '-'),
+    `${scenarioName} 最近使用时间列展示异常: ${JSON.stringify(metrics.lastUsedCells)}`
   )
   assert(metrics.hasTableToolbar, `${scenarioName} 缺少表格筛选工具条`)
   assert(metrics.hasPagination, `${scenarioName} 缺少 key 表格分页器`)

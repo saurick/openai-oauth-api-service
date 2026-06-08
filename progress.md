@@ -2,6 +2,15 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-08 API 凭据最近使用时间独立列
+
+- 完成：按线上反馈把 `/admin-keys` 中“最近使用时间”从备注下方的二级文本提升为独立列，列头为“最近使用时间”；无记录时仍显示 `-`，不改后端 `last_used_at` 真源和写入口径。
+- 完成：同步调整 API 凭据表最小宽度、列宽、空态 `colSpan`、`style:l1` 表格列索引和状态列断言，避免新增列后完整凭据、状态、复制按钮等相邻列错位。
+- 文档：同步更新 `web/README.md`，明确 API 凭据列表用独立列展示最近使用时间。
+- 验证：已执行 `node --check web/scripts/styleL1.mjs`、`pnpm --dir web exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`pnpm --dir web test`、`pnpm --dir web css`、`pnpm --dir web build`、`STYLE_L1_BASE_URL=http://127.0.0.1:4393 STYLE_L1_SCENARIOS=admin-keys-desktop,admin-keys-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`，均通过；`style:l1` 已确认 `/admin-keys` 桌面和移动端存在独立“最近使用时间”列，且列内同时覆盖有值和 `-`。
+- 部署：待执行。
+- 阻塞/风险：本轮只改前端表格展示、文档和回归断言，不改后端 `last_used_at` 更新口径、schema、历史数据或 usage 真源。
+
 ## 2026-06-08 API 凭据最近使用时间回归
 
 - 完成：确认 API 凭据最近使用时间沿既有 `gateway_api_keys.last_used_at` 主路径维护，网关统一 usage 写入后调用 `TouchAPIKeyUsed` 更新，`key_list` 已返回 `last_used_at`，`/admin-keys` 在备注下方展示“最近使用”；本轮不新增 schema、不从前端伪造时间，也不改 usage 记录口径。

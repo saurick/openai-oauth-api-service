@@ -3105,10 +3105,11 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
           <div className={tableWrapClass}>
             <div className="overflow-auto">
-              <table className={`${keyTableClass} min-w-[1500px]`}>
+              <table className={`${keyTableClass} min-w-[1660px]`}>
                 <colgroup>
                   <col className="admin-key-table-selection-col" />
                   <col className="admin-key-table-remark-col" />
+                  <col className="admin-key-table-date-col" />
                   <col className="admin-key-table-date-col" />
                   <col className="admin-key-table-date-col" />
                   <col className="admin-key-table-key-col" />
@@ -3137,6 +3138,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                     <th className={thClass}>备注</th>
                     <th className={thClass}>创建时间</th>
                     <th className={thClass}>更新时间</th>
+                    <th className={thClass}>最近使用时间</th>
                     <th className={thClass}>完整凭据</th>
                     <th className={thClass}>模型限制</th>
                     <th className={thClass}>上游策略</th>
@@ -3176,9 +3178,6 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                           </td>
                           <td className={`${tdClass} font-medium`}>
                             {item.name || '无备注'}
-                            <div className="mt-1 text-xs text-[#9aa39e]">
-                              最近使用：{fmtTs(item.last_used_at)}
-                            </div>
                           </td>
                           <td
                             className={`${tdClass} whitespace-nowrap text-sm`}
@@ -3189,6 +3188,11 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                             className={`${tdClass} whitespace-nowrap text-sm`}
                           >
                             {fmtTs(item.updated_at)}
+                          </td>
+                          <td
+                            className={`${tdClass} whitespace-nowrap text-sm`}
+                          >
+                            {fmtTs(item.last_used_at)}
                           </td>
                           <td className={`${tdClass} font-mono text-xs`}>
                             <div className="admin-key-value-cell">
@@ -3258,7 +3262,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   ) : (
                     <tr>
                       <td
-                        colSpan={10}
+                        colSpan={11}
                         className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                       >
                         {hasActiveKeyFilters
