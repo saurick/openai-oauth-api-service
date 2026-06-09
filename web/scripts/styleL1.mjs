@@ -150,7 +150,7 @@ const scenarios = [
       await expectText(page, '用量日志')
       await expectText(page, '每日模型')
       await expectText(page, '时间范围')
-      await expectText(page, '24h 范围内第')
+      await expectText(page, '今天 范围内第')
       await expectNoText(page, '返回控制台')
       await assertAdminChrome(page, 'admin-usage-desktop')
       await assertUsageTableVisuals(page, 'admin-usage-desktop')
@@ -167,7 +167,7 @@ const scenarios = [
       await expectText(page, '用量日志')
       await expectText(page, '每日模型')
       await expectText(page, '时间范围')
-      await expectText(page, '24h 范围内第')
+      await expectText(page, '今天 范围内第')
       await expectNoText(page, '返回控制台')
       await assertAdminChrome(page, 'admin-usage-mobile')
       await assertUsageTableVisuals(page, 'admin-usage-mobile')
@@ -1666,7 +1666,7 @@ async function assertUsageTableVisuals(page, scenarioName) {
         main?.querySelectorAll(
           '.admin-summary-card .admin-th-help[data-tooltip]'
         ).length >= 6,
-      hasUsageWindowSummary: document.body.innerText.includes('24h 范围内第'),
+      hasUsageWindowSummary: document.body.innerText.includes('今天 范围内第'),
       mainHeight: mainRect?.height || 0,
       tableHeight: tableRect?.height || 0,
       tableWidth: tableRect?.width || 0,

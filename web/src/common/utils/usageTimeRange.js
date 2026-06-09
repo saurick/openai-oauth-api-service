@@ -1,6 +1,6 @@
 export const DAY_SECONDS = 24 * 60 * 60
 
-export const DEFAULT_USAGE_TIME_RANGE = '24h'
+export const DEFAULT_USAGE_TIME_RANGE = 'today'
 export const DEFAULT_DAILY_USAGE_TIME_RANGE = '30d'
 
 export const USAGE_TIME_RANGE_OPTIONS = [

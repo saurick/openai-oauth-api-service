@@ -54,6 +54,15 @@
 - 清理：部署成功后记录远端 `/` 使用率、`docker system df` 与运行容器；删除远端 release 镜像 tar 包和 migration tar 包，执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未被任何容器使用的旧镜像并回收 392.8MB，未清理 volume。清理后根分区使用率 21%，当前 app-server 仍运行新镜像。
 - 阻塞/风险：本轮只完成 schema / usage 写入 / 管理端展示与导出，不做 IP 风控、GeoIP、黑名单或保留期清理；如后续需要按公网真实来源 IP 归因，应继续核对宿主机 Nginx / frp / Docker bridge 的反代头链路和 `GATEWAY_TRUSTED_PROXY_CIDRS` 配置。
 
+## 2026-06-09 用量日志默认今天窗口
+
+- 完成：将用量日志共享默认时间窗口从滚动 `24h` 调整为「今天」；`today` 仍按本地自然日 00:00 到当前时间计算，`24h` 仍保留为可手动选择的滚动 24 小时窗口。每日模型保持未手动选择时默认 30 天，不改看板趋势的 30 天默认、不改后端 usage 接口、schema 或迁移。
+- 文档：同步更新 `web/README.md`，明确用量日志默认选择「今天」。
+- 验证：已执行 `pnpm --dir web exec eslint --ext .js --ext .jsx src/common/utils/usageTimeRange.js scripts/styleL1.mjs`、`node --check web/scripts/styleL1.mjs`、`pnpm --dir web test`、`pnpm --dir web css`、`pnpm --dir web build`、`STYLE_L1_PORT=4355 STYLE_L1_SCENARIOS=admin-analytics-redirect,admin-usage-desktop,admin-usage-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`、`git diff --check -- web/src/common/utils/usageTimeRange.js web/scripts/styleL1.mjs web/README.md progress.md`，均通过。线上 Playwright 登录 `https://oauth-api.saurick.me/admin-usage` 后确认默认摘要显示「今天 范围内第」，不再显示「24h 范围内第」，时间范围 combobox 当前值为「今天」，控制台无 error。
+- 部署：本地构建 linux/amd64 镜像 `oauth-api-service-server:20260609T103505-48598b49-local-default-today`，上传到 `192.168.0.133:/data/openai-oauth-api-service/releases/20260609T103505-48598b49-local-default-today`。远端只执行 `docker load`、宿主机 Atlas status、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建；Atlas 当前版本 `20260604123931`、pending 0。远端本机与公网 `/healthz` / `/readyz` 通过，管理员 `admin/adminadmin` 登录、`api.summary` 与今天窗口 `api.usage_list` smoke 通过。
+- 清理：部署成功后记录远端 `/` 使用率、`docker system df` 与运行容器；删除远端 release 镜像 tar 包，执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260608T170813-48598b49-key-last-used-column`，回收 353.3MB，未清理 volume。清理后根分区使用率 23%，当前 app-server 运行镜像为 `oauth-api-service-server:20260609T103505-48598b49-local-default-today`。
+- 阻塞/风险：本轮只改前端默认时间窗口和文档/回归断言；镜像因按“先部署后提交”流程构建，tag 带有 `48598b49-local` 标记，但运行代码已包含本轮改动。
+
 ## 2026-06-04 看板与用量日志指标说明
 
 - 完成：`/admin-dashboard` 顶部核心指标卡和 `/admin-usage` 用量日志摘要指标卡新增问号说明，复用现有后台 tooltip 交互与暗色主题变量；说明范围覆盖今日 Token / 请求数、服务错误率、响应耗时、RPM/TPM、上游分布、客户端分布、费用估算和 API 凭据状态。
