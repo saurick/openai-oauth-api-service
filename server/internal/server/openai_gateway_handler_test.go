@@ -1382,6 +1382,159 @@ func TestStreamCodexBackendResponsesPassesThroughEventsAndUsage(t *testing.T) {
 	}
 }
 
+func TestGatewayLargeRequestGuardBlocksConcurrentLargeRequestsPerKey(t *testing.T) {
+	t.Setenv("GATEWAY_LARGE_REQUEST_MIN_BYTES", "16")
+	t.Setenv("GATEWAY_LARGE_REQUEST_MAX_INFLIGHT_PER_KEY", "1")
+	t.Setenv("GATEWAY_LARGE_REQUEST_BURST_MAX_PER_KEY", "10")
+	originalLimiter := gatewayLargeRequestLimiter
+	originalBurstLimiter := gatewayLargeRequestBurstLimiter
+	gatewayLargeRequestLimiter = newGatewayInFlightLimiter()
+	gatewayLargeRequestBurstLimiter = newGatewayBurstLimiter()
+	defer func() {
+		gatewayLargeRequestLimiter = originalLimiter
+		gatewayLargeRequestBurstLimiter = originalBurstLimiter
+	}()
+
+	handler := &openAIGatewayHandler{}
+	key := &biz.GatewayAPIKey{ID: 9, KeyPrefix: "ogw_test"}
+	if release, err := handler.acquireGatewayLargeRequestSlot(key, "/v1/responses", []byte("small")); err != nil || release != nil {
+		t.Fatalf("small request should not acquire guard, release_is_nil=%t err=%v", release == nil, err)
+	}
+
+	release, err := handler.acquireGatewayLargeRequestSlot(key, "/v1/responses", []byte("0123456789abcdef"))
+	if err != nil {
+		t.Fatalf("first large request acquire failed: %v", err)
+	}
+	if release == nil {
+		t.Fatal("first large request should return a release function")
+	}
+	if _, err := handler.acquireGatewayLargeRequestSlot(key, "/v1/chat/completions", []byte("0123456789abcdef")); !errors.Is(err, errGatewayLargeRequestInFlight) {
+		t.Fatalf("second large request err = %v, want inflight", err)
+	}
+
+	release()
+	release, err = handler.acquireGatewayLargeRequestSlot(key, "/v1/chat/completions", []byte("0123456789abcdef"))
+	if err != nil {
+		t.Fatalf("large request should acquire after release: %v", err)
+	}
+	release()
+}
+
+func TestGatewayLargeRequestGuardBlocksBurstPerKey(t *testing.T) {
+	t.Setenv("GATEWAY_LARGE_REQUEST_MIN_BYTES", "4")
+	t.Setenv("GATEWAY_LARGE_REQUEST_MAX_INFLIGHT_PER_KEY", "0")
+	t.Setenv("GATEWAY_LARGE_REQUEST_BURST_MAX_PER_KEY", "2")
+	t.Setenv("GATEWAY_LARGE_REQUEST_BURST_WINDOW_SECONDS", "60")
+	originalLimiter := gatewayLargeRequestLimiter
+	originalBurstLimiter := gatewayLargeRequestBurstLimiter
+	gatewayLargeRequestLimiter = newGatewayInFlightLimiter()
+	gatewayLargeRequestBurstLimiter = newGatewayBurstLimiter()
+	defer func() {
+		gatewayLargeRequestLimiter = originalLimiter
+		gatewayLargeRequestBurstLimiter = originalBurstLimiter
+	}()
+
+	handler := &openAIGatewayHandler{}
+	key := &biz.GatewayAPIKey{ID: 10, KeyPrefix: "ogw_burst"}
+	for i := 0; i < 2; i++ {
+		release, err := handler.acquireGatewayLargeRequestSlot(key, "/v1/responses", []byte("large"))
+		if err != nil {
+			t.Fatalf("large request %d should pass: %v", i+1, err)
+		}
+		if release != nil {
+			release()
+		}
+	}
+	if _, err := handler.acquireGatewayLargeRequestSlot(key, "/v1/responses", []byte("large")); !errors.Is(err, errGatewayLargeRequestBurst) {
+		t.Fatalf("third large request err = %v, want burst", err)
+	}
+	if _, err := handler.acquireGatewayLargeRequestSlot(&biz.GatewayAPIKey{ID: 11}, "/v1/responses", []byte("large")); err != nil {
+		t.Fatalf("different key should have separate burst window: %v", err)
+	}
+	if _, err := handler.acquireGatewayLargeRequestSlot(key, "/v1/models", []byte("large")); err != nil {
+		t.Fatalf("models endpoint should not use large request guard: %v", err)
+	}
+}
+
+type failingStreamResponseWriter struct {
+	header    http.Header
+	failAfter int
+	writes    int
+	status    int
+}
+
+func newFailingStreamResponseWriter(failAfter int) *failingStreamResponseWriter {
+	return &failingStreamResponseWriter{
+		header:    make(http.Header),
+		failAfter: failAfter,
+	}
+}
+
+func (w *failingStreamResponseWriter) Header() http.Header {
+	return w.header
+}
+
+func (w *failingStreamResponseWriter) WriteHeader(status int) {
+	w.status = status
+}
+
+func (w *failingStreamResponseWriter) Write(p []byte) (int, error) {
+	w.writes++
+	if w.writes > w.failAfter {
+		return 0, io.ErrClosedPipe
+	}
+	return len(p), nil
+}
+
+func (w *failingStreamResponseWriter) Flush() {}
+
+func TestStreamCodexBackendResponsesCancelsUpstreamOnClientWriteFailure(t *testing.T) {
+	accessToken := testJWT(time.Now().Add(time.Hour).Unix(), "acct_123")
+	authPath := filepath.Join(t.TempDir(), "auth.json")
+	if err := os.WriteFile(authPath, []byte(`{"tokens":{"access_token":"`+accessToken+`","refresh_token":"refresh-token","account_id":"acct_123"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	upstreamCanceled := make(chan struct{})
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		_, _ = w.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\n"))
+		if flusher != nil {
+			flusher.Flush()
+		}
+		<-r.Context().Done()
+		close(upstreamCanceled)
+	}))
+	defer upstream.Close()
+
+	t.Setenv("CODEX_AUTH_FILE", authPath)
+	t.Setenv("CODEX_BACKEND_BASE_URL", upstream.URL)
+	t.Setenv("CODEX_BACKEND_TIMEOUT_SECONDS", "30")
+
+	writer := newFailingStreamResponseWriter(1)
+	result, err := (&openAIGatewayHandler{}).streamCodexBackendResponses(
+		context.Background(),
+		writer,
+		"/v1/responses",
+		[]byte(`{"model":"gpt-5.5","stream":true,"input":"Reply OK"}`),
+		"gpt-5.5",
+		"high",
+		false,
+	)
+	if !isGatewayClientCanceled(err) {
+		t.Fatalf("err = %v, want client canceled", err)
+	}
+	if !result.Diagnostic.UpstreamStreamStarted {
+		t.Fatalf("expected upstream stream to start before write failure: %#v", result.Diagnostic)
+	}
+	select {
+	case <-upstreamCanceled:
+	case <-time.After(time.Second):
+		t.Fatal("upstream request was not canceled after client write failure")
+	}
+}
+
 func TestStreamCodexBackendResponsesClassifiesMidStreamClose(t *testing.T) {
 	accessToken := testJWT(time.Now().Add(time.Hour).Unix(), "acct_123")
 	authPath := filepath.Join(t.TempDir(), "auth.json")

@@ -36,6 +36,10 @@ const (
 	maxGatewayFiles                       = 4
 	maxGatewayFileBytes                   = 16 << 20
 	maxGatewayRequestBytes                = 90 << 20
+	defaultGatewayLargeRequestMinBytes    = 64 << 10
+	defaultGatewayLargeRequestMaxInFlight = 1
+	defaultGatewayLargeRequestBurstMax    = 4
+	defaultGatewayLargeRequestBurstWindow = 60 * time.Second
 	defaultCodexCLITimeout                = 28800 * time.Second
 	gatewayUsageWriteTimeout              = 5 * time.Second
 	defaultGatewayStreamHeartbeatInterval = 15 * time.Second
@@ -45,6 +49,14 @@ const (
 var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
 
 var codexCLIUpstreamMu sync.Mutex
+var gatewayLargeRequestLimiter = newGatewayInFlightLimiter()
+var gatewayLargeRequestBurstLimiter = newGatewayBurstLimiter()
+
+var (
+	errGatewayLargeRequestInFlight = errors.New("gateway large request already in flight")
+	errGatewayLargeRequestBurst    = errors.New("gateway large request burst limited")
+	errGatewayClientStreamClosed   = errors.New("gateway client stream closed")
+)
 
 type openAIUsageMetrics struct {
 	Model           string
@@ -436,6 +448,18 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		return
 	}
 	body = prepared.Body
+	releaseLargeRequest, inflightErr := h.acquireGatewayLargeRequestSlot(key, r.URL.Path, body)
+	if inflightErr != nil {
+		diagnostic := prepared.Diagnostic
+		if diagnostic.RequestBytes == 0 {
+			diagnostic = gatewayUsageDiagnosticForRequest(r.URL.Path, body, reasoningEffort)
+		}
+		h.writeGatewayLargeRequestLimit(w, r, key, requestID, sessionID, endpoint, requestModel, reasoningEffort, upstreamMode, stream, body, start, diagnostic, inflightErr)
+		return
+	}
+	if releaseLargeRequest != nil {
+		defer releaseLargeRequest()
+	}
 
 	if stream && r.URL.Path == "/v1/responses" && upstreamMode == codexUpstreamModeBackend {
 		h.handleCodexBackendResponsesStream(w, r, key, requestID, sessionID, endpoint, requestModel, reasoningEffort, body, start, prepared.Diagnostic, fallbackEnabled)
@@ -443,6 +467,176 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 	}
 
 	h.handleCodexCLIProxy(w, r, key, requestID, sessionID, endpoint, requestModel, reasoningEffort, stream, body, start, prepared.Diagnostic)
+}
+
+func (h *openAIGatewayHandler) writeGatewayLargeRequestLimit(
+	w stdhttp.ResponseWriter,
+	r *stdhttp.Request,
+	key *biz.GatewayAPIKey,
+	requestID string,
+	sessionID string,
+	endpoint string,
+	requestModel string,
+	reasoningEffort string,
+	upstreamMode string,
+	stream bool,
+	body []byte,
+	start time.Time,
+	diagnostic biz.GatewayUsageDiagnostic,
+	err error,
+) {
+	status := stdhttp.StatusTooManyRequests
+	errorType := gatewayErrorType(err)
+	h.writeGatewayError(w, status, err, errorType)
+	h.recordUsage(r, key, &biz.GatewayUsageLog{
+		APIKeyID:               key.ID,
+		APIKeyPrefix:           key.KeyPrefix,
+		SessionID:              sessionID,
+		RequestID:              requestID,
+		Method:                 r.Method,
+		Path:                   r.URL.Path,
+		Endpoint:               endpoint,
+		Model:                  requestModel,
+		ReasoningEffort:        reasoningEffort,
+		StatusCode:             status,
+		Success:                false,
+		Stream:                 stream,
+		RequestBytes:           int64(len(body)),
+		DurationMS:             time.Since(start).Milliseconds(),
+		UpstreamConfiguredMode: upstreamMode,
+		UpstreamMode:           upstreamMode,
+		UpstreamErrorType:      errorType,
+		ErrorType:              errorType,
+		Diagnostic:             diagnostic,
+		CreatedAt:              time.Now(),
+	})
+}
+
+type gatewayInFlightLimiter struct {
+	mu       sync.Mutex
+	inFlight map[string]int
+}
+
+func newGatewayInFlightLimiter() *gatewayInFlightLimiter {
+	return &gatewayInFlightLimiter{inFlight: make(map[string]int)}
+}
+
+func (l *gatewayInFlightLimiter) tryAcquire(key string, limit int) (func(), bool) {
+	if l == nil || strings.TrimSpace(key) == "" || limit <= 0 {
+		return nil, true
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	current := l.inFlight[key]
+	if current >= limit {
+		return nil, false
+	}
+	l.inFlight[key] = current + 1
+	return func() {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		if l.inFlight[key] <= 1 {
+			delete(l.inFlight, key)
+			return
+		}
+		l.inFlight[key]--
+	}, true
+}
+
+func (h *openAIGatewayHandler) acquireGatewayLargeRequestSlot(key *biz.GatewayAPIKey, path string, body []byte) (func(), error) {
+	if !gatewayLargeRequestNeedsGuard(path, body) {
+		return nil, nil
+	}
+	limiterKey := gatewayLargeRequestLimiterKey(key)
+	if !gatewayLargeRequestBurstLimiter.allow(limiterKey, gatewayLargeRequestBurstMaxPerKey(), gatewayLargeRequestBurstWindowPerKey(), time.Now()) {
+		return nil, errGatewayLargeRequestBurst
+	}
+	limit := gatewayLargeRequestMaxInFlightPerKey()
+	if limit <= 0 {
+		return nil, nil
+	}
+	release, ok := gatewayLargeRequestLimiter.tryAcquire(limiterKey, limit)
+	if !ok {
+		return nil, errGatewayLargeRequestInFlight
+	}
+	return release, nil
+}
+
+func gatewayLargeRequestNeedsGuard(path string, body []byte) bool {
+	switch path {
+	case "/v1/responses", "/v1/chat/completions":
+	default:
+		return false
+	}
+	threshold := gatewayLargeRequestMinBytes()
+	return threshold > 0 && len(body) >= threshold
+}
+
+func gatewayLargeRequestMinBytes() int {
+	return envInt("GATEWAY_LARGE_REQUEST_MIN_BYTES", defaultGatewayLargeRequestMinBytes)
+}
+
+func gatewayLargeRequestMaxInFlightPerKey() int {
+	return envInt("GATEWAY_LARGE_REQUEST_MAX_INFLIGHT_PER_KEY", defaultGatewayLargeRequestMaxInFlight)
+}
+
+func gatewayLargeRequestBurstMaxPerKey() int {
+	return envInt("GATEWAY_LARGE_REQUEST_BURST_MAX_PER_KEY", defaultGatewayLargeRequestBurstMax)
+}
+
+func gatewayLargeRequestBurstWindowPerKey() time.Duration {
+	seconds := envInt("GATEWAY_LARGE_REQUEST_BURST_WINDOW_SECONDS", int(defaultGatewayLargeRequestBurstWindow/time.Second))
+	if seconds <= 0 {
+		return 0
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func gatewayLargeRequestLimiterKey(key *biz.GatewayAPIKey) string {
+	if key == nil {
+		return ""
+	}
+	if key.ID > 0 {
+		return fmt.Sprintf("key:%d", key.ID)
+	}
+	return "prefix:" + strings.TrimSpace(key.KeyPrefix)
+}
+
+type gatewayBurstLimiter struct {
+	mu     sync.Mutex
+	events map[string][]time.Time
+}
+
+func newGatewayBurstLimiter() *gatewayBurstLimiter {
+	return &gatewayBurstLimiter{events: make(map[string][]time.Time)}
+}
+
+func (l *gatewayBurstLimiter) allow(key string, limit int, window time.Duration, now time.Time) bool {
+	if l == nil || strings.TrimSpace(key) == "" || limit <= 0 || window <= 0 {
+		return true
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+	cutoff := now.Add(-window)
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	events := l.events[key]
+	keep := events[:0]
+	for _, ts := range events {
+		if ts.After(cutoff) {
+			keep = append(keep, ts)
+		}
+	}
+	if len(keep) >= limit {
+		l.events[key] = keep
+		return false
+	}
+	keep = append(keep, now)
+	l.events[key] = keep
+	return true
 }
 
 type codexBackendResponsesStreamResult struct {
@@ -570,7 +764,11 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 		Started:    true,
 		Diagnostic: gatewayUsageDiagnosticForRequest(path, body, reasoningEffort),
 	}
-	result.ResponseBytes += writeGatewaySSEComment(w, flusher, "keepalive")
+	n, writeErr := writeGatewaySSECommentWithError(w, flusher, "keepalive")
+	result.ResponseBytes += n
+	if writeErr != nil {
+		return result, gatewayClientStreamWriteError(writeErr)
+	}
 
 	ticker := time.NewTicker(gatewayStreamHeartbeatInterval())
 	defer ticker.Stop()
@@ -609,7 +807,11 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 			respBody = opened.body
 			result.Diagnostic.UpstreamStreamStarted = true
 		case <-ticker.C:
-			result.ResponseBytes += writeGatewaySSEComment(w, flusher, "keepalive")
+			n, writeErr := writeGatewaySSECommentWithError(w, flusher, "keepalive")
+			result.ResponseBytes += n
+			if writeErr != nil {
+				return result, gatewayClientStreamWriteError(writeErr)
+			}
 		case <-reqCtx.Done():
 			err := reqCtx.Err()
 			if err == context.DeadlineExceeded {
@@ -658,7 +860,11 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 				}
 				if failedSeen {
 					if !doneSeen {
-						result.ResponseBytes += writeGatewaySSEData(w, flusher, "[DONE]")
+						n, writeErr := writeGatewaySSEDataWithError(w, flusher, "[DONE]")
+						result.ResponseBytes += n
+						if writeErr != nil {
+							return result, gatewayClientStreamWriteError(writeErr)
+						}
 					}
 					err := fmt.Errorf("codex backend response failed")
 					if result.ErrorType == "" {
@@ -668,7 +874,11 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 				}
 				if !doneSeen {
 					if completedSeen {
-						result.ResponseBytes += writeGatewaySSEData(w, flusher, "[DONE]")
+						n, writeErr := writeGatewaySSEDataWithError(w, flusher, "[DONE]")
+						result.ResponseBytes += n
+						if writeErr != nil {
+							return result, gatewayClientStreamWriteError(writeErr)
+						}
 					} else {
 						err := io.ErrUnexpectedEOF
 						result.ResponseBytes += writeGatewayResponsesStreamFailure(w, flusher, codexBackendStreamFailureType(err, result.Diagnostic), err)
@@ -682,7 +892,11 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 			if strings.TrimSpace(data) == "" {
 				continue
 			}
-			result.ResponseBytes += writeGatewaySSEData(w, flusher, data)
+			n, writeErr := writeGatewaySSEDataWithError(w, flusher, data)
+			result.ResponseBytes += n
+			if writeErr != nil {
+				return result, gatewayClientStreamWriteError(writeErr)
+			}
 			if data == "[DONE]" {
 				doneSeen = true
 				result.Diagnostic.UpstreamStreamDoneSeen = true
@@ -722,7 +936,11 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 				result.ErrorType = codexBackendResponseEventErrorType(data, "codex_backend_response_incomplete")
 			}
 		case <-ticker.C:
-			result.ResponseBytes += writeGatewaySSEComment(w, flusher, "keepalive")
+			n, writeErr := writeGatewaySSECommentWithError(w, flusher, "keepalive")
+			result.ResponseBytes += n
+			if writeErr != nil {
+				return result, gatewayClientStreamWriteError(writeErr)
+			}
 		case <-reqCtx.Done():
 			err := reqCtx.Err()
 			if completedSeen && !failedSeen {
@@ -736,6 +954,13 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 			return result, err
 		}
 	}
+}
+
+func gatewayClientStreamWriteError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%w: %v", errGatewayClientStreamClosed, err)
 }
 
 func mergeGatewayUsageDiagnostic(base biz.GatewayUsageDiagnostic, overlay biz.GatewayUsageDiagnostic) biz.GatewayUsageDiagnostic {
@@ -1229,6 +1454,18 @@ func gatewayStreamHeartbeatInterval() time.Duration {
 	return defaultGatewayStreamHeartbeatInterval
 }
 
+func envInt(name string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return fallback
+	}
+	return value
+}
+
 func upstreamErrorType(err error, mode string) string {
 	if isGatewayClientCanceled(err) {
 		return "client_canceled"
@@ -1240,7 +1477,7 @@ func upstreamErrorType(err error, mode string) string {
 }
 
 func isGatewayClientCanceled(err error) bool {
-	return errors.Is(err, context.Canceled)
+	return errors.Is(err, context.Canceled) || errors.Is(err, errGatewayClientStreamClosed)
 }
 
 func codexBackendErrorType(err error) string {
@@ -2589,23 +2826,33 @@ func writeGatewaySSE(w stdhttp.ResponseWriter, flusher stdhttp.Flusher, payload 
 }
 
 func writeGatewaySSEData(w stdhttp.ResponseWriter, flusher stdhttp.Flusher, data string) int64 {
+	n, _ := writeGatewaySSEDataWithError(w, flusher, data)
+	return n
+}
+
+func writeGatewaySSEDataWithError(w stdhttp.ResponseWriter, flusher stdhttp.Flusher, data string) (int64, error) {
 	line := append([]byte("data: "), []byte(data)...)
 	line = append(line, '\n', '\n')
-	n, _ := w.Write(line)
+	n, err := w.Write(line)
 	if flusher != nil {
 		flusher.Flush()
 	}
-	return int64(n)
+	return int64(n), err
 }
 
 func writeGatewaySSEComment(w stdhttp.ResponseWriter, flusher stdhttp.Flusher, comment string) int64 {
+	n, _ := writeGatewaySSECommentWithError(w, flusher, comment)
+	return n
+}
+
+func writeGatewaySSECommentWithError(w stdhttp.ResponseWriter, flusher stdhttp.Flusher, comment string) (int64, error) {
 	line := append([]byte(": "), []byte(strings.TrimSpace(comment))...)
 	line = append(line, '\n', '\n')
-	n, _ := w.Write(line)
+	n, err := w.Write(line)
 	if flusher != nil {
 		flusher.Flush()
 	}
-	return int64(n)
+	return int64(n), err
 }
 
 func responsesOutputPayload(content string, reasoningSummary gatewayReasoningSummary, toolCalls []gatewayToolCall, now int64) []map[string]any {
@@ -2891,6 +3138,10 @@ func mapGatewayHTTPErrorMessage(err error) string {
 		return errcode.APIModelDisabled.Message
 	case errors.Is(err, biz.ErrGatewayModelNotAllowed):
 		return errcode.APIModelNotAllowed.Message
+	case errors.Is(err, errGatewayLargeRequestInFlight):
+		return "同一 API key 已有大上下文请求在运行，请稍后重试"
+	case errors.Is(err, errGatewayLargeRequestBurst):
+		return "同一 API key 的大上下文请求过于频繁，请稍后重试"
 	case errors.Is(err, biz.ErrGatewayRateLimited):
 		return "API key 限流超限"
 	case errors.Is(err, biz.ErrGatewayQuotaExceeded):
@@ -2910,6 +3161,10 @@ func gatewayErrorType(err error) string {
 		return "gateway_model_disabled"
 	case errors.Is(err, biz.ErrGatewayModelNotAllowed):
 		return "gateway_model_not_allowed"
+	case errors.Is(err, errGatewayLargeRequestInFlight):
+		return "gateway_large_request_inflight"
+	case errors.Is(err, errGatewayLargeRequestBurst):
+		return "gateway_large_request_burst"
 	case errors.Is(err, biz.ErrGatewayRateLimited):
 		return "gateway_rate_limited"
 	case errors.Is(err, biz.ErrGatewayQuotaExceeded):

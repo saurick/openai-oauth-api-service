@@ -40,6 +40,10 @@ CODEX_UPSTREAM_FALLBACK_ENABLED=false
 CODEX_CLI_BIN=codex
 CODEX_CLI_TIMEOUT_SECONDS=28800
 CODEX_BACKEND_RETRY_ATTEMPTS=2
+GATEWAY_LARGE_REQUEST_MIN_BYTES=65536
+GATEWAY_LARGE_REQUEST_MAX_INFLIGHT_PER_KEY=1
+GATEWAY_LARGE_REQUEST_BURST_MAX_PER_KEY=4
+GATEWAY_LARGE_REQUEST_BURST_WINDOW_SECONDS=60
 APP_MEM_LIMIT=900m
 APP_MEM_RESERVATION=256m
 ```
@@ -52,7 +56,7 @@ APP_MEM_RESERVATION=256m
 CODEX_UPSTREAM_MODE=codex_cli
 ```
 
-`codex_backend` 不会为每次请求启动 `codex exec` 子进程，也不会注入 Codex CLI 自身的大量 agent 上下文，适合高频低延迟调用。默认策略是 Backend 直连，backend 失败时直接返回上游错误；确需临时救急时可在后台「上游策略」选择 Backend + CLI 兜底，或把 `CODEX_UPSTREAM_FALLBACK_ENABLED` 设为 `true` 作为初始环境口径，仅允许纯文本 / 图片请求 fallback 到 `codex_cli`。带工具调用、工具历史或文件输入的请求不会 fallback 到 CLI，避免把客户端本机工具错误改成服务端 `codex exec`。若想完全避开 backend 协议变化风险，可把 `CODEX_UPSTREAM_MODE` 固定为 `codex_cli`。
+`codex_backend` 不会为每次请求启动 `codex exec` 子进程，也不会注入 Codex CLI 自身的大量 agent 上下文，适合高频低延迟调用。默认策略是 Backend 直连，backend 失败时直接返回上游错误；确需临时救急时可在后台「上游策略」选择 Backend + CLI 兜底，或把 `CODEX_UPSTREAM_FALLBACK_ENABLED` 设为 `true` 作为初始环境口径，仅允许纯文本 / 图片请求 fallback 到 `codex_cli`。带工具调用、工具历史或文件输入的请求不会 fallback 到 CLI，避免把客户端本机工具错误改成服务端 `codex exec`。若想完全避开 backend 协议变化风险，可把 `CODEX_UPSTREAM_MODE` 固定为 `codex_cli`。默认还会对同一 API key 的大上下文 `/v1/chat/completions` 与 `/v1/responses` 请求做并发和突发频率保护：请求体达到 `GATEWAY_LARGE_REQUEST_MIN_BYTES` 后，同一 key 同时最多允许 `GATEWAY_LARGE_REQUEST_MAX_INFLIGHT_PER_KEY` 个上游请求，并且每 `GATEWAY_LARGE_REQUEST_BURST_WINDOW_SECONDS` 秒最多允许 `GATEWAY_LARGE_REQUEST_BURST_MAX_PER_KEY` 个大请求；超过后分别返回 `429 gateway_large_request_inflight` 或 `429 gateway_large_request_burst`，避免客户端异常循环继续烧 Codex token。
 
 如果服务器 Codex CLI 需要走宿主机 mihomo / Clash，优先使用显式代理环境变量，而不是直接启用全局 TUN。推荐让代理只监听 app-server 所在 Docker bridge 网关，例如 `172.19.0.1:7890`，并在 `.env` 中配置：
 

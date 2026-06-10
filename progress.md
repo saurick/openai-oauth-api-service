@@ -2,6 +2,17 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-10 Codex 大上下文循环止血
+
+- 诊断：线上 `gateway_usage_logs` 显示 `ogw_junnan_G` 在 2026-06-10 22:00-23:05（Asia/Shanghai）之间对 `gpt-5.5` 发起 75 次 `/v1/responses`，累计约 713.6 万 token；多数请求为上游 `response.completed` 后 200 成功，少量为 `client_canceled`，未见服务端 5xx、超时或资源瓶颈。现象更接近客户端异常循环重放大上下文，但服务端缺少同 key 大请求并发保护，且 backend SSE 写下游失败时没有立即把写错误作为取消信号。
+- 诊断：首次发布并发保护后继续观察到顺序型大请求循环，`junnan` 10 分钟 32 次约 80.2 万 token，`xin2` 10 分钟 23 次约 254.4 万 token；仅靠 in-flight 保护无法挡住一前一后的客户端循环。
+- 完成：`/v1/chat/completions` 与 `/v1/responses` 新增大请求 in-flight 与突发频率保护，默认请求体达到 `GATEWAY_LARGE_REQUEST_MIN_BYTES=65536` 后，同一 API key 同时最多允许 `GATEWAY_LARGE_REQUEST_MAX_INFLIGHT_PER_KEY=1` 个上游请求，并且每 `GATEWAY_LARGE_REQUEST_BURST_WINDOW_SECONDS=60` 秒最多允许 `GATEWAY_LARGE_REQUEST_BURST_MAX_PER_KEY=4` 个大请求；后续大请求快速返回 HTTP `429` / `gateway_large_request_inflight` 或 `gateway_large_request_burst` 并记录 usage 诊断，避免客户端异常循环继续烧 token。
+- 完成：Codex backend `/v1/responses` streaming 主路径改为检查下游 SSE 写错误；下游断开或写失败时按 `client_canceled` 收口并取消上游请求，避免继续消费上游流。
+- 文档：同步更新 `server/deploy/compose/prod/compose.yml`、`server/deploy/compose/prod/.env.example`、`server/deploy/compose/prod/README.md`、`server/docs/config.md`、`server/docs/api.md`；顺手修正 `.env.example` 中“默认自动 fallback”的旧注释。
+- 验证：已执行 `cd server && go test -count=1 ./internal/server`、`cd server && go test -count=1 ./...`，均通过；本地构建 linux/amd64 镜像 `oauth-api-service-server:20260610T232946-46f5fec-large-request-burst`，上传到 133 后执行 `docker load`、Atlas migration status、`docker compose up -d --no-deps --force-recreate app-server`，远端 `healthz/readyz`、公开域名 `healthz/readyz`、管理员 RPC summary、临时 key `/v1/models` smoke 均通过，临时 key 已删除。
+- 部署：133 当前运行 `oauth-api-service-server:20260610T232946-46f5fec-large-request-burst`；容器环境已确认 `GATEWAY_LARGE_REQUEST_MIN_BYTES=65536`、`GATEWAY_LARGE_REQUEST_MAX_INFLIGHT_PER_KEY=1`、`GATEWAY_LARGE_REQUEST_BURST_MAX_PER_KEY=4`、`GATEWAY_LARGE_REQUEST_BURST_WINDOW_SECONDS=60`。部署后执行 `docker image prune -a -f` 和 `docker builder prune -f`，旧镜像清理释放 353.3MB，根分区回到 23G used / 71G available。
+- 阻塞/风险：该保护是服务端止血，不修复 Windows/Codex 客户端自身为何反复编辑同一文件；新版本启动后暂未再观察到真实客户端触发 `gateway_large_request_burst`，若用户继续复现，应同时排查客户端版本、工作区状态和会话恢复逻辑。
+
 ## 2026-06-08 API 凭据最近使用时间独立列
 
 - 完成：按线上反馈把 `/admin-keys` 中“最近使用时间”从备注下方的二级文本提升为独立列，列头为“最近使用时间”；无记录时仍显示 `-`，不改后端 `last_used_at` 真源和写入口径。
