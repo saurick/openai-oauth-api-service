@@ -2,6 +2,18 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-14 Codex 上下文压缩进度锚点保留
+
+- 完成：补充项目级 `AGENTS.md`，明确 Codex 多轮上下文压缩、恢复或 Windows 端回归测试时，不能把 `codex exec resume --last` 作为可靠验收依据；必须从本轮 JSONL 读取 `thread_id` 并显式 `codex exec resume <thread_id>`，避免误捡 Windows 用户全局旧会话。
+- 诊断：当前网关已能在大上下文前置压缩，但单个超长 Responses `input` / 消息 `content` / `function_call_output` 的裁剪主路径只保留自动摘要和固定短尾部；如果“最新会话进度 / 验证 / 下一步 / 部署”等交接文本后面还有大量工具 schema、环境文本或其他尾部噪声，压缩后可能丢失最新执行状态，恢复时更容易回到几小时前的旧讨论。Windows Codex 实测还暴露了数组压缩路径的第二个问题：被裁掉的前半段里同时包含 Codex 系统规则和用户当前请求时，正向扫描会优先抓到系统规则里的 `next step / blocked` 词，用户当前请求仍可能被弱化。
+- 完成：上下文压缩新增最近进度锚点提取，自动摘要中单列“最近进度与交接锚点”；单个超长文本裁剪时改为保留“压缩恢复执行锚点”、原文开头、最近进度锚点和原文末尾，不再只依赖固定 2000 字尾部；多消息数组压缩时插入显式恢复锚点，并从被裁掉片段尾部反向提取，优先保留最近用户当前请求。本轮不新增 schema、不改压缩阈值、不改变请求体/响应体默认不落库口径。
+- 文档：同步更新 `server/docs/config.md` 和 `server/docs/api.md`，说明压缩会保留最新进度、验证、部署、下一步、阻塞或风险附近的交接文本。
+- 验证：已执行 `cd server && go test -count=1 ./internal/server -run 'TestCompactGatewayContext|TestPrepareGatewayContext'` 与 `cd server && go test -count=1 ./...`，均通过；新增回归覆盖“最新进度在尾部噪声之前，旧 2000 字末尾裁剪会丢失交接文本”、Responses 数组被压缩时保留当前请求、Chat 多消息数组保留当前请求、系统规则也含进度词时仍优先最近用户请求。
+- 验证：本地强制低阈值直连 `/v1/responses` 返回 `MARKER=LOCAL-ANCHOR-V2`；`ssh sauri@192.168.0.45` 到 Windows Codex 0.133.0，临时 `CODEX_HOME` 指向本机网关，强制压缩阈值下新会话 `D-SMALL-T1`、`E-SMALL-T1` 通过，显式 `thread_id=019ec4f4-bbd7-7270-9f24-09e025444083` 恢复同一会话 `D-EXPLICIT-T2`、`D-EXPLICIT-T3` 通过。测试中发现 `codex exec resume --last` 会捡到 Windows 用户全局旧会话，必须显式 resume thread id；大流量测试遇到上游 429，已改用小流量多轮验证。
+- 部署：Windows Codex 多会话与同会话多次压缩验证通过后，已本地构建 linux/amd64 镜像 `oauth-api-service-server:20260614T152137-ec3a01fe-context-anchor` 并上传到 `192.168.0.133:/data/openai-oauth-api-service/releases/20260614T152137-ec3a01fe-context-anchor`。远端只执行 `docker load`、宿主机 `/usr/local/bin/atlas migrate status`、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建。Atlas 当前版本 `20260604123931`、pending 0；本机与公网 `/healthz` / `/readyz` 通过，管理员 `admin/adminadmin` 登录、`api.summary` 与 `api.model_list` smoke 通过。首次重建时 shell 旧 `APP_IMAGE` 覆盖 `.env` 导致仍跑旧镜像，已立即用显式 `APP_IMAGE=oauth-api-service-server:20260614T152137-ec3a01fe-context-anchor` 重建修正；当前容器环境 `GIT_SHA_SHORT=ec3a01fe-local`、`IMAGE_TAG=20260614T152137-ec3a01fe-context-anchor`。
+- 清理：部署成功后记录远端 `/` 使用率、`docker system df` 与运行容器；删除远端 release 镜像 tar 包，执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260610T232946-46f5fec-large-request-burst`，回收 353.3MB，未清理 volume。清理后根分区使用率 30%，当前 app-server 运行镜像为 `oauth-api-service-server:20260614T152137-ec3a01fe-context-anchor`。
+- 阻塞/风险：本轮修的是网关侧压缩保留策略；Windows Codex 客户端的 `resume --last` 选择全局旧会话属于客户端/脚本用法边界，不能作为网关压缩失败判断。上游 429 会影响重压测稳定性，后续大批量压测需降频或换隔离测试 key。
+
 ## 2026-06-10 Codex 大上下文循环止血
 
 - 诊断：线上 `gateway_usage_logs` 显示 `ogw_junnan_G` 在 2026-06-10 22:00-23:05（Asia/Shanghai）之间对 `gpt-5.5` 发起 75 次 `/v1/responses`，累计约 713.6 万 token；多数请求为上游 `response.completed` 后 200 成功，少量为 `client_canceled`，未见服务端 5xx、超时或资源瓶颈。现象更接近客户端异常循环重放大上下文，但服务端缺少同 key 大请求并发保护，且 backend SSE 写下游失败时没有立即把写错误作为取消信号。

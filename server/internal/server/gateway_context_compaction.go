@@ -20,6 +20,9 @@ const (
 	defaultGatewayContextHardTokens      = 255_000
 	defaultGatewayContextKeepItems       = 8
 	defaultGatewayContextSummaryMaxRunes = 12_000
+	defaultGatewayContextHeadMaxRunes    = 2_000
+	defaultGatewayContextRecentMaxRunes  = 8_000
+	defaultGatewayContextAnchorMaxRunes  = 4_000
 )
 
 var errGatewayContextLengthExceeded = errors.New("上下文已超过模型窗口，请压缩历史或开启新会话")
@@ -302,7 +305,7 @@ func compactChatPayload(payload map[string]any, keepItems int, old *[]gatewayCon
 	}
 	next := make([]any, 0, leadEnd+1+len(messages)-keepStart)
 	next = append(next, messages[:leadEnd]...)
-	next = append(next, map[string]any{"role": "user", "content": gatewayContextSummaryMessagePlaceholder})
+	next = append(next, map[string]any{"role": "user", "content": gatewayContextSummaryPlaceholderWithHandoff(*old)})
 	next = append(next, messages[keepStart:]...)
 	payload["messages"] = next
 	return len(*old) > 0
@@ -338,7 +341,7 @@ func compactResponsesPayload(payload map[string]any, keepItems int, old *[]gatew
 			return false
 		}
 		*old = append(*old, gatewayContextTextSegment{Label: "responses.input", Text: v})
-		payload["input"] = gatewayContextSummaryMessagePlaceholder + "\n\n" + tailText(v, 2000)
+		payload["input"] = gatewayContextSummaryMessagePlaceholder + "\n\n" + gatewayContextExecutionAnchorText("responses.input", v)
 		return true
 	case []any:
 		if len(v) == 0 {
@@ -372,7 +375,7 @@ func compactResponsesPayload(payload map[string]any, keepItems int, old *[]gatew
 		next = append(next, map[string]any{
 			"type":    "message",
 			"role":    "user",
-			"content": []any{map[string]any{"type": "input_text", "text": gatewayContextSummaryMessagePlaceholder}},
+			"content": []any{map[string]any{"type": "input_text", "text": gatewayContextSummaryPlaceholderWithHandoff(*old)}},
 		})
 		next = append(next, v[keepStart:]...)
 		payload["input"] = next
@@ -405,8 +408,16 @@ func compactLargestResponsesItem(items []any, old *[]gatewayContextTextSegment) 
 
 const gatewayContextSummaryMessagePlaceholder = "[gateway_context_summary]"
 
+func gatewayContextSummaryPlaceholderWithHandoff(segments []gatewayContextTextSegment) string {
+	handoff := gatewayContextHandoffText(segments)
+	if handoff == "" {
+		return gatewayContextSummaryMessagePlaceholder
+	}
+	return gatewayContextSummaryMessagePlaceholder + "\n\n" + handoff
+}
+
 func insertGatewayContextSummary(path string, payload map[string]any, summary string) {
-	message := "以下是网关自动压缩的较早工程会话摘要。请把它作为历史上下文，优先遵循后续未压缩的最新消息。\n\n" + summary
+	message := "以下是网关自动压缩后的工程会话上下文。摘要只作为历史线索；如果下方包含“压缩恢复执行锚点”，其中的“当前请求 / 最新会话进度 / 下一步”代表被压缩原文里的当前任务状态，必须优先于普通历史摘要继续执行；若后续还有未压缩消息，则以后续未压缩消息为准。\n\n" + summary
 	if path == "/v1/responses" {
 		input, _ := payload["input"].([]any)
 		for _, item := range input {
@@ -440,7 +451,7 @@ func compactLargeContent(item map[string]any, old *[]gatewayContextTextSegment, 
 		return false
 	}
 	*old = append(*old, gatewayContextTextSegment{Label: label, Text: text})
-	replaceContentText(item, gatewayContextSummaryMessagePlaceholder+"\n\n"+tailText(text, 2000))
+	replaceContentText(item, gatewayContextSummaryMessagePlaceholder+"\n\n"+gatewayContextExecutionAnchorText(label, text))
 	return true
 }
 
@@ -524,6 +535,11 @@ func buildGatewayContextSummary(previous string, segments []gatewayContextTextSe
 		lines = append(lines, "", "## 已有摘要", limitRunes(prev, 3000))
 	}
 
+	if anchors := recentGatewayProgressAnchors(segments, 8); len(anchors) > 0 {
+		lines = append(lines, "", "## 最近进度与交接锚点")
+		lines = append(lines, anchors...)
+	}
+
 	paths := uniqueMatches(segments, regexp.MustCompile(`([A-Za-z]:\\[^\s"'<>|]+|/(?:[\w.\-]+/)+[\w.\-]+|[\w.\-]+/[\w.\-\/]+)`), 40)
 	if len(paths) > 0 {
 		lines = append(lines, "", "## 文件与路径线索")
@@ -551,6 +567,147 @@ func buildGatewayContextSummary(previous string, segments []gatewayContextTextSe
 		lines = append(lines, headTailText(text, 700, 900))
 	}
 	return limitRunes(strings.TrimSpace(strings.Join(lines, "\n")), defaultGatewayContextSummaryMaxRunes)
+}
+
+func recentGatewayContextText(text string) string {
+	head := limitRunes(text, defaultGatewayContextHeadMaxRunes)
+	tail := tailText(text, defaultGatewayContextRecentMaxRunes)
+	parts := make([]string, 0, 3)
+	if strings.TrimSpace(head) != "" {
+		parts = append(parts, "## 原文开头\n"+head)
+	}
+	if gatewayContextHasProgressMarker(tail) {
+		parts = append(parts, "## 原文末尾\n"+tail)
+		return strings.TrimSpace(strings.Join(parts, "\n\n"))
+	}
+	anchor := recentGatewayProgressAnchorText(text)
+	if anchor != "" {
+		parts = append(parts, "## 最近进度锚点\n"+anchor)
+	}
+	parts = append(parts, "## 原文末尾\n"+tail)
+	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+}
+
+func gatewayContextExecutionAnchorText(label string, text string) string {
+	body := recentGatewayContextText(text)
+	if body == "" {
+		return ""
+	}
+	return strings.TrimSpace("## 压缩恢复执行锚点\n以下内容来自被压缩原文；如果出现“当前请求 / 最新会话进度 / 下一步”，它仍是当前要继续执行的任务状态，不要当作旧摘要忽略。\n\n### " + label + "\n" + body)
+}
+
+func recentGatewayProgressAnchors(segments []gatewayContextTextSegment, limit int) []string {
+	out := make([]string, 0, limit)
+	seen := make(map[string]struct{})
+	for i := len(segments) - 1; i >= 0; i-- {
+		segment := segments[i]
+		anchor := recentGatewayProgressAnchorText(segment.Text)
+		if anchor == "" {
+			continue
+		}
+		anchor = limitRunes(anchor, 900)
+		key := segment.Label + ":" + anchor
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, "- ["+segment.Label+"] "+strings.ReplaceAll(anchor, "\n", "\n  "))
+		if len(out) >= limit {
+			return out
+		}
+	}
+	return out
+}
+
+func gatewayContextHandoffText(segments []gatewayContextTextSegment) string {
+	blocks := make([]string, 0, 4)
+	for i := len(segments) - 1; i >= 0; i-- {
+		segment := segments[i]
+		text := strings.TrimSpace(segment.Text)
+		if text == "" || !gatewayContextHasProgressMarker(text) {
+			continue
+		}
+		block := recentGatewayContextText(text)
+		if block == "" {
+			continue
+		}
+		blocks = append(blocks, "### "+segment.Label+"\n"+block)
+		if len(blocks) >= 3 {
+			break
+		}
+	}
+	if len(blocks) == 0 {
+		return ""
+	}
+	return strings.TrimSpace("## 压缩恢复执行锚点\n以下内容来自被压缩原文；如果出现“当前请求 / 最新会话进度 / 下一步”，它仍是当前要继续执行的任务状态，不要当作旧摘要忽略；若后续还有未压缩消息，则以后续未压缩消息为准。\n\n" + strings.Join(blocks, "\n\n"))
+}
+
+func recentGatewayProgressAnchorText(text string) string {
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+	if len(lines) == 0 {
+		return ""
+	}
+	start := -1
+	for i := len(lines) - 1; i >= 0; i-- {
+		if gatewayContextHasProgressMarker(lines[i]) {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return ""
+	}
+	from := start - 6
+	if from < 0 {
+		from = 0
+	}
+	to := start + 18
+	if to > len(lines) {
+		to = len(lines)
+	}
+	block := strings.TrimSpace(strings.Join(lines[from:to], "\n"))
+	return limitRunes(block, defaultGatewayContextAnchorMaxRunes)
+}
+
+func gatewayContextHasProgressMarker(text string) bool {
+	lower := strings.ToLower(strings.TrimSpace(text))
+	if lower == "" {
+		return false
+	}
+	for _, marker := range []string{
+		"最新会话进度",
+		"当前请求",
+		"当前进度",
+		"当前状态",
+		"本轮目标",
+		"下一步",
+		"待办",
+		"已完成",
+		"验证",
+		"部署",
+		"阻塞",
+		"风险",
+		"回归",
+		"交接",
+		"继续",
+		"latest progress",
+		"current progress",
+		"current status",
+		"next step",
+		"todo",
+		"done",
+		"verified",
+		"deployed",
+		"blocked",
+		"risk",
+		"handoff",
+		"resume",
+	} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func keywordLines(segments []gatewayContextTextSegment, keywords []string, limit int) []string {

@@ -68,6 +68,160 @@ func TestCompactGatewayContextResponsesString(t *testing.T) {
 	}
 }
 
+func TestCompactGatewayContextResponsesStringPreservesLatestProgressAnchor(t *testing.T) {
+	oldDiscussion := strings.Repeat("几个小时前的旧讨论：先处理 OAuth callback，再看 usage chart\n", 260)
+	latestProgress := strings.Join([]string{
+		"最新会话进度：已经修复上下文压缩的主路径，并且 server/internal/server 单测通过。",
+		"验证：go test ./internal/server -count=1 通过。",
+		"下一步：ssh sauri@192.168.0.45 到 Windows Codex 多会话压缩测试，之后部署到 192.168.0.133。",
+	}, "\n")
+	lateSchemaNoise := strings.Repeat("tool schema field description without current task signal\n", 260)
+	body := []byte(`{"model":"gpt-5.5","stream":true,"input":` + mustJSONQuote(oldDiscussion+latestProgress+"\n"+lateSchemaNoise) + `}`)
+
+	compacted, err := compactGatewayContextRequest("/v1/responses", body, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !compacted.Changed {
+		t.Fatal("expected compaction")
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(compacted.Body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	input := stringValue(payload["input"])
+	if !strings.Contains(input, "最新会话进度：已经修复上下文压缩的主路径") {
+		t.Fatalf("compacted input missing latest progress anchor: %s", input)
+	}
+	if !strings.Contains(input, "部署到 192.168.0.133") {
+		t.Fatalf("compacted input missing deploy handoff: %s", input)
+	}
+	if !strings.Contains(compacted.Summary, "最近进度与交接锚点") {
+		t.Fatalf("summary missing progress anchor section: %s", compacted.Summary)
+	}
+}
+
+func TestCompactGatewayContextResponsesStringPreservesCurrentInstructionAtHead(t *testing.T) {
+	currentInstruction := strings.Join([]string{
+		"当前请求：只输出 MARKER=WIN-COMPRESS-HEAD 和 NEXT=部署到 192.168.0.133。",
+		"不要检查文件，不要执行命令，不要把下面旧讨论当成新任务。",
+	}, "\n")
+	oldDiscussion := strings.Repeat("几个小时前的旧讨论：排查 OAuth callback 和 usage 图表。\n", 260)
+	latestProgress := "最新会话进度：MARKER WIN-COMPRESS-HEAD 已完成压缩回归。\n下一步：部署到 192.168.0.133。\n"
+	lateSchemaNoise := strings.Repeat("tool schema tail noise without current task signal\n", 260)
+	body := []byte(`{"model":"gpt-5.5","stream":true,"input":` + mustJSONQuote(currentInstruction+"\n"+oldDiscussion+latestProgress+lateSchemaNoise) + `}`)
+
+	compacted, err := compactGatewayContextRequest("/v1/responses", body, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !compacted.Changed {
+		t.Fatal("expected compaction")
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(compacted.Body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	input := stringValue(payload["input"])
+	if !strings.Contains(input, "压缩恢复执行锚点") {
+		t.Fatalf("compacted input missing execution anchor section: %s", input)
+	}
+	if !strings.Contains(input, "当前请求：只输出 MARKER=WIN-COMPRESS-HEAD") {
+		t.Fatalf("compacted input missing current instruction head: %s", input)
+	}
+	if !strings.Contains(input, "不要检查文件，不要执行命令") {
+		t.Fatalf("compacted input missing no-tool instruction: %s", input)
+	}
+	if !strings.Contains(input, "最新会话进度：MARKER WIN-COMPRESS-HEAD") {
+		t.Fatalf("compacted input missing latest progress anchor: %s", input)
+	}
+}
+
+func TestCompactGatewayContextResponsesArrayPreservesCompressedHandoff(t *testing.T) {
+	currentInstruction := strings.Join([]string{
+		"当前请求：只输出 MARKER=WIN-COMPRESS-ARRAY 和 NEXT=部署到 192.168.0.133。",
+		"不要检查文件，不要执行命令，不要把下面旧讨论当成新任务。",
+		"最新会话进度：已经完成本地单测，正在做 Windows Codex 多会话压缩回归。",
+		"下一步：测试通过后部署到 192.168.0.133。",
+	}, "\n")
+	oldNoise := strings.Repeat("旧工具输出：context_length_exceeded /workspace/service/gateway.go\n", 120)
+	tailNoise := strings.Repeat("尾部工具 schema 噪声，没有当前任务指令。\n", 80)
+	body := []byte(`{"model":"gpt-5.5","stream":true,"input":[` +
+		`{"type":"message","role":"system","content":[{"type":"input_text","text":"系统规则：blocked 时说明风险，next step 只作为通用说明，不是用户当前请求。"}]},` +
+		`{"type":"message","role":"user","content":[{"type":"input_text","text":` + mustJSONQuote(currentInstruction) + `}]},` +
+		`{"type":"message","role":"assistant","content":[{"type":"output_text","text":"我会继续处理。"}]},` +
+		`{"type":"function_call_output","call_id":"call_old","output":` + mustJSONQuote(oldNoise) + `},` +
+		`{"type":"message","role":"assistant","content":[{"type":"output_text","text":` + mustJSONQuote(tailNoise) + `}]},` +
+		`{"type":"message","role":"user","content":[{"type":"input_text","text":"继续"}]}` +
+		`]}`)
+
+	compacted, err := compactGatewayContextRequest("/v1/responses", body, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !compacted.Changed {
+		t.Fatal("expected compaction")
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(compacted.Body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	input := payload["input"].([]any)
+	inserted := gatewayContextTextFromValue(mapValue(input[0]))
+	if !strings.Contains(inserted, "压缩恢复执行锚点") {
+		t.Fatalf("inserted message missing handoff section: %s", inserted)
+	}
+	if !strings.Contains(inserted, "当前请求：只输出 MARKER=WIN-COMPRESS-ARRAY") {
+		t.Fatalf("inserted message missing current instruction: %s", inserted)
+	}
+	if !strings.Contains(inserted, "Windows Codex 多会话压缩回归") {
+		t.Fatalf("inserted message missing latest progress: %s", inserted)
+	}
+	if !strings.Contains(inserted, "部署到 192.168.0.133") {
+		t.Fatalf("inserted message missing deploy handoff: %s", inserted)
+	}
+}
+
+func TestCompactGatewayContextChatArrayPreservesCompressedHandoff(t *testing.T) {
+	currentInstruction := strings.Join([]string{
+		"当前请求：只输出 MARKER=CHAT-COMPRESS-ARRAY。",
+		"最新会话进度：chat 压缩回归正在验证。",
+		"下一步：部署到 192.168.0.133。",
+	}, "\n")
+	oldNoise := strings.Repeat("旧终端输出：go test ./... passed /workspace/server/main.go\n", 120)
+	body := []byte(`{"model":"gpt-5.5","stream":true,"messages":[` +
+		`{"role":"system","content":"follow project rules"},` +
+		`{"role":"user","content":` + mustJSONQuote(currentInstruction) + `},` +
+		`{"role":"assistant","content":"处理中"},` +
+		`{"role":"user","content":` + mustJSONQuote(oldNoise) + `},` +
+		`{"role":"assistant","content":"latest answer"},` +
+		`{"role":"user","content":"继续"}` +
+		`]}`)
+
+	compacted, err := compactGatewayContextRequest("/v1/chat/completions", body, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !compacted.Changed {
+		t.Fatal("expected compaction")
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(compacted.Body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	messages := payload["messages"].([]any)
+	inserted := gatewayContextTextFromValue(mapValue(messages[1]))
+	if !strings.Contains(inserted, "压缩恢复执行锚点") {
+		t.Fatalf("inserted message missing handoff section: %s", inserted)
+	}
+	if !strings.Contains(inserted, "当前请求：只输出 MARKER=CHAT-COMPRESS-ARRAY") {
+		t.Fatalf("inserted message missing current instruction: %s", inserted)
+	}
+	if !strings.Contains(inserted, "部署到 192.168.0.133") {
+		t.Fatalf("inserted message missing deploy handoff: %s", inserted)
+	}
+}
+
 func TestCompactGatewayContextCarriesPreviousSummaryAcrossCompactions(t *testing.T) {
 	firstHistory := strings.Repeat("phase one failed at /workspace/service/auth.go with oauth callback timeout\n", 240)
 	firstBody := []byte(`{"model":"gpt-5.5","stream":true,"input":` + mustJSONQuote(firstHistory+"next step is patch auth callback handling") + `}`)
