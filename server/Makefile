@@ -82,6 +82,10 @@ api:
 build:
 	mkdir -p bin/ && go build -ldflags "-X main.Version=$(VERSION)" -o ./bin/ ./...
 
+.PHONY: production_preflight
+production_preflight:
+	@cd "$(GIT_ROOT)" && bash scripts/deploy/production-preflight.sh --env-file server/deploy/compose/prod/.env
+
 .PHONY: build_linux
 build_linux:
 	mkdir -p bin/ && GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=$(VERSION)" -o ./bin/ ./...

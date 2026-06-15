@@ -2,6 +2,21 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-15 21:50 CST
+
+- 完成：新增 `scripts/deploy/production-preflight.sh` 和 `server/Makefile` 的 `production_preflight` 入口，作为 OAuth API Service 生产发布前门禁；检查运行时 `.env`、占位 secret、镜像 tag、Codex upstream fallback、Compose 禁止 `build:`、migration 文档边界和可选运行态 `/healthz` / `/readyz`。
+- 完成：同步 `scripts/README.md` 与 `server/deploy/compose/prod/README.md` 的 preflight 入口说明；保留当前个人部署 `admin/adminadmin` 口径，不在脚本里擅自强制改密。
+- 验证：`bash scripts/deploy/production-preflight.sh --example` 通过；`.env.example` 作为生产 env 被 placeholder 门禁阻断；临时非占位 env 通过静态 preflight；`make -n production_preflight`、`bash scripts/qa/secrets.sh`、`git diff --check` 通过。
+- 下一步：真实发布前先替换 `server/deploy/compose/prod/.env` 并执行 `cd server && make production_preflight`；部署后追加 `--runtime`。
+- 阻塞/风险：本项目当前没有独立 `migrate_online.sh`，preflight 检查的是 Compose 与部署文档中的宿主机 Atlas / flock 迁移边界；本轮未连接真实生产 `.env` 或运行中 Compose。
+
+## 2026-06-15 Codex 上游代理自动切换
+
+- 完成：为 `192.168.0.133` 增加 mihomo 自动切换守护脚本，实时跟随 `openai-oauth-api-service-server` 日志；当 Codex backend 到 `https://chatgpt.com/backend-api/codex/responses` 出现 `EOF`、`INTERNAL_ERROR`、`stream disconnected`、`error sending request` 或 `connection reset` 时，自动把 mihomo `节点选择` 按 `日本JP-HY2 -> 日本-优化3 -> 日本-优化2 -> 日本-优化` 切到下一个，并保持 `ChatGPT` 组继承 `节点选择`。默认冷却时间 180 秒，避免同一批错误瞬间连跳。
+- 部署：远端仅新增宿主机级 systemd 服务 `codex-upstream-proxy-failover.service` 和脚本 `/usr/local/sbin/codex-upstream-proxy-failover.py`，未重启 app-server，未修改 Compose、镜像、数据库、管理员密码或 mihomo 订阅配置。
+- 验证：手动切换后确认 `ChatGPT=节点选择`，当前 `节点选择=日本-优化3`；`日本-优化3`、`日本-优化2`、`日本-优化` 均可完成 mihomo 延迟测试；经代理访问 `https://chatgpt.com/backend-api/wham/usage` 返回 401，app-server `healthz/readyz` 和 `/public/codex/balance` 正常。
+- 阻塞/风险：该守护只按日志中的 Codex backend 断流信号切换节点，不主动重启 mihomo 或业务容器；若所有候选节点都被上游风控或断流，服务会在冷却后继续按列表循环，仍需人工排查订阅、出口或 ChatGPT 上游状态。
+
 ## 2026-06-14 Codex 上下文压缩进度锚点保留
 
 - 完成：补充项目级 `AGENTS.md`，明确 Codex 多轮上下文压缩、恢复或 Windows 端回归测试时，不能把 `codex exec resume --last` 作为可靠验收依据；必须从本轮 JSONL 读取 `thread_id` 并显式 `codex exec resume <thread_id>`，避免误捡 Windows 用户全局旧会话。

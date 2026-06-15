@@ -9,6 +9,7 @@
 | `bash scripts/bootstrap.sh` | 安装依赖、启用 hooks、运行快速自检 |
 | `bash scripts/doctor.sh` | 检查本机依赖、hooks 与关键脚本状态 |
 | `bash scripts/init-project.sh --project --strict` | 检查是否仍有模板残留或默认配置 |
+| `bash scripts/deploy/production-preflight.sh` | 生产发布前门禁，检查运行时 env、Compose、Codex upstream、migration 文档边界和部署后 healthz/readyz |
 | `bash scripts/qa/fast.sh` | 开发期快速检查 |
 | `bash scripts/qa/full.sh` | 提交/推送前全量检查 |
 | `bash scripts/qa/strict.sh` | 发版前严格检查 |

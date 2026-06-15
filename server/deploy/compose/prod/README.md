@@ -30,6 +30,27 @@ POSTGRES_DSN=...
 OAUTH_API_JWT_SECRET=...
 ```
 
+正式发布前先执行产品级 preflight；该命令只检查配置、Compose、Codex upstream、migration 文档边界和低配部署边界，不执行 migration：
+
+```bash
+cd /Users/simon/projects/openai-oauth-api-service
+bash scripts/deploy/production-preflight.sh --env-file server/deploy/compose/prod/.env
+```
+
+等价 Make 入口：
+
+```bash
+cd /Users/simon/projects/openai-oauth-api-service/server
+make production_preflight
+```
+
+部署后可追加运行态检查：
+
+```bash
+cd /Users/simon/projects/openai-oauth-api-service
+bash scripts/deploy/production-preflight.sh --env-file server/deploy/compose/prod/.env --runtime
+```
+
 API 上游统一使用服务器 Codex 登录态：
 
 ```bash
