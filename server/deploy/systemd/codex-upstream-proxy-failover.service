@@ -1,0 +1,14 @@
+[Unit]
+Description=Auto switch mihomo node on Codex upstream stream failures
+After=docker.service mihomo.service
+Wants=docker.service mihomo.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/codex-upstream-proxy-failover.py
+Restart=always
+RestartSec=5s
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

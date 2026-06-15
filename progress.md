@@ -13,8 +13,9 @@
 ## 2026-06-15 Codex 上游代理自动切换
 
 - 完成：为 `192.168.0.133` 增加 mihomo 自动切换守护脚本，实时跟随 `openai-oauth-api-service-server` 日志；当 Codex backend 到 `https://chatgpt.com/backend-api/codex/responses` 出现 `EOF`、`INTERNAL_ERROR`、`stream disconnected`、`error sending request` 或 `connection reset` 时，自动把 mihomo `节点选择` 按 `日本JP-HY2 -> 日本-优化3 -> 日本-优化2 -> 日本-优化` 切到下一个，并保持 `ChatGPT` 组继承 `节点选择`。默认冷却时间 180 秒，避免同一批错误瞬间连跳。
+- 完成：新增 `scripts/ops/install-codex-upstream-proxy-failover.sh` 作为迁移服务器时的一键安装入口；守护脚本新增 `--check` 自检模式，安装时会检查 mihomo controller、`节点选择`、继承组和候选节点，而不是把宿主机运维逻辑塞进业务 Docker 镜像。
 - 部署：远端仅新增宿主机级 systemd 服务 `codex-upstream-proxy-failover.service` 和脚本 `/usr/local/sbin/codex-upstream-proxy-failover.py`，未重启 app-server，未修改 Compose、镜像、数据库、管理员密码或 mihomo 订阅配置。
-- 验证：手动切换后确认 `ChatGPT=节点选择`，当前 `节点选择=日本-优化3`；`日本-优化3`、`日本-优化2`、`日本-优化` 均可完成 mihomo 延迟测试；经代理访问 `https://chatgpt.com/backend-api/wham/usage` 返回 401，app-server `healthz/readyz` 和 `/public/codex/balance` 正常。
+- 验证：手动切换后确认 `ChatGPT=节点选择`，当前 `节点选择=日本-优化3`；`日本-优化3`、`日本-优化2`、`日本-优化` 均可完成 mihomo 延迟测试；经代理访问 `https://chatgpt.com/backend-api/wham/usage` 返回 401，app-server `healthz/readyz` 和 `/public/codex/balance` 正常。已用临时安装包在 133 执行 `bash scripts/ops/install-codex-upstream-proxy-failover.sh`，安装脚本完成语法检查、systemd reload、服务重启和 `--check` 自检，服务保持 `active`。
 - 阻塞/风险：该守护只按日志中的 Codex backend 断流信号切换节点，不主动重启 mihomo 或业务容器；若所有候选节点都被上游风控或断流，服务会在冷却后继续按列表循环，仍需人工排查订阅、出口或 ChatGPT 上游状态。
 
 ## 2026-06-14 Codex 上下文压缩进度锚点保留
