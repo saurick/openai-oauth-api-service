@@ -70,6 +70,7 @@ type codexCreditsSnapshot struct {
 type publicCodexBalanceResponse struct {
 	Status              string                                  `json:"status"`
 	FetchedAt           string                                  `json:"fetched_at"`
+	Stale               bool                                    `json:"stale,omitempty"`
 	Credits             *codexCreditsSnapshot                   `json:"credits"`
 	RateLimits          publicCodexRateLimitSnapshot            `json:"rate_limits"`
 	RateLimitsByLimitID map[string]publicCodexRateLimitSnapshot `json:"rate_limits_by_limit_id,omitempty"`
@@ -117,6 +118,7 @@ func (h *codexBalanceHTTPHandler) ServeHTTP(ctx context.Context, w stdhttp.Respo
 		return
 	}
 
+	now := time.Now()
 	rateLimits, err := readCodexRateLimits(ctx)
 	if err != nil {
 		h.log.WithContext(ctx).Warnw(
@@ -125,6 +127,10 @@ func (h *codexBalanceHTTPHandler) ServeHTTP(ctx context.Context, w stdhttp.Respo
 			"trace_id", traceIDFromContext(ctx),
 			"error", err.Error(),
 		)
+		if stale := h.staleBalance(now); stale != nil {
+			writeJSON(w, stdhttp.StatusOK, stale)
+			return
+		}
 		writeJSON(w, stdhttp.StatusBadGateway, map[string]any{
 			"error":   "codex_balance_query_failed",
 			"message": "查询 Codex 余额失败，请检查服务器 Codex 登录态或 Codex app-server 是否可用",
@@ -132,8 +138,8 @@ func (h *codexBalanceHTTPHandler) ServeHTTP(ctx context.Context, w stdhttp.Respo
 		return
 	}
 
-	payload := mapPublicCodexBalance(rateLimits, time.Now())
-	h.storeBalanceCache(payload, time.Now())
+	payload := mapPublicCodexBalance(rateLimits, now)
+	h.storeBalanceCache(payload, now)
 	writeJSON(w, stdhttp.StatusOK, payload)
 }
 
@@ -338,7 +344,20 @@ func (h *codexBalanceHTTPHandler) cachedBalance(now time.Time) map[string]any {
 	if h.cache == nil || !now.Before(h.cacheExpiresAt) {
 		return nil
 	}
-	return h.cache
+	return cloneBalancePayload(h.cache)
+}
+
+func (h *codexBalanceHTTPHandler) staleBalance(now time.Time) map[string]any {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.cache == nil {
+		return nil
+	}
+	payload := cloneBalancePayload(h.cache)
+	payload["stale"] = true
+	payload["stale_reason"] = "codex_balance_query_failed"
+	payload["last_error_at"] = now.UTC().Format(time.RFC3339)
+	return payload
 }
 
 func (h *codexBalanceHTTPHandler) storeBalanceCache(payload map[string]any, now time.Time) {
@@ -350,6 +369,14 @@ func (h *codexBalanceHTTPHandler) storeBalanceCache(payload map[string]any, now 
 	defer h.mu.Unlock()
 	h.cache = payload
 	h.cacheExpiresAt = now.Add(ttl)
+}
+
+func cloneBalancePayload(payload map[string]any) map[string]any {
+	out := make(map[string]any, len(payload))
+	for key, value := range payload {
+		out[key] = value
+	}
+	return out
 }
 
 func codexBalanceCacheTTL() time.Duration {

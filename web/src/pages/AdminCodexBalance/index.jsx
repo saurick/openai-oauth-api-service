@@ -30,6 +30,13 @@ function fmtCredits(credits) {
   return String(credits.balance)
 }
 
+function balanceStatusText(payload, loading) {
+  if (loading) return '查询中'
+  if (payload?.stale) return '缓存结果'
+  if (payload?.status === 'ok') return '正常'
+  return '-'
+}
+
 function rateLimitTitle(item) {
   if (!item) return 'Codex'
   if (item.limit_name) return item.limit_name
@@ -172,12 +179,18 @@ export default function AdminCodexBalancePage() {
         </div>
       ) : null}
 
+      {payload?.stale ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          实时查询暂时失败，当前显示上次成功读取的 Codex 余额。
+        </div>
+      ) : null}
+
       <SurfacePanel variant="admin" className="p-5">
         <div className="grid gap-4 md:grid-cols-3">
           <div>
             <div className="text-sm text-[#7b8780]">接口状态</div>
             <div className="mt-1 text-2xl font-bold text-[#1f2d25]">
-              {loading ? '查询中' : payload?.status === 'ok' ? '正常' : '-'}
+              {balanceStatusText(payload, loading)}
             </div>
           </div>
           <div>

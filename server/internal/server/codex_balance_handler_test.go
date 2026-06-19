@@ -1,13 +1,16 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	klog "github.com/go-kratos/kratos/v2/log"
 	httpx "github.com/go-kratos/kratos/v2/transport/http"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
@@ -77,5 +80,79 @@ func TestCodexBalanceRouteRejectsNonGET(t *testing.T) {
 	}
 	if allow := recorder.Header().Get("Allow"); allow != http.MethodGet {
 		t.Fatalf("Allow = %q, want GET", allow)
+	}
+}
+
+func TestCodexBalanceRouteServesStaleCacheOnTemporaryFailure(t *testing.T) {
+	successBin := filepath.Join(t.TempDir(), "fake-codex-success")
+	successScript := `#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"initialize"'*)
+      echo '{"id":1,"result":{}}'
+      ;;
+    *'"method":"account/rateLimits/read"'*)
+      echo '{"id":2,"result":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":12},"credits":{"balance":"9"}}}}'
+      exit 0
+      ;;
+  esac
+done
+`
+	if err := os.WriteFile(successBin, []byte(successScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CODEX_APP_SERVER_BIN", successBin)
+	t.Setenv("CODEX_BALANCE_TIMEOUT_SECONDS", "2")
+	t.Setenv("CODEX_BALANCE_CACHE_SECONDS", "60")
+
+	handler := &codexBalanceHTTPHandler{log: klog.NewHelper(&captureLogger{})}
+	req := httptest.NewRequest(http.MethodGet, "/public/codex/balance", nil)
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(context.Background(), first, req)
+	if first.Code != http.StatusOK {
+		t.Fatalf("initial status = %d, want %d; body=%s", first.Code, http.StatusOK, first.Body.String())
+	}
+
+	handler.mu.Lock()
+	handler.cacheExpiresAt = time.Now().Add(-time.Second)
+	handler.mu.Unlock()
+
+	failBin := filepath.Join(t.TempDir(), "fake-codex-fail")
+	failScript := `#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"initialize"'*)
+      echo '{"id":1,"result":{}}'
+      ;;
+    *'"method":"account/rateLimits/read"'*)
+      echo '{"id":2,"error":{"code":-32000,"message":"temporary upstream error"}}'
+      exit 0
+      ;;
+  esac
+done
+`
+	if err := os.WriteFile(failBin, []byte(failScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CODEX_APP_SERVER_BIN", failBin)
+
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(context.Background(), second, req)
+	if second.Code != http.StatusOK {
+		t.Fatalf("stale status = %d, want %d; body=%s", second.Code, http.StatusOK, second.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(second.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["status"] != "ok" || body["stale"] != true {
+		t.Fatalf("stale body status/stale = %v/%v, body=%s", body["status"], body["stale"], second.Body.String())
+	}
+	credits := body["credits"].(map[string]any)
+	if credits["balance"] != "9" {
+		t.Fatalf("stale credits.balance = %v, want 9", credits["balance"])
+	}
+	if body["stale_reason"] != "codex_balance_query_failed" {
+		t.Fatalf("stale_reason = %v", body["stale_reason"])
 	}
 }

@@ -163,12 +163,14 @@ HTTP 路由：
 - 不要求管理员登录，也不要求下游 `ogw_` key。
 - 服务端使用服务器自己的 Codex 登录态，通过 Codex app-server 的 `account/rateLimits/read` 读取限额和 credits。
 - 默认使用 30 秒内存缓存，避免公开查询频繁启动 Codex app-server 子进程；可通过 `CODEX_BALANCE_CACHE_SECONDS` 调整。
+- 如果实时读取 Codex app-server 或 ChatGPT usage 接口临时失败，但进程内已有上次成功结果，接口会返回 HTTP 200 和上次成功结果，并带 `stale=true`、`stale_reason=codex_balance_query_failed` 与 `last_error_at`；首次启动且没有成功缓存时仍返回 `codex_balance_query_failed`。
 
 返回字段：
 
 - `credits.balance`：Codex workspace credits 余额字符串；无 credits 时通常为 `"0"`。
 - `rate_limits.primary` / `secondary`：主窗口与次窗口用量，包含 `used_percent`、`remaining_percent`、`window_duration_mins`、`resets_at` 和 UTC `resets_at_time`。
 - `rate_limits_by_limit_id`：按 Codex limit id 返回的多桶视图，例如默认 `codex` 和特定模型桶。
+- `stale`：可选布尔值；为 `true` 时表示当前展示的是上次成功查询结果，不是本次实时读取结果。
 
 该接口不会返回账号邮箱、access token、refresh token、请求正文或模型输出正文。若生产环境不希望任何人看到余额 / 限额百分比，应在反代或边缘层增加 IP allowlist、独立查询 token 或直接屏蔽该路径。
 

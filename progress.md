@@ -2,6 +2,24 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-19 Codex 余额查询临时失败兜底
+
+- 诊断：线上 `/admin-codex-balance` 一度显示“Codex 余额查询失败”，133 app-server 与 PostgreSQL 均健康，`/healthz` / `/readyz` 正常；后端日志显示 `account/rateLimits/read` 读取 `https://chatgpt.com/backend-api/wham/usage` 时出现 `error sending request`，随后同一路径又可正常返回 200，判断为 Codex app-server 到 ChatGPT usage 接口的临时上游 / 代理链路失败，不是 Codex 登录态整体失效。
+- 完成：`/public/codex/balance` 保留上次成功结果；实时查询失败且已有成功缓存时返回 HTTP 200、原余额数据和 `stale=true` / `stale_reason=codex_balance_query_failed` / `last_error_at`，避免后台页直接清空余额并显示红色失败。首次启动且没有成功缓存时仍返回失败，不伪造余额。
+- 完成：`/admin-codex-balance` 识别 stale 结果，接口状态显示“缓存结果”，并展示“实时查询暂时失败，当前显示上次成功读取的 Codex 余额。”提示；暗色主题沿既有 admin warning 变量覆盖。
+- 文档：同步更新 `server/docs/api.md` 的公开余额查询说明，明确 stale 语义和首次无缓存仍失败的边界。
+- 验证：已执行 `cd server && go test -count=1 ./internal/server -run 'TestCodexBalanceRoute'`、`cd server && go test -count=1 ./...`、`pnpm --dir web exec eslint --ext .js --ext .jsx src/pages/AdminCodexBalance/index.jsx scripts/styleL1.mjs`、`pnpm --dir web test`、`pnpm --dir web build`、`STYLE_L1_SCENARIOS=admin-codex-balance-desktop,admin-codex-balance-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`，均通过；`style:l1` 覆盖 Codex 余额桌面和移动端目标区域。线上 Playwright 登录 `https://oauth-api.saurick.me/admin-codex-balance` 后确认页面显示接口状态“正常”、Credits remaining 为 `0`，无红色失败提示、无 stale 提示、无横向溢出。
+- 部署：本地构建 linux/amd64 镜像 `oauth-api-service-server:20260619T180249-eb054c3f-local`，上传到 `192.168.0.133:/data/openai-oauth-api-service/releases/20260619T180249-eb054c3f-balance-stale`。远端只执行 `docker load`、宿主机 Atlas status、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建。首次 Atlas status 被 migration 目录中的 macOS `._*` 资源叉文件阻断，已清理资源叉文件后重跑通过；Atlas 当前版本 `20260604123931`、pending 0。远端本机和公网 `/healthz` / `/readyz` / `/public/codex/balance` 均通过，当前 `app-server` 运行镜像为 `oauth-api-service-server:20260619T180249-eb054c3f-local`，容器环境 `GIT_SHA_SHORT=eb054c3f-local`、`IMAGE_TAG=20260619T180249-eb054c3f-local`。
+- 清理：部署成功后记录远端 `/` 使用率、`docker system df` 与运行容器；删除远端 release 镜像 tar 包，执行 `docker image prune -a -f` 和 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260614T175158-1a18472-context-anchor`，回收 353.3MB，未清理 volume。清理后根分区使用率 30%，当前 app-server 仍运行新镜像。
+- 阻塞/风险：本轮兜底依赖 app-server 进程内缓存；容器刚重启且第一次查询就遇到上游失败时仍会显示失败。该修复不改变 Codex app-server、mihomo 节点或 ChatGPT usage 接口本身的稳定性。
+
+## 2026-06-16 Codex 上游代理优先级切换
+
+- 完成：调整 `scripts/ops/codex-upstream-proxy-failover.py` 的节点选择策略，从“当前节点的下一个”轮转改为每次触发时按 `CODEX_FAILOVER_NODES` 优先级选择第一个可用且不同于当前节点的目标；当前优先级仍为 `日本JP-HY2 -> 日本-优化3 -> 日本-优化2 -> 日本-优化`，因此低优先级线路失败会优先切回 HY2，HY2 失败时才切到下一优先级。
+- 验证：已执行 `python3 -m py_compile scripts/ops/codex-upstream-proxy-failover.py`，并用 importlib 直接断言 HY2、低优先级、未知当前节点和无可切节点场景的选择结果。
+- 部署：已同步到 `192.168.0.133` 的 `/usr/local/sbin/codex-upstream-proxy-failover.py`，执行远端 `python3 -m py_compile` 后重启宿主机级 `codex-upstream-proxy-failover.service`；服务为 `active`，`--check` 自检通过，当前 `节点选择=日本JP-HY2` 且 `ChatGPT=节点选择`。未重启 app-server、PostgreSQL，也未修改 Compose。
+- 阻塞/风险：本轮只改触发后的节点选择顺序，不改变 180 秒冷却窗口，也不扩大错误日志匹配范围；`TLS handshake timeout` 和无 URL 的 `unexpected EOF` 是否触发切换仍需单独收口。
+
 ## 2026-06-15 21:50 CST
 
 - 完成：新增 `scripts/deploy/production-preflight.sh` 和 `server/Makefile` 的 `production_preflight` 入口，作为 OAuth API Service 生产发布前门禁；检查运行时 `.env`、占位 secret、镜像 tag、Codex upstream fallback、Compose 禁止 `build:`、migration 文档边界和可选运行态 `/healthz` / `/readyz`。

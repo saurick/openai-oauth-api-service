@@ -100,6 +100,13 @@ def set_selector(group: str, target: str, proxies: dict) -> bool:
     return True
 
 
+def choose_priority_node(current: str | None, available: list[str]) -> str:
+    for node in FAILOVER_NODES:
+        if node != current and node in available:
+            return node
+    return ""
+
+
 def check_config() -> int:
     data = mihomo_request("GET", "/proxies") or {}
     proxies = data.get("proxies") or {}
@@ -153,13 +160,9 @@ def switch_next(reason: str) -> None:
         return
 
     current = selector.get("now")
-    if current in FAILOVER_NODES:
-        next_node = FAILOVER_NODES[(FAILOVER_NODES.index(current) + 1) % len(FAILOVER_NODES)]
-    else:
-        next_node = FAILOVER_NODES[0]
-
-    if next_node not in (selector.get("all") or []):
-        log(f"next node unavailable selector={SELECTOR} current={current} next={next_node}")
+    next_node = choose_priority_node(current, selector.get("all") or [])
+    if not next_node:
+        log(f"no priority node available selector={SELECTOR} current={current}")
         return
 
     set_selector(SELECTOR, next_node, proxies)
@@ -173,6 +176,7 @@ def switch_next(reason: str) -> None:
             "last_reason": reason,
             "last_from": current,
             "last_to": next_node,
+            "selection_strategy": "priority",
         }
     )
     save_state(state)
