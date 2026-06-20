@@ -208,3 +208,11 @@
 - 验证：已执行 `cd web && pnpm exec eslint --ext .js --ext .jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`cd web && node --check scripts/styleL1.mjs`、`cd web && pnpm test`、`cd web && pnpm css`、`cd web && pnpm build`、`cd web && STYLE_L1_PORT=4340 STYLE_L1_SCENARIOS=admin-usage-desktop,admin-usage-mobile NODE_USE_ENV_PROXY=0 pnpm style:l1`、`git diff --check -- web/src/pages/AdminApi/index.jsx web/scripts/styleL1.mjs web/src/tailwind.css web/README.md progress.md`，均通过。内置 Browser 已打开本地 dev server，确认未登录访问 `/admin-usage` 按现有鉴权回跳 `/admin-login`，控制台仅有 React Router v7 future flag 既有 warning；普通 dev mock 不覆盖 `/rpc/api`，每日模型详情交互以 `style:l1` mock RPC 回归为准。
 - 下一步：如生产数据里 30 天窗口的日期 + 模型组合继续增长，可再评估是否把 `usage_buckets group_by=day_model` 扩展为后端分页接口；本轮不改后端聚合口径。
 - 阻塞/风险：本轮只做每日模型汇总表和详情弹窗分页样式统一，不改后端 `usage_buckets group_by=day_model` 聚合接口、schema、usage 真源或详情弹窗请求级分页口径。
+
+## 2026-06-20 Codex 项目 skills 迁入
+
+- 完成：将 openai-oauth 项目专属 `openai-oauth-docs-governance`、`openai-oauth-page-governance` 从个人 `~/.codex/skills` 迁入 `.agents/skills/`，作为仓库内 canonical，避免长期依赖本机副本。
+- 完成：同步更新根 `README.md` 技术栈 / 路径表，说明 `.agents/skills/` 只承载 Codex 项目专属文档治理和页面治理 workflow；本轮未更新 `docs/README.md`，因为没有新增、删除或重命名 `docs/` 文档，也未改变 architecture / operations / deploy 文档分层。
+- 验证：追加前 `progress.md` 为 210 行、55108 字节，未达到归档阈值；项目内两份 skill 已执行 `quick_validate.py` 均通过；对应 `SKILL.md` 已通过 Ruby YAML 解析；`.agents` 未被 gitignore 忽略。
+- 下一步：后续修改 openai-oauth 项目专属 skill 时以 `.agents/skills/` 为真源；个人全局同名 skill 只可作为临时入口，不再单独维护。
+- 阻塞/风险：本轮不改运行时代码、schema、auth/key 语义、usage 真源、上游策略、部署配置、密钥、历史 Python MVP 或正式运维口径。

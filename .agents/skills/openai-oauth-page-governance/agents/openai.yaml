@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenAI OAuth Page Governance"
+  short_description: "openai-oauth 管理后台页面与 L1 回归治理"
+  default_prompt: "Use $openai-oauth-page-governance to review or implement an openai-oauth-api-service admin page with clear page purpose, safe credential actions, readable tables, light/dark coverage, and style:l1 regression."
