@@ -18,7 +18,7 @@ OpenAI OAuth API Service 是一个长期维护的 OpenAI 兼容 API 转发与 to
 | `server/` | Go + Kratos + Ent + Atlas + PostgreSQL | 长期主后端 |
 | `web/` | Vite + React | 管理后台 |
 | `server/deploy/compose/prod/` | Docker Compose | 当前主部署路径 |
-| `.agents/skills/` | Codex repo skills | 项目专属文档治理和页面治理工作流；作为仓库内 canonical，不依赖个人本机 `~/.codex/skills` 副本 |
+| `.agents/skills/` | Codex repo skills | 项目专属文档治理、页面治理和代码审查工作流；作为仓库内 canonical，不依赖个人本机 `~/.codex/skills` 副本 |
 | `legacy-python-mvp/` | FastAPI + SQLite | 首轮 MVP 参考实现，不作为长期主路径 |
 
 ## 快速开始

@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenAI OAuth Code Review Governance"
+  short_description: "OpenAI OAuth 独立代码审查与风险检查流程"
+  default_prompt: "Use $openai-oauth-code-review-governance to review openai-oauth-api-service changes without editing code."

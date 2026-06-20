@@ -216,3 +216,18 @@
 - 验证：追加前 `progress.md` 为 210 行、55108 字节，未达到归档阈值；项目内两份 skill 已执行 `quick_validate.py` 均通过；对应 `SKILL.md` 已通过 Ruby YAML 解析；`.agents` 未被 gitignore 忽略。
 - 下一步：后续修改 openai-oauth 项目专属 skill 时以 `.agents/skills/` 为真源；个人全局同名 skill 只可作为临时入口，不再单独维护。
 - 阻塞/风险：本轮不改运行时代码、schema、auth/key 语义、usage 真源、上游策略、部署配置、密钥、历史 Python MVP 或正式运维口径。
+
+## 2026-06-20 Codex 代码审查 skill 补充
+
+- 完成：新增 `.agents/skills/openai-oauth-code-review-governance/`，作为 openai-oauth 项目独立代码审查入口，覆盖任意会话中的 worktree / staged diff / commit review；审查重点收口到 OAuth、下游 API key、usage、上游策略、Codex backend / CLI fallback、secrets、公开余额接口、部署和 legacy Python 边界。
+- 完成：同步根 `README.md` 技术栈 / 路径表中 `.agents/skills/` 职责，从文档治理 / 页面治理扩展为文档治理、页面治理和代码审查；本轮未更新 `docs/README.md`，因为没有新增、删除或重命名 `docs/` 文档，也未改变 architecture / operations / deploy 文档分层。
+- 验证：追加前 `progress.md` 为 218 行、56262 字节，未达到归档阈值；已执行 `quick_validate.py`（通过临时 PyYAML 路径）验证 `code-review-governance` 与 `openai-oauth-code-review-governance` 均通过；已执行 Ruby YAML 解析、TODO / 默认提示扫描、`git diff --check -- .agents/skills/openai-oauth-code-review-governance README.md progress.md`，通过。
+- 下一步：后续 review 可直接在独立会话或当前会话使用 `$openai-oauth-code-review-governance`；涉及官方 OpenAI API 当前行为时仍需另行核对官方文档。
+- 阻塞/风险：本轮只新增 Codex skill 和入口说明，不改运行时代码、schema、auth/key 语义、usage 真源、上游策略、部署配置、密钥、历史 Python MVP 或正式运维口径。
+
+## 2026-06-20 Codex skill UI 名称英文化
+
+- 完成：将 `.agents/skills/openai-oauth-code-review-governance/agents/openai.yaml` 的 `display_name` 改为英文 `OpenAI OAuth Code Review Governance`；项目内 docs/page governance 的 `display_name` 已是英文，无需改动。
+- 验证：追加前 `progress.md` 为 226 行、57793 字节，未达到归档阈值；已扫描相关 skills 的 `display_name`，确认无中文命中；后续以 skill 正文保持中英结合，UI chip 名称保持英文。
+- 下一步：如 Codex UI 仍显示旧名称，重新打开会话或等待 skill metadata 刷新。
+- 阻塞/风险：本轮只改 skill UI metadata，不改 `SKILL.md` 规则正文、运行时代码、schema、auth/key 语义、usage 真源、上游策略、部署配置或密钥。
