@@ -7,6 +7,8 @@
 - 完成：`/admin-dashboard` 用量趋势指标按钮改为 `Token / 请求 / 服务错误 / 延迟 / 费用`，默认展示 Token；`/admin-usage` 摘要指标卡同步把总 Token 放在第一位，后续按请求、服务错误率、费用、上游和客户端分布排列。
 - 完成：恢复 `/admin-dashboard` 最近调用表的“客户端 IP”列，保持与调用明细和既有回归口径一致。
 - 验证：已执行 `pnpm --dir web exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`node --check web/scripts/styleL1.mjs`、`STYLE_L1_SCENARIOS=admin-dashboard-desktop,admin-dashboard-mobile,admin-usage-desktop,admin-usage-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`、`pnpm --dir web test`、`pnpm --dir web css` 和 `pnpm --dir web build`，均通过；`style:l1` 覆盖 dashboard / usage 桌面与移动端目标页、趋势按钮顺序与默认 Token、usage 摘要卡顺序、tooltip、暗色/浅色相关目标区域和表格盒模型。
+- 部署：已提交并推送 `b9371bf fix: 调整管理端用量指标顺序`；本地构建 linux/amd64 镜像 `oauth-api-service-server:20260620T151023-b9371bf0-usage-metric-order`，上传到 `192.168.0.133:/data/openai-oauth-api-service/releases/20260620T151023-b9371bf0-usage-metric-order`。远端只执行 `docker load`、宿主机 Atlas status、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建。Atlas 当前版本 `20260604123931`、pending 0；远端本机和公网 `/healthz` / `/readyz` 通过，容器环境 `GIT_SHA_SHORT=b9371bf0`、`IMAGE_TAG=20260620T151023-b9371bf0-usage-metric-order`，公网静态 bundle 已包含新指标顺序和“客户端 IP”列，管理员 `admin/adminadmin` 登录、`api.summary` 与 `api.usage_list` smoke 通过。
+- 清理：部署成功后记录远端 `/` 使用率、`docker system df` 与运行容器；删除远端 release 镜像 tar 包和 migration tar 包，执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260619T180249-eb054c3f-local`，回收 353.3MB，未清理 volume。清理后根分区使用率 30%，当前 app-server 运行镜像为 `oauth-api-service-server:20260620T151023-b9371bf0-usage-metric-order`。
 - 阻塞/风险：本轮只改前端展示顺序、最近调用客户端 IP 展示和回归断言，不改后端 usage 真源、统计口径、schema 或部署配置。
 
 ## 2026-06-19 Codex 余额查询临时失败兜底
