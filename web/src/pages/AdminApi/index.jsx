@@ -4393,16 +4393,22 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const renderUsageSummaryCards = () => (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
       <SummaryCard
+        label="总 Token"
+        value={fmtNumber(summary.total_tokens)}
+        sub={`${fmtNumber(summary.input_tokens)} 输入（非缓存 ${fmtNumber(billableInputTokens(summary))}） / ${fmtNumber(summary.output_tokens)} 输出`}
+        help="总 Token = 输入 Token + 输出 Token；非缓存输入用于估算实际计费输入。"
+      />
+      <SummaryCard
         label="请求数"
         value={fmtNumber(summary.total_requests)}
         sub={`${fmtNumber(summary.success_requests)} 成功 / ${fmtNumber(summary.failed_requests)} 服务错误 / ${fmtNumber(summary.client_canceled_requests)} 取消`}
         help="请求数按当前用量日志筛选窗口统计；成功、服务错误和客户端取消分别按 usage 真源归类。"
       />
       <SummaryCard
-        label="总 Token"
-        value={fmtNumber(summary.total_tokens)}
-        sub={`${fmtNumber(summary.input_tokens)} 输入（非缓存 ${fmtNumber(billableInputTokens(summary))}） / ${fmtNumber(summary.output_tokens)} 输出`}
-        help="总 Token = 输入 Token + 输出 Token；非缓存输入用于估算实际计费输入。"
+        label="服务错误率"
+        value={fmtRate(summary.failed_requests, summary.total_requests)}
+        sub={`${fmtNumber(summary.client_canceled_requests)} 次客户端取消 / ${fmtNumber(summary.average_duration_ms)} ms 平均耗时`}
+        help="服务错误率 = 服务端或上游错误请求 / 当前筛选窗口请求总数；客户端取消单独展示。"
       />
       <SummaryCard
         label="费用估算"
@@ -4421,12 +4427,6 @@ export default function AdminApiPage({ view = 'dashboard' }) {
         value={`${fmtNumber(summary.codex_requests)} / ${fmtNumber(summary.opencode_requests)}`}
         sub={`${fmtNumber(summary.other_client_requests)} 次其他客户端`}
         help="主值依次为 Codex / OpenCode 请求数；其他客户端单独汇总。"
-      />
-      <SummaryCard
-        label="服务错误率"
-        value={fmtRate(summary.failed_requests, summary.total_requests)}
-        sub={`${fmtNumber(summary.client_canceled_requests)} 次客户端取消 / ${fmtNumber(summary.average_duration_ms)} ms 平均耗时`}
-        help="服务错误率 = 服务端或上游错误请求 / 当前筛选窗口请求总数；客户端取消单独展示。"
         helpAlign="end"
       />
     </div>

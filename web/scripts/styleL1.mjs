@@ -1133,11 +1133,10 @@ async function assertApiVisuals(page, scenarioName) {
   )
   assert(metrics.hasDetailsLink, `${scenarioName} 最近调用缺少明细页入口`)
   assert(
-    ['请求', '服务错误', '费用', '延迟', 'Token'].every((text) =>
-      metrics.trendMetricButtons.some((item) => item.text === text)
-    ) &&
+    JSON.stringify(metrics.trendMetricButtons.map((item) => item.text)) ===
+      JSON.stringify(['Token', '请求', '服务错误', '延迟', '费用']) &&
       metrics.trendMetricButtons.some(
-        (item) => item.text === '请求' && item.pressed
+        (item) => item.text === 'Token' && item.pressed
       ),
     `${scenarioName} 业务看板趋势指标切换异常: ${JSON.stringify(metrics.trendMetricButtons)}`
   )
@@ -1666,6 +1665,17 @@ async function assertUsageTableVisuals(page, scenarioName) {
         main?.querySelectorAll(
           '.admin-summary-card .admin-th-help[data-tooltip]'
         ).length >= 6,
+      summaryCardLabels: Array.from(
+        main?.querySelectorAll('.admin-summary-card') || []
+      )
+        .slice(0, 6)
+        .map(
+          (node) =>
+            node
+              .querySelector('.admin-th-help-wrap > span')
+              ?.textContent.replace(/\s+/gu, ' ')
+              .trim() || ''
+        ),
       hasUsageWindowSummary: document.body.innerText.includes('今天 范围内第'),
       mainHeight: mainRect?.height || 0,
       tableHeight: tableRect?.height || 0,
@@ -1697,11 +1707,16 @@ async function assertUsageTableVisuals(page, scenarioName) {
     metrics.hasSummaryCardTooltips,
     `${scenarioName} usage 摘要指标卡缺少说明 tooltip`
   )
+  assert.deepEqual(
+    metrics.summaryCardLabels,
+    ['总 Token', '请求数', '服务错误率', '费用估算', '上游分布', '客户端分布'],
+    `${scenarioName} usage 摘要指标卡顺序异常`
+  )
   await assertSummaryHelpTooltipVisible(
     page,
     scenarioName,
     'main .admin-summary-card .admin-th-help[data-tooltip]',
-    '请求数'
+    '总 Token'
   )
   assert(
     !metrics.hasTableRefreshAction,

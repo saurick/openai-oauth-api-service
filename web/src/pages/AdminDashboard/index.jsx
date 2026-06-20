@@ -22,6 +22,7 @@ import {
 const PAGE_SIZE = 12
 const DASHBOARD_KEY_FETCH_LIMIT = 200
 const TREND_METRICS = [
+  { key: 'tokens', label: 'Token', field: 'total_tokens', color: '#238a43' },
   { key: 'requests', label: '请求', field: 'total_requests', color: '#1478ff' },
   {
     key: 'errors',
@@ -30,18 +31,17 @@ const TREND_METRICS = [
     color: '#cf1322',
   },
   {
-    key: 'cost',
-    label: '费用',
-    field: 'estimated_cost_usd',
-    color: '#7c3aed',
-  },
-  {
     key: 'duration',
     label: '延迟',
     field: 'average_duration_ms',
     color: '#d97706',
   },
-  { key: 'tokens', label: 'Token', field: 'total_tokens', color: '#238a43' },
+  {
+    key: 'cost',
+    label: '费用',
+    field: 'estimated_cost_usd',
+    color: '#7c3aed',
+  },
 ]
 const TREND_CHART_TYPES = [
   { key: 'bar', label: '柱状' },
@@ -770,6 +770,7 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
               <tr>
                 <th className={thClass}>时间</th>
                 <th className={thClass}>请求</th>
+                <th className={thClass}>客户端 IP</th>
                 <th className={thClass}>凭据</th>
                 <th className={thClass}>接口</th>
                 <th className={thClass}>模型</th>
@@ -820,6 +821,9 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
                       <div className="mt-1 break-all text-xs text-[#9aa39e]">
                         Session：{item.session_id || '未传入'}
                       </div>
+                    </td>
+                    <td className={`${tdClass} font-mono text-xs`}>
+                      {item.client_ip || '-'}
                     </td>
                     <td className={tdClass}>
                       <ApiKeyUsageCell item={item} />
@@ -896,7 +900,7 @@ function RecentCallsTable({ loading, usageItems, usageTotal }) {
               ) : (
                 <tr>
                   <td
-                    colSpan={14}
+                    colSpan={15}
                     className="px-4 py-10 text-center text-sm text-[#9aa39e]"
                   >
                     {loading ? '加载中...' : '暂无调用记录'}
@@ -932,7 +936,7 @@ export default function AdminDashboardPage() {
   const [usageBuckets, setUsageBuckets] = useState([])
   const [usageTotal, setUsageTotal] = useState(0)
   const [trendChartType, setTrendChartType] = useState('bar')
-  const [trendMetric, setTrendMetric] = useState('requests')
+  const [trendMetric, setTrendMetric] = useState('tokens')
   const [trendTimeRange, setTrendTimeRange] = useState(
     DEFAULT_DAILY_USAGE_TIME_RANGE
   )

@@ -2,6 +2,13 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-20 管理端用量指标顺序
+
+- 完成：`/admin-dashboard` 用量趋势指标按钮改为 `Token / 请求 / 服务错误 / 延迟 / 费用`，默认展示 Token；`/admin-usage` 摘要指标卡同步把总 Token 放在第一位，后续按请求、服务错误率、费用、上游和客户端分布排列。
+- 完成：恢复 `/admin-dashboard` 最近调用表的“客户端 IP”列，保持与调用明细和既有回归口径一致。
+- 验证：已执行 `pnpm --dir web exec eslint --ext .js --ext .jsx src/pages/AdminDashboard/index.jsx src/pages/AdminApi/index.jsx scripts/styleL1.mjs`、`node --check web/scripts/styleL1.mjs`、`STYLE_L1_SCENARIOS=admin-dashboard-desktop,admin-dashboard-mobile,admin-usage-desktop,admin-usage-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`、`pnpm --dir web test`、`pnpm --dir web css` 和 `pnpm --dir web build`，均通过；`style:l1` 覆盖 dashboard / usage 桌面与移动端目标页、趋势按钮顺序与默认 Token、usage 摘要卡顺序、tooltip、暗色/浅色相关目标区域和表格盒模型。
+- 阻塞/风险：本轮只改前端展示顺序、最近调用客户端 IP 展示和回归断言，不改后端 usage 真源、统计口径、schema 或部署配置。
+
 ## 2026-06-19 Codex 余额查询临时失败兜底
 
 - 诊断：线上 `/admin-codex-balance` 一度显示“Codex 余额查询失败”，133 app-server 与 PostgreSQL 均健康，`/healthz` / `/readyz` 正常；后端日志显示 `account/rateLimits/read` 读取 `https://chatgpt.com/backend-api/wham/usage` 时出现 `error sending request`，随后同一路径又可正常返回 200，判断为 Codex app-server 到 ChatGPT usage 接口的临时上游 / 代理链路失败，不是 Codex 登录态整体失效。
