@@ -1,0 +1,1 @@
+default_prompt: "Use $openai-oauth-test-governance to choose and report the correct OpenAI OAuth API service validation scope before claiming tests pass."

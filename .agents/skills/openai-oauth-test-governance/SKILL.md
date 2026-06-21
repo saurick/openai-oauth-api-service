@@ -1,0 +1,46 @@
+---
+name: openai-oauth-test-governance
+description: Project-specific test governance for /Users/simon/projects/openai-oauth-api-service. Use when Codex chooses, runs, reviews, or explains validation scope for OpenAI OAuth API service changes, including Go unit/integration tests, web tests, admin UI style:l1, migration checks, auth/API-key/quota/usage logging validation, Codex backend behavior, proxy/upstream failure handling, secrets checks, deploy preflight, smoke tests, or when the user asks 测试分类/测试治理/怎么测/要不要补测试.
+---
+
+# OpenAI OAuth Test Governance
+
+用这份 skill 把 openai-oauth-api-service 的验证范围落到真实风险：鉴权、API key、额度、usage logging、Codex backend、上游失败、管理端页面、migration、低配部署和 secrets。
+
+## Workflow
+
+1. 先判断改动触达 server、web、migration、deploy、proxy/upstream、Codex backend、管理端页面或文档。
+2. 读取相关真源：`README.md`、`AGENTS.md`、`server/README.md`、`web/README.md`、`scripts/README.md`，部署任务再读 `server/deploy/README.md`。
+3. 按风险选最小充分命令；不要把 live upstream 调用当稳定单元测试。
+4. 涉及线上或低配服务器时，本地/CI 构建，远端只做加载制品、migration、启动、健康检查和 smoke。
+5. 汇报命令、结果、未覆盖项；有正式改动时更新 `progress.md`。
+
+## Test Shapes
+
+| 类型 | 适用场景 | 常用命令 / 验证 |
+| --- | --- | --- |
+| Static / Guard | 任意改动、配置、脚本、密钥边界 | `git diff --check`、`bash scripts/qa/secrets.sh`、`shellcheck`、`shfmt` |
+| Go Unit / Integration | OAuth、API key、quota、usage、gateway、Codex backend | `go test ./...` 或定向 server 包 |
+| Web Unit | 管理端组件、错误码、auth 分类、表格交互 | `cd web && pnpm lint`、`pnpm test` |
+| Admin UI Regression | 管理端登录、dashboard、usage、admins、layout/style | `cd web && pnpm style:l1`，必要时设置 `STYLE_L1_SCENARIOS=...` |
+| Migration / DB | schema、migration、usage log、quota 表结构 | `make migrate_status`、`make migrate_apply` 前先确认目标 DB |
+| Deploy Preflight | Compose、低配发布、运行时配置 | `bash scripts/qa/production-preflight.sh --runtime`，再做 health/ready |
+| Full / Strict | 跨层改动、提交前、发布前 | `bash scripts/qa/fast.sh`、`bash scripts/qa/full.sh`、`bash scripts/qa/strict.sh` |
+
+## Selection Rules
+
+- 鉴权、API key、余额、quota、usage logging 或 error classification 改动必须覆盖正常路径、权限失败、额度不足、禁用/过期、上游失败和日志字段。
+- Codex backend / direct API / CLI fallback 相关改动要区分可控 fake/local 测试与真实上游 smoke；真实上游不作为 deterministic 单元测试。
+- 管理端指标、表格、筛选、详情页或登录态改动必须跑对应 web 测试和 `style:l1` 场景。
+- Secrets、prompt、token、API key、session 和日志改动必须跑 secrets/grep 类检查，最终回复不得泄漏值。
+- 低配部署验证必须包含 `/healthz`、`/readyz`、migration 状态、容器状态和必要业务 smoke；禁止在低配服务器直接重构建。
+- 如果只改文档或 skill，做文档/skill 校验即可，不机械跑 live gateway 或部署 smoke。
+
+## Reporting Standard
+
+最终回复必须写清：
+
+- 本轮覆盖了 server、web、migration、deploy、upstream 中哪些层。
+- 实际命令与结果。
+- 是否覆盖 auth/API-key/quota/usage/Codex/backend/admin UI/secrets 边界。
+- 没跑真实上游、远端部署或 full/strict 时，要写清原因和剩余风险。
