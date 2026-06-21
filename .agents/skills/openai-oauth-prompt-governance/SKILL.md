@@ -65,6 +65,11 @@ $relevant-openai-oauth-skill
 | 代码 review | `$openai-oauth-code-review-governance` |
 | 测试选择 / 验证范围 | `$openai-oauth-test-governance` |
 | 通用提示词整理 | `$prompt-governance` |
+| 发布/部署/版本 | `$openai-oauth-release-governance` |
+| 领域边界/实现前评估 | `$openai-oauth-domain-boundary-governance` |
+| 运行故障诊断 | `$openai-oauth-runtime-diagnostics` |
+| 可观测/错误提示 | `$openai-oauth-observability-error-governance` |
+| 安全/隐私/权限 | `$openai-oauth-security-privacy-governance` |
 
 ## Prompt Patterns
 

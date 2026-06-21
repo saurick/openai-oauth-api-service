@@ -247,3 +247,11 @@
 - 验证：追加前 `progress.md` 为 241 行、60098 字节，未达到归档阈值；已执行项目 `openai-oauth-prompt-governance` 和通用 `prompt-governance` 的 `quick_validate.py`、Ruby YAML 解析、TODO 扫描、中文 `display_name` 扫描、默认提示扫描和 `git diff --check`，均通过。
 - 下一步：后续新开主会话、side chat、review 会话或需要把 openai-oauth 需求整理成可执行任务时，优先使用 `$openai-oauth-prompt-governance`；跨项目通用提示词整理使用 `$prompt-governance`。
 - 阻塞/风险：本轮只新增 Codex skill、README 入口和过程记录，不改运行时代码、schema、auth/key 语义、usage 真源、上游策略、部署配置、密钥、真实测试脚本或远端部署；因此不运行 Go/web/full/strict、真实上游 smoke 或远端部署验证。
+
+## 2026-06-21 Codex 高风险治理 skills 补充
+
+- 完成：新增项目专属 `.agents/skills/openai-oauth-release-governance/`、`openai-oauth-domain-boundary-governance/`、`openai-oauth-runtime-diagnostics/`、`openai-oauth-observability-error-governance/`、`openai-oauth-security-privacy-governance/`；未新增 seed/import 专属版，因为该服务不是数据导入型 ERP，避免误触发。
+- 完成：同步根 `README.md` 中 `.agents/skills/` 职责，并补充项目 prompt-governance 的 skill pairing 表，方便后续一次提示词带出相关治理 skill。
+- 验证：追加前 `progress.md` 为 249 行、61610 字节，未达到归档阈值；本轮只改 skill / README / progress，不改运行时代码、schema、migration、RBAC、部署脚本或生产配置；验证命令见本轮最终回复。
+- 下一步：后续涉及发布/部署/版本、运行报错、业务边界、可观测错误或安全隐私任务时优先使用对应项目 skill；跨项目通用 seed/import 任务可用全局 skill。
+- 阻塞/风险：新 skill 是执行治理入口，不等于已经修改 release 脚本、监控系统、安全策略或真实导入流程；如需自动守卫仍需后续落到脚本、测试或 CI/hook。

@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenAI OAuth Release Governance"
+  short_description: "Govern release, deploy, version, rollback, and evidence"
+  default_prompt: "Use $openai-oauth-release-governance to handle this openai-oauth-api-service task with project truth, validation, and risk reporting."

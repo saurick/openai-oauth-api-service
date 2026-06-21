@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenAI OAuth Domain Boundary Governance"
+  short_description: "Keep implementation aligned with domain truth and ownership"
+  default_prompt: "Use $openai-oauth-domain-boundary-governance to handle this openai-oauth-api-service task with project truth, validation, and risk reporting."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenAI OAuth Runtime Diagnostics"
+  short_description: "Diagnose live runtime failures before patching code"
+  default_prompt: "Use $openai-oauth-runtime-diagnostics to handle this openai-oauth-api-service task with project truth, validation, and risk reporting."

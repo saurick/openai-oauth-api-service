@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenAI OAuth Observability Error Governance"
+  short_description: "Design logs, traces, metrics, errors, and user messages"
+  default_prompt: "Use $openai-oauth-observability-error-governance to handle this openai-oauth-api-service task with project truth, validation, and risk reporting."

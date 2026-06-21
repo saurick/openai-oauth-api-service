@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenAI OAuth Security Privacy Governance"
+  short_description: "Handle auth, secrets, permissions, privacy, and safe data use"
+  default_prompt: "Use $openai-oauth-security-privacy-governance to handle this openai-oauth-api-service task with project truth, validation, and risk reporting."
