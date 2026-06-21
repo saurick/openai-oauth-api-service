@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenAI OAuth Prompt Governance"
+  short_description: "Draft OAuth service task prompts"
+  default_prompt: "Use $openai-oauth-prompt-governance to turn this OpenAI OAuth request into an executable task prompt."

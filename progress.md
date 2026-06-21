@@ -239,3 +239,11 @@
 - 验证：追加前 `progress.md` 为 233 行、58594 字节，未达到归档阈值；已执行 `quick_validate.py` 验证通用 `test-governance` 与项目 `openai-oauth-test-governance` 均通过；已执行 Ruby YAML 解析、TODO 扫描、中文 `display_name` 扫描、默认提示扫描和 `git diff --check`，均通过。
 - 下一步：后续涉及测试选择、auth/API-key/quota/usage/Codex backend/admin UI/deploy 验证或“是否测试充分”时优先使用 `$openai-oauth-test-governance`；只需要通用测试分类时可用 `$test-governance`。
 - 阻塞/风险：本轮只新增 Codex skill、README 入口和过程记录，不改运行时代码、schema、auth/key 语义、usage 真源、上游策略、部署配置、密钥或真实测试脚本；因此未运行 Go/web/full/strict、真实上游 smoke 或远端部署验证。
+
+## 2026-06-21 Codex 提示词治理 skill 补充
+
+- 完成：新增 `.agents/skills/openai-oauth-prompt-governance/`，作为 openai-oauth 项目专属提示词治理入口，覆盖 auth、API key、quota、usage logging、Codex backend、secrets、proxy/upstream、admin UI、deploy preflight、提交推送和交接提示词；同步根 `README.md` 中 `.agents/skills/` 职责为文档治理、页面治理、代码审查、测试治理和提示词治理。
+- 完成：通用 `~/.codex/skills/prompt-governance/` 已存在，用于跨项目提示词治理；项目内仍以 `.agents/skills/openai-oauth-prompt-governance/` 承载 openai-oauth 专属边界。
+- 验证：追加前 `progress.md` 为 241 行、60098 字节，未达到归档阈值；已执行项目 `openai-oauth-prompt-governance` 和通用 `prompt-governance` 的 `quick_validate.py`、Ruby YAML 解析、TODO 扫描、中文 `display_name` 扫描、默认提示扫描和 `git diff --check`，均通过。
+- 下一步：后续新开主会话、side chat、review 会话或需要把 openai-oauth 需求整理成可执行任务时，优先使用 `$openai-oauth-prompt-governance`；跨项目通用提示词整理使用 `$prompt-governance`。
+- 阻塞/风险：本轮只新增 Codex skill、README 入口和过程记录，不改运行时代码、schema、auth/key 语义、usage 真源、上游策略、部署配置、密钥、真实测试脚本或远端部署；因此不运行 Go/web/full/strict、真实上游 smoke 或远端部署验证。
