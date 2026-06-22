@@ -18,6 +18,15 @@
 - 前端后台、鉴权、页面：先读 `web/README.md`
 - 部署：先读 `server/deploy/README.md`
 
+## 项目专属 Skill 维护约定
+
+- 本项目专属 Codex skill 统一放在 `.agents/skills/<skill-name>/`，并随本仓库 git 管理；`~/.codex/skills/` 只放跨项目通用 skill。
+- 项目专属 skill 只写 openai-oauth-api-service 的当前真源、边界、命令和验证要求，不把临时任务状态、聊天结论、密钥、生产现场细节或一次性方案写成长期规则。
+- skill 的 `name`、目录名、UI `display_name` 保持英文；`SKILL.md description`、正文、`agents/openai.yaml short_description/default_prompt` 使用中文主体 + English anchors。
+- 项目版 skill 不能只是通用版复制，至少应包含 `Truth Chain / 必读真源`、`Project Rules / 项目边界`、`Workflow / 工作流`、`Output / 输出要求`，必要时补 `Validation / 验证要求`。
+- 新增、删除、重命名或调整项目 skill 职责时，同步检查根 `README.md`、相关 docs 索引和 `progress.md` 是否需要更新；只改正文且不改变职责时通常不需要改 `docs/README.md`。
+- 修改 skill 后至少运行 skill validator、YAML 解析和 metadata 扫描，确认 `$skill-name`、中英摘要和英文 `display_name` 都符合规则。
+
 ## 工程基线
 
 - 保留质量门禁、错误码治理、健康检查、基础可观测性、数据库迁移工作流。
