@@ -1,4 +1,4 @@
 interface:
   display_name: "OpenAI OAuth Prompt Governance"
-  short_description: "Draft OAuth service task prompts"
-  default_prompt: "Use $openai-oauth-prompt-governance to turn this OpenAI OAuth request into an executable task prompt."
+  short_description: "提示词治理 Prompt"
+  default_prompt: "Use $openai-oauth-prompt-governance 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险。"

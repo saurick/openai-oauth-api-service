@@ -1,9 +1,11 @@
 ---
 name: openai-oauth-test-governance
-description: Project-specific test governance for /Users/simon/projects/openai-oauth-api-service. Use when Codex chooses, runs, reviews, or explains validation scope for OpenAI OAuth API service changes, including Go unit/integration tests, web tests, admin UI style:l1, migration checks, auth/API-key/quota/usage logging validation, Codex backend behavior, proxy/upstream failure handling, secrets checks, deploy preflight, smoke tests, or when the user asks 测试分类/测试治理/怎么测/要不要补测试.
+description: openai-oauth-api-service 项目测试治理。Use when Codex chooses, runs, reviews, or explains validation scope for OpenAI OAuth API service changes, including Go unit/integration tests, web tests, admin UI style:l1, migration checks, auth/API-key/quota/usage logging validation, Codex backend behavior, proxy/upstream failure handling, secrets checks, deploy preflight, smoke tests, or when the user asks 测试分类/测试治理/怎么测/要不要补测试.
 ---
 
 # OpenAI OAuth Test Governance
+
+阅读口径：正文默认中文主线 + English anchors；`name` / `display_name` 保持英文，`Workflow / Fact / RBAC / API / migration / runtime` 等术语按需保留，方便触发、检索和跨工具引用。
 
 用这份 skill 把 openai-oauth-api-service 的验证范围落到真实风险：鉴权、API key、额度、usage logging、Codex backend、上游失败、管理端页面、migration、低配部署和 secrets。
 

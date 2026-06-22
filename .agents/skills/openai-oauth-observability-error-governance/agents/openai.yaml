@@ -1,4 +1,4 @@
 interface:
   display_name: "OpenAI OAuth Observability Error Governance"
-  short_description: "Design logs, traces, metrics, errors, and user messages"
-  default_prompt: "Use $openai-oauth-observability-error-governance to handle this openai-oauth-api-service task with project truth, validation, and risk reporting."
+  short_description: "可观测性/错误 Observability"
+  default_prompt: "Use $openai-oauth-observability-error-governance 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险。"

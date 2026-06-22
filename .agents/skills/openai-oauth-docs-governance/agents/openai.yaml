@@ -1,4 +1,4 @@
 interface:
   display_name: "OpenAI OAuth Docs Governance"
-  short_description: "openai-oauth 文档真源、结构表达、部署和 progress 治理"
-  default_prompt: "Use $openai-oauth-docs-governance to review or update openai-oauth-api-service docs with architecture, operations, deployment, tables, diagrams, links, README, and progress source-of-truth checks."
+  short_description: "文档治理 Docs"
+  default_prompt: "Use $openai-oauth-docs-governance 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险。"

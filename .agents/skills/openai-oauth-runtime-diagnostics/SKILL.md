@@ -1,32 +1,33 @@
 ---
 name: openai-oauth-runtime-diagnostics
-description: Project-specific runtime diagnostics workflow for openai-oauth-api-service. Use when Codex diagnoses openai-oauth-api-service page errors, API/RPC failures, backend read/write failures, migration drift, database mismatch, deployment mismatch, browser/runtime issues, logs, request IDs, configuration drift, environment confusion, or production/test/local differences before changing code.
+description: openai-oauth-api-service 项目运行时故障诊断。Use when Codex diagnoses openai-oauth-api-service page errors, API/RPC failures, backend read/write failures, migration drift, database mismatch, deployment mismatch, browser/runtime issues, logs, request IDs, configuration drift, environment confusion, or production/test/local differences before changing code.
 ---
 
-# OpenAI OAuth Runtime Diagnostics
+# OpenAI OAuth 运行时诊断 Runtime Diagnostics
 
-Use this skill to diagnose openai-oauth-api-service runtime failures from evidence before editing code.
+阅读口径：正文默认中文主线 + English anchors；`name` / `display_name` 保持英文，`Workflow / Fact / RBAC / API / migration / runtime` 等术语按需保留，方便触发、检索和跨工具引用。
 
-## Truth Chain
+用这个 skill 在修改 `openai-oauth-api-service` 代码前先用 runtime evidence 分层定位故障，避免把环境、数据、migration、部署或浏览器问题误修成代码补丁。
 
-- Check actual environment, branch/commit/image, config/env, DB/migration state, logs, request IDs, browser network/console, and recent deploys.
-- Do not infer runtime truth from static code alone when live behavior is available.
+## 真源链 Truth Chain
 
-## Project Rules
+- 核对 actual environment、branch/commit/image、config/env、DB/migration state、logs、request IDs、browser network/console、recent deploys。
+- live behavior 可取得时，不只靠 static code 推断 runtime truth。
 
-- 生产 502 / balance / usage 问题先查 `gateway_usage_logs`、request_id/session_id、容器日志、上游响应和 host 网络。
-- 管理端页面问题要同时核对 API payload、浏览器渲染、缓存/stale fallback 和部署版本。
-- 先定位服务是否真的属于当前 repo，再改代码。
+## 项目规则 Project Rules
 
-## Workflow
+- 生产 502 / balance / usage 问题先查 `gateway_usage_logs`、request_id/session_id、container logs、upstream response 和 host network。
+- 管理端页面问题要同时核对 API payload、browser render、cache/stale fallback 和部署版本。
+- 先确认故障服务确实属于当前 repo，再改代码。
 
-1. Capture exact symptom, route/API, user/role, timestamp, environment, and last known good version.
-2. Classify the failing layer: browser/UI, route/menu, API/RPC, service/usecase, DB/migration, auth/RBAC, config/env, deploy/container, network/upstream.
-3. Reproduce narrowly with one command/request/browser action.
-4. Compare runtime evidence against code/docs; distinguish local/test/prod and mock/real paths.
-5. Fix the owning layer, avoiding page-local or fallback patches unless they are documented and bounded.
-6. Rerun the failing path and adjacent regression checks.
+## 工作流 Workflow
 
-## Output
+1. 捕获 symptom：route/API、user/role、timestamp、environment、last known good version。
+2. 分层：browser/UI、route/menu、API/RPC、service/usecase、DB/migration、auth/RBAC、config/env、deploy/container、network/upstream。
+3. 用一个最小 command/request/browser action 复现。
+4. 对比 runtime evidence 与 code/docs，区分 local/test/prod 和 mock/real path。
+5. 先给出 root cause 或 narrowed suspects，再决定改代码、改数据、改配置、补 migration 或回滚部署。
 
-Report root cause, evidence, environment, commands/requests, fix scope, validation, and unverified paths.
+## 输出 Output
+
+汇报 symptom、evidence、failing layer、reproduction、root cause/suspects、fix path、validation 和 remaining blind spots。

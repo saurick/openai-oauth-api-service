@@ -1,9 +1,11 @@
 ---
 name: openai-oauth-docs-governance
-description: Project-specific documentation governance for /Users/simon/projects/openai-oauth-api-service. Use when Codex reviews, creates, renames, reorganizes, simplifies, or updates this project's Markdown docs, README files, docs/README.md, architecture docs, operations docs, server/deploy docs, web README, progress.md, admin-console docs, OAuth/API key/usage/upstream strategy docs, deployment instructions, tables, classification matrices, Mermaid diagrams, reader paths, conclusion-first structure, copyable commands, links, anchors, or when the user mentions openai-oauth-api-service with 文档治理, docs, 真源, progress, architecture, operations, deploy, admin 可见性, low-spec, gateway_usage_logs, 上游策略, 表格, 矩阵, 命令可复制, or asks whether this project's docs guidance should become reusable.
+description: openai-oauth-api-service 项目文档治理。Use when Codex reviews, creates, renames, reorganizes, simplifies, or updates this project's Markdown docs, README files, docs/README.md, architecture docs, operations docs, server/deploy docs, web README, progress.md, admin-console docs, OAuth/API key/usage/upstream strategy docs, deployment instructions, tables, classification matrices, Mermaid diagrams, reader paths, conclusion-first structure, copyable commands, links, anchors, or when the user mentions openai-oauth-api-service with 文档治理, docs, 真源, progress, architecture, operations, deploy, admin 可见性, low-spec, gateway_usage_logs, 上游策略, 表格, 矩阵, 命令可复制, or asks whether this project's docs guidance should become reusable.
 ---
 
 # OpenAI OAuth Docs Governance
+
+阅读口径：正文默认中文主线 + English anchors；`name` / `display_name` 保持英文，`Workflow / Fact / RBAC / API / migration / runtime` 等术语按需保留，方便触发、检索和跨工具引用。
 
 Use this skill to keep `openai-oauth-api-service` docs concise, source-grounded, and operationally safe. This is local project documentation governance; use `openai-docs` separately for official OpenAI API/Product documentation questions.
 

@@ -1,9 +1,11 @@
 ---
 name: openai-oauth-prompt-governance
-description: Project-specific prompt governance for /Users/simon/projects/openai-oauth-api-service. Use when Codex writes, refines, evaluates, or converts an OpenAI OAuth API service request into an executable prompt for implementation, review, docs governance, admin page design, tests, deployment, handoff, side chat, main chat, or commit/push work; when prompts need auth/API-key/quota/usage logging/Codex backend/secrets/proxy/upstream/deploy boundaries; or when the user wants positive "要做什么" wording instead of broad "不要" lists.
+description: openai-oauth-api-service 项目提示词治理。Use when Codex writes, refines, evaluates, or converts an OpenAI OAuth API service request into an executable prompt for implementation, review, docs governance, admin page design, tests, deployment, handoff, side chat, main chat, or commit/push work; when prompts need auth/API-key/quota/usage logging/Codex backend/secrets/proxy/upstream/deploy boundaries; or when the user wants positive "要做什么" wording instead of broad "不要" lists.
 ---
 
 # OpenAI OAuth Prompt Governance
+
+阅读口径：正文默认中文主线 + English anchors；`name` / `display_name` 保持英文，`Workflow / Fact / RBAC / API / migration / runtime` 等术语按需保留，方便触发、检索和跨工具引用。
 
 Use this skill to draft prompts for openai-oauth-api-service work. The prompt should identify the target layer, security-sensitive boundaries, validation, and closeout. Prefer positive instructions; reserve "do not" for secrets, auth, live upstream, deployment, and destructive Git risks.
 

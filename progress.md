@@ -279,3 +279,11 @@
 - 验证：追加前 `progress.md` 为 273 行、65310 字节，未达到归档阈值；本轮只改项目级 AGENTS / progress，不改运行时代码、schema、auth/key 语义、usage 真源、上游策略、页面或部署脚本；已执行 `git diff --check -- AGENTS.md progress.md`。
 - 下一步：后续新增或维护项目 skill 时，按项目 AGENTS 和全局 AGENTS 的一致规则执行；如只改 skill 正文且职责不变，通常不需要改 `docs/README.md`。
 - 阻塞/风险：本轮规则只约束后续 skill 维护，不代表已经修改任何自动 hook、CI、监控系统、安全策略或真实业务流程。
+
+## 2026-06-22 页面治理与后端边界 skill 说明收口
+
+- 完成：补充 `openai-oauth-page-governance` 与 `openai-oauth-domain-boundary-governance` 的边界说明，明确 admin 页面如果涉及 auth/API key/quota/usage logging/gateway/upstream/admin API/schema/migration/error code，应先回到 domain skill 定义后端/API/auth/usage/upstream 边界。
+- 完成：同步修正通用 `~/.codex/skills/page-design-governance` 与 `domain-boundary-governance` 的页面 / 后端边界说明，避免服务版继续从通用版漂移。
+- 验证：追加前 `progress.md` 为 281 行、66510 字节，未达到归档阈值；已执行相关 skill validator、YAML 解析和 diff 检查。
+- 下一步：openai-oauth 管理端页面任务若需要 auth/API/usage/upstream 能力，先切到 `$openai-oauth-domain-boundary-governance`，再回到页面 skill 做 UI 回归。
+- 阻塞/风险：本轮只改 skill 文本和过程记录，不新增 backend skill，不改运行时代码、schema、auth/key 语义、usage 真源、上游策略、部署脚本、监控系统或测试实现。

@@ -1,9 +1,11 @@
 ---
 name: openai-oauth-page-governance
-description: Project-specific page design governance for /Users/simon/projects/openai-oauth-api-service. Use when Codex designs, reviews, simplifies, or implements this project's admin console pages, API operations dashboard, usage logs, upstream strategy page, API key tables and dialogs, OAuth/admin login, client-config generator, model/limit settings, public balance page, buttons, filters, tables, charts, empty/error states, light/dark theme, responsive layout, credential/key reset actions, accessibility, keyboard/focus behavior, or when the user mentions openai-oauth-api-service with 页面治理, 简洁易用, 心智负担, 信息密度, admin 页面, usage 可见性, key 管理, 上游策略, style:l1, 暗色模式, 表格, 弹窗, or asks whether admin-console guidance should become reusable.
+description: openai-oauth-api-service 项目页面设计治理。Use when Codex designs, reviews, simplifies, or implements this project's admin console pages, API operations dashboard, usage logs, upstream strategy page, API key tables and dialogs, OAuth/admin login, client-config generator, model/limit settings, public balance page, buttons, filters, tables, charts, empty/error states, light/dark theme, responsive layout, credential/key reset actions, accessibility, keyboard/focus behavior, or when the user mentions openai-oauth-api-service with 页面治理, 简洁易用, 心智负担, 信息密度, admin 页面, usage 可见性, key 管理, 上游策略, style:l1, 暗色模式, 表格, 弹窗, or asks whether admin-console guidance should become reusable.
 ---
 
 # OpenAI OAuth Page Governance
+
+阅读口径：正文默认中文主线 + English anchors；`name` / `display_name` 保持英文，`Workflow / Fact / RBAC / API / migration / runtime` 等术语按需保留，方便触发、检索和跨工具引用。
 
 Use this skill to keep `openai-oauth-api-service` admin pages useful, safe, and verifiable. This is project-specific admin-console guidance, not OpenAI official product documentation and not ERP page governance.
 
@@ -39,6 +41,7 @@ Use this skill to keep `openai-oauth-api-service` admin pages useful, safe, and 
 
 5. Preserve project boundaries.
    - Do not change schema, migration, auth semantics, route truth, upstream mode behavior, key lifecycle, deployment defaults, or logging policy as a side effect of visual cleanup.
+   - If admin-page work requires backend/API/auth/API-key/usage/upstream behavior changes, stop treating it as page-only work. Use `openai-oauth-domain-boundary-governance` to define the auth, usage, upstream, API contract, and persistence boundary first.
    - Do not restore old portal/user-account flows or Python MVP behavior unless the task explicitly asks for that product review.
    - Do not change the default personal-deploy admin password policy or production deploy path from page work.
    - If a page simplification requires hiding, renaming, or combining official admin routes, stop and treat it as a product/navigation review.
