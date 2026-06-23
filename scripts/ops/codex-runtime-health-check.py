@@ -84,6 +84,10 @@ def run_command(command: list[str] | str, timeout: float = REQUEST_TIMEOUT_SECON
         }
 
 
+def command_label(command: list[str] | str) -> str:
+    return command if isinstance(command, str) else " ".join(command)
+
+
 def get_codex_version() -> dict[str, Any]:
     if CODEX_MODE not in {"auto", "host", "container"}:
         return {"ok": False, "mode": CODEX_MODE, "error": "invalid CODEX_RUNTIME_MODE"}
@@ -102,6 +106,45 @@ def get_codex_version() -> dict[str, Any]:
         result.update({"mode": "container", "bin": CODEX_BIN, "container": CONTAINER})
         return result
     return {"ok": False, "mode": CODEX_MODE, "bin": CODEX_BIN, "error": "docker not found"}
+
+
+def extract_semver(output: str) -> str:
+    for token in reversed(output.replace("\n", " ").split()):
+        if token and token[0].isdigit():
+            return token
+    return ""
+
+
+def resolve_latest_command(version: dict[str, Any]) -> list[str] | str | None:
+    if LATEST_VERSION_COMMAND:
+        return LATEST_VERSION_COMMAND
+    if version.get("mode") == "container":
+        docker = shutil.which("docker")
+        if not docker:
+            return None
+        return [docker, "exec", CONTAINER, "npm", "view", "@openai/codex", "version"]
+    if version.get("mode") == "host":
+        npm = shutil.which("npm")
+        if not npm:
+            return None
+        return [npm, "view", "@openai/codex", "version"]
+    return None
+
+
+def resolve_upgrade_command(version: dict[str, Any]) -> list[str] | str | None:
+    if UPGRADE_COMMAND:
+        return UPGRADE_COMMAND
+    if version.get("mode") == "container":
+        docker = shutil.which("docker")
+        if not docker:
+            return None
+        return [docker, "exec", CONTAINER, "npm", "install", "-g", "@openai/codex@latest"]
+    if version.get("mode") == "host":
+        npm = shutil.which("npm")
+        if not npm:
+            return None
+        return [npm, "install", "-g", "@openai/codex@latest"]
+    return None
 
 
 def http_get(path: str) -> dict[str, Any]:
@@ -143,33 +186,36 @@ def add_check(report: dict[str, Any], name: str, status: str, details: dict[str,
         report["status"] = status
 
 
-def check_codex(report: dict[str, Any]) -> None:
+def check_codex(report: dict[str, Any]) -> dict[str, Any]:
     version = get_codex_version()
     add_check(report, "codex_binary", "ok" if version["ok"] else "fail", {"version": version})
 
-    if not LATEST_VERSION_COMMAND:
+    latest_command = resolve_latest_command(version)
+    if not latest_command:
         add_check(
             report,
             "codex_latest_version",
-            "ok",
-            {"skipped": True, "reason": "CODEX_RUNTIME_LATEST_VERSION_COMMAND is not configured"},
+            "warn",
+            {"skipped": True, "reason": "npm latest version command is not available"},
         )
-        return
+        return {"version": version, "latest": None, "update_available": False}
 
-    latest = run_command(LATEST_VERSION_COMMAND, timeout=REQUEST_TIMEOUT_SECONDS)
-    current = version.get("stdout", "").split()[-1:] or [""]
-    latest_stdout = latest.get("stdout", "").splitlines()[-1:] or [""]
+    latest = run_command(latest_command, timeout=REQUEST_TIMEOUT_SECONDS)
+    current_version = extract_semver(version.get("stdout", ""))
+    latest_version = extract_semver(latest.get("stdout", ""))
     status = "ok" if latest["ok"] else "warn"
+    update_available = bool(latest["ok"] and current_version and latest_version and current_version != latest_version)
     details = {
-        "command": LATEST_VERSION_COMMAND,
-        "current": current[0],
-        "latest": latest_stdout[0],
+        "command": command_label(latest_command),
+        "current": current_version,
+        "latest": latest_version,
         "result": latest,
     }
-    if latest["ok"] and current[0] and latest_stdout[0] and current[0] != latest_stdout[0]:
+    if update_available:
         status = "warn"
         details["update_available"] = True
     add_check(report, "codex_latest_version", status, details)
+    return {"version": version, "latest": latest, "update_available": update_available}
 
 
 def check_http(report: dict[str, Any], strict_balance: bool) -> None:
@@ -252,26 +298,96 @@ def write_report(report: dict[str, Any]) -> None:
         pass
 
 
-def perform_upgrade(report: dict[str, Any], dry_run: bool) -> None:
-    if not UPGRADE_COMMAND:
+def perform_upgrade(report: dict[str, Any], dry_run: bool, only_if_update: bool) -> None:
+    before = get_codex_version()
+    latest_command = resolve_latest_command(before)
+    latest: dict[str, Any] | None = None
+    update_available = True
+    if latest_command:
+        latest = run_command(latest_command, timeout=REQUEST_TIMEOUT_SECONDS)
+        current_version = extract_semver(before.get("stdout", ""))
+        latest_version = extract_semver(latest.get("stdout", ""))
+        if only_if_update and not latest["ok"]:
+            add_check(
+                report,
+                "codex_upgrade",
+                "warn",
+                {
+                    "skipped": True,
+                    "reason": "latest version query failed",
+                    "current": current_version,
+                    "latest": latest_version,
+                    "latest_result": latest,
+                },
+            )
+            return
+        if only_if_update and (not current_version or not latest_version):
+            add_check(
+                report,
+                "codex_upgrade",
+                "warn",
+                {
+                    "skipped": True,
+                    "reason": "version is not comparable",
+                    "current": current_version,
+                    "latest": latest_version,
+                    "latest_result": latest,
+                },
+            )
+            return
+        update_available = bool(latest["ok"] and current_version and latest_version and current_version != latest_version)
+        if only_if_update and not update_available:
+            add_check(
+                report,
+                "codex_upgrade",
+                "ok",
+                {
+                    "skipped": True,
+                    "reason": "already latest",
+                    "current": current_version,
+                    "latest": latest_version,
+                    "latest_result": latest,
+                },
+            )
+            return
+
+    upgrade_command = resolve_upgrade_command(before)
+    if not upgrade_command:
         add_check(
             report,
             "codex_upgrade",
             "fail",
-            {"skipped": True, "reason": "CODEX_RUNTIME_UPGRADE_COMMAND is not configured"},
+            {"skipped": True, "reason": "npm upgrade command is not available", "before": before},
         )
         return
     if dry_run:
-        add_check(report, "codex_upgrade", "warn", {"dry_run": True, "command": UPGRADE_COMMAND})
+        add_check(
+            report,
+            "codex_upgrade",
+            "warn",
+            {
+                "dry_run": True,
+                "command": command_label(upgrade_command),
+                "only_if_update": only_if_update,
+                "update_available": update_available,
+                "latest_result": latest,
+            },
+        )
         return
-    before = get_codex_version()
-    upgrade = run_command(UPGRADE_COMMAND, timeout=600)
+    upgrade = run_command(upgrade_command, timeout=600)
     after = get_codex_version()
     add_check(
         report,
         "codex_upgrade",
         "ok" if upgrade["ok"] else "fail",
-        {"command": UPGRADE_COMMAND, "before": before, "upgrade": upgrade, "after": after},
+        {
+            "command": command_label(upgrade_command),
+            "before": before,
+            "latest_result": latest,
+            "upgrade": upgrade,
+            "after": after,
+            "only_if_update": only_if_update,
+        },
     )
 
 
@@ -283,7 +399,8 @@ def build_report(strict_balance: bool) -> dict[str, Any]:
         "compose_dir": str(COMPOSE_DIR),
         "checks": [],
     }
-    check_codex(report)
+    codex = check_codex(report)
+    report["codex_update_available"] = codex["update_available"]
     check_docker(report)
     check_http(report, strict_balance)
     check_failover(report)
@@ -296,6 +413,7 @@ def parse_args() -> argparse.Namespace:
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--check", action="store_true", help="run health checks")
     action.add_argument("--upgrade", action="store_true", help="run configured upgrade command, then health checks")
+    action.add_argument("--auto-upgrade", action="store_true", help="upgrade Codex when latest differs, then run checks")
     parser.add_argument("--strict-balance", action="store_true", help="treat stale balance as a failure")
     parser.add_argument("--dry-run", action="store_true", help="show upgrade command without running it")
     return parser.parse_args()
@@ -303,12 +421,12 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    if not args.check and not args.upgrade:
+    if not args.check and not args.upgrade and not args.auto_upgrade:
         args.check = True
 
     report = build_report(args.strict_balance)
-    if args.upgrade:
-        perform_upgrade(report, args.dry_run)
+    if args.upgrade or args.auto_upgrade:
+        perform_upgrade(report, args.dry_run, only_if_update=args.auto_upgrade)
         if not args.dry_run:
             upgrade_checks = [item for item in report["checks"] if item["name"] == "codex_upgrade"]
             post_report = build_report(args.strict_balance)

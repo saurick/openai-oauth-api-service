@@ -336,3 +336,12 @@
 - 完成：同步更新 `scripts/ops/install-codex-runtime-health-check.sh`、`docs/operations.md` 和 `server/deploy/README.md`，明确日常 timer 是固定 Asia/Shanghai 05:00 只检查，不自动升级。
 - 验证：本地已通过 `bash -n scripts/ops/install-codex-runtime-health-check.sh`、`git diff --check`、`bash scripts/qa/secrets.sh`；133 已重装 timer，`systemctl list-timers` 显示下一次触发为 `2026-06-23 21:00:00 UTC`，即北京时间 / Asia/Shanghai `2026-06-24 05:00:00`。
 - 阻塞/风险：本轮只调整 timer 时间和说明，不改健康检查项、升级策略、app-server、schema、auth/key 语义或上游策略。
+
+## 2026-06-23 Codex runtime 自动升级 latest
+
+- 完成：将 `codex-runtime-health-check.py` 增加 `--auto-upgrade` 模式；脚本会先读取当前 `codex --version`，再查询 `@openai/codex` latest，发现版本不同就执行升级，之后重新跑 `/healthz`、`/readyz`、`/public/codex/balance`、failover 和磁盘检查。
+- 完成：默认 latest / upgrade 命令按运行位置自动选择；133 当前是 app-server 容器内 Codex，因此默认走 `docker exec openai-oauth-api-service-server npm view @openai/codex version` 和 `docker exec openai-oauth-api-service-server npm install -g @openai/codex@latest`。
+- 完成：将 systemd service 从 `--check` 改为 `--auto-upgrade`，timer 仍固定 Asia/Shanghai 05:00；同步更新安装脚本、`docs/operations.md` 和 `server/deploy/README.md`。
+- 验证：本地已通过 `python3 -m py_compile`、`bash -n`、`bash scripts/qa/shellcheck.sh`、`bash scripts/qa/secrets.sh`、`git diff --check`；133 已部署并重载 systemd，service 当前执行 `/usr/local/sbin/codex-runtime-health-check.py --auto-upgrade`。
+- 验证：133 实测从容器内 `codex-cli 0.133.0` 检查到 latest `0.142.0`，执行 `docker exec openai-oauth-api-service-server npm install -g @openai/codex@latest` 后升级为 `codex-cli 0.142.0`；随后 `/healthz`、`/readyz`、`/public/codex/balance`、failover 与磁盘检查均为 `ok`，下一次 timer 仍为 Asia/Shanghai `2026-06-24 05:00:00`。
+- 阻塞/风险：本轮不改 app-server 业务代码、schema、migration、auth/key 语义或上游策略；如果未来 app-server 容器重建，容器内临时升级会回到镜像基线版本，再由 timer 下一次拉到 latest。

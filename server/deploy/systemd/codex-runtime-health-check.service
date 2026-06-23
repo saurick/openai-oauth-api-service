@@ -5,5 +5,5 @@ Wants=docker.service network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/sbin/codex-runtime-health-check.py --check
+ExecStart=/usr/local/sbin/codex-runtime-health-check.py --auto-upgrade
 Environment=PYTHONUNBUFFERED=1

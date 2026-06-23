@@ -7,7 +7,7 @@ print_help() {
   bash scripts/ops/install-codex-runtime-health-check.sh
 
 作用:
-  在当前服务器安装并启用 Codex runtime 每日健康检查 timer。
+  在当前服务器安装并启用 Codex runtime 每日自动更新与健康检查 timer。
 
 安装内容:
   - /usr/local/sbin/codex-runtime-health-check.py
@@ -15,7 +15,8 @@ print_help() {
   - /etc/systemd/system/codex-runtime-health-check.timer
 
 默认行为:
-  - 每天 Asia/Shanghai 05:00 只执行 --check，不自动升级 Codex
+  - 每天 Asia/Shanghai 05:00 执行 --auto-upgrade
+  - 检查 @openai/codex latest，发现新版本就安装 latest
   - 不重启 app-server
   - 不重启 Docker、mihomo 或 Nginx
   - 写入 /var/lib/codex-runtime-health/state.json
@@ -30,7 +31,7 @@ print_help() {
   CODEX_RUNTIME_UPGRADE_COMMAND='npm install -g @openai/codex@latest'
 
 手动升级:
-  CODEX_RUNTIME_UPGRADE_COMMAND='...' /usr/local/sbin/codex-runtime-health-check.py --upgrade
+  /usr/local/sbin/codex-runtime-health-check.py --auto-upgrade
 USAGE
 }
 
@@ -97,8 +98,8 @@ echo "[codex-runtime-health-install] 重载 systemd 并启用 timer"
 "${sudo_cmd[@]}" systemctl daemon-reload
 "${sudo_cmd[@]}" systemctl enable --now codex-runtime-health-check.timer
 
-echo "[codex-runtime-health-install] 执行一次健康检查"
-"${sudo_cmd[@]}" "$TARGET_SCRIPT" --check
+echo "[codex-runtime-health-install] 执行一次自动升级与健康检查"
+"${sudo_cmd[@]}" "$TARGET_SCRIPT" --auto-upgrade
 
 echo "[codex-runtime-health-install] timer 状态"
 "${sudo_cmd[@]}" systemctl --no-pager --lines=12 status codex-runtime-health-check.timer
