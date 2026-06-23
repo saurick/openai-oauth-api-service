@@ -5097,7 +5097,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
           ? renderKeyTokenStats({
               title: '凭据统计',
               description:
-                '按当前筛选条件汇总每个 API 凭据的 Token 窗口；无调用显示 0。',
+                '按当前筛选条件汇总每个 API 凭据的 Token 窗口；优先按今天排序，空窗口自动降级到 24h、7 天及更长窗口。',
               showFilters: true,
             })
           : null}

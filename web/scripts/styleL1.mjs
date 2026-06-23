@@ -2031,6 +2031,7 @@ async function assertUsageKeyStatsTab(page, scenarioName) {
   await expectText(page, '凭据统计')
   await expectText(page, '24h Token')
   await expectText(page, '5 年 Token')
+  await expectText(page, '空窗口自动降级到 24h')
   const metrics = await page.evaluate(() => ({
     hasSearchInput: Boolean(
       document.querySelector('main input[placeholder="搜索备注、前缀或后四位"]')
