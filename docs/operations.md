@@ -73,6 +73,54 @@ bash scripts/qa/fast.sh
 bash scripts/qa/full.sh
 ```
 
+## Codex runtime 健康检查
+
+133 低配服务器上的 Codex runtime 更新不放进 app-server 业务进程。当前主路径是仓库内运维脚本 + systemd timer：日常只检查，不自动升级。
+
+安装：
+
+```bash
+bash scripts/ops/install-codex-runtime-health-check.sh
+```
+
+默认每天执行一次：
+
+```bash
+/usr/local/sbin/codex-runtime-health-check.py --check
+```
+
+检查内容包括：
+
+- `codex --version`；默认 `CODEX_RUNTIME_MODE=auto`，宿主机无 `codex` 时改查 app-server 容器内的 `codex`
+- `/healthz`、`/readyz`
+- `/public/codex/balance`，其中 `stale=true` 记为 warning
+- `openai-oauth-api-service-server` 容器运行状态
+- Codex 上游代理 failover 配置检查
+- 根分区磁盘余量
+
+结果写入：
+
+```bash
+/var/lib/codex-runtime-health/state.json
+/var/log/codex-runtime-health.log
+```
+
+如需检查新版本，可配置只读版本查询命令：
+
+```bash
+CODEX_RUNTIME_LATEST_VERSION_COMMAND='npm view @openai/codex version' \
+  /usr/local/sbin/codex-runtime-health-check.py --check
+```
+
+升级必须显式配置命令并手动触发，避免 timer 误改生产运行时：
+
+```bash
+CODEX_RUNTIME_UPGRADE_COMMAND='npm install -g @openai/codex@latest' \
+  /usr/local/sbin/codex-runtime-health-check.py --upgrade
+```
+
+不同安装方式的服务器迁移时，只需要调整 `CODEX_RUNTIME_MODE`、`CODEX_RUNTIME_BIN`、`CODEX_RUNTIME_LATEST_VERSION_COMMAND` 和 `CODEX_RUNTIME_UPGRADE_COMMAND`，不需要修改 app-server 代码。当前 Codex 若随 app-server 镜像运行，升级应走镜像发布；不要在容器内临时升级后当作持久变更。
+
 后端：
 
 ```bash

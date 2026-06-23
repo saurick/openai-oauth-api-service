@@ -1,0 +1,9 @@
+[Unit]
+Description=Check host-side Codex runtime and OpenAI OAuth API service health
+After=docker.service network-online.target
+Wants=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/codex-runtime-health-check.py --check
+Environment=PYTHONUNBUFFERED=1

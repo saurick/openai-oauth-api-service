@@ -309,3 +309,23 @@
 - 验证：追加前 `progress.md` 为 281 行、66510 字节，未达到归档阈值；已执行相关 skill validator、YAML 解析和 diff 检查。
 - 下一步：openai-oauth 管理端页面任务若需要 auth/API/usage/upstream 能力，先切到 `$openai-oauth-domain-boundary-governance`，再回到页面 skill 做 UI 回归。
 - 阻塞/风险：本轮只改 skill 文本和过程记录，不新增 backend skill，不改运行时代码、schema、auth/key 语义、usage 真源、上游策略、部署脚本、监控系统或测试实现。
+
+## 2026-06-23 Codex skills 目录 README 入口补充
+
+- 完成：新增 `.agents/skills/README.md`，作为项目专属 Codex skills 的父目录薄入口，列出 `$openai-oauth-*` skills、主要用途和维护规则；继续说明本项目没有专属 seed/import skill，导入类临时任务使用通用 `$seed-import-governance`。
+- 完成：明确单个 skill 子目录仍以 `SKILL.md` 为唯一入口，不给每个 skill 包再加 README / quick reference / changelog，避免违反 skill 包最小结构。
+- 完成：补充 `使用规则 / Rules` 小节，说明 `$skill-name` 触发、多 skill 组合、项目版优先、README 与 `SKILL.md` 的边界，以及 skill 修改时的 metadata 检查。
+- 完成：补充 `常用组合 / Pairings` 短表，列出 docs/page、page/domain、review/test、runtime/release、security/observability 等常见并用场景，便于一次会话同时 `$` 多个 skill。
+- 验证：追加前 `progress.md` 为 308 行、73000 字节，未达到归档阈值；本轮只新增并补充 skill 目录 README 和过程记录，不改运行时代码、schema、auth/key 语义、usage 真源、上游策略、部署脚本、监控系统或安全策略。
+- 下一步：后续新增、删除、重命名项目 skill 时，同步更新 `.agents/skills/README.md`。
+- 阻塞/风险：README 只做目录路由，不替代各 skill 的 `SKILL.md`、项目 `AGENTS.md`、正式 docs 或自动化校验。
+
+## 2026-06-23 Codex runtime 健康检查 timer
+
+- 完成：新增 `scripts/ops/codex-runtime-health-check.py`，用于宿主机侧检查 Codex runtime、`/healthz`、`/readyz`、`/public/codex/balance`、app-server 容器、failover 配置和根分区磁盘余量，并写入 `/var/lib/codex-runtime-health/state.json` 与 `/var/log/codex-runtime-health.log`；`CODEX_RUNTIME_MODE=auto` 会在宿主机没有 `codex` 时改查 app-server 容器内版本。
+- 完成：新增 `scripts/ops/install-codex-runtime-health-check.sh`、`server/deploy/systemd/codex-runtime-health-check.service` 和 `.timer`，默认每天 05:20 附带随机延迟只执行 `--check`；`--upgrade` 必须显式配置 `CODEX_RUNTIME_UPGRADE_COMMAND` 后手动触发，避免低配生产机自动升级 Codex。
+- 完成：更新 `scripts/README.md`、`docs/operations.md` 和 `server/deploy/README.md`，明确 Codex runtime 属于宿主机运维依赖，进仓库版本管理但不放入 app-server 业务进程；迁服时复制脚本和 systemd 单元即可。
+- 验证：本地已通过 `python3 -m py_compile`、`bash -n`、`bash scripts/qa/shellcheck.sh`、`bash scripts/qa/secrets.sh`、`git diff --check`；133 已安装并启用 `codex-runtime-health-check.timer`，一次 `/usr/local/sbin/codex-runtime-health-check.py --check` 返回 `status=ok`。
+- 验证：133 当前 Codex runtime 由 app-server 容器提供，检查结果为 `mode=container`、`codex-cli 0.133.0`；`/healthz` 返回 `ok`，`/readyz` 返回 `ready`，`/public/codex/balance` 返回 `status=ok`，failover 当前 `日本JP-HY2`，根分区使用率约 28.11%；下一次 timer 触发为 `2026-06-24 05:31:17 UTC`。
+- 下一步：如 133 当前 Codex 安装方式确认稳定，可在宿主机 systemd override 或环境文件中配置 `CODEX_RUNTIME_LATEST_VERSION_COMMAND`；默认不配置自动升级命令。
+- 阻塞/风险：本轮不改 schema、migration、auth/key 语义、上游策略、app-server 代码或管理员密码；健康检查脚本只读运行状态，升级路径需要人工显式配置命令。

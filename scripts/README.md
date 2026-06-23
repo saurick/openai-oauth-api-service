@@ -9,6 +9,7 @@
 | `bash scripts/bootstrap.sh` | 安装依赖、启用 hooks、运行快速自检 |
 | `bash scripts/doctor.sh` | 检查本机依赖、hooks 与关键脚本状态 |
 | `bash scripts/ops/install-codex-upstream-proxy-failover.sh` | 在服务器安装 Codex 上游代理自动切换 systemd 守护 |
+| `bash scripts/ops/install-codex-runtime-health-check.sh` | 在服务器安装 Codex runtime 每日健康检查 systemd timer |
 | `bash scripts/init-project.sh --project --strict` | 检查是否仍有模板残留或默认配置 |
 | `bash scripts/deploy/production-preflight.sh` | 生产发布前门禁，检查运行时 env、Compose、Codex upstream、migration 文档边界和部署后 healthz/readyz |
 | `bash scripts/qa/fast.sh` | 开发期快速检查 |
