@@ -1538,6 +1538,13 @@ function isTodayWindowCall(call) {
   )
 }
 
+function isRollingWindowCall(call, expectedSeconds) {
+  const startTime = Number(call.params?.start_time)
+  const endTime = Number(call.params?.end_time)
+  if (!Number.isFinite(startTime) || !Number.isFinite(endTime)) return false
+  return Math.abs(endTime - startTime - expectedSeconds) <= 2
+}
+
 function assertDashboardCompactRequests(page, scenarioName) {
   const calls = page.__styleL1ApiRpcCalls || []
   assert(
@@ -2031,9 +2038,17 @@ async function assertUsageKeyStatsTab(page, scenarioName) {
     hasStatsRows:
       document.body.innerText.includes('productionapikey') &&
       document.body.innerText.includes('stagingkeylongname'),
+    firstStatsRowName:
+      document
+        .querySelector('main table tbody tr:first-child td:first-child')
+        ?.textContent.trim() || '',
   }))
   assert(metrics.hasSearchInput, `${scenarioName} 凭据统计缺少搜索框`)
   assert(metrics.hasStatsRows, `${scenarioName} 凭据统计缺少统计行`)
+  assert(
+    metrics.firstStatsRowName.includes('stagingkeylongname'),
+    `${scenarioName} 凭据统计未在今天全 0 时按 24h Token 降级排序: ${JSON.stringify(metrics)}`
+  )
 }
 
 async function assertUsageSessionTab(page, scenarioName) {
@@ -5089,6 +5104,10 @@ function getApiMockData(method, params = {}, state = {}) {
   }
 
   if (method === 'usage_key_summaries') {
+    const isTodayStats = isTodayWindowCall({ params })
+    const is24hStats = isRollingWindowCall({ params }, 24 * 60 * 60)
+    const productionTokens = isTodayStats ? 0 : is24hStats ? 65_410 : 165_410
+    const stagingTokens = isTodayStats ? 0 : is24hStats ? 98_080 : 1_080
     return {
       items: [
         {
@@ -5104,13 +5123,13 @@ function getApiMockData(method, params = {}, state = {}) {
           cli_requests: 1,
           codex_requests: 1,
           fallback_requests: 1,
-          input_tokens: 61900,
+          input_tokens: productionTokens > 0 ? productionTokens - 3510 : 0,
           opencode_requests: 1,
           other_client_requests: 0,
-          output_tokens: 3510,
+          output_tokens: productionTokens > 0 ? 3510 : 0,
           success_requests: 2,
-          total_requests: 2,
-          total_tokens: 65410,
+          total_requests: productionTokens > 0 ? 2 : 0,
+          total_tokens: productionTokens,
         },
         {
           api_key_id: 2,
@@ -5125,13 +5144,13 @@ function getApiMockData(method, params = {}, state = {}) {
           cli_requests: 1,
           codex_requests: 0,
           fallback_requests: 0,
-          input_tokens: 1000,
+          input_tokens: stagingTokens > 0 ? stagingTokens - 80 : 0,
           opencode_requests: 0,
           other_client_requests: 1,
-          output_tokens: 80,
+          output_tokens: stagingTokens > 0 ? 80 : 0,
           success_requests: 0,
-          total_requests: 1,
-          total_tokens: 1080,
+          total_requests: stagingTokens > 0 ? 1 : 0,
+          total_tokens: stagingTokens,
         },
       ],
     }

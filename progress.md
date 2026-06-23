@@ -2,6 +2,14 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-23 凭据统计活跃窗口排序
+
+- 完成：`/admin-usage` 与用量统计页的凭据 Token 统计改为按活跃窗口排序；优先按今天 Token 降序，今天窗口全 0 时自动降级到 24h，再按 7 天、30 天、180 天、360 天、1 年、3 年、5 年依次降级，ID 作为稳定排序兜底。
+- 完成：同步页面说明、`web/README.md` 和 `style:l1` mock/断言；回归数据覆盖“今天全 0、24h 有使用量”时凭据统计首行按 24h Token 排序。
+- 验证：已执行 `pnpm --dir web lint`、`pnpm --dir web css`、`pnpm --dir web test`、`pnpm --dir web build`、`STYLE_L1_SCENARIOS=admin-usage-desktop,admin-usage-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`，均通过；`style:l1` 覆盖 `/admin-usage` 桌面和移动端目标页、凭据统计 tab、今天全 0 时按 24h Token 降级排序、表格筛选 / 分页和盒模型回归。
+- 部署：待提交、推送并部署到 `192.168.0.133`，按低配主路径本地构建镜像、上传 tar、远端 `docker load`、Atlas status、更新 `APP_IMAGE` 并重建 `app-server`。
+- 阻塞/风险：本轮只改前端展示排序、说明和浏览器回归，不改后端 `usage_key_summaries` 聚合、usage 真源、schema、key 生命周期或部署配置。
+
 ## 2026-06-20 管理端用量指标顺序
 
 - 完成：`/admin-dashboard` 用量趋势指标按钮改为 `Token / 请求 / 服务错误 / 延迟 / 费用`，默认展示 Token；`/admin-usage` 摘要指标卡同步把总 Token 放在第一位，后续按请求、服务错误率、费用、上游和客户端分布排列。

@@ -47,6 +47,7 @@ const KEY_TOKEN_WINDOWS = [
   { key: '3y', label: '3 年', seconds: 3 * 365 * DAY_SECONDS },
   { key: '5y', label: '5 年', seconds: 5 * 365 * DAY_SECONDS },
 ]
+const KEY_TOKEN_SORT_WINDOWS = KEY_TOKEN_WINDOWS.map((item) => item.key)
 
 function getKeyTokenTimeWindow(windowItem, now) {
   if (windowItem.key === 'today') {
@@ -1153,6 +1154,26 @@ function mergeKeyTokenStats(keys, statsByWindow) {
   })
 }
 
+function getKeyTokenSortWindow(rows) {
+  const list = Array.isArray(rows) ? rows : []
+  return (
+    KEY_TOKEN_SORT_WINDOWS.find((windowKey) =>
+      list.some((item) => asInt(item?.tokens?.[windowKey], 0) > 0)
+    ) || KEY_TOKEN_SORT_WINDOWS[0]
+  )
+}
+
+function sortKeyTokenStatsRows(rows) {
+  const list = Array.isArray(rows) ? rows : []
+  const sortWindow = getKeyTokenSortWindow(list)
+  return [...list].sort((a, b) => {
+    const tokenDiff =
+      asInt(b?.tokens?.[sortWindow], 0) - asInt(a?.tokens?.[sortWindow], 0)
+    if (tokenDiff !== 0) return tokenDiff
+    return asInt(a?.id, 0) - asInt(b?.id, 0)
+  })
+}
+
 function SummaryCard({ label, value, sub, help, helpAlign = 'start' }) {
   return (
     <SurfacePanel variant="admin" className="admin-summary-card p-4">
@@ -1561,7 +1582,10 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     keySearch || keySearchInput || keyModelFilter || keyStatusFilter
   )
   const keyTokenStatsRows = useMemo(
-    () => mergeKeyTokenStats(filteredKeys, keyTokenStatsByWindow),
+    () =>
+      sortKeyTokenStatsRows(
+        mergeKeyTokenStats(filteredKeys, keyTokenStatsByWindow)
+      ),
     [filteredKeys, keyTokenStatsByWindow]
   )
   const paginatedKeys = useMemo(
@@ -2801,7 +2825,10 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
   const renderKeyTokenStats = ({
     title = '凭据 Token 统计',
-    description = '按当前凭据列表汇总各时间窗口的总 Token；无调用显示 0。',
+    description = [
+      '按当前凭据列表汇总各时间窗口的总 Token；优先按今天排序，',
+      '空窗口自动降级到 24h、7 天及更长窗口。',
+    ].join(''),
     showFilters = false,
   } = {}) => (
     <SurfacePanel variant="admin" className="p-5 sm:p-6">
@@ -3324,7 +3351,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
 
         {renderKeyTokenStats({
           title: '凭据维度',
-          description: '按当前凭据列表汇总各时间窗口的总 Token；无调用显示 0。',
+          description:
+            '按当前凭据列表汇总各时间窗口的总 Token；优先按今天排序，空窗口自动降级到 24h、7 天及更长窗口。',
           showFilters: true,
         })}
       </div>
