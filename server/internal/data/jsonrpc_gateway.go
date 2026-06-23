@@ -1006,6 +1006,12 @@ func mapGatewayUsageDiagnosticForRPC(item biz.GatewayUsageDiagnostic) map[string
 	if item.UpstreamHTTPStatus > 0 {
 		out["upstream_http_status"] = item.UpstreamHTTPStatus
 	}
+	if item.UpstreamErrorCode != "" {
+		out["upstream_error_code"] = item.UpstreamErrorCode
+	}
+	if item.UpstreamErrorMessage != "" {
+		out["upstream_error_message"] = item.UpstreamErrorMessage
+	}
 	if item.UpstreamBody != "" {
 		out["upstream_body"] = item.UpstreamBody
 	}

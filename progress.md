@@ -2,6 +2,16 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-23 Codex backend 容量错误分类
+
+- 诊断：133 当前运行 `oauth-api-service-server:20260623T141123-e6dd6e1b-key-stats-sort`，`/healthz` / `/readyz` 正常，`codex-upstream-proxy-failover.py --check` 显示 `节点选择=日本JP-HY2` 且 `ChatGPT=节点选择`。截图中的 `resp_0cc496...` 对应线上 `request_id=89f10955ee9c71327bb3ed79655af8bf`，上游 SSE 终态为 `response.failed`，`error.code=server_is_overloaded`、message 为 servers overloaded；近 12 小时 840 次请求中 829 次成功、11 次失败，失败集中在 `gpt-5.5` 的短时 `codex_backend_response_failed` 峰值，不是本地上下文超限主因，也不是服务整体不可用。
+- 完成：Codex backend `response.failed` / `response.incomplete` 新增结构化错误解析，将 `server_is_overloaded` 和 “Selected model is at capacity” 归类为 `codex_backend_overloaded`；usage diagnostic 增加 `upstream_error_code` / `upstream_error_message` 并在后台诊断列显示。`summarizeCodexBackendBody` 对可解析上游事件只保留 type、status、response_id、code、message，避免日志和 usage 继续保存大段 instructions 片段；不改变终态事件不盲重试的边界。
+- 文档：同步更新 `server/docs/api.md` 与后台错误类型说明，明确 `codex_backend_overloaded` 是上游短时容量问题，不等同于 `context_length_exceeded`。
+- 验证：已执行 `cd server && go test ./internal/server -run 'TestUpstreamErrorTypeClassifiesBackendErrors|TestStreamCodexBackendResponsesClassifiesContextLengthFailedEvent|TestStreamCodexBackendResponsesClassifiesOverloadedFailedEvent'`、`cd server && go test ./...`、`cd web && pnpm lint`、`cd web && pnpm test -- --runInBand`、`cd web && pnpm style:l1`、`bash scripts/qa/secrets.sh`、`git diff --check`，均通过；`style:l1` 验证 31 个管理端场景。
+- Windows 验证：`ssh sauri@192.168.0.45` 确认 Codex CLI `0.133.0`、OpenCode `1.14.48`。OpenCode 通过 `oauth-api-service/gpt-5.5` 返回 `WIN_OPENCODE_PROVIDER_OK_20260623`；Codex 显式使用 `saurick-oauth` provider 返回 `WIN_CODEX_SAURICK_OK_20260623`。133 usage 落库确认 OpenCode `/v1/chat/completions status=200 client_type=opencode`，Codex `/v1/responses status=200 client_type=codex`。
+- 下一步：提交并推送当前修复后，用 clean commit SHA 本地构建 linux/amd64 镜像，按低配路径上传并部署到 133；部署后补充 health/ready、Atlas status、管理员 smoke、容器版本和清理证据。
+- 阻塞/风险：本轮只修复容量错误的分类、诊断展示和日志摘要，不修复 ChatGPT/Codex 上游自身容量；如果上游继续返回 `server_is_overloaded`，客户端仍应稍后重试或临时换模型。
+
 ## 2026-06-23 凭据统计活跃窗口排序
 
 - 完成：`/admin-usage` 与用量统计页的凭据 Token 统计改为按活跃窗口排序；优先按今天 Token 降序，今天窗口全 0 时自动降级到 24h，再按 7 天、30 天、180 天、360 天、1 年、3 年、5 年依次降级，ID 作为稳定排序兜底。

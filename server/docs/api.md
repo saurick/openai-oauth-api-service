@@ -276,6 +276,7 @@ HTTP 路由：
 | `codex_backend_auth_failed` | Backend 鉴权失败 | 服务器 Codex 登录态无效、`auth.json` / refresh token 失效，或上游返回 401 / 403。 |
 | `codex_backend_rate_limited` | Backend 限流 | 上游返回 429，可能是账号、模型或组织维度被限流。 |
 | `codex_backend_http_5xx` | Backend 5xx | Codex backend 或其上游服务返回 5xx。 |
+| `codex_backend_overloaded` | Backend 容量繁忙 | Codex backend 终态事件返回 `server_is_overloaded` 或模型容量繁忙；通常是上游短时容量问题，不等同于本地上下文超限。 |
 | `codex_backend_timeout` | Backend 超时 | Codex backend 调用超过超时时间；常见于上游慢、网络慢或 `CODEX_BACKEND_TIMEOUT_SECONDS` 到期。默认生产模板为 `28800` 秒。 |
 | `codex_backend_response_failed` | Backend response failed | 上游 SSE 返回 `response.failed`，表示本次 response 执行失败。 |
 | `context_length_exceeded` | 上下文超限 | 请求历史超过模型上下文窗口；网关会先尝试压缩可压缩历史，仍超限时直接拦截，避免客户端反复重试。 |

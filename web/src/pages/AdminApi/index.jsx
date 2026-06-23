@@ -205,6 +205,7 @@ const USAGE_ERROR_FILTER_BASE_OPTIONS = [
   { value: 'codex_backend_auth_failed' },
   { value: 'codex_backend_rate_limited' },
   { value: 'codex_backend_http_5xx' },
+  { value: 'codex_backend_overloaded' },
   { value: 'codex_backend_timeout' },
   { value: 'codex_backend_response_failed' },
   { value: 'codex_backend_response_incomplete' },
@@ -1252,17 +1253,28 @@ function DiagnosticCell({ item }) {
   if (diagnostic.upstream_http_status) {
     chips.push(`上游 HTTP ${diagnostic.upstream_http_status}`)
   }
+  if (diagnostic.upstream_error_code) {
+    chips.push(`上游 ${diagnostic.upstream_error_code}`)
+  }
+  const upstreamMessage = String(diagnostic.upstream_error_message || '').trim()
   const body = String(diagnostic.upstream_body || '').trim()
   const compactSummary = String(
     diagnostic.context_compaction_summary || ''
   ).trim()
 
-  if (!summary && chips.length === 0 && !body && !compactSummary) return '-'
+  if (
+    !summary &&
+    chips.length === 0 &&
+    !body &&
+    !compactSummary &&
+    !upstreamMessage
+  )
+    { return '-' }
 
   return (
     <div
       className="max-w-[280px] text-xs leading-5"
-      title={summary || body || compactSummary}
+      title={summary || upstreamMessage || body || compactSummary}
     >
       {chips.length > 0 ? (
         <div className="flex flex-wrap gap-1">
@@ -1281,6 +1293,11 @@ function DiagnosticCell({ item }) {
         <span className="mx-1 text-[#c0c9c4]">/</span>
         响应 {fmtNumber(diagnostic.response_bytes ?? item?.response_bytes)}B
       </div>
+      {upstreamMessage ? (
+        <div className="mt-1 line-clamp-2 break-words text-[#7b8780]">
+          {upstreamMessage}
+        </div>
+      ) : null}
       {diagnostic.context_compacted ? (
         <div className="mt-1 text-[#7b8780]">
           压缩 {fmtNumber(diagnostic.context_original_estimated_tokens)}

@@ -56,6 +56,12 @@ const GATEWAY_ERROR_TYPES = {
     statusHint: '502',
     description: 'Codex backend 或其上游服务返回 5xx。',
   },
+  codex_backend_overloaded: {
+    label: 'Backend 容量繁忙',
+    statusHint: '502 / 上游 server_is_overloaded',
+    description:
+      'Codex backend 返回 server_is_overloaded 或模型容量繁忙，通常是上游短时容量问题，不等同于本地上下文超限。',
+  },
   codex_backend_timeout: {
     label: 'Backend 超时',
     statusHint: '502',

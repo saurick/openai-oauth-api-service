@@ -1956,6 +1956,12 @@ func mapGatewayUsageDiagnosticForDB(item biz.GatewayUsageDiagnostic) map[string]
 	if item.UpstreamHTTPStatus > 0 {
 		out["upstream_http_status"] = item.UpstreamHTTPStatus
 	}
+	if item.UpstreamErrorCode != "" {
+		out["upstream_error_code"] = item.UpstreamErrorCode
+	}
+	if item.UpstreamErrorMessage != "" {
+		out["upstream_error_message"] = item.UpstreamErrorMessage
+	}
 	if item.UpstreamBody != "" {
 		out["upstream_body"] = item.UpstreamBody
 	}
@@ -2028,6 +2034,8 @@ func mapGatewayUsageDiagnosticFromDB(raw map[string]any) biz.GatewayUsageDiagnos
 		FallbackBlocked:                 diagnosticBool(raw["fallback_blocked"]),
 		ReasoningEffort:                 strings.TrimSpace(fmt.Sprint(raw["reasoning_effort"])),
 		UpstreamHTTPStatus:              int(diagnosticInt64(raw["upstream_http_status"])),
+		UpstreamErrorCode:               diagnosticString(raw["upstream_error_code"]),
+		UpstreamErrorMessage:            diagnosticString(raw["upstream_error_message"]),
 		UpstreamBody:                    strings.TrimSpace(fmt.Sprint(raw["upstream_body"])),
 		UpstreamStreamStarted:           diagnosticBool(raw["upstream_stream_started"]),
 		UpstreamStreamCompleted:         diagnosticBool(raw["upstream_stream_completed"]),
@@ -2067,6 +2075,17 @@ func diagnosticInt64(value any) int64 {
 	default:
 		return 0
 	}
+}
+
+func diagnosticString(value any) string {
+	if value == nil {
+		return ""
+	}
+	text := strings.TrimSpace(fmt.Sprint(value))
+	if text == "<nil>" {
+		return ""
+	}
+	return text
 }
 
 func diagnosticBool(value any) bool {

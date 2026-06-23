@@ -123,6 +123,8 @@ type GatewayUsageDiagnostic struct {
 	FallbackBlocked                 bool   `json:"fallback_blocked"`
 	ReasoningEffort                 string `json:"reasoning_effort"`
 	UpstreamHTTPStatus              int    `json:"upstream_http_status"`
+	UpstreamErrorCode               string `json:"upstream_error_code"`
+	UpstreamErrorMessage            string `json:"upstream_error_message"`
 	UpstreamBody                    string `json:"upstream_body"`
 	UpstreamStreamStarted           bool   `json:"upstream_stream_started"`
 	UpstreamStreamCompleted         bool   `json:"upstream_stream_completed"`
@@ -165,6 +167,12 @@ func (d GatewayUsageDiagnostic) Summary() string {
 	}
 	if d.UpstreamHTTPStatus > 0 {
 		parts = append(parts, fmt.Sprintf("upstream_http=%d", d.UpstreamHTTPStatus))
+	}
+	if d.UpstreamErrorCode != "" {
+		parts = append(parts, "upstream_error="+d.UpstreamErrorCode)
+	}
+	if d.UpstreamErrorMessage != "" {
+		parts = append(parts, "upstream_message="+d.UpstreamErrorMessage)
 	}
 	if d.UpstreamBody != "" {
 		parts = append(parts, "upstream_body="+d.UpstreamBody)

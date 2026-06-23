@@ -929,10 +929,12 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 			case "response.failed":
 				failedSeen = true
 				result.Diagnostic.UpstreamBody = summarizeCodexBackendBody([]byte(data))
+				applyCodexBackendErrorDetailToDiagnostic(&result.Diagnostic, data)
 				result.ErrorType = codexBackendResponseEventErrorType(data, "codex_backend_response_failed")
 			case "response.incomplete":
 				failedSeen = true
 				result.Diagnostic.UpstreamBody = summarizeCodexBackendBody([]byte(data))
+				applyCodexBackendErrorDetailToDiagnostic(&result.Diagnostic, data)
 				result.ErrorType = codexBackendResponseEventErrorType(data, "codex_backend_response_incomplete")
 			}
 		case <-ticker.C:
@@ -979,6 +981,12 @@ func mergeGatewayUsageDiagnostic(base biz.GatewayUsageDiagnostic, overlay biz.Ga
 	}
 	if overlay.UpstreamHTTPStatus > 0 {
 		out.UpstreamHTTPStatus = overlay.UpstreamHTTPStatus
+	}
+	if overlay.UpstreamErrorCode != "" {
+		out.UpstreamErrorCode = overlay.UpstreamErrorCode
+	}
+	if overlay.UpstreamErrorMessage != "" {
+		out.UpstreamErrorMessage = overlay.UpstreamErrorMessage
 	}
 	if overlay.UpstreamBody != "" {
 		out.UpstreamBody = overlay.UpstreamBody
@@ -1035,10 +1043,115 @@ func mergeGatewayUsageDiagnostic(base biz.GatewayUsageDiagnostic, overlay biz.Ga
 }
 
 func codexBackendResponseEventErrorType(data string, fallback string) string {
-	if isCodexBackendContextLengthError(errors.New(data)) {
-		return gatewayContextErrorType
+	if detail, ok := codexBackendErrorDetailFromText(data); ok {
+		return codexBackendErrorTypeFromDetail(detail, fallback)
 	}
 	return fallback
+}
+
+type codexBackendErrorDetail struct {
+	EventType      string
+	ResponseID     string
+	ResponseStatus string
+	Code           string
+	Message        string
+}
+
+func codexBackendErrorDetailFromText(text string) (codexBackendErrorDetail, bool) {
+	raw := strings.TrimSpace(text)
+	if raw == "" {
+		return codexBackendErrorDetail{}, false
+	}
+	if idx := strings.Index(raw, "{"); idx >= 0 {
+		var payload any
+		if err := json.Unmarshal([]byte(raw[idx:]), &payload); err == nil {
+			if detail, ok := codexBackendErrorDetailFromValue(payload); ok {
+				return detail, true
+			}
+		}
+	}
+	lower := strings.ToLower(raw)
+	if strings.Contains(lower, "selected model is at capacity") ||
+		strings.Contains(lower, "server_is_overloaded") ||
+		strings.Contains(lower, "currently overloaded") {
+		return codexBackendErrorDetail{Message: summarizeDiagnosticMessage(raw)}, true
+	}
+	return codexBackendErrorDetail{}, false
+}
+
+func codexBackendErrorDetailFromValue(value any) (codexBackendErrorDetail, bool) {
+	event := mapValue(value)
+	if event == nil {
+		return codexBackendErrorDetail{}, false
+	}
+	detail := codexBackendErrorDetail{EventType: strings.TrimSpace(stringValue(event["type"]))}
+	response := mapValue(event["response"])
+	errorPayload := mapValue(event["error"])
+	if response != nil {
+		detail.ResponseID = strings.TrimSpace(stringValue(response["id"]))
+		detail.ResponseStatus = strings.TrimSpace(stringValue(response["status"]))
+		if errorPayload == nil {
+			errorPayload = mapValue(response["error"])
+		}
+	}
+	if errorPayload != nil {
+		detail.Code = strings.TrimSpace(stringValue(errorPayload["code"]))
+		detail.Message = summarizeDiagnosticMessage(stringValue(errorPayload["message"]))
+	}
+	if detail.Code == "" {
+		detail.Code = strings.TrimSpace(stringValue(event["code"]))
+	}
+	if detail.Message == "" {
+		detail.Message = summarizeDiagnosticMessage(stringValue(event["message"]))
+	}
+	if detail.EventType == "" && detail.ResponseID == "" && detail.ResponseStatus == "" && detail.Code == "" && detail.Message == "" {
+		return codexBackendErrorDetail{}, false
+	}
+	return detail, true
+}
+
+func codexBackendErrorTypeFromDetail(detail codexBackendErrorDetail, fallback string) string {
+	code := strings.ToLower(strings.TrimSpace(detail.Code))
+	message := strings.ToLower(strings.TrimSpace(detail.Message))
+	switch {
+	case code == "context_length_exceeded" || strings.Contains(message, "context window"):
+		return gatewayContextErrorType
+	case code == "server_is_overloaded" ||
+		strings.Contains(message, "currently overloaded") ||
+		strings.Contains(message, "selected model is at capacity") ||
+		strings.Contains(message, "model is at capacity"):
+		return "codex_backend_overloaded"
+	case strings.Contains(code, "rate_limit") || strings.Contains(message, "rate limit"):
+		return "codex_backend_rate_limited"
+	case code == "unauthorized" || code == "forbidden":
+		return "codex_backend_auth_failed"
+	}
+	return fallback
+}
+
+func applyCodexBackendErrorDetailToDiagnostic(diagnostic *biz.GatewayUsageDiagnostic, text string) {
+	if diagnostic == nil {
+		return
+	}
+	detail, ok := codexBackendErrorDetailFromText(text)
+	if !ok {
+		return
+	}
+	if detail.Code != "" {
+		diagnostic.UpstreamErrorCode = detail.Code
+	}
+	if detail.Message != "" {
+		diagnostic.UpstreamErrorMessage = detail.Message
+	}
+}
+
+func summarizeDiagnosticMessage(message string) string {
+	text := strings.TrimSpace(message)
+	const maxLen = 240
+	if len(text) > maxLen {
+		text = text[:maxLen]
+	}
+	return text
 }
 
 func codexBackendStreamFailureType(err error, diagnostic biz.GatewayUsageDiagnostic) string {
@@ -1501,6 +1614,13 @@ func codexBackendErrorType(err error) string {
 		}
 	}
 	text := strings.ToLower(err.Error())
+	if detail, ok := codexBackendErrorDetailFromText(err.Error()); ok {
+		fallback := "codex_backend_response_failed"
+		if strings.Contains(text, "response incomplete") {
+			fallback = "codex_backend_response_incomplete"
+		}
+		return codexBackendErrorTypeFromDetail(detail, fallback)
+	}
 	switch {
 	case strings.Contains(text, "timed out") || strings.Contains(text, "deadline exceeded"):
 		return "codex_backend_timeout"
@@ -1555,8 +1675,10 @@ func gatewayUsageDiagnosticForUpstreamFailure(path string, body []byte, reasonin
 		diagnostic.UpstreamHTTPStatus = httpErr.status
 		diagnostic.ResponseBytes = int64(len(httpErr.body))
 		diagnostic.UpstreamBody = summarizeCodexBackendBody(httpErr.body)
+		applyCodexBackendErrorDetailToDiagnostic(&diagnostic, string(httpErr.body))
 	} else {
 		diagnostic.UpstreamBody = summarizeErrorForUsage(err)
+		applyCodexBackendErrorDetailToDiagnostic(&diagnostic, err.Error())
 	}
 	return diagnostic
 }

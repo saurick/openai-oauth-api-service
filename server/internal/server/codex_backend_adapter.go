@@ -1149,6 +1149,27 @@ func isCodexBackendContextLengthError(err error) bool {
 
 func summarizeCodexBackendBody(body []byte) string {
 	text := strings.TrimSpace(string(body))
+	if detail, ok := codexBackendErrorDetailFromText(text); ok {
+		parts := []string{}
+		if detail.EventType != "" {
+			parts = append(parts, "type="+detail.EventType)
+		}
+		if detail.ResponseStatus != "" {
+			parts = append(parts, "status="+detail.ResponseStatus)
+		}
+		if detail.ResponseID != "" {
+			parts = append(parts, "response_id="+detail.ResponseID)
+		}
+		if detail.Code != "" {
+			parts = append(parts, "code="+detail.Code)
+		}
+		if detail.Message != "" {
+			parts = append(parts, "message="+detail.Message)
+		}
+		if len(parts) > 0 {
+			return strings.Join(parts, " ")
+		}
+	}
 	const maxLen = 800
 	if len(text) > maxLen {
 		text = text[:maxLen]

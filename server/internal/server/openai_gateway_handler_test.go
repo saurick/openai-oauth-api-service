@@ -78,6 +78,8 @@ func TestUpstreamErrorTypeClassifiesBackendErrors(t *testing.T) {
 		{name: "http_5xx", err: codexBackendHTTPError{status: http.StatusBadGateway}, want: "codex_backend_http_5xx"},
 		{name: "timeout", err: errors.New("codex backend upstream timed out after 10s"), want: "codex_backend_timeout"},
 		{name: "context_length", err: errors.New(`codex backend response failed: {"error":{"code":"context_length_exceeded"}}`), want: "context_length_exceeded"},
+		{name: "overloaded", err: errors.New(`codex backend response failed: {"type":"response.failed","response":{"status":"failed","error":{"code":"server_is_overloaded","message":"Our servers are currently overloaded. Please try again later."}}}`), want: "codex_backend_overloaded"},
+		{name: "model_capacity", err: errors.New("Selected model is at capacity. Please try a different model."), want: "codex_backend_overloaded"},
 		{name: "incomplete", err: errors.New("codex backend response incomplete: stopped"), want: "codex_backend_response_incomplete"},
 		{name: "stream", err: errors.New("unexpected EOF while reading stream"), want: "codex_backend_stream_error"},
 		{name: "client_canceled", err: context.Canceled, want: "client_canceled"},
@@ -1806,6 +1808,47 @@ func TestStreamCodexBackendResponsesClassifiesContextLengthFailedEvent(t *testin
 	}
 	if !strings.Contains(result.Diagnostic.UpstreamBody, "context_length_exceeded") {
 		t.Fatalf("diagnostic missing context error: %s", result.Diagnostic.UpstreamBody)
+	}
+}
+
+func TestStreamCodexBackendResponsesClassifiesOverloadedFailedEvent(t *testing.T) {
+	accessToken := testJWT(time.Now().Add(time.Hour).Unix(), "acct_123")
+	authPath := filepath.Join(t.TempDir(), "auth.json")
+	if err := os.WriteFile(authPath, []byte(`{"tokens":{"access_token":"`+accessToken+`","refresh_token":"refresh-token","account_id":"acct_123"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(`data: {"type":"response.failed","response":{"id":"resp_overloaded","status":"failed","error":{"code":"server_is_overloaded","message":"Our servers are currently overloaded. Please try again later."},"instructions":"must-not-leak"}}` + "\n\n"))
+	}))
+	defer upstream.Close()
+
+	t.Setenv("CODEX_AUTH_FILE", authPath)
+	t.Setenv("CODEX_BACKEND_BASE_URL", upstream.URL)
+	t.Setenv("CODEX_BACKEND_TIMEOUT_SECONDS", "30")
+
+	rec := httptest.NewRecorder()
+	result, err := (&openAIGatewayHandler{}).streamCodexBackendResponses(
+		context.Background(),
+		rec,
+		"/v1/responses",
+		[]byte(`{"model":"gpt-5.5","stream":true,"input":"Reply OK"}`),
+		"gpt-5.5",
+		"medium",
+		false,
+	)
+	if err == nil {
+		t.Fatal("expected response.failed to return an error")
+	}
+	if result.ErrorType != "codex_backend_overloaded" {
+		t.Fatalf("error type = %q, want codex_backend_overloaded", result.ErrorType)
+	}
+	if result.Diagnostic.UpstreamErrorCode != "server_is_overloaded" {
+		t.Fatalf("upstream error code = %q", result.Diagnostic.UpstreamErrorCode)
+	}
+	if strings.Contains(result.Diagnostic.UpstreamBody, "must-not-leak") {
+		t.Fatalf("diagnostic leaked instructions: %s", result.Diagnostic.UpstreamBody)
 	}
 }
 
