@@ -7,7 +7,8 @@
 - 完成：`/admin-usage` 与用量统计页的凭据 Token 统计改为按活跃窗口排序；优先按今天 Token 降序，今天窗口全 0 时自动降级到 24h，再按 7 天、30 天、180 天、360 天、1 年、3 年、5 年依次降级，ID 作为稳定排序兜底。
 - 完成：同步页面说明、`web/README.md` 和 `style:l1` mock/断言；回归数据覆盖“今天全 0、24h 有使用量”时凭据统计首行按 24h Token 排序。
 - 验证：已执行 `pnpm --dir web lint`、`pnpm --dir web css`、`pnpm --dir web test`、`pnpm --dir web build`、`STYLE_L1_SCENARIOS=admin-usage-desktop,admin-usage-mobile NODE_USE_ENV_PROXY=0 pnpm --dir web style:l1`，均通过；`style:l1` 覆盖 `/admin-usage` 桌面和移动端目标页、凭据统计 tab、今天全 0 时按 24h Token 降级排序、表格筛选 / 分页和盒模型回归。
-- 部署：待提交、推送并部署到 `192.168.0.133`，按低配主路径本地构建镜像、上传 tar、远端 `docker load`、Atlas status、更新 `APP_IMAGE` 并重建 `app-server`。
+- 部署：已提交并推送 `0797df3 fix: 调整凭据统计活跃窗口排序` 与 `e6dd6e1 fix: 补齐凭据统计排序说明`；最终本地构建 linux/amd64 镜像 `oauth-api-service-server:20260623T141123-e6dd6e1b-key-stats-sort`，上传到 `192.168.0.133:/data/openai-oauth-api-service/releases/20260623T141123-e6dd6e1b-key-stats-sort`。远端只执行 `docker load`、宿主机 Atlas status、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在服务器构建。Atlas 当前版本 `20260604123931`、pending 0；远端本机与公网 `/healthz` / `/readyz` 通过，容器环境 `GIT_SHA_SHORT=e6dd6e1b`、`IMAGE_TAG=20260623T141123-e6dd6e1b-key-stats-sort`；管理员 `admin/adminadmin` 登录、`api.summary` 与 `api.usage_key_summaries` smoke 通过；线上 Playwright 登录 `/admin-usage` 后确认“凭据统计”tab 显示降级排序说明，首行有真实凭据数据，表格盒模型正常。
+- 清理：部署成功后记录远端 `/` 使用率、`docker system df` 与运行容器；删除本轮两个 release 的镜像 tar 包和 migration tar 包，执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260623T140454-0797df3d-key-stats-sort` 与 `oauth-api-service-server:20260620T151023-b9371bf0-usage-metric-order`，回收 706.6MB，未清理 volume。清理后根分区使用率 30%，当前 app-server 运行镜像为 `oauth-api-service-server:20260623T141123-e6dd6e1b-key-stats-sort`。
 - 阻塞/风险：本轮只改前端展示排序、说明和浏览器回归，不改后端 `usage_key_summaries` 聚合、usage 真源、schema、key 生命周期或部署配置。
 
 ## 2026-06-20 管理端用量指标顺序
