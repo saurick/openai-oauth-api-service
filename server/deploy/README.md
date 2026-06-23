@@ -24,7 +24,7 @@ Codex runtime 属于宿主机运维依赖，不由 app-server 业务进程负责
 bash scripts/ops/install-codex-runtime-health-check.sh
 ```
 
-默认 timer 每天只执行 `/usr/local/sbin/codex-runtime-health-check.py --check`，检查 `codex --version`、`/healthz`、`/readyz`、`/public/codex/balance`、容器状态、failover 配置和磁盘余量，并把结果写入 `/var/lib/codex-runtime-health/state.json`。`CODEX_RUNTIME_MODE=auto` 会先查宿主机 `codex`，宿主机没有时改查 app-server 容器内的 `codex`。
+默认 timer 每天 Asia/Shanghai 05:00 固定执行 `/usr/local/sbin/codex-runtime-health-check.py --check`，检查 `codex --version`、`/healthz`、`/readyz`、`/public/codex/balance`、容器状态、failover 配置和磁盘余量，并把结果写入 `/var/lib/codex-runtime-health/state.json`。`CODEX_RUNTIME_MODE=auto` 会先查宿主机 `codex`，宿主机没有时改查 app-server 容器内的 `codex`。
 
 升级不自动执行；如确需升级，先按当前服务器的 Codex 安装方式配置 `CODEX_RUNTIME_UPGRADE_COMMAND`，再手动运行。若 Codex 随 app-server 镜像运行，升级应走镜像发布，不要在容器内临时升级后当作持久变更：
 

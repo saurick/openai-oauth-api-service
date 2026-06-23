@@ -15,7 +15,7 @@ print_help() {
   - /etc/systemd/system/codex-runtime-health-check.timer
 
 默认行为:
-  - 每天只执行 --check，不自动升级 Codex
+  - 每天 Asia/Shanghai 05:00 只执行 --check，不自动升级 Codex
   - 不重启 app-server
   - 不重启 Docker、mihomo 或 Nginx
   - 写入 /var/lib/codex-runtime-health/state.json

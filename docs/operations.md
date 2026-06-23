@@ -83,7 +83,7 @@ bash scripts/qa/full.sh
 bash scripts/ops/install-codex-runtime-health-check.sh
 ```
 
-默认每天执行一次：
+默认每天按 Asia/Shanghai 05:00 固定执行一次，不跟随服务器本地时区漂移：
 
 ```bash
 /usr/local/sbin/codex-runtime-health-check.py --check

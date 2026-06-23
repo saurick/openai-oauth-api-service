@@ -2,8 +2,7 @@
 Description=Daily host-side Codex runtime health check
 
 [Timer]
-OnCalendar=*-*-* 05:20:00
-RandomizedDelaySec=15min
+OnCalendar=*-*-* 05:00:00 Asia/Shanghai
 Persistent=true
 Unit=codex-runtime-health-check.service
 

@@ -329,3 +329,10 @@
 - 验证：133 当前 Codex runtime 由 app-server 容器提供，检查结果为 `mode=container`、`codex-cli 0.133.0`；`/healthz` 返回 `ok`，`/readyz` 返回 `ready`，`/public/codex/balance` 返回 `status=ok`，failover 当前 `日本JP-HY2`，根分区使用率约 28.11%；下一次 timer 触发为 `2026-06-24 05:31:17 UTC`。
 - 下一步：如 133 当前 Codex 安装方式确认稳定，可在宿主机 systemd override 或环境文件中配置 `CODEX_RUNTIME_LATEST_VERSION_COMMAND`；默认不配置自动升级命令。
 - 阻塞/风险：本轮不改 schema、migration、auth/key 语义、上游策略、app-server 代码或管理员密码；健康检查脚本只读运行状态，升级路径需要人工显式配置命令。
+
+## 2026-06-23 Codex runtime timer 固定北京时间
+
+- 完成：将 `codex-runtime-health-check.timer` 从服务器本地时区 `05:20` + 随机延迟，改为 `OnCalendar=*-*-* 05:00:00 Asia/Shanghai`，确保迁移到 UTC 或其他时区服务器后仍按北京时间 / 上海时间凌晨 5 点执行。
+- 完成：同步更新 `scripts/ops/install-codex-runtime-health-check.sh`、`docs/operations.md` 和 `server/deploy/README.md`，明确日常 timer 是固定 Asia/Shanghai 05:00 只检查，不自动升级。
+- 验证：本地已通过 `bash -n scripts/ops/install-codex-runtime-health-check.sh`、`git diff --check`、`bash scripts/qa/secrets.sh`；133 已重装 timer，`systemctl list-timers` 显示下一次触发为 `2026-06-23 21:00:00 UTC`，即北京时间 / Asia/Shanghai `2026-06-24 05:00:00`。
+- 阻塞/风险：本轮只调整 timer 时间和说明，不改健康检查项、升级策略、app-server、schema、auth/key 语义或上游策略。
