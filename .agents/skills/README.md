@@ -22,6 +22,7 @@
 | 你现在想做什么 | 优先使用 | 它解决什么 | 不负责什么 |
 | --- | --- | --- | --- |
 | 选中主会话一段话，简单问“是什么 / 为什么 / 合理吗 / 怎么办” | 全局 `$selected-context-analysis` | 片段理解、短问短答、上下文边界 | 不把片段当 openai-oauth 当前真源 |
+| 提交推送相关 / 所有代码、多会话同时收口、lint/test/hook 反复失败 | 全局 `$git-closeout-coordination` + `$openai-oauth-release-governance` | owner 判定、冻结范围、upstream/dirty 状态、hook 改写和发布前收口 | 不替代具体 diff review、真实上游验证或 133 部署证据 |
 | 写新主会话、side chat、review、测试、部署或提交推送提示词 | `$openai-oauth-prompt-governance` | 把目标、真源、范围、验收和风险写成可执行 prompt | 不替代实际执行或验证 |
 | 502、balance、usage、`gateway_usage_logs`、request_id、container logs 或 stale fallback | `$openai-oauth-runtime-diagnostics` | 分层排查 gateway / upstream / DB / container / config / deploy | 不在定位前直接补代码 |
 | 判断测试是否通过、范围是否足够、要不要跑 web/admin UI、migration、deploy preflight | `$openai-oauth-test-governance` | 选择 Go/web/admin UI、auth/API-key/quota/usage、secrets 和部署检查 | 不替代代码审查结论 |
@@ -41,6 +42,7 @@
 | 文档改动会影响管理端页面、admin 可见性或 low-spec 说明 | `$openai-oauth-docs-governance` + `$openai-oauth-page-governance` |
 | 管理端页面改动涉及 auth、API key、quota、usage、gateway 或 persisted config | `$openai-oauth-page-governance` + `$openai-oauth-domain-boundary-governance` |
 | 实现完成后做独立 review 或提交前自查 | `$openai-oauth-code-review-governance` + `$openai-oauth-test-governance` |
+| 提交推送、hook 重试或多会话互相改工作区 | 全局 `$git-closeout-coordination` + `$openai-oauth-release-governance` |
 | 502、balance、usage、container 或部署故障排查后准备发布 / 回滚 | `$openai-oauth-runtime-diagnostics` + `$openai-oauth-release-governance` |
 | key、token、admin access、request logs 或脱敏边界相关 | `$openai-oauth-security-privacy-governance` + `$openai-oauth-observability-error-governance` |
 
