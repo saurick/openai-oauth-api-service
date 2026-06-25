@@ -17,6 +17,23 @@
 | `$openai-oauth-observability-error-governance` | request logs、upstream error、latency、`stale=true`、dashboard 字段顺序和排障证据 |
 | `$openai-oauth-security-privacy-governance` | API keys、OAuth tokens、upstream credentials、admin access、request logs 和脱敏 |
 
+## 按问题选 Skill / Scenario Matrix
+
+| 你现在想做什么 | 优先使用 | 它解决什么 | 不负责什么 |
+| --- | --- | --- | --- |
+| 选中主会话一段话，简单问“是什么 / 为什么 / 合理吗 / 怎么办” | 全局 `$selected-context-analysis` | 片段理解、短问短答、上下文边界 | 不把片段当 openai-oauth 当前真源 |
+| 写新主会话、side chat、review、测试、部署或提交推送提示词 | `$openai-oauth-prompt-governance` | 把目标、真源、范围、验收和风险写成可执行 prompt | 不替代实际执行或验证 |
+| 502、balance、usage、`gateway_usage_logs`、request_id、container logs 或 stale fallback | `$openai-oauth-runtime-diagnostics` | 分层排查 gateway / upstream / DB / container / config / deploy | 不在定位前直接补代码 |
+| 判断测试是否通过、范围是否足够、要不要跑 web/admin UI、migration、deploy preflight | `$openai-oauth-test-governance` | 选择 Go/web/admin UI、auth/API-key/quota/usage、secrets 和部署检查 | 不替代代码审查结论 |
+| 实现后看问题是否真的解决、改动是否对、有没有 bug / 缺测试 | `$openai-oauth-code-review-governance` | 独立审查 OAuth、API key、usage、gateway、Codex backend、secrets 和部署风险 | 不以实现总结为主 |
+| 文档不好读、architecture / operations / deploy、admin 可见性、low-spec 说明漂移 | `$openai-oauth-docs-governance` | 文档真源、运维路径、部署说明、可读性和进度记录 | 不证明 runtime 行为正确 |
+| 管理后台、usage、upstream strategy、API key、登录、暗色模式或 L1 回归 | `$openai-oauth-page-governance` | 管理端页面语义、信息层级、交互和视觉回归 | 不直接定义 auth / gateway 后端语义 |
+| OAuth/auth、gateway/proxy、upstream provider、admin API、usage logging、persisted config 怎么落 | `$openai-oauth-domain-boundary-governance` | 服务边界、数据真源、API/auth/usage/upstream 层级 | 不处理纯视觉或文案排版 |
+| 133 低配发布、本地构建、上传 tar、`APP_IMAGE`、health/ready/admin smoke、rollback | `$openai-oauth-release-governance` | 发布路径、低配服务器边界、回滚和 release evidence | 不替代 runtime 故障定位 |
+| 临时 fixture、导入或清理类任务 | 通用 `$seed-import-governance` | 可逆数据、导入 dry-run 和清理边界 | 不把本服务误判为 ERP 导入系统 |
+| request logs、upstream error、latency、`stale=true`、dashboard 字段顺序和排障证据 | `$openai-oauth-observability-error-governance` | 可观测性、错误分类、用户提示和证据链 | 不替代安全审查 |
+| API keys、OAuth tokens、upstream credentials、admin access、request logs 和脱敏 | `$openai-oauth-security-privacy-governance` | 安全与隐私边界、敏感数据和权限风险 | 不替代普通业务 review |
+
 ## 常用组合 / Pairings
 
 | 场景 | 建议同时使用 |
