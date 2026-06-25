@@ -102,7 +102,18 @@ bash scripts/ops/install-codex-runtime-health-check.sh
 
 ```bash
 /var/lib/codex-runtime-health/state.json
+/var/lib/codex-runtime-health/last-upgrade.json
+/var/lib/codex-runtime-health/upgrade-history.jsonl
 /var/log/codex-runtime-health.log
+```
+
+其中 `state.json` 是最近一次整体健康检查快照；`last-upgrade.json` 是最近一次自动升级事件；`upgrade-history.jsonl` 追加保存每次 `--auto-upgrade` / `--upgrade` 事件，包含 before/latest/after 版本、是否发现新版本、升级命令结果、失败原因和升级后的健康检查状态。
+
+排查最近一次升级：
+
+```bash
+python3 -m json.tool /var/lib/codex-runtime-health/last-upgrade.json
+tail -n 20 /var/lib/codex-runtime-health/upgrade-history.jsonl
 ```
 
 默认会按当前运行位置自动选择版本查询和升级方式：

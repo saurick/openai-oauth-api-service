@@ -130,7 +130,7 @@ usage 记录：
 - OpenAI-compatible 图片输入支持 data URL 形式的 `image_url` / `input_image`；CLI 模式会临时落盘并通过 Codex CLI `--image` 附加到本次请求，direct backend 模式会直接传入 `/responses` 内容；单次最多 4 张、单张最大 16 MiB，网关总请求体上限 90 MiB，用于覆盖 data URL 的 base64 膨胀。
 - OpenAI-compatible PDF 输入支持 `input_file` / `file` 的 `application/pdf` data URL，或带 `mimeType=application/pdf` / `media_type=application/pdf` 的 base64 文件数据；PDF 仅支持 direct backend 模式，单次最多 4 个、单个最大 16 MiB，网关总请求体上限 90 MiB。`txt` / `md` / 代码等文本类附件由客户端读取成文本后按普通 `text` 输入转发；`doc` / `docx` / `xls` / `xlsx` 暂不声明为原生模态，后续如需支持应先增加明确的服务端转换链路。
 - 默认不保存 prompt、response body 或正文采样
-- `/v1/chat/completions` 和 `/v1/responses` 转发前会检查 key 状态、模型权限、key 级总 / 输入 / 输出 / 非缓存输入 token 日周额度、RPM、TPM、日/月请求配额和日/月 token 配额；超限返回 HTTP `429`。默认还会对同一 API key 的大请求做并发和突发频率保护：请求体达到 `GATEWAY_LARGE_REQUEST_MIN_BYTES` 后，同一 key 同时最多允许 `GATEWAY_LARGE_REQUEST_MAX_INFLIGHT_PER_KEY` 个上游请求，并且每 `GATEWAY_LARGE_REQUEST_BURST_WINDOW_SECONDS` 秒最多允许 `GATEWAY_LARGE_REQUEST_BURST_MAX_PER_KEY` 个大请求；超过分别返回 `gateway_large_request_inflight` 或 `gateway_large_request_burst`。
+- `/v1/chat/completions` 和 `/v1/responses` 转发前会检查 key 状态、模型权限、key 级总 / 输入 / 输出 / 非缓存输入 token 日周额度、RPM、TPM、日/月请求配额和日/月 token 配额；超限返回 HTTP `429`。默认还会对同一 API key 的大请求做并发和突发频率保护：请求体达到 `GATEWAY_LARGE_REQUEST_MIN_BYTES` 后，同一 key 同时最多允许 `GATEWAY_LARGE_REQUEST_MAX_INFLIGHT_PER_KEY` 个上游请求，并且每 `GATEWAY_LARGE_REQUEST_BURST_WINDOW_SECONDS` 秒最多允许 `GATEWAY_LARGE_REQUEST_BURST_MAX_PER_KEY` 个大请求；超过分别返回 `gateway_large_request_inflight` 或 `gateway_large_request_burst`，响应会带 `Retry-After` header 和 `error.retry_after_seconds`。这是本地网关保护，不表示上游账号、组织或模型额度耗尽，客户端应等待后再重试，避免异常循环消耗 token。
 - token 配额以本系统落库 usage 为准，key 级 token 总额度、TPM 和 token 配额允许单次请求短暂越界，下一次请求开始拦截
 
 ## 管理员 OAuth 入口
@@ -285,8 +285,8 @@ HTTP 路由：
 | `codex_backend_stream_interrupted` | Backend 流中途断开 | 上游 SSE 已返回部分事件，但尚未返回 `response.completed` / `[DONE]` 就断开；网关不会自动重试已开始输出的流。 |
 | `codex_backend_http_error` | Backend HTTP 错误 | backend 返回其他非 2xx HTTP 状态，且不属于鉴权、限流或 5xx。 |
 | `codex_backend_upstream_failed` | Backend 未分类失败 | backend 兜底错误，需要结合服务日志里的 `err` 查看。 |
-| `gateway_large_request_inflight` | 大请求并发保护 | 同一 API key 已有大上下文 `/v1/chat/completions` 或 `/v1/responses` 请求在运行，后续大请求会返回 429，避免客户端异常循环并发消耗 token。 |
-| `gateway_large_request_burst` | 大请求突发保护 | 同一 API key 在保护窗口内的大上下文请求过于频繁，后续大请求会返回 429，避免客户端异常循环串行消耗 token。 |
+| `gateway_large_request_inflight` | 大请求并发保护 | 同一 API key 已有大上下文 `/v1/chat/completions` 或 `/v1/responses` 请求在运行，后续大请求会返回 429，并带 `Retry-After` 与 `error.retry_after_seconds`，避免客户端异常循环并发消耗 token。 |
+| `gateway_large_request_burst` | 大请求突发保护 | 同一 API key 在保护窗口内的大上下文请求过于频繁，后续大请求会返回 429，并带 `Retry-After` 与 `error.retry_after_seconds`；这是本地网关保护，不是上游额度耗尽。 |
 | `client_canceled` | 客户端取消 | 下游客户端或入口代理主动断开请求；通常应排查客户端超时、网络中断或流式保活是否被识别。 |
 | `codex_cli_timeout` | CLI 超时 | Codex CLI 执行超过 `CODEX_CLI_TIMEOUT_SECONDS`。默认生产模板为 `28800` 秒。 |
 | `codex_cli_not_found` | CLI 不存在 | 容器内找不到 `codex` 二进制，或 `CODEX_CLI_BIN` / PATH 配错。 |

@@ -29,6 +29,18 @@ const GATEWAY_ERROR_TYPES = {
     statusHint: '429',
     description: '请求开始前该 API 凭据的 Token 额度已超限。',
   },
+  gateway_large_request_inflight: {
+    label: '大请求并发保护',
+    statusHint: '429',
+    description:
+      '同一 API key 已有大上下文请求在运行；这是本地网关保护，用于避免客户端异常并发重复消耗 token，可按 Retry-After 稍后重试。',
+  },
+  gateway_large_request_burst: {
+    label: '大请求突发保护',
+    statusHint: '429',
+    description:
+      '同一 API key 在保护窗口内的大上下文请求过于频繁；这是本地网关保护，不是上游账号或模型额度耗尽，可按 Retry-After 稍后重试。',
+  },
   gateway_reasoning_effort_invalid: {
     label: 'Effort 非法',
     statusHint: '400',
@@ -142,7 +154,7 @@ const GATEWAY_ERROR_TYPES = {
 }
 
 export const GATEWAY_ERROR_TYPE_HELP =
-  '错误字段来自 usage.error_type；失败或中断时记录细分类型，例如 backend 超时、鉴权失败、上游 5xx、限流、客户端取消或 CLI 超时等；客户端取消会单独统计，不计入服务错误率。诊断字段只保存请求大小、fallback 状态和脱敏上游摘要，不保存 prompt / output 正文。'
+  '错误字段来自 usage.error_type；失败或中断时记录细分类型，例如 backend 超时、鉴权失败、上游 5xx、上游限流、本地大请求保护、客户端取消或 CLI 超时等；客户端取消会单独统计，不计入服务错误率。诊断字段只保存请求大小、fallback 状态和脱敏上游摘要，不保存 prompt / output 正文。'
 
 export function gatewayErrorTypeInfo(code) {
   const normalized = String(code || '').trim()

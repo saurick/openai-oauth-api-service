@@ -2,6 +2,24 @@
 
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-25 大请求 429 Retry-After 可解释性
+
+- 诊断：朋友截图里的 `request_id=42bee9ca9061c52d5b41fe5e5d7552f1` 对应线上 `gateway_usage_logs` 的 HTTP `429` / `gateway_large_request_burst`，请求体约 339KB，来自同一 API key 在 60 秒窗口内连续多个大上下文 `/v1/responses` 请求；这是本地网关大请求突发保护，不是上游账号、组织或模型额度耗尽。
+- 完成：服务端对 `gateway_large_request_inflight` 与 `gateway_large_request_burst` 返回 `Retry-After` header 和 `error.retry_after_seconds`，用户可见错误文案明确“网关保护”和建议等待秒数；后台 usage 错误类型表补齐两类本地大请求保护说明，避免管理员把它和上游 429 混淆。
+- 完成：同步更新 `server/docs/api.md`、`server/docs/config.md` 与 `server/deploy/compose/prod/README.md`，写明大请求保护 429 的返回字段、客户端等待策略和本地保护语义。
+- 部署：本地构建 linux/amd64 镜像 `oauth-api-service-server:20260625T172518-601538a0-local-large429-retry-after`，上传到 133 的 `/data/openai-oauth-api-service/releases/20260625T172518-601538a0-local-large429-retry-after/app-server-image.tar.gz`；远端只执行 `docker load`、备份 `.env` 为 `.env.bak.20260625T172518-601538a0-local-large429-retry-after`、更新 `APP_IMAGE` 并重建 `app-server`，未在 133 执行构建。
+- 验证：本地已通过 `cd server && go test ./internal/server -run 'TestGatewayLargeRequest'`、`cd web && pnpm lint`、`cd web && pnpm test`；前端测试脚本重新生成错误码产物后未留下额外 generated diff。
+- 验证：133 发布后 `healthz=ok`、`readyz=ready`、`GET /public/codex/balance` 返回 200；容器运行镜像为 `20260625T172518-601538a0-local-large429-retry-after`，运行环境 `IMAGE_TAG/GIT_SHA_SHORT/GIT_SHA` 与镜像标签一致，大请求 guard 仍为 `1 / 4 / 60s / 65536B`，`strings /app/server` 可见 `retry_after_seconds`，近 2 分钟日志未见 WARN/ERROR/PANIC/FATAL。
+- 阻塞/风险：本轮不放松生产阈值，不改 schema、migration、key 权限、模型上下文策略或上游 failover；未触发真实大请求上游压测，避免额外消耗额度；对已经按普通 429 固定重试的第三方客户端，只能通过 `Retry-After` 和更明确 body 提示改善可解释性，无法强制客户端停止重试。133 根分区仍有约 63G 可用，本轮保留上一版镜像 `20260623T214245-539068e4-codex-overloaded` 作为回滚点，未执行 `docker image prune -a`。
+
+## 2026-06-25 133 大上下文 502 生产配置止血
+
+- 诊断：133 今天北京时间 00:44-01:57 的 11 条 502 全部来自同一 key/IP 的 `gpt-5.5` `/v1/responses` 大上下文请求，约 199K-205K 估算 token 区间触发上游 `response.incomplete` 或 `context_length_exceeded`；同一时段仍有大量 200，`/healthz`、`/readyz`、Codex runtime health 和 HY2 failover 均正常，排除服务整体不可用。
+- 根因：线上 `gpt-5.5` 模型上下文策略仍继承内置 `400K / 260K / 380K / 1M / 1.9M` 推荐值，导致 900KB 级请求没有提前压缩；同时远端 Compose `.env` 将 `GATEWAY_LARGE_REQUEST_MAX_INFLIGHT_PER_KEY` 与 `GATEWAY_LARGE_REQUEST_BURST_MAX_PER_KEY` 覆盖为 `0`，绕开了 2026-06-10 已上线的同 key 大请求并发 / 突发保护。
+- 完成：通过正式 admin RPC `model_context_update` 将生产 `gpt-5.5` 模型级上下文覆盖为 `context_window_tokens=400000`、`context_compact_tokens=180000`、`context_hard_tokens=260000`、`context_compact_bytes=850000`、`context_hard_bytes=1900000`、`context_keep_items=8`；备份远端 `/data/openai-oauth-api-service/compose/.env` 后恢复 `GATEWAY_LARGE_REQUEST_MAX_INFLIGHT_PER_KEY=1`、`GATEWAY_LARGE_REQUEST_BURST_MAX_PER_KEY=4`、`GATEWAY_LARGE_REQUEST_BURST_WINDOW_SECONDS=60`、`GATEWAY_LARGE_REQUEST_MIN_BYTES=65536`，并只重建 `app-server`，未在 133 构建镜像。
+- 验证：远端 app-server 重建后 `healthz=ok`、`readyz=ready`、`GET /public/codex/balance` 返回 200；容器环境确认大请求 guard 为 `1 / 4 / 60s / 65536B`，`model_list` 与数据库均确认 `gpt-5.5` 生效阈值为 `400000 / 180000 / 260000 / 850000 / 1900000 / 8`；近 5 分钟 app 日志未见 WARN/ERROR，修复后 usage 仅新增 1 条 200。
+- 阻塞/风险：本轮是生产配置止血，没有修改代码或重新发布镜像；未主动发送新的 900KB 级真实上游请求压测，避免额外消耗额度。后续如仍出现大上下文 502，应优先查看是否触发 `context_compacted`、`gateway_large_request_burst` 或新的上游终态错误，再决定是否进一步收紧模型阈值或增加配置漂移告警。
+
 ## 2026-06-23 Codex backend 容量错误分类
 
 - 诊断：133 当前运行 `oauth-api-service-server:20260623T141123-e6dd6e1b-key-stats-sort`，`/healthz` / `/readyz` 正常，`codex-upstream-proxy-failover.py --check` 显示 `节点选择=日本JP-HY2` 且 `ChatGPT=节点选择`。截图中的 `resp_0cc496...` 对应线上 `request_id=89f10955ee9c71327bb3ed79655af8bf`，上游 SSE 终态为 `response.failed`，`error.code=server_is_overloaded`、message 为 servers overloaded；近 12 小时 840 次请求中 829 次成功、11 次失败，失败集中在 `gpt-5.5` 的短时 `codex_backend_response_failed` 峰值，不是本地上下文超限主因，也不是服务整体不可用。
@@ -345,3 +363,11 @@
 - 验证：本地已通过 `python3 -m py_compile`、`bash -n`、`bash scripts/qa/shellcheck.sh`、`bash scripts/qa/secrets.sh`、`git diff --check`；133 已部署并重载 systemd，service 当前执行 `/usr/local/sbin/codex-runtime-health-check.py --auto-upgrade`。
 - 验证：133 实测从容器内 `codex-cli 0.133.0` 检查到 latest `0.142.0`，执行 `docker exec openai-oauth-api-service-server npm install -g @openai/codex@latest` 后升级为 `codex-cli 0.142.0`；随后 `/healthz`、`/readyz`、`/public/codex/balance`、failover 与磁盘检查均为 `ok`，下一次 timer 仍为 Asia/Shanghai `2026-06-24 05:00:00`。
 - 阻塞/风险：本轮不改 app-server 业务代码、schema、migration、auth/key 语义或上游策略；如果未来 app-server 容器重建，容器内临时升级会回到镜像基线版本，再由 timer 下一次拉到 latest。
+
+## 2026-06-25 Codex runtime 升级事件持久化
+
+- 完成：为 `scripts/ops/codex-runtime-health-check.py` 增加升级事件持久化；每次 `--auto-upgrade` / `--upgrade` 都会写入 `/var/lib/codex-runtime-health/last-upgrade.json` 和追加 `/var/lib/codex-runtime-health/upgrade-history.jsonl`。
+- 完成：升级事件记录 before/latest/after 版本、是否发现新版本、升级动作、升级命令结果、失败原因、升级后整体健康状态、各检查项状态和 `non_ok_checks_after`，便于排查是否更新成功、是否失败以及失败原因。
+- 完成：同步更新 `docs/operations.md` 与 `server/deploy/README.md`，写明升级历史文件和排查命令。
+- 验证：本地已通过 `python3 -m py_compile`、`bash -n`、`bash scripts/qa/shellcheck.sh`、`bash scripts/qa/secrets.sh`、`git diff --check`；133 已部署并复跑 `--auto-upgrade`，`last-upgrade.json` 记录 `event_action=already_latest`、`before_version=0.142.2`、`latest_version=0.142.2`、`health_status_after=ok`、`non_ok_checks_after=[]`，`upgrade-history.jsonl` 已追加至 4 条。
+- 阻塞/风险：本轮只增加运维脚本持久化与文档，不改 app-server 业务代码、schema、migration、auth/key 语义、页面路由或上游策略。

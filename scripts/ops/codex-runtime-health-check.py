@@ -24,6 +24,18 @@ STATE_FILE = Path(
     os.getenv("CODEX_RUNTIME_HEALTH_STATE_FILE", "/var/lib/codex-runtime-health/state.json")
 )
 LOG_FILE = Path(os.getenv("CODEX_RUNTIME_HEALTH_LOG_FILE", "/var/log/codex-runtime-health.log"))
+UPGRADE_HISTORY_FILE = Path(
+    os.getenv(
+        "CODEX_RUNTIME_UPGRADE_HISTORY_FILE",
+        "/var/lib/codex-runtime-health/upgrade-history.jsonl",
+    )
+)
+LAST_UPGRADE_FILE = Path(
+    os.getenv(
+        "CODEX_RUNTIME_LAST_UPGRADE_FILE",
+        "/var/lib/codex-runtime-health/last-upgrade.json",
+    )
+)
 FAILOVER_CHECK = os.getenv(
     "CODEX_RUNTIME_FAILOVER_CHECK",
     "/usr/local/sbin/codex-upstream-proxy-failover.py --check",
@@ -32,6 +44,7 @@ LATEST_VERSION_COMMAND = os.getenv("CODEX_RUNTIME_LATEST_VERSION_COMMAND", "")
 UPGRADE_COMMAND = os.getenv("CODEX_RUNTIME_UPGRADE_COMMAND", "")
 REQUEST_TIMEOUT_SECONDS = float(os.getenv("CODEX_RUNTIME_HEALTH_TIMEOUT_SECONDS", "20"))
 DISK_WARN_PERCENT = float(os.getenv("CODEX_RUNTIME_DISK_WARN_PERCENT", "90"))
+COMMAND_OUTPUT_MAX_CHARS = int(os.getenv("CODEX_RUNTIME_COMMAND_OUTPUT_MAX_CHARS", "4000"))
 
 
 def read_compose_env() -> dict[str, str]:
@@ -86,6 +99,24 @@ def run_command(command: list[str] | str, timeout: float = REQUEST_TIMEOUT_SECON
 
 def command_label(command: list[str] | str) -> str:
     return command if isinstance(command, str) else " ".join(command)
+
+
+def truncate_text(value: str, limit: int = COMMAND_OUTPUT_MAX_CHARS) -> str:
+    if len(value) <= limit:
+        return value
+    return value[:limit] + f"...[truncated {len(value) - limit} chars]"
+
+
+def compact_result(result: dict[str, Any] | None) -> dict[str, Any] | None:
+    if result is None:
+        return None
+    compact: dict[str, Any] = {}
+    for key, value in result.items():
+        if isinstance(value, str):
+            compact[key] = truncate_text(value)
+        else:
+            compact[key] = value
+    return compact
 
 
 def get_codex_version() -> dict[str, Any]:
@@ -298,8 +329,45 @@ def write_report(report: dict[str, Any]) -> None:
         pass
 
 
-def perform_upgrade(report: dict[str, Any], dry_run: bool, only_if_update: bool) -> None:
+def write_upgrade_event(event: dict[str, Any]) -> None:
+    event["recorded_at"] = now_iso()
+    event["history_file"] = str(UPGRADE_HISTORY_FILE)
+    event["last_file"] = str(LAST_UPGRADE_FILE)
+    UPGRADE_HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    LAST_UPGRADE_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    tmp = LAST_UPGRADE_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(event, ensure_ascii=False, indent=2) + "\n")
+    tmp.replace(LAST_UPGRADE_FILE)
+
+    with UPGRADE_HISTORY_FILE.open("a") as handle:
+        handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def summarize_checks(report: dict[str, Any]) -> dict[str, str]:
+    return {item["name"]: item["status"] for item in report.get("checks", [])}
+
+
+def non_ok_checks(report: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {"name": item["name"], "status": item["status"], "details": item.get("details", {})}
+        for item in report.get("checks", [])
+        if item.get("status") != "ok"
+    ]
+
+
+def perform_upgrade(report: dict[str, Any], dry_run: bool, only_if_update: bool) -> dict[str, Any]:
     before = get_codex_version()
+    event: dict[str, Any] = {
+        "event": "codex_runtime_upgrade",
+        "started_at": now_iso(),
+        "mode": before.get("mode"),
+        "container": before.get("container"),
+        "only_if_update": only_if_update,
+        "dry_run": dry_run,
+        "before": compact_result(before),
+        "before_version": extract_semver(before.get("stdout", "")),
+    }
     latest_command = resolve_latest_command(before)
     latest: dict[str, Any] | None = None
     update_available = True
@@ -307,7 +375,23 @@ def perform_upgrade(report: dict[str, Any], dry_run: bool, only_if_update: bool)
         latest = run_command(latest_command, timeout=REQUEST_TIMEOUT_SECONDS)
         current_version = extract_semver(before.get("stdout", ""))
         latest_version = extract_semver(latest.get("stdout", ""))
+        event.update(
+            {
+                "latest_command": command_label(latest_command),
+                "latest_result": compact_result(latest),
+                "current_version": current_version,
+                "latest_version": latest_version,
+            }
+        )
         if only_if_update and not latest["ok"]:
+            event.update(
+                {
+                    "status": "warn",
+                    "action": "latest_query_failed",
+                    "reason": "latest version query failed",
+                    "update_available": False,
+                }
+            )
             add_check(
                 report,
                 "codex_upgrade",
@@ -320,8 +404,16 @@ def perform_upgrade(report: dict[str, Any], dry_run: bool, only_if_update: bool)
                     "latest_result": latest,
                 },
             )
-            return
+            return event
         if only_if_update and (not current_version or not latest_version):
+            event.update(
+                {
+                    "status": "warn",
+                    "action": "version_not_comparable",
+                    "reason": "version is not comparable",
+                    "update_available": False,
+                }
+            )
             add_check(
                 report,
                 "codex_upgrade",
@@ -334,9 +426,17 @@ def perform_upgrade(report: dict[str, Any], dry_run: bool, only_if_update: bool)
                     "latest_result": latest,
                 },
             )
-            return
+            return event
         update_available = bool(latest["ok"] and current_version and latest_version and current_version != latest_version)
+        event["update_available"] = update_available
         if only_if_update and not update_available:
+            event.update(
+                {
+                    "status": "ok",
+                    "action": "already_latest",
+                    "reason": "already latest",
+                }
+            )
             add_check(
                 report,
                 "codex_upgrade",
@@ -349,18 +449,35 @@ def perform_upgrade(report: dict[str, Any], dry_run: bool, only_if_update: bool)
                     "latest_result": latest,
                 },
             )
-            return
+            return event
 
     upgrade_command = resolve_upgrade_command(before)
     if not upgrade_command:
+        event.update(
+            {
+                "status": "fail",
+                "action": "upgrade_command_unavailable",
+                "reason": "npm upgrade command is not available",
+                "update_available": update_available,
+            }
+        )
         add_check(
             report,
             "codex_upgrade",
             "fail",
             {"skipped": True, "reason": "npm upgrade command is not available", "before": before},
         )
-        return
+        return event
     if dry_run:
+        event.update(
+            {
+                "status": "warn",
+                "action": "dry_run",
+                "reason": "dry run",
+                "command": command_label(upgrade_command),
+                "update_available": update_available,
+            }
+        )
         add_check(
             report,
             "codex_upgrade",
@@ -373,9 +490,21 @@ def perform_upgrade(report: dict[str, Any], dry_run: bool, only_if_update: bool)
                 "latest_result": latest,
             },
         )
-        return
+        return event
     upgrade = run_command(upgrade_command, timeout=600)
     after = get_codex_version()
+    event.update(
+        {
+            "status": "ok" if upgrade["ok"] else "fail",
+            "action": "upgraded" if upgrade["ok"] else "upgrade_failed",
+            "reason": "" if upgrade["ok"] else "upgrade command failed",
+            "command": command_label(upgrade_command),
+            "update_available": update_available,
+            "upgrade_result": compact_result(upgrade),
+            "after": compact_result(after),
+            "after_version": extract_semver(after.get("stdout", "")),
+        }
+    )
     add_check(
         report,
         "codex_upgrade",
@@ -389,6 +518,7 @@ def perform_upgrade(report: dict[str, Any], dry_run: bool, only_if_update: bool)
             "only_if_update": only_if_update,
         },
     )
+    return event
 
 
 def build_report(strict_balance: bool) -> dict[str, Any]:
@@ -397,6 +527,8 @@ def build_report(strict_balance: bool) -> dict[str, Any]:
         "status": "ok",
         "app_base_url": APP_BASE_URL,
         "compose_dir": str(COMPOSE_DIR),
+        "upgrade_history_file": str(UPGRADE_HISTORY_FILE),
+        "last_upgrade_file": str(LAST_UPGRADE_FILE),
         "checks": [],
     }
     codex = check_codex(report)
@@ -425,8 +557,9 @@ def main() -> int:
         args.check = True
 
     report = build_report(args.strict_balance)
+    upgrade_event: dict[str, Any] | None = None
     if args.upgrade or args.auto_upgrade:
-        perform_upgrade(report, args.dry_run, only_if_update=args.auto_upgrade)
+        upgrade_event = perform_upgrade(report, args.dry_run, only_if_update=args.auto_upgrade)
         if not args.dry_run:
             upgrade_checks = [item for item in report["checks"] if item["name"] == "codex_upgrade"]
             post_report = build_report(args.strict_balance)
@@ -438,6 +571,13 @@ def main() -> int:
                 post_report["status"] = "fail"
             report = post_report
             report["post_upgrade"] = True
+        if upgrade_event is not None:
+            upgrade_event["finished_at"] = now_iso()
+            upgrade_event["health_status_after"] = report["status"]
+            upgrade_event["check_statuses_after"] = summarize_checks(report)
+            upgrade_event["non_ok_checks_after"] = non_ok_checks(report)
+            write_upgrade_event(upgrade_event)
+            report["upgrade_event"] = upgrade_event
 
     write_report(report)
     print(json.dumps(report, ensure_ascii=False, indent=2))

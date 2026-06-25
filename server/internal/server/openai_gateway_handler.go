@@ -487,7 +487,13 @@ func (h *openAIGatewayHandler) writeGatewayLargeRequestLimit(
 ) {
 	status := stdhttp.StatusTooManyRequests
 	errorType := gatewayErrorType(err)
-	h.writeGatewayError(w, status, err, errorType)
+	retryAfterSeconds := gatewayLargeRequestRetryAfterSeconds(err)
+	details := map[string]any{}
+	if retryAfterSeconds > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
+		details["retry_after_seconds"] = retryAfterSeconds
+	}
+	h.writeGatewayErrorResponse(w, status, gatewayLargeRequestLimitMessage(err, retryAfterSeconds), errorType, details)
 	h.recordUsage(r, key, &biz.GatewayUsageLog{
 		APIKeyID:               key.ID,
 		APIKeyPrefix:           key.KeyPrefix,
@@ -510,6 +516,34 @@ func (h *openAIGatewayHandler) writeGatewayLargeRequestLimit(
 		Diagnostic:             diagnostic,
 		CreatedAt:              time.Now(),
 	})
+}
+
+func gatewayLargeRequestRetryAfterSeconds(err error) int {
+	switch {
+	case errors.Is(err, errGatewayLargeRequestInFlight), errors.Is(err, errGatewayLargeRequestBurst):
+		seconds := int(gatewayLargeRequestBurstWindowPerKey() / time.Second)
+		if seconds <= 0 {
+			return int(defaultGatewayLargeRequestBurstWindow / time.Second)
+		}
+		return seconds
+	default:
+		return 0
+	}
+}
+
+func gatewayLargeRequestLimitMessage(err error, retryAfterSeconds int) string {
+	wait := "稍后"
+	if retryAfterSeconds > 0 {
+		wait = fmt.Sprintf("约 %d 秒后", retryAfterSeconds)
+	}
+	switch {
+	case errors.Is(err, errGatewayLargeRequestInFlight):
+		return fmt.Sprintf("同一 API key 已有大上下文请求在运行，请%s重试；这是网关保护，用于避免重复消耗 token。", wait)
+	case errors.Is(err, errGatewayLargeRequestBurst):
+		return fmt.Sprintf("同一 API key 的大上下文请求过于频繁，请%s重试；这是网关保护，不是上游额度耗尽。", wait)
+	default:
+		return mapGatewayHTTPErrorMessage(err)
+	}
 }
 
 type gatewayInFlightLimiter struct {
@@ -3234,16 +3268,27 @@ func (h *openAIGatewayHandler) writeGatewayError(w stdhttp.ResponseWriter, statu
 	if err != nil {
 		message = mapGatewayHTTPErrorMessage(err)
 	}
+	h.writeGatewayErrorResponse(w, status, message, errorType, nil)
+}
+
+func (h *openAIGatewayHandler) writeGatewayErrorResponse(w stdhttp.ResponseWriter, status int, message string, errorType string, details map[string]any) {
 	code := errorType
 	if code == "" {
 		code = "gateway_error"
 	}
+	errorBody := map[string]any{
+		"message": message,
+		"type":    "gateway_error",
+		"code":    code,
+	}
+	for key, value := range details {
+		if key == "" || value == nil {
+			continue
+		}
+		errorBody[key] = value
+	}
 	body, _ := json.Marshal(map[string]any{
-		"error": map[string]any{
-			"message": message,
-			"type":    "gateway_error",
-			"code":    code,
-		},
+		"error": errorBody,
 	})
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

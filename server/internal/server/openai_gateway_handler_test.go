@@ -1458,6 +1458,68 @@ func TestGatewayLargeRequestGuardBlocksBurstPerKey(t *testing.T) {
 	}
 }
 
+func TestGatewayLargeRequestLimitResponseIncludesRetryAfter(t *testing.T) {
+	t.Setenv("GATEWAY_LARGE_REQUEST_BURST_WINDOW_SECONDS", "60")
+	handler := &openAIGatewayHandler{}
+	key := &biz.GatewayAPIKey{ID: 12, KeyPrefix: "ogw_limit"}
+	cases := []struct {
+		name        string
+		err         error
+		code        string
+		messagePart string
+	}{
+		{
+			name:        "inflight",
+			err:         errGatewayLargeRequestInFlight,
+			code:        "gateway_large_request_inflight",
+			messagePart: "已有大上下文请求在运行",
+		},
+		{
+			name:        "burst",
+			err:         errGatewayLargeRequestBurst,
+			code:        "gateway_large_request_burst",
+			messagePart: "不是上游额度耗尽",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader("{}"))
+			handler.writeGatewayLargeRequestLimit(rec, req, key, "req_limit", "", "responses", "gpt-5.5", "high", codexUpstreamModeBackend, true, []byte("large body"), time.Now(), biz.GatewayUsageDiagnostic{}, tc.err)
+
+			if rec.Code != http.StatusTooManyRequests {
+				t.Fatalf("status = %d, want 429", rec.Code)
+			}
+			if got := rec.Header().Get("Retry-After"); got != "60" {
+				t.Fatalf("Retry-After = %q, want 60", got)
+			}
+			var payload struct {
+				Error struct {
+					Message           string `json:"message"`
+					Type              string `json:"type"`
+					Code              string `json:"code"`
+					RetryAfterSeconds int    `json:"retry_after_seconds"`
+				} `json:"error"`
+			}
+			if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if payload.Error.Type != "gateway_error" {
+				t.Fatalf("error.type = %q, want gateway_error", payload.Error.Type)
+			}
+			if payload.Error.Code != tc.code {
+				t.Fatalf("error.code = %q, want %q", payload.Error.Code, tc.code)
+			}
+			if payload.Error.RetryAfterSeconds != 60 {
+				t.Fatalf("retry_after_seconds = %d, want 60", payload.Error.RetryAfterSeconds)
+			}
+			if !strings.Contains(payload.Error.Message, tc.messagePart) || !strings.Contains(payload.Error.Message, "60 秒") || !strings.Contains(payload.Error.Message, "网关保护") {
+				t.Fatalf("message = %q", payload.Error.Message)
+			}
+		})
+	}
+}
+
 type failingStreamResponseWriter struct {
 	header    http.Header
 	failAfter int

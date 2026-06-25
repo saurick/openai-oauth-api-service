@@ -24,7 +24,16 @@ Codex runtime 属于宿主机运维依赖，不由 app-server 业务进程负责
 bash scripts/ops/install-codex-runtime-health-check.sh
 ```
 
-默认 timer 每天 Asia/Shanghai 05:00 固定执行 `/usr/local/sbin/codex-runtime-health-check.py --auto-upgrade`，检查 `@openai/codex` latest；发现新版本就安装 latest，然后检查 `codex --version`、`/healthz`、`/readyz`、`/public/codex/balance`、容器状态、failover 配置和磁盘余量，并把结果写入 `/var/lib/codex-runtime-health/state.json`。`CODEX_RUNTIME_MODE=auto` 会先查宿主机 `codex`，宿主机没有时改查 app-server 容器内的 `codex`。
+默认 timer 每天 Asia/Shanghai 05:00 固定执行 `/usr/local/sbin/codex-runtime-health-check.py --auto-upgrade`，检查 `@openai/codex` latest；发现新版本就安装 latest，然后检查 `codex --version`、`/healthz`、`/readyz`、`/public/codex/balance`、容器状态、failover 配置和磁盘余量，并把整体健康结果写入 `/var/lib/codex-runtime-health/state.json`。`CODEX_RUNTIME_MODE=auto` 会先查宿主机 `codex`，宿主机没有时改查 app-server 容器内的 `codex`。
+
+每次 `--auto-upgrade` / `--upgrade` 都会持久化升级事件：
+
+```bash
+/var/lib/codex-runtime-health/last-upgrade.json
+/var/lib/codex-runtime-health/upgrade-history.jsonl
+```
+
+事件内容包含 before/latest/after 版本、是否发现新版本、升级命令结果、失败原因和升级后的健康检查状态。
 
 如确需手动触发同一逻辑，可运行：
 
