@@ -33,7 +33,7 @@ const GATEWAY_ERROR_TYPES = {
     label: '大请求并发保护',
     statusHint: '429',
     description:
-      '同一 API key 已有大上下文请求在运行；这是本地网关保护，用于避免客户端异常并发重复消耗 token，可按 Retry-After 稍后重试。',
+      '同一 API key 的大上下文并发已达上限；这是本地网关保护，用于避免客户端异常并发重复消耗 token，可按 Retry-After 稍后重试。',
   },
   gateway_large_request_burst: {
     label: '大请求突发保护',

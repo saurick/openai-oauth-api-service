@@ -3,6 +3,15 @@
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 - 2026-06-25：旧 `progress.md` 已按超过 80KB 阈值归档到 `docs/archive/progress-2026-06-25-before-skill-scenario-matrix.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-26 单 key 多会话大请求保护放宽
+
+- 诊断：朋友反馈的 `429 Too Many Requests` 仍集中在 `api_key_id=5 / ogw_xiuzhu_1 / 120.234.136.227`，133 当前服务健康，问题不是服务整体异常。真实使用方式是每个人一个 key，但同一个 key 会同时开 8-10 个 Codex / OpenCode 会话；过去 24 小时该 key 的 `/v1/responses` / `/v1/chat/completions` 请求没有稳定 `session_id`，因此无法立即按真实会话分桶，只能先把 key 级大请求并发和突发阈值调整到支持多会话。
+- 完成：将服务端默认、生产 Compose 默认、`.env.example` 和部署说明调整为 `GATEWAY_LARGE_REQUEST_MAX_INFLIGHT_PER_KEY=10`、`GATEWAY_LARGE_REQUEST_BURST_MAX_PER_KEY=40`、`GATEWAY_LARGE_REQUEST_BURST_WINDOW_SECONDS=60`、`GATEWAY_LARGE_REQUEST_MIN_BYTES=65536`；同步后台错误类型说明和 API / config 文档，明确同一 key 可以承载多个并行会话，但仍保留异常循环保护。
+- 部署：先临时备份 133 `.env.bak.20260626T102404-burst8` 并放宽到 `1 / 8 / 60s / 65536B`；随后按最终多会话方案备份 `.env.bak.20260626T105650-multi-session-large-request`，写入 `10 / 40 / 60s / 65536B`，并本地构建 linux/amd64 镜像 `oauth-api-service-server:20260626T185812-f604fc3a-local-multi-session-large-guard`，上传到 `/data/openai-oauth-api-service/releases/20260626T185812-f604fc3a-local-multi-session-large-guard/app-server-image.tar.gz`，远端只执行 `docker load`、更新 `APP_IMAGE` 和重建 `app-server`。
+- 验证：133 新镜像运行后 `healthz=ok`、`readyz=ready`、`GET /public/codex/balance` 返回 200，容器环境确认为 `10 / 40 / 60s / 65536B`，`IMAGE_TAG/GIT_SHA_SHORT/GIT_SHA` 与新镜像一致，近 2 分钟 app 日志未见 WARN/ERROR/PANIC/FATAL；新镜像切换后已新增 1 条 200、0 条 429。根分区约 60G 可用，保留上一版镜像作为回滚点，未执行 `docker image prune -a`。
+- 验证：本地已通过 `cd server && go test ./internal/server -run 'TestGatewayLargeRequest'`、`cd web && pnpm lint`、`cd web && pnpm test`、`docker compose --env-file server/deploy/compose/prod/.env.example -f server/deploy/compose/prod/compose.yml config -q`、`bash scripts/qa/secrets.sh` 和 `git diff --check`。
+- 阻塞/风险：本轮按用户要求放宽单 key 多会话能力，但不关闭保护；如果同一 key 后续在 60 秒内超过 40 个大请求，仍会返回 `gateway_large_request_burst`。Codex / OpenCode 当前没有传稳定 `session_id`，后台会话聚合和真正的会话级限流仍无法生效；后续若客户端能传 `X-Session-ID`、`session_id`、`conversation_id` 或 `thread_id`，再把保护细化到会话级会更精确。
+
 ## 2026-06-25 Codex skills 使用场景速查补充
 
 - 完成：补充根 `README.md` 的 `.agents/skills/` 导航，并完善 `.agents/skills/README.md` 的“按问题选 Skill / Scenario Matrix”，把选中文本分析、提示词、runtime 诊断、测试范围、代码 review、文档治理、管理端页面、服务边界、发布、通用 seed/import、可观测错误和安全隐私按常见提问方式映射到对应 skill。

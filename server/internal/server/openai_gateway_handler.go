@@ -37,8 +37,8 @@ const (
 	maxGatewayFileBytes                   = 16 << 20
 	maxGatewayRequestBytes                = 90 << 20
 	defaultGatewayLargeRequestMinBytes    = 64 << 10
-	defaultGatewayLargeRequestMaxInFlight = 1
-	defaultGatewayLargeRequestBurstMax    = 4
+	defaultGatewayLargeRequestMaxInFlight = 10
+	defaultGatewayLargeRequestBurstMax    = 40
 	defaultGatewayLargeRequestBurstWindow = 60 * time.Second
 	defaultCodexCLITimeout                = 28800 * time.Second
 	gatewayUsageWriteTimeout              = 5 * time.Second
