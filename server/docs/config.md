@@ -102,8 +102,8 @@
 - `GATEWAY_TRUSTED_PROXY_CIDRS`：可选可信反代 CIDR 列表，多个值用逗号分隔；设置后只有匹配的直连来源才采信 `X-Forwarded-For` / `X-Real-IP`。留空时默认信任本机、内网和 link-local 直连来源，适配 Docker/Nginx 反代部署。
 - `GATEWAY_STREAM_HEARTBEAT_SECONDS`：`stream=true` 请求等待上游期间的 SSE keepalive 间隔，默认 `15` 秒；backend Responses 流会在连接上游前先建立下游 SSE 并持续输出 keepalive，用于避免 Codex / OpenCode / Cloudflare / 代理在长请求无输出时断开连接。
 - `GATEWAY_LARGE_REQUEST_MIN_BYTES`：大上下文保护的请求体阈值，默认 `65536` 字节；设为 `0` 可关闭该保护。
-- `GATEWAY_LARGE_REQUEST_MAX_INFLIGHT_PER_KEY`：同一 API key 同时允许进入上游的大请求数量，默认 `10`；用于支持一个 key 下的多个 Codex / OpenCode 会话并行工作。超过后返回 HTTP `429` / `gateway_large_request_inflight`，并带 `Retry-After` 与 `error.retry_after_seconds`，避免客户端异常循环并发消耗 token。
-- `GATEWAY_LARGE_REQUEST_BURST_MAX_PER_KEY`：同一 API key 在突发窗口内允许进入上游的大请求数量，默认 `40`；设为 `0` 可关闭突发保护。
+- `GATEWAY_LARGE_REQUEST_MAX_INFLIGHT_PER_KEY`：同一 API key 同时允许进入上游的大请求数量，默认 `30`；用于支持一个 key 下的多个 Codex / OpenCode 会话并行工作。超过后返回 HTTP `429` / `gateway_large_request_inflight`，并带 `Retry-After` 与 `error.retry_after_seconds`，避免客户端异常循环并发消耗 token。
+- `GATEWAY_LARGE_REQUEST_BURST_MAX_PER_KEY`：同一 API key 在突发窗口内允许进入上游的大请求数量，默认 `120`；设为 `0` 可关闭突发保护。
 - `GATEWAY_LARGE_REQUEST_BURST_WINDOW_SECONDS`：大请求突发保护窗口，默认 `60` 秒；超过窗口内上限后返回 HTTP `429` / `gateway_large_request_burst`，并用同一窗口秒数填充 `Retry-After` 与 `error.retry_after_seconds`。这是本地网关保护，不表示上游额度耗尽。
 - `GATEWAY_CONTEXT_COMPACT_BYTES`：模型未配置字节阈值时的全局运维覆盖；留空时按模型推荐值生效。默认部署模板不再给旧固定值，避免覆盖后台模型推荐。
 - `GATEWAY_CONTEXT_HARD_BYTES`：模型未配置硬字节阈值时的全局运维覆盖；留空时按模型推荐值生效。
