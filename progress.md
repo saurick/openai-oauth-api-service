@@ -3,6 +3,17 @@
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 - 2026-06-25：旧 `progress.md` 已按超过 80KB 阈值归档到 `docs/archive/progress-2026-06-25-before-skill-scenario-matrix.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-27 Codex rate limit reset credits 可见性
+
+- 完成：`GET /public/codex/balance` 在保留原 Codex app-server `account/rateLimits/read` 余额 / 限额主路径的基础上，使用同一服务器 Codex 登录态只读获取 `rate-limit-reset-credits`，并裁剪为 `rate_limit_reset_credits` 摘要；只返回 `reset_type`、`status`、`granted_at`、`expires_at`、`title`、可用数量和累计数量，不返回上游内部 credit id、头像 URL、profile user id、账号邮箱或 token。
+- 完成：后台 `/admin-codex-balance` 增加“可用重置券”概览和 reset credits 表格，按北京时间展示获得 / 过期时间；如果重置券读取失败，余额和限额窗口仍正常展示，并在表格区显示暂不可用提示。
+- 完成：同步 `README.md`、`server/docs/api.md`、`server/docs/config.md`、生产 Compose 示例和 `compose.yml` 的公开余额接口口径与可选 `CODEX_RATE_LIMIT_RESET_CREDITS_URL` 配置。
+- 验证：已通过 `go test -count=1 ./internal/server -run 'TestCodexBalanceRoute'`、`go test -count=1 ./...`、`/usr/local/bin/pnpm --dir web lint`、`/usr/local/bin/pnpm --dir web css`、`/usr/local/bin/pnpm --dir web test`、`/usr/local/bin/pnpm --dir web build`、`STYLE_L1_SCENARIOS=admin-codex-balance-desktop,admin-codex-balance-mobile NODE_USE_ENV_PROXY=0 /usr/local/bin/pnpm --dir web style:l1`、`bash scripts/qa/secrets.sh`、`docker compose --env-file server/deploy/compose/prod/.env.example -f server/deploy/compose/prod/compose.yml config -q` 和 `git diff --check`。Codex runtime 自带 `pnpm 11.7.0` 首次触发 `ERR_PNPM_IGNORED_BUILDS`，已按本仓库稳定路径改用 `/usr/local/bin/pnpm 10.13.1` 重跑通过，并删除生成的临时 `web/pnpm-workspace.yaml`。
+- 部署：本地构建 linux/amd64 镜像 `oauth-api-service-server:20260627T222513-e402593a-dirty-reset-credits`，上传到 `192.168.0.133:/data/openai-oauth-api-service/releases/20260627T222513-e402593a-dirty-reset-credits`；同步远端 compose `CODEX_RATE_LIMIT_RESET_CREDITS_URL` 环境入口，远端只执行 `docker load`、宿主机 `/usr/local/bin/atlas migrate status`、备份 `.env` 为 `.env.bak.20260627T222513-e402593a-dirty-reset-credits`、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在 133 构建。Atlas 当前版本 `20260604123931`、pending 0；首次重建被 shell 中旧 `APP_IMAGE` 覆盖，已立即用显式 `APP_IMAGE=oauth-api-service-server:20260627T222513-e402593a-dirty-reset-credits` 重建修正。
+- 线上验证：当前 `app-server` 运行镜像为 `oauth-api-service-server:20260627T222513-e402593a-dirty-reset-credits`，容器环境含 `GIT_SHA=e402593ae9bbbeb4f399103b73a6e187dff38c84`、`GIT_SHA_SHORT=e402593a-dirty`、`IMAGE_TAG=20260627T222513-e402593a-dirty-reset-credits` 和 `CODEX_RATE_LIMIT_RESET_CREDITS_URL=https://chatgpt.com/backend-api/wham/rate-limit-reset-credits`；远端本机和公网 `/healthz` / `/readyz` 均通过，`/public/codex/balance` 返回 `rate_limit_reset_credits.status=ok`、`available_count=3`，单条字段只含 `expires_at/granted_at/reset_type/status/title`。生产 Playwright 登录 `/admin-codex-balance` 后确认页面显示 3 条 `Full reset (Weekly + 5 hr)`、无 `RateLimitResetCredit_` / `Codex Team` 泄漏、无页面级横向溢出、控制台无错误。
+- 清理：部署验证后删除远端本轮 release tar 包，执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧镜像 `oauth-api-service-server:20260626T191039-3c31ee33-dirty-large-guard-30`，回收 353.3MB；未执行 volume prune。根分区从约 59G 可用恢复到约 60G 可用，当前 app-server 仍运行新镜像。
+- 阻塞/风险：该信息仍来自当前服务器 Codex 登录态和 ChatGPT 后端只读接口；如上游接口字段或权限变化，页面会显示重置券暂不可用，但不会影响原余额 / 限额窗口展示。
+
 ## 2026-06-26 单 key 30 并行会话大请求保护放宽
 
 - 诊断：朋友反馈的 `429 Too Many Requests` 仍集中在单个下游 key 的大上下文请求；真实使用方式是每个人一个 key，但同一个 key 会同时开多路 Codex / OpenCode 会话，最新要求按 30 个并行会话承载。过去 24 小时该 key 的 `/v1/responses` / `/v1/chat/completions` 请求没有稳定 `session_id`，因此无法立即按真实会话分桶，只能继续按 key 级大请求并发和突发阈值放宽。

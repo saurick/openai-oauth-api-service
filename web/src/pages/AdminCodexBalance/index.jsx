@@ -23,6 +23,16 @@ function fmtDate(value) {
   return date.toLocaleString()
 }
 
+function fmtBeijingDate(value) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  return date.toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    hour12: false,
+  })
+}
+
 function fmtCredits(credits) {
   if (!credits) return '-'
   if (credits.unlimited) return '无限'
@@ -51,6 +61,33 @@ function sortRateLimits(payload) {
     if (b?.limit_id === 'codex') return 1
     return rateLimitTitle(a).localeCompare(rateLimitTitle(b))
   })
+}
+
+function sortResetCredits(payload) {
+  const credits = payload?.rate_limit_reset_credits?.credits || []
+  return [...credits].sort((a, b) =>
+    String(a?.granted_at || '').localeCompare(String(b?.granted_at || ''))
+  )
+}
+
+function resetCreditsSummary(payload) {
+  const resetCredits = payload?.rate_limit_reset_credits
+  if (!resetCredits) return '-'
+  if (resetCredits.status !== 'ok') return '暂不可用'
+  return `${resetCredits.available_count || 0} / ${
+    resetCredits.total_earned_count || 0
+  }`
+}
+
+function resetCreditStatusText(value) {
+  if (value === 'available') return '可用'
+  if (value === 'redeemed') return '已使用'
+  if (value === 'expired') return '已过期'
+  return value || '-'
+}
+
+function resetCreditTitle(item) {
+  return item?.title || item?.reset_type || 'Rate limit reset credit'
 }
 
 function LimitBar({ label, item }) {
@@ -106,12 +143,92 @@ function LimitCard({ item }) {
   )
 }
 
+function ResetCreditsPanel({ payload, credits }) {
+  const resetCredits = payload?.rate_limit_reset_credits
+  const unavailable = resetCredits?.status && resetCredits.status !== 'ok'
+
+  return (
+    <SurfacePanel variant="admin" className="p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-[var(--admin-text)]">
+            Rate limit reset credits
+          </h2>
+          <p className="mt-1 text-sm text-[var(--admin-muted)]">
+            可用 {resetCredits?.available_count || 0} 个 / 累计{' '}
+            {resetCredits?.total_earned_count || 0} 个
+          </p>
+        </div>
+        <div className="rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface-muted)] px-3 py-2 text-right">
+          <div className="text-xs text-[var(--admin-muted)]">状态</div>
+          <div className="mt-0.5 text-base font-bold text-[var(--admin-text)]">
+            {unavailable ? '暂不可用' : '正常'}
+          </div>
+        </div>
+      </div>
+
+      {unavailable ? (
+        <div className="mt-4 rounded-lg border border-[var(--admin-warning-border)] bg-[var(--admin-warning-bg)] px-4 py-3 text-sm text-[var(--admin-warning-text)]">
+          重置券读取暂时不可用，当前余额和限额窗口仍可正常查看。
+        </div>
+      ) : null}
+
+      {credits.length > 0 ? (
+        <div className="mt-4 overflow-x-auto">
+          <table className="admin-data-table min-w-[760px] text-left text-sm">
+            <thead>
+              <tr className="bg-[var(--admin-surface-soft)] text-[var(--admin-muted-strong)]">
+                <th className="w-16 px-4 py-3 font-semibold">#</th>
+                <th className="px-4 py-3 font-semibold">类型</th>
+                <th className="w-24 px-4 py-3 font-semibold">状态</th>
+                <th className="w-56 px-4 py-3 font-semibold">
+                  获得时间（北京时间）
+                </th>
+                <th className="w-56 px-4 py-3 font-semibold">
+                  过期时间（北京时间）
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {credits.map((item, index) => (
+                <tr
+                  key={`${item?.granted_at || index}-${item?.expires_at || ''}`}
+                  className="border-t border-[var(--admin-border-soft)] text-[var(--admin-text)]"
+                >
+                  <td className="px-4 py-3 font-semibold">{index + 1}</td>
+                  <td className="px-4 py-3 font-medium">
+                    {resetCreditTitle(item)}
+                  </td>
+                  <td className="px-4 py-3">
+                    {resetCreditStatusText(item?.status)}
+                  </td>
+                  <td className="px-4 py-3">
+                    {fmtBeijingDate(item?.granted_at)}
+                  </td>
+                  <td className="px-4 py-3">
+                    {fmtBeijingDate(item?.expires_at)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : !unavailable ? (
+        <div className="mt-4 text-sm text-[var(--admin-muted)]">
+          当前没有可展示的重置券。
+        </div>
+      ) : null}
+    </SurfacePanel>
+  )
+}
+
 export default function AdminCodexBalancePage() {
   const [payload, setPayload] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   const limits = useMemo(() => sortRateLimits(payload), [payload])
+  const resetCredits = useMemo(() => sortResetCredits(payload), [payload])
 
   const loadBalance = useCallback(async ({ signal } = {}) => {
     setLoading(true)
@@ -151,7 +268,7 @@ export default function AdminCodexBalancePage() {
     <AdminFrame
       breadcrumb="用量统计 / Codex 余额"
       title="Codex 余额"
-      description="查看当前服务器 Codex 登录态对应的额度余额、5 小时窗口和每周窗口；数据来自公开余额接口，不展示账号邮箱或 token。"
+      description="查看当前服务器 Codex 登录态对应的额度余额、5 小时窗口、每周窗口和 rate limit reset credits；数据来自公开余额接口，不展示账号邮箱或 token。"
       actions={
         <>
           <a
@@ -186,7 +303,7 @@ export default function AdminCodexBalancePage() {
       ) : null}
 
       <SurfacePanel variant="admin" className="p-5">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <div>
             <div className="text-sm text-[#7b8780]">接口状态</div>
             <div className="mt-1 text-2xl font-bold text-[#1f2d25]">
@@ -197,6 +314,12 @@ export default function AdminCodexBalancePage() {
             <div className="text-sm text-[#7b8780]">Credits remaining</div>
             <div className="mt-1 text-2xl font-bold text-[#1f2d25]">
               {fmtCredits(payload?.credits)}
+            </div>
+          </div>
+          <div>
+            <div className="text-sm text-[#7b8780]">可用重置券</div>
+            <div className="mt-1 text-2xl font-bold text-[#1f2d25]">
+              {resetCreditsSummary(payload)}
             </div>
           </div>
           <div>
@@ -212,6 +335,10 @@ export default function AdminCodexBalancePage() {
         <SurfacePanel variant="admin" className="p-5">
           <div className="text-sm text-[#7b8780]">正在读取 Codex 余额...</div>
         </SurfacePanel>
+      ) : null}
+
+      {payload ? (
+        <ResetCreditsPanel payload={payload} credits={resetCredits} />
       ) : null}
 
       {limits.length > 0 ? (

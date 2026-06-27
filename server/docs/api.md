@@ -162,17 +162,19 @@ HTTP 路由：
 
 - 不要求管理员登录，也不要求下游 `ogw_` key。
 - 服务端使用服务器自己的 Codex 登录态，通过 Codex app-server 的 `account/rateLimits/read` 读取限额和 credits。
+- 服务端使用同一服务器 Codex 登录态只读获取 `rate-limit-reset-credits`，并只返回展示所需字段。
 - 默认使用 30 秒内存缓存，避免公开查询频繁启动 Codex app-server 子进程；可通过 `CODEX_BALANCE_CACHE_SECONDS` 调整。
-- 如果实时读取 Codex app-server 或 ChatGPT usage 接口临时失败，但进程内已有上次成功结果，接口会返回 HTTP 200 和上次成功结果，并带 `stale=true`、`stale_reason=codex_balance_query_failed` 与 `last_error_at`；首次启动且没有成功缓存时仍返回 `codex_balance_query_failed`。
+- 如果实时读取 Codex app-server 或 ChatGPT usage 接口临时失败，但进程内已有上次成功结果，接口会返回 HTTP 200 和上次成功结果，并带 `stale=true`、`stale_reason=codex_balance_query_failed` 与 `last_error_at`；首次启动且没有成功缓存时仍返回 `codex_balance_query_failed`。如果只有重置券读取失败，接口仍返回余额和限额窗口，并将 `rate_limit_reset_credits.status` 置为 `unavailable`。
 
 返回字段：
 
 - `credits.balance`：Codex workspace credits 余额字符串；无 credits 时通常为 `"0"`。
 - `rate_limits.primary` / `secondary`：主窗口与次窗口用量，包含 `used_percent`、`remaining_percent`、`window_duration_mins`、`resets_at` 和 UTC `resets_at_time`。
 - `rate_limits_by_limit_id`：按 Codex limit id 返回的多桶视图，例如默认 `codex` 和特定模型桶。
+- `rate_limit_reset_credits`：重置券摘要，包含 `status`、`available_count`、`total_earned_count` 和裁剪后的 `credits` 列表；单条只包含 `reset_type`、`status`、`granted_at`、`expires_at` 和 `title`。
 - `stale`：可选布尔值；为 `true` 时表示当前展示的是上次成功查询结果，不是本次实时读取结果。
 
-该接口不会返回账号邮箱、access token、refresh token、请求正文或模型输出正文。若生产环境不希望任何人看到余额 / 限额百分比，应在反代或边缘层增加 IP allowlist、独立查询 token 或直接屏蔽该路径。
+该接口不会返回账号邮箱、access token、refresh token、上游内部 credit id、头像 URL、profile user id、请求正文或模型输出正文。若生产环境不希望任何人看到余额 / 限额百分比 / 重置券数量，应在反代或边缘层增加 IP allowlist、独立查询 token 或直接屏蔽该路径。
 
 ## 默认返回结构
 

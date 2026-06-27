@@ -22,6 +22,7 @@ import (
 
 const defaultCodexBalanceTimeout = 15 * time.Second
 const defaultCodexBalanceCacheTTL = 30 * time.Second
+const defaultCodexRateLimitResetCreditsURL = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"
 
 type codexBalanceHTTPHandler struct {
 	log *log.Helper
@@ -68,12 +69,13 @@ type codexCreditsSnapshot struct {
 }
 
 type publicCodexBalanceResponse struct {
-	Status              string                                  `json:"status"`
-	FetchedAt           string                                  `json:"fetched_at"`
-	Stale               bool                                    `json:"stale,omitempty"`
-	Credits             *codexCreditsSnapshot                   `json:"credits"`
-	RateLimits          publicCodexRateLimitSnapshot            `json:"rate_limits"`
-	RateLimitsByLimitID map[string]publicCodexRateLimitSnapshot `json:"rate_limits_by_limit_id,omitempty"`
+	Status                string                                  `json:"status"`
+	FetchedAt             string                                  `json:"fetched_at"`
+	Stale                 bool                                    `json:"stale,omitempty"`
+	Credits               *codexCreditsSnapshot                   `json:"credits"`
+	RateLimits            publicCodexRateLimitSnapshot            `json:"rate_limits"`
+	RateLimitsByLimitID   map[string]publicCodexRateLimitSnapshot `json:"rate_limits_by_limit_id,omitempty"`
+	RateLimitResetCredits publicCodexRateLimitResetCredits        `json:"rate_limit_reset_credits"`
 }
 
 type publicCodexRateLimitSnapshot struct {
@@ -92,6 +94,35 @@ type publicCodexRateLimitWindow struct {
 	WindowDurationMins *int    `json:"window_duration_mins"`
 	ResetsAt           *int64  `json:"resets_at"`
 	ResetsAtTime       *string `json:"resets_at_time,omitempty"`
+}
+
+type codexRateLimitResetCreditsResponse struct {
+	Credits          []codexRateLimitResetCredit `json:"credits"`
+	AvailableCount   int                         `json:"available_count"`
+	TotalEarnedCount int                         `json:"total_earned_count"`
+}
+
+type codexRateLimitResetCredit struct {
+	ResetType *string `json:"reset_type"`
+	Status    *string `json:"status"`
+	GrantedAt *string `json:"granted_at"`
+	ExpiresAt *string `json:"expires_at"`
+	Title     *string `json:"title"`
+}
+
+type publicCodexRateLimitResetCredits struct {
+	Status           string                            `json:"status"`
+	AvailableCount   int                               `json:"available_count"`
+	TotalEarnedCount int                               `json:"total_earned_count"`
+	Credits          []publicCodexRateLimitResetCredit `json:"credits"`
+}
+
+type publicCodexRateLimitResetCredit struct {
+	ResetType *string `json:"reset_type"`
+	Status    *string `json:"status"`
+	GrantedAt *string `json:"granted_at"`
+	ExpiresAt *string `json:"expires_at"`
+	Title     *string `json:"title"`
 }
 
 var codexAppServerCommandContext = exec.CommandContext
@@ -138,7 +169,17 @@ func (h *codexBalanceHTTPHandler) ServeHTTP(ctx context.Context, w stdhttp.Respo
 		return
 	}
 
-	payload := mapPublicCodexBalance(rateLimits, now)
+	resetCredits, resetCreditsErr := readCodexRateLimitResetCredits(ctx)
+	if resetCreditsErr != nil {
+		h.log.WithContext(ctx).Warnw(
+			"msg", "codex rate limit reset credits query failed",
+			"request_id", requestIDFromRequest(r),
+			"trace_id", traceIDFromContext(ctx),
+			"error", resetCreditsErr.Error(),
+		)
+	}
+
+	payload := mapPublicCodexBalance(rateLimits, resetCredits, resetCreditsErr == nil, now)
 	h.storeBalanceCache(payload, now)
 	writeJSON(w, stdhttp.StatusOK, payload)
 }
@@ -244,6 +285,55 @@ func readCodexRateLimits(ctx context.Context) (*codexRateLimitsReadResponse, err
 	return nil, errors.New("codex app-server exited without rate limit response")
 }
 
+func readCodexRateLimitResetCredits(ctx context.Context) (*codexRateLimitResetCreditsResponse, error) {
+	timeout := codexBalanceTimeout()
+	reqCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	return defaultCodexBackendClient.readRateLimitResetCredits(reqCtx, false)
+}
+
+func (c *codexBackendClient) readRateLimitResetCredits(ctx context.Context, forceRefresh bool) (*codexRateLimitResetCreditsResponse, error) {
+	accessToken, accountID, err := c.codexAccessToken(ctx, forceRefresh)
+	if err != nil {
+		return nil, err
+	}
+	req, err := stdhttp.NewRequestWithContext(ctx, stdhttp.MethodGet, codexRateLimitResetCreditsURL(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("User-Agent", codexBackendUserAgent())
+	if accountID != "" {
+		req.Header.Set("ChatGPT-Account-Id", accountID)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, readErr
+	}
+	if resp.StatusCode == stdhttp.StatusUnauthorized && !forceRefresh {
+		return c.readRateLimitResetCredits(ctx, true)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("codex reset credits query failed: status=%d body=%s", resp.StatusCode, summarizeCodexBackendBody(body))
+	}
+
+	var result codexRateLimitResetCreditsResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 func writeCodexAppServerRequest(w io.Writer, id int, method string, params any) error {
 	payload := map[string]any{
 		"jsonrpc": "2.0",
@@ -262,12 +352,13 @@ func writeCodexAppServerRequest(w io.Writer, id int, method string, params any) 
 	return err
 }
 
-func mapPublicCodexBalance(rateLimits *codexRateLimitsReadResponse, now time.Time) map[string]any {
+func mapPublicCodexBalance(rateLimits *codexRateLimitsReadResponse, resetCredits *codexRateLimitResetCreditsResponse, resetCreditsOK bool, now time.Time) map[string]any {
 	payload := publicCodexBalanceResponse{
-		Status:     "ok",
-		FetchedAt:  now.UTC().Format(time.RFC3339),
-		Credits:    rateLimits.RateLimits.Credits,
-		RateLimits: mapPublicCodexRateLimit(rateLimits.RateLimits),
+		Status:                "ok",
+		FetchedAt:             now.UTC().Format(time.RFC3339),
+		Credits:               rateLimits.RateLimits.Credits,
+		RateLimits:            mapPublicCodexRateLimit(rateLimits.RateLimits),
+		RateLimitResetCredits: mapPublicCodexRateLimitResetCredits(resetCredits, resetCreditsOK),
 	}
 	if len(rateLimits.RateLimitsByLimitID) > 0 {
 		payload.RateLimitsByLimitID = make(map[string]publicCodexRateLimitSnapshot, len(rateLimits.RateLimitsByLimitID))
@@ -279,6 +370,25 @@ func mapPublicCodexBalance(rateLimits *codexRateLimitsReadResponse, now time.Tim
 	var out map[string]any
 	_ = json.Unmarshal(body, &out)
 	return out
+}
+
+func mapPublicCodexRateLimitResetCredits(resetCredits *codexRateLimitResetCreditsResponse, ok bool) publicCodexRateLimitResetCredits {
+	if !ok || resetCredits == nil {
+		return publicCodexRateLimitResetCredits{
+			Status:  "unavailable",
+			Credits: []publicCodexRateLimitResetCredit{},
+		}
+	}
+	credits := make([]publicCodexRateLimitResetCredit, 0, len(resetCredits.Credits))
+	for _, credit := range resetCredits.Credits {
+		credits = append(credits, publicCodexRateLimitResetCredit(credit))
+	}
+	return publicCodexRateLimitResetCredits{
+		Status:           "ok",
+		AvailableCount:   resetCredits.AvailableCount,
+		TotalEarnedCount: resetCredits.TotalEarnedCount,
+		Credits:          credits,
+	}
 }
 
 func mapPublicCodexRateLimit(snapshot codexRateLimitSnapshot) publicCodexRateLimitSnapshot {
@@ -387,4 +497,11 @@ func codexBalanceCacheTTL() time.Duration {
 		}
 	}
 	return defaultCodexBalanceCacheTTL
+}
+
+func codexRateLimitResetCreditsURL() string {
+	if raw := strings.TrimSpace(os.Getenv("CODEX_RATE_LIMIT_RESET_CREDITS_URL")); raw != "" {
+		return raw
+	}
+	return defaultCodexRateLimitResetCreditsURL
 }

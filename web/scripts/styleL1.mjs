@@ -2759,6 +2759,16 @@ async function assertCodexBalanceVisuals(page, scenarioName) {
         document.body.innerText.includes('Credits remaining') &&
         document.body.innerText.includes('0'),
       hasNoError: !document.body.innerText.includes('Codex 余额查询失败'),
+      hasNoResetCreditID: !document.body.innerText.includes(
+        'RateLimitResetCredit_'
+      ),
+      hasResetCredits:
+        document.body.innerText.includes('Rate limit reset credits') &&
+        document.body.innerText.includes('可用 3 个 / 累计 3 个') &&
+        document.body.innerText.includes('Full reset (Weekly + 5 hr)'),
+      hasResetCreditsOverview:
+        document.body.innerText.includes('可用重置券') &&
+        document.body.innerText.includes('3 / 3'),
       hasSparkCard: document.body.innerText.includes('GPT-5.3-Codex-Spark'),
       linkHeight: linkRect?.height || 0,
       linkRel: link?.getAttribute('rel') || '',
@@ -2768,6 +2778,13 @@ async function assertCodexBalanceVisuals(page, scenarioName) {
       progressBarWidths: progressBars.map(
         (node) => node.getBoundingClientRect().width
       ),
+      resetCreditRows: Array.from(
+        main?.querySelectorAll('tbody tr') || []
+      ).filter((row) => row.innerText.includes('Full reset')).length,
+      resetCreditTableScrollWidth:
+        Array.from(main?.querySelectorAll('table') || []).find((table) =>
+          table.innerText.includes('Full reset')
+        )?.scrollWidth || 0,
     }
   })
 
@@ -2791,10 +2808,28 @@ async function assertCodexBalanceVisuals(page, scenarioName) {
   )
   assert(metrics.hasNoError, `${scenarioName} mock 余额接口不应显示失败提示`)
   assert(metrics.hasCreditsZero, `${scenarioName} 余额概览未显示 credits`)
+  assert(
+    metrics.hasResetCreditsOverview,
+    `${scenarioName} 余额概览未显示 reset credits 汇总`
+  )
+  assert(metrics.hasResetCredits, `${scenarioName} 缺少 reset credits 表格`)
+  assert(
+    metrics.hasNoResetCreditID,
+    `${scenarioName} reset credits 不应展示上游内部 id`
+  )
+  assert.equal(
+    metrics.resetCreditRows,
+    3,
+    `${scenarioName} reset credits 行数异常`
+  )
+  assert(
+    metrics.resetCreditTableScrollWidth >= 760,
+    `${scenarioName} reset credits 表格宽度异常: ${metrics.resetCreditTableScrollWidth}`
+  )
   assert(metrics.hasCodexCard, `${scenarioName} 缺少 Codex 限额卡`)
   assert(metrics.hasSparkCard, `${scenarioName} 缺少 Spark 限额卡`)
   assert(
-    metrics.panelCount >= 3,
+    metrics.panelCount >= 4,
     `${scenarioName} 余额页卡片数量异常: ${metrics.panelCount}`
   )
   assert(
@@ -4661,6 +4696,34 @@ async function installCodexBalanceMock(page) {
               resets_at_time: '2026-05-26T12:00:00Z',
             },
           },
+        },
+        rate_limit_reset_credits: {
+          status: 'ok',
+          available_count: 3,
+          total_earned_count: 3,
+          credits: [
+            {
+              reset_type: 'codex_rate_limits',
+              status: 'available',
+              granted_at: '2026-06-12T02:10:16.436947Z',
+              expires_at: '2026-07-12T02:10:16.436947Z',
+              title: 'Full reset (Weekly + 5 hr)',
+            },
+            {
+              reset_type: 'codex_rate_limits',
+              status: 'available',
+              granted_at: '2026-06-18T00:37:21.123456Z',
+              expires_at: '2026-07-18T00:37:21.123456Z',
+              title: 'Full reset (Weekly + 5 hr)',
+            },
+            {
+              reset_type: 'codex_rate_limits',
+              status: 'available',
+              granted_at: '2026-06-26T23:55:01.654321Z',
+              expires_at: '2026-07-26T23:55:01.654321Z',
+              title: 'Full reset (Weekly + 5 hr)',
+            },
+          ],
         },
       }),
     })

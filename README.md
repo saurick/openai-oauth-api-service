@@ -102,6 +102,7 @@ CODEX_CLI_BIN=codex
 CODEX_APP_SERVER_BIN=codex
 CODEX_BALANCE_TIMEOUT_SECONDS=15
 CODEX_BALANCE_CACHE_SECONDS=30
+CODEX_RATE_LIMIT_RESET_CREDITS_URL=https://chatgpt.com/backend-api/wham/rate-limit-reset-credits
 CODEX_CLI_TIMEOUT_SECONDS=600
 CODEX_BACKEND_BASE_URL=https://chatgpt.com/backend-api/codex
 CODEX_BACKEND_TIMEOUT_SECONDS=600
@@ -118,7 +119,7 @@ CODEX_BACKEND_RETRY_ATTEMPTS=2
 
 开发与当前个人部署默认会初始化管理员账号 `admin/adminadmin`。不要在部署时擅自生成或替换管理员密码；如需改密，应由维护者明确指定后再调整 `OAUTH_API_ADMIN_PASSWORD` 并重启服务。JWT secret、数据库密码和 Codex 登录态路径仍必须通过私有环境变量配置。
 
-`/public/codex/balance` 不要求管理员登录，服务端会启动 Codex app-server 读取服务器 Codex 登录态的 `account/rateLimits/read` 结果，只返回窗口用量百分比、剩余额度百分比、重置时间、plan type 和 credits 余额；不会返回账号邮箱、access token、refresh token 或请求正文。由于这是公开只读接口，生产环境如不希望任意人看到余额，应在 Nginx / Cloudflare 层增加 IP allowlist 或独立查询 token。
+`/public/codex/balance` 不要求管理员登录，服务端会启动 Codex app-server 读取服务器 Codex 登录态的 `account/rateLimits/read` 结果，并用同一服务器 Codex 登录态只读获取 rate limit reset credits。接口只返回窗口用量百分比、剩余额度百分比、重置时间、plan type、credits 余额、重置券数量以及重置券的类型 / 状态 / 获得和过期时间；不会返回账号邮箱、access token、refresh token、上游内部 credit id 或请求正文。由于这是公开只读接口，生产环境如不希望任意人看到余额，应在 Nginx / Cloudflare 层增加 IP allowlist 或独立查询 token。
 
 ## 下游调用 API
 

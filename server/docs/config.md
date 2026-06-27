@@ -94,6 +94,7 @@
 - `CODEX_APP_SERVER_BIN`：公开余额查询使用的 Codex app-server 可执行文件，默认复用 `CODEX_CLI_BIN`，再回退到 `codex`。
 - `CODEX_BALANCE_TIMEOUT_SECONDS`：`GET /public/codex/balance` 启动 Codex app-server 并读取 `account/rateLimits/read` 的超时，默认 `15` 秒。
 - `CODEX_BALANCE_CACHE_SECONDS`：公开余额查询的内存缓存时间，默认 `30` 秒；设为 `0` 可关闭缓存。
+- `CODEX_RATE_LIMIT_RESET_CREDITS_URL`：公开余额查询附带读取 rate limit reset credits 的 ChatGPT 后端只读地址，默认 `https://chatgpt.com/backend-api/wham/rate-limit-reset-credits`。
 - `CODEX_CLI_TIMEOUT_SECONDS`：单次 Codex CLI upstream 超时，默认 `28800` 秒。
 - `CODEX_BACKEND_BASE_URL`：direct backend 基础地址，默认 `https://chatgpt.com/backend-api/codex`。
 - `CODEX_BACKEND_TIMEOUT_SECONDS`：direct backend 单次请求超时，默认 `28800` 秒。
@@ -122,7 +123,7 @@
 
 两种模式下客户端都只保存 `ogw_...` 下游 key，服务端统一使用服务器 Codex 登录态，并继续记录 usage。direct backend 模式不会启动 `codex exec`，因此也不会注入 Codex CLI 自身的大量 agent 上下文；token usage 更接近客户端实际请求体。
 
-公开余额查询路径 `GET /public/codex/balance` 不走 `/v1` 下游 key，也不要求管理员登录。它会按请求启动 Codex app-server，读取 `account/rateLimits/read`，再返回裁剪后的限额窗口、剩余百分比、重置时间和 credits 余额。该路径不会返回账号邮箱或 token；若线上不希望公开展示余额 / 限额百分比，应在 Nginx / Cloudflare 层限制访问。
+公开余额查询路径 `GET /public/codex/balance` 不走 `/v1` 下游 key，也不要求管理员登录。它会按请求启动 Codex app-server，读取 `account/rateLimits/read`，并用服务器 Codex 登录态只读获取 rate limit reset credits，再返回裁剪后的限额窗口、剩余百分比、重置时间、credits 余额和重置券摘要。该路径不会返回账号邮箱、token、上游内部 credit id、头像 URL 或 profile user id；若线上不希望公开展示余额 / 限额百分比 / 重置券数量，应在 Nginx / Cloudflare 层限制访问。
 
 如果宿主机通过 mihomo / Clash 提供代理，优先让代理只监听 Docker bridge 网关地址，并在 Compose `.env` 中显式注入代理环境变量。例如 app-server 所在网络网关为 `172.19.0.1` 时，可使用 `http://172.19.0.1:7890`。不要为了 app-server 默认启用全局 TUN，除非已经确认整机路由、Docker bridge 和回滚方式都可控。
 
