@@ -3,6 +3,15 @@
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 - 2026-06-25：旧 `progress.md` 已按超过 80KB 阈值归档到 `docs/archive/progress-2026-06-25-before-skill-scenario-matrix.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-06-29 凭据统计 Token 表头点击排序
+
+- 完成：参考 `trade-erp` 表头排序的“当前排序列 + 升降序状态 + 稳定兜底”模式，为 `/admin-usage` 的「凭据统计」Token 窗口表头增加点击排序；未手动排序时继续沿用今天优先、空窗口自动降级到 24h / 7 天 / 更长窗口的默认降序规则。
+- 完成：Token 窗口表头改为可聚焦按钮，显示当前升 / 降序箭头并写入 `aria-sort`；点击任意窗口表头会切换该列升序 / 降序，并把凭据统计分页重置到第一页，避免排序后停留在旧分页看不到结果。
+- 完成：同步 `web/README.md` 的凭据统计排序说明，并把 `web/scripts/styleL1.mjs` 的 `admin-usage` 桌面 / 移动场景扩展为真实点击 30 天 Token 表头，验证默认降级排序、降序 / 升序切换、`aria-sort` 和表头宽度不溢出。
+- 验证：已通过 `/usr/local/bin/pnpm --dir web lint`、`/usr/local/bin/pnpm --dir web css`、`/usr/local/bin/pnpm --dir web test`、`/usr/local/bin/pnpm --dir web build`、`STYLE_L1_SCENARIOS=admin-usage-desktop,admin-usage-mobile NODE_USE_ENV_PROXY=0 /usr/local/bin/pnpm --dir web style:l1`、`bash scripts/qa/secrets.sh` 和 `git diff --check`。默认 `pnpm` 命中 Codex runtime `pnpm 11.7.0` 时仍会触发本仓库已知 `ERR_PNPM_IGNORED_BUILDS`，已改用稳定 `/usr/local/bin/pnpm 10.13.1` 重跑通过，并把失败过程生成的临时 `web/pnpm-workspace.yaml` 移到废纸篓。
+- 下一步：用本次提交构建 linux/amd64 镜像，按低配主路径部署到 `192.168.0.133`，远端只执行 `docker load`、Atlas status、更新 `APP_IMAGE`、重建 `app-server`、health / ready / admin usage smoke 和发布后镜像清理。
+- 阻塞/风险：本轮只改管理端前端派生排序和文档，不改 usage 真源、schema、后端 API、鉴权、key 生命周期、上游策略、quota 或 migration。
+
 ## 2026-06-27 Codex rate limit reset credits 可见性
 
 - 完成：`GET /public/codex/balance` 在保留原 Codex app-server `account/rateLimits/read` 余额 / 限额主路径的基础上，使用同一服务器 Codex 登录态只读获取 `rate-limit-reset-credits`，并裁剪为 `rate_limit_reset_credits` 摘要；只返回 `reset_type`、`status`、`granted_at`、`expires_at`、`title`、可用数量和累计数量，不返回上游内部 credit id、头像 URL、profile user id、账号邮箱或 token。

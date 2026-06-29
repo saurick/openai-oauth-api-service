@@ -1164,12 +1164,24 @@ function getKeyTokenSortWindow(rows) {
   )
 }
 
-function sortKeyTokenStatsRows(rows) {
+function getKeyTokenSortSpec(rows, sortSpec) {
+  const windowKey = KEY_TOKEN_SORT_WINDOWS.includes(sortSpec?.windowKey)
+    ? sortSpec.windowKey
+    : getKeyTokenSortWindow(rows)
+  return {
+    windowKey,
+    order: sortSpec?.order === 'asc' ? 'asc' : 'desc',
+  }
+}
+
+function sortKeyTokenStatsRows(rows, sortSpec) {
   const list = Array.isArray(rows) ? rows : []
-  const sortWindow = getKeyTokenSortWindow(list)
+  const { windowKey, order } = getKeyTokenSortSpec(list, sortSpec)
   return [...list].sort((a, b) => {
+    const leftTokens = asInt(a?.tokens?.[windowKey], 0)
+    const rightTokens = asInt(b?.tokens?.[windowKey], 0)
     const tokenDiff =
-      asInt(b?.tokens?.[sortWindow], 0) - asInt(a?.tokens?.[sortWindow], 0)
+      order === 'asc' ? leftTokens - rightTokens : rightTokens - leftTokens
     if (tokenDiff !== 0) return tokenDiff
     return asInt(a?.id, 0) - asInt(b?.id, 0)
   })
@@ -1268,8 +1280,9 @@ function DiagnosticCell({ item }) {
     !body &&
     !compactSummary &&
     !upstreamMessage
-  )
-    { return '-' }
+  ) {
+    return '-'
+  }
 
   return (
     <div
@@ -1530,6 +1543,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const [keySearch, setKeySearch] = useState('')
   const [keyModelFilter, setKeyModelFilter] = useState('')
   const [keyStatusFilter, setKeyStatusFilter] = useState('')
+  const [keyTokenStatsSort, setKeyTokenStatsSort] = useState(null)
   const [keyPagination, setKeyPagination] = useState(createInitialPagination)
   const [keyStatsPagination, setKeyStatsPagination] = useState(
     createInitialPagination
@@ -1598,12 +1612,17 @@ export default function AdminApiPage({ view = 'dashboard' }) {
   const hasActiveKeyFilters = Boolean(
     keySearch || keySearchInput || keyModelFilter || keyStatusFilter
   )
-  const keyTokenStatsRows = useMemo(
-    () =>
-      sortKeyTokenStatsRows(
-        mergeKeyTokenStats(filteredKeys, keyTokenStatsByWindow)
-      ),
+  const mergedKeyTokenStatsRows = useMemo(
+    () => mergeKeyTokenStats(filteredKeys, keyTokenStatsByWindow),
     [filteredKeys, keyTokenStatsByWindow]
+  )
+  const activeKeyTokenStatsSort = useMemo(
+    () => getKeyTokenSortSpec(mergedKeyTokenStatsRows, keyTokenStatsSort),
+    [keyTokenStatsSort, mergedKeyTokenStatsRows]
+  )
+  const keyTokenStatsRows = useMemo(
+    () => sortKeyTokenStatsRows(mergedKeyTokenStatsRows, keyTokenStatsSort),
+    [keyTokenStatsSort, mergedKeyTokenStatsRows]
   )
   const paginatedKeys = useMemo(
     () => paginateItems(filteredKeys, keyPagination),
@@ -2280,6 +2299,19 @@ export default function AdminApiPage({ view = 'dashboard' }) {
     setKeyStatusFilter('')
   }
 
+  const handleKeyTokenStatsSort = (windowKey) => {
+    setErrMsg('')
+    setKeyStatsPagination((current) => ({ ...current, current: 1 }))
+    setKeyTokenStatsSort((current) => {
+      const activeSort = getKeyTokenSortSpec(mergedKeyTokenStatsRows, current)
+      const nextOrder =
+        activeSort.windowKey === windowKey && activeSort.order === 'desc'
+          ? 'asc'
+          : 'desc'
+      return { windowKey, order: nextOrder }
+    })
+  }
+
   const performDeleteKey = async (item) => {
     const keyId = item?.id
     setErrMsg('')
@@ -2923,11 +2955,48 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               <tr>
                 <th className={thClass}>备注</th>
                 <th className={thClass}>状态</th>
-                {KEY_TOKEN_WINDOWS.map((windowItem) => (
-                  <th key={windowItem.key} className={thClass}>
-                    {windowItem.label} Token
-                  </th>
-                ))}
+                {KEY_TOKEN_WINDOWS.map((windowItem) => {
+                  const isActiveSort =
+                    activeKeyTokenStatsSort.windowKey === windowItem.key
+                  const nextSortOrder =
+                    isActiveSort && activeKeyTokenStatsSort.order === 'desc'
+                      ? '升序'
+                      : '降序'
+                  return (
+                    <th
+                      key={windowItem.key}
+                      className={thClass}
+                      aria-sort={
+                        isActiveSort
+                          ? activeKeyTokenStatsSort.order === 'asc'
+                            ? 'ascending'
+                            : 'descending'
+                          : 'none'
+                      }
+                    >
+                      <button
+                        type="button"
+                        className={`admin-sort-header-button ${
+                          isActiveSort ? 'admin-sort-header-button-active' : ''
+                        }`}
+                        onClick={() => handleKeyTokenStatsSort(windowItem.key)}
+                        aria-label={`${windowItem.label} Token 排序，点击按${nextSortOrder}排列`}
+                      >
+                        <span>{windowItem.label} Token</span>
+                        <span
+                          className="admin-sort-header-indicator"
+                          aria-hidden="true"
+                        >
+                          {isActiveSort
+                            ? activeKeyTokenStatsSort.order === 'asc'
+                              ? '↑'
+                              : '↓'
+                            : '↕'}
+                        </span>
+                      </button>
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e7efe9] bg-white">

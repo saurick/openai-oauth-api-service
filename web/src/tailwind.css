@@ -627,6 +627,47 @@
   border-spacing: 0;
 }
 
+.admin-frame .admin-sort-header-button {
+  display: inline-flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--admin-muted-strong);
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.admin-frame .admin-sort-header-button:hover,
+.admin-frame .admin-sort-header-button:focus-visible,
+.admin-frame .admin-sort-header-button-active {
+  color: var(--admin-accent);
+}
+
+.admin-frame .admin-sort-header-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--admin-accent) 45%, transparent);
+  outline-offset: 3px;
+}
+
+.admin-frame .admin-sort-header-indicator {
+  display: inline-flex;
+  width: 14px;
+  flex: 0 0 auto;
+  justify-content: center;
+  color: currentcolor;
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.78;
+}
+
 .admin-frame .admin-key-table {
   table-layout: fixed;
 }

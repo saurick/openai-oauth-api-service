@@ -2050,6 +2050,59 @@ async function assertUsageKeyStatsTab(page, scenarioName) {
     metrics.firstStatsRowName.includes('stagingkeylongname'),
     `${scenarioName} 凭据统计未在今天全 0 时按 24h Token 降级排序: ${JSON.stringify(metrics)}`
   )
+
+  await page.getByRole('button', { name: /30 天 Token 排序/u }).click()
+  const descMetrics = await page.evaluate(() => {
+    const header = Array.from(document.querySelectorAll('main table th')).find(
+      (node) => node.textContent.includes('30 天 Token')
+    )
+    return {
+      firstStatsRowName:
+        document
+          .querySelector('main table tbody tr:first-child td:first-child')
+          ?.textContent.trim() || '',
+      sortState: header?.getAttribute('aria-sort') || '',
+      headerText: header?.textContent.trim() || '',
+      headerWidth: header?.getBoundingClientRect().width || 0,
+      headerScrollWidth: header?.scrollWidth || 0,
+    }
+  })
+  assert(
+    descMetrics.firstStatsRowName.includes('productionapikey'),
+    `${scenarioName} 点击 30 天 Token 后未按降序排序: ${JSON.stringify(descMetrics)}`
+  )
+  assert.equal(
+    descMetrics.sortState,
+    'descending',
+    `${scenarioName} 30 天 Token 表头 aria-sort 未标记降序`
+  )
+  assert(
+    descMetrics.headerScrollWidth <= Math.ceil(descMetrics.headerWidth) + 1,
+    `${scenarioName} 30 天 Token 排序表头溢出: ${JSON.stringify(descMetrics)}`
+  )
+
+  await page.getByRole('button', { name: /30 天 Token 排序/u }).click()
+  const ascMetrics = await page.evaluate(() => {
+    const header = Array.from(document.querySelectorAll('main table th')).find(
+      (node) => node.textContent.includes('30 天 Token')
+    )
+    return {
+      firstStatsRowName:
+        document
+          .querySelector('main table tbody tr:first-child td:first-child')
+          ?.textContent.trim() || '',
+      sortState: header?.getAttribute('aria-sort') || '',
+    }
+  })
+  assert(
+    !ascMetrics.firstStatsRowName.includes('productionapikey'),
+    `${scenarioName} 再次点击 30 天 Token 后仍停留在降序首行: ${JSON.stringify(ascMetrics)}`
+  )
+  assert.equal(
+    ascMetrics.sortState,
+    'ascending',
+    `${scenarioName} 30 天 Token 表头 aria-sort 未标记升序`
+  )
 }
 
 async function assertUsageSessionTab(page, scenarioName) {
