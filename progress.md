@@ -49,3 +49,10 @@
 - 验证：追加前 `progress.md` 为 12 行、1793 字节，未达到归档阈值；已执行全局 skill 与 `openai-oauth-release-governance` 的 `quick_validate.py`、`agents/openai.yaml` Ruby YAML 解析、TODO 扫描和限定 `git diff --check`，均通过。
 - 下一步：后续 openai-oauth 提交推送相关 / 所有代码，尤其多会话、脏工作区、hook 反复失败或 133 发布前收口时，先 `$git-closeout-coordination`，再按 `$openai-oauth-release-governance` 和 `$openai-oauth-test-governance` 选择项目命令。
 - 阻塞/风险：本轮只改全局 skill、项目 skill README、release skill 和过程记录，不改运行时代码、schema、auth/key 语义、usage 真源、上游策略、部署脚本、监控系统、真实上游验证或 133 环境。
+
+## 2026-07-01 prompt skill 工程质量门禁
+
+- 完成：补强 `openai-oauth-prompt-governance`，要求生成实现 / 管理端 / 文档 / 测试 / 部署 / review 提示词时显式包含 Engineering Quality Gate：复用现有 auth、API key、quota、usage logging、admin UI、proxy/upstream、deploy 和 health/ready 结构；新增抽象 / 配置 / fallback / upstream 策略 / 缓存 / migration / 部署步骤前说明复用不足、安全影响和运维影响。同步 UI metadata 加入工程质量门禁和复杂度预算。
+- 验证：追加前 `progress.md` 为 51 行、13092 字节，未达到归档阈值；本组已执行 YAML 解析、等价 skill metadata 校验和限定 `git diff --check`。
+- 下一步：后续 openai-oauth 提示词把“请求可用 / 做完整 / 稳定”落成 auth/quota/usage/error/deploy 边界、复杂度预算、可观测证据和验证命令，不用宽松 fallback 掩盖真实上游或密钥问题。
+- 阻塞/风险：本组只改 skill 文档、UI metadata 和过程记录，不改运行时代码、schema、auth/key 语义、usage 真源、上游策略、部署脚本、监控系统、真实上游验证或 133 环境。

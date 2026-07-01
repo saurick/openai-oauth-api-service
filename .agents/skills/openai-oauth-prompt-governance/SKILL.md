@@ -1,6 +1,6 @@
 ---
 name: openai-oauth-prompt-governance
-description: openai-oauth-api-service 项目提示词治理。Use when Codex writes, refines, evaluates, or converts an OpenAI OAuth API service request into an executable prompt for implementation, review, docs governance, admin page design, tests, deployment, handoff, side chat, main chat, or commit/push work; when a complete copyable final prompt, prompt length control, Codex input limit, or prompt boundary conditions are needed; when prompts need auth/API-key/quota/usage logging/Codex backend/secrets/proxy/upstream/deploy boundaries; or when the user wants positive "要做什么" wording instead of broad "不要" lists.
+description: openai-oauth-api-service 项目提示词治理。Use when Codex writes, refines, evaluates, or converts an OpenAI OAuth API service request into an executable prompt for implementation, review, docs governance, admin page design, tests, deployment, handoff, side chat, main chat, or commit/push work; when a complete copyable final prompt, prompt length control, Codex input limit, engineering quality gate, maintainability, extensibility, simplicity, complexity budget, or prompt boundary conditions are needed; when prompts need auth/API-key/quota/usage logging/Codex backend/secrets/proxy/upstream/deploy boundaries; or when the user wants positive "要做什么" wording instead of broad "不要" lists.
 ---
 
 # OpenAI OAuth Prompt Governance
@@ -42,6 +42,16 @@ Use "不要 / 禁止" only for expensive mistakes:
 
 完整 openai-oauth 提示词通常应包含：相关 `$openai-oauth-*` skills、目标、先读真源、允许修改、本轮不做、验收、progress.md 要求、真实上游 / secrets / deploy 边界和收口要求。微型提示词可省略明显无关段落。
 
+## Engineering Quality Gate
+
+openai-oauth 提示词必须把安全、可诊断和复杂度控制作为交付条件。不能为了“请求能通”而绕过 auth、quota、usage、error 或 deploy 边界：
+
+- 优先复用现有 auth、API key、quota、usage logging、admin UI、proxy/upstream、deploy 和 health/ready 结构。
+- 新增抽象、配置、fallback、upstream 策略、缓存、migration、admin 页面或部署步骤前，必须说明为什么现有能力不能承接，以及对安全、可观测性和运维的影响。
+- 不把真实 upstream 抖动、密钥问题或 quota 边界用宽松 fallback 掩盖；需要 fallback 时写清触发条件、退出条件和日志证据。
+- 如果任务同时牵涉后端逻辑、管理端、真实上游、部署和文档，先拆成可验证切片。
+- 收口必须说明复用点、复杂度变化、安全 / 隐私边界、可观测性证据、未验证真实上游或远端环境的范围和剩余风险。
+
 ## Standard OpenAI OAuth Prompt
 
 ```markdown
@@ -61,6 +71,11 @@ $relevant-openai-oauth-skill
 
 本轮不做：
 - <only high-risk non-goals: secrets, live upstream, migration, deploy, low-spec build, etc.>
+
+工程质量：
+- 优先复用 openai-oauth 现有 auth、API key、quota、usage logging、admin UI、proxy/upstream、deploy 和 health/ready 结构。
+- 新增抽象、配置、fallback、upstream 策略、缓存、migration 或部署步骤前，先说明复用不足、安全影响和运维影响。
+- 收口时说明复杂度控制、复用点、安全 / 隐私边界、可观测性证据、未验证项和剩余风险。
 
 验收：
 - 先按影响面选择测试形态。
@@ -101,6 +116,8 @@ $openai-oauth-test-governance
 验收：
 - 覆盖正常路径、权限失败、额度不足、禁用/过期、上游失败和日志字段。
 - 真实上游只作为明确授权的 smoke；单元/集成测试优先用 fake/local path。
+工程质量：
+- 不用宽松 fallback 掩盖 auth、quota、usage logging 或 upstream 分类错误；需要 fallback 时写清日志和退出条件。
 ```
 
 When asked to produce a prompt, deliver it as:
@@ -143,3 +160,4 @@ $openai-oauth-prompt-governance
 - 要求 "完整测试" 但不说明是否包含真实上游、admin browser regression、migration 或远端 smoke。
 - 把部署、业务修复、UI 重排和 docs 全塞进一个提示词。
 - 只讲提示词原则但不给最终可复制版本，或把完整聊天历史塞进一个超长 prompt。
+- 只要求“请求可用”，但不要求 auth/quota/usage/error/deploy 边界、复杂度预算和可观测证据。
