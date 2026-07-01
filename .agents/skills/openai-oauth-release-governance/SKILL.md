@@ -1,6 +1,6 @@
 ---
 name: openai-oauth-release-governance
-description: openai-oauth-api-service 项目发布、部署、版本与回滚治理。Use when Codex plans, performs, reviews, or explains openai-oauth-api-service releases, deploys, image tags, migrations, changelog, rollback, health checks, post-deploy verification, or target environment delivery.
+description: 项目发布、部署、版本与回滚治理（openai-oauth-api-service）。Use when Codex plans, performs, reviews, or explains openai-oauth-api-service releases, deploys, image tags, migrations, changelog, rollback, health checks, post-deploy verification, or target environment delivery.
 ---
 
 # OpenAI OAuth 发布治理 Release Governance
@@ -12,6 +12,14 @@ description: openai-oauth-api-service 项目发布、部署、版本与回滚治
 ## OpenAI OAuth 发布质量门禁 Release Quality Gate
 
 发布治理的质量不是把版本推上去，而是可复现、可回滚、可证明。
+
+### 结构质量检查 Structure Quality Checks
+
+- 边界清晰、合理严谨：说明本轮管什么、不管什么、依赖哪个真源，以及为什么当前拆分、抽象和验证足够但不过度。
+- 模块化：发布脚本、migration、镜像构建、健康检查、回滚、清理和证据归档各有清楚入口，不把手工命令散成隐藏流程。
+- 高内聚：同一版本、镜像、migration、env、smoke 和 rollback evidence 绑定在同一 release truth，不在聊天、远端现场和文档里各存一份。
+- 低耦合：构建机、目标机、数据库、反代和外部依赖的责任分开；低配目标机不承担本地/CI 应做的重构建。
+- 单一职责：发布变更只发布已验证范围；若顺手修代码、改配置或清理现场，必须说明边界和回滚路径。
 
 - 只发布已提交、已验证、已绑定版本证据的范围；不要把未归属 dirty worktree、临时脚本或手工远端改动混进 release truth。
 - 低配服务器默认不构建；本地/CI 构建，远端只加载制品、执行 migration、启动、health/ready/smoke 和必要清理。

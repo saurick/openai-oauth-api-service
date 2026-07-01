@@ -1,4 +1,4 @@
 interface:
   display_name: "OpenAI OAuth Docs Governance"
   short_description: "文档治理 Docs / 文档质量门禁"
-  default_prompt: "Use $openai-oauth-docs-governance 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险；执行文档质量门禁，保证结论前置、低心智负担、链接/表格/Mermaid 适度、文档漂移可控、索引同步和 progress.md 边界清楚。"
+  default_prompt: "Use $openai-oauth-docs-governance 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险；执行文档质量门禁（含边界清晰、合理严谨、模块化、高内聚、低耦合、单一职责），保证结论前置、低心智负担、链接/表格/Mermaid 适度、文档漂移可控、索引同步和 progress.md 边界清楚。"

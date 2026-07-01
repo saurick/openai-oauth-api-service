@@ -1,4 +1,4 @@
 interface:
   display_name: "OpenAI OAuth Observability Error Governance"
   short_description: "可观测性/错误 Observability / 质量门禁"
-  default_prompt: "Use $openai-oauth-observability-error-governance 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险；执行可观测性质量门禁，明确 request_id/trace_id、错误分类、中文用户提示、日志脱敏、fallback/degraded 边界和可复现排障证据，不让错误兜底变成隐藏主路径。"
+  default_prompt: "Use $openai-oauth-observability-error-governance 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险；执行可观测性质量门禁（含边界清晰、合理严谨、模块化、高内聚、低耦合、单一职责），明确 request_id/trace_id、错误分类、中文用户提示、日志脱敏、fallback/degraded 边界和可复现排障证据，不让错误兜底变成隐藏主路径。"

@@ -62,3 +62,18 @@
 - 完成：同步 `openai-oauth-*` 项目治理 skills 的质量门禁。docs/page/domain/release/test/code-review 正文补齐质量门禁；runtime/observability/security 等默认提示词补齐根因、可观测、安全质量锚点，触发 `$openai-oauth-*` 时默认关注 OAuth/API key/usage/upstream 真源、secrets、低配发布证据、测试可信度和管理端可读性。
 - 下一步：若后续新增 seed/import 类项目 skill，再按本项目真实数据导入边界单独设计，不从 ERP 项目复制。
 - 阻塞/风险：本组只改 `.agents/skills` 和 `progress.md`；不改 runtime、schema、auth、API key、usage、上游策略、部署或生产配置。
+
+## 2026-07-01 governance skills 结构质量门禁
+
+- 完成：补强 `openai-oauth-*` 治理 skills 的结构质量检查，明确模块化、高内聚、低耦合、单一职责；管理端页面、OAuth/API key/usage/upstream、运行时诊断、可观测性、安全、发布和测试分别保留项目语义。
+- 完成：同步 `agents/openai.yaml` 默认提示词，让 `$openai-oauth-*` 默认把质量门禁理解为包含模块化、高内聚、低耦合和单一职责。
+- 验证：追加前 `progress.md` 为 64 行、15017 字节，未达到归档阈值；Ruby YAML 解析通过 88 个 `agents/openai.yaml`；结构/frontmatter 扫描通过 54 个目标 skill；`quick_validate.py` 因当前 Python 环境缺 `yaml`/PyYAML 失败，已按依赖缺口记录。
+- 下一步：后续 openai-oauth skill 继续围绕 auth/quota/usage/error/deploy 边界补充，不从 ERP 或模板项目复制业务事实。
+- 阻塞/风险：本组只改 `.agents/skills` 和 `progress.md`；不改 runtime、schema、auth、API key、usage、上游策略、部署或生产配置。
+
+## 2026-07-01 governance skills 边界清晰与合理严谨门禁
+
+- 完成：在 `openai-oauth-*` 项目治理 skills 的结构质量检查中补入一条短门禁：边界清晰、合理严谨；要求说明本轮管什么、不管什么、依赖哪个真源，以及为什么当前拆分、抽象和验证足够但不过度。
+- 完成：同步 `agents/openai.yaml` 默认提示词，让 `$openai-oauth-*` 的质量门禁显式包含边界清晰、合理严谨、模块化、高内聚、低耦合、单一职责。
+- 下一步：后续 openai-oauth skill 继续围绕 auth、API key、quota、usage、upstream、deploy 和 secrets 边界补充，不复制 ERP 或模板项目事实。
+- 阻塞/风险：追加前 `progress.md` 为 72 行、16097 字节，未达到归档阈值。本组只改 `.agents/skills` 和 `progress.md`；不改 runtime、schema、auth、API key、usage、上游策略、部署或生产配置。

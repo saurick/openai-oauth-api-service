@@ -1,6 +1,6 @@
 ---
 name: openai-oauth-page-governance
-description: openai-oauth-api-service 项目页面设计治理。Use when Codex designs, reviews, simplifies, or implements this project's admin console pages, API operations dashboard, usage logs, upstream strategy page, API key tables and dialogs, OAuth/admin login, client-config generator, model/limit settings, public balance page, buttons, filters, tables, charts, empty/error states, light/dark theme, responsive layout, credential/key reset actions, accessibility, keyboard/focus behavior, or when the user mentions openai-oauth-api-service with 页面治理, 简洁易用, 心智负担, 信息密度, admin 页面, usage 可见性, key 管理, 上游策略, style:l1, 暗色模式, 表格, 弹窗, or asks whether admin-console guidance should become reusable.
+description: 项目页面设计治理（openai-oauth-api-service）。Use when Codex designs, reviews, simplifies, or implements this project's admin console pages, API operations dashboard, usage logs, upstream strategy page, API key tables and dialogs, OAuth/admin login, client-config generator, model/limit settings, public balance page, buttons, filters, tables, charts, empty/error states, light/dark theme, responsive layout, credential/key reset actions, accessibility, keyboard/focus behavior, or when the user mentions openai-oauth-api-service with 页面治理, 简洁易用, 心智负担, 信息密度, admin 页面, usage 可见性, key 管理, 上游策略, style:l1, 暗色模式, 表格, 弹窗, or asks whether admin-console guidance should become reusable.
 ---
 
 # OpenAI OAuth Page Governance
@@ -12,6 +12,14 @@ Use this skill to keep `openai-oauth-api-service` admin pages useful, safe, and 
 ## OpenAI OAuth 页面质量门禁 Page Quality Gate
 
 页面治理不能只追求好看或少一点。要把每个可见模块、字段、按钮、状态和文案压回真实业务意义。
+
+### 结构质量检查 Structure Quality Checks
+
+- 边界清晰、合理严谨：说明本轮管什么、不管什么、依赖哪个真源，以及为什么当前拆分、抽象和验证足够但不过度。
+- 模块化：页面按主任务、数据/动作 hook、表格、表单、详情、状态和反馈拆分；只有能降低理解、复用或回归成本时才拆。
+- 高内聚：同一字段展示、状态解释、操作入口、错误提示和布局规则尽量收口到共享组件/helper，不让相邻页面各写一套。
+- 低耦合：页面只提交用户意图并展示后端事实，不把 RBAC、业务事实、部署或客户配置硬编码进局部 UI。
+- 单一职责：一个组件不要同时承担布局、数据请求、权限裁决、业务派生、保存副作用和兜底；必要时先抽 hook/helper。
 
 - 每个元素都要支持明确角色、判断、动作或反馈；无决策价值、重复入口、假快捷方式和装饰性卡片应删除、合并或降级。
 - 页面不能补造后端事实、隐藏 API/RBAC/业务边界缺口、显示裸技术字段，或用页面私有映射替代共享 helper / API 合同。

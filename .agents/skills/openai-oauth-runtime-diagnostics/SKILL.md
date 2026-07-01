@@ -1,6 +1,6 @@
 ---
 name: openai-oauth-runtime-diagnostics
-description: openai-oauth-api-service 项目运行时故障诊断。Use when Codex diagnoses openai-oauth-api-service page errors, API/RPC failures, backend read/write failures, migration drift, database mismatch, deployment mismatch, browser/runtime issues, logs, request IDs, configuration drift, environment confusion, or production/test/local differences before changing code.
+description: 项目运行时故障诊断（openai-oauth-api-service）。Use when Codex diagnoses openai-oauth-api-service page errors, API/RPC failures, backend read/write failures, migration drift, database mismatch, deployment mismatch, browser/runtime issues, logs, request IDs, configuration drift, environment confusion, or production/test/local differences before changing code.
 ---
 
 # OpenAI OAuth 运行时诊断 Runtime Diagnostics
@@ -19,6 +19,14 @@ description: openai-oauth-api-service 项目运行时故障诊断。Use when Cod
 - 生产 502 / balance / usage 问题先查 `gateway_usage_logs`、request_id/session_id、container logs、upstream response 和 host network。
 - 管理端页面问题要同时核对 API payload、browser render、cache/stale fallback 和部署版本。
 - 先确认故障服务确实属于当前 repo，再改代码。
+
+## 结构质量门禁 Structure Quality Gate
+
+- 边界清晰、合理严谨：说明本轮管什么、不管什么、依赖哪个真源，以及为什么当前拆分、抽象和验证足够但不过度。
+- 模块化：诊断先按 browser、API、service、DB/migration、auth/RBAC、config/deploy、external dependency 分层，不把所有问题混成代码补丁。
+- 高内聚：证据、复现步骤、日志/request_id、环境差异和 root cause 归到同一故障链路里，避免散落成不可复查的截图或口头结论。
+- 低耦合：先证明失败层，再决定改代码、数据、配置、migration 或部署；不要用 UI fallback 掩盖后端/环境真因。
+- 单一职责：临时探针、脚本或日志只服务本次定位；若要长期保留，必须说明归属、触发条件和验证价值。
 
 ## 工作流 Workflow
 

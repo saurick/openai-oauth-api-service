@@ -1,6 +1,6 @@
 ---
 name: openai-oauth-docs-governance
-description: openai-oauth-api-service 项目文档治理。Use when Codex reviews, creates, renames, reorganizes, simplifies, or updates this project's Markdown docs, README files, docs/README.md, architecture docs, operations docs, server/deploy docs, web README, progress.md, admin-console docs, OAuth/API key/usage/upstream strategy docs, deployment instructions, tables, classification matrices, Mermaid diagrams, reader paths, conclusion-first structure, copyable commands, links, anchors, or when the user mentions openai-oauth-api-service with 文档治理, docs, 真源, progress, architecture, operations, deploy, admin 可见性, low-spec, gateway_usage_logs, 上游策略, 表格, 矩阵, 命令可复制, or asks whether this project's docs guidance should become reusable.
+description: 项目文档治理（openai-oauth-api-service）。Use when Codex reviews, creates, renames, reorganizes, simplifies, or updates this project's Markdown docs, README files, docs/README.md, architecture docs, operations docs, server/deploy docs, web README, progress.md, admin-console docs, OAuth/API key/usage/upstream strategy docs, deployment instructions, tables, classification matrices, Mermaid diagrams, reader paths, conclusion-first structure, copyable commands, links, anchors, or when the user mentions openai-oauth-api-service with 文档治理, docs, 真源, progress, architecture, operations, deploy, admin 可见性, low-spec, gateway_usage_logs, 上游策略, 表格, 矩阵, 命令可复制, or asks whether this project's docs guidance should become reusable.
 ---
 
 # OpenAI OAuth Docs Governance
@@ -12,6 +12,14 @@ Use this skill to keep `openai-oauth-api-service` docs concise, source-grounded,
 ## OpenAI OAuth 文档质量门禁 Docs Quality Gate
 
 文档治理不能只追求写得多或排版整齐。要保护当前真源、降低心智负担、避免文档漂移，并控制文档体系复杂度。
+
+### 结构质量检查 Structure Quality Checks
+
+- 边界清晰、合理严谨：说明本轮管什么、不管什么、依赖哪个真源，以及为什么当前拆分、抽象和验证足够但不过度。
+- 模块化：按读者任务和真源边界组织文档；能在一页讲清就不拆，长文才用索引、摘要表和专题页。
+- 高内聚：同一口径、命令、状态、链接和跳转锚点尽量收口到一个真源或索引，不在多处复制近似说明。
+- 低耦合：文档引用代码、脚本、页面和正式真源位置，不复写易漂移的实现细节；过程记录不覆盖正式文档。
+- 单一职责：README 管导航，专题文档管业务/操作，progress/changelog 管过程；图表和表格只在降低理解成本时使用。
 
 - 先确认代码、migration、测试、README、正式 docs 和 AGENTS 的优先级，不让过程记录覆盖当前真源。
 - 结论、适用范围、主路径、验收方式和风险边界前置；表格、Mermaid、链接和摘要只在减少查找成本时使用。
