@@ -1,6 +1,6 @@
 ---
 name: openai-oauth-prompt-governance
-description: openai-oauth-api-service 项目提示词治理。Use when Codex writes, refines, evaluates, or converts an OpenAI OAuth API service request into an executable prompt for implementation, review, docs governance, admin page design, tests, deployment, handoff, side chat, main chat, or commit/push work; when prompts need auth/API-key/quota/usage logging/Codex backend/secrets/proxy/upstream/deploy boundaries; or when the user wants positive "要做什么" wording instead of broad "不要" lists.
+description: openai-oauth-api-service 项目提示词治理。Use when Codex writes, refines, evaluates, or converts an OpenAI OAuth API service request into an executable prompt for implementation, review, docs governance, admin page design, tests, deployment, handoff, side chat, main chat, or commit/push work; when a complete copyable final prompt, prompt length control, Codex input limit, or prompt boundary conditions are needed; when prompts need auth/API-key/quota/usage logging/Codex backend/secrets/proxy/upstream/deploy boundaries; or when the user wants positive "要做什么" wording instead of broad "不要" lists.
 ---
 
 # OpenAI OAuth Prompt Governance
@@ -27,6 +27,20 @@ Use "不要 / 禁止" only for expensive mistakes:
 - 不在低配服务器构建；远端只加载制品、migration、启动、health/ready 和 smoke。
 - 不跳过 auth、quota、usage logging、error classification、admin UI 或 deploy preflight 的边界说明。
 - 不改 unrelated dirty worktree，不 reset/stash/force push。
+
+## Complete Prompt Output
+
+当任务是“写 / 改 / 转换提示词”时，必须输出一份完整可复制的 `最终提示词`，用 fenced Markdown 包起来；不要只给原则、片段或检查清单。
+
+如果用户只是问“是否合理 / 为什么 / 怎么处理”，先短答，不强制展开成完整提示词。
+
+长度治理：
+
+- 最终提示词必须能放进目标 Codex / ChatGPT 输入窗口。目标限制未知时，默认压缩历史，保留真源、当前状态、决策、阻塞和验收。
+- 如果仍可能超限，输出 `主提示词` + `补充上下文`，不要给一个无法粘贴执行的超长版本。
+- 不凭空声称精确 token 余量；需要时只说明压缩和拆分策略。
+
+完整 openai-oauth 提示词通常应包含：相关 `$openai-oauth-*` skills、目标、先读真源、允许修改、本轮不做、验收、progress.md 要求、真实上游 / secrets / deploy 边界和收口要求。微型提示词可省略明显无关段落。
 
 ## Standard OpenAI OAuth Prompt
 
@@ -89,6 +103,17 @@ $openai-oauth-test-governance
 - 真实上游只作为明确授权的 smoke；单元/集成测试优先用 fake/local path。
 ```
 
+When asked to produce a prompt, deliver it as:
+
+````markdown
+最终提示词：
+
+```markdown
+$openai-oauth-prompt-governance
+...
+```
+````
+
 ### Admin UI
 
 ```markdown
@@ -117,3 +142,4 @@ $openai-oauth-prompt-governance
 - 把密钥、token 或真实请求体粘进提示词。
 - 要求 "完整测试" 但不说明是否包含真实上游、admin browser regression、migration 或远端 smoke。
 - 把部署、业务修复、UI 重排和 docs 全塞进一个提示词。
+- 只讲提示词原则但不给最终可复制版本，或把完整聊天历史塞进一个超长 prompt。
