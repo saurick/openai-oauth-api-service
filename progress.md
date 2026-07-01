@@ -56,3 +56,9 @@
 - 验证：追加前 `progress.md` 为 51 行、13092 字节，未达到归档阈值；本组已执行 YAML 解析、等价 skill metadata 校验和限定 `git diff --check`。
 - 下一步：后续 openai-oauth 提示词把“请求可用 / 做完整 / 稳定”落成 auth/quota/usage/error/deploy 边界、复杂度预算、可观测证据和验证命令，不用宽松 fallback 掩盖真实上游或密钥问题。
 - 阻塞/风险：本组只改 skill 文档、UI metadata 和过程记录，不改运行时代码、schema、auth/key 语义、usage 真源、上游策略、部署脚本、监控系统、真实上游验证或 133 环境。
+
+## 2026-07-01 项目治理 skills 质量门禁同步
+
+- 完成：同步 `openai-oauth-*` 项目治理 skills 的质量门禁。docs/page/domain/release/test/code-review 正文补齐质量门禁；runtime/observability/security 等默认提示词补齐根因、可观测、安全质量锚点，触发 `$openai-oauth-*` 时默认关注 OAuth/API key/usage/upstream 真源、secrets、低配发布证据、测试可信度和管理端可读性。
+- 下一步：若后续新增 seed/import 类项目 skill，再按本项目真实数据导入边界单独设计，不从 ERP 项目复制。
+- 阻塞/风险：本组只改 `.agents/skills` 和 `progress.md`；不改 runtime、schema、auth、API key、usage、上游策略、部署或生产配置。

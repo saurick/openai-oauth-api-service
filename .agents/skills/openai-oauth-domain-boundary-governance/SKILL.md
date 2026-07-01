@@ -11,6 +11,15 @@ description: openai-oauth-api-service 项目业务边界与数据真源治理。
 
 它是后端/API/auth/usage/upstream 变更的主治理入口。管理端页面治理可以发现 UI 暗示了新能力；一旦涉及 OAuth/API key、quota、usage logging、gateway/proxy、upstream failover、admin API、schema/migration、transaction、error code 或 persisted config，就先回到本 skill。
 
+## OpenAI OAuth 工程质量门禁 Engineering Quality Gate
+
+业务边界治理必须守住最小必要复杂度和单一真源。
+
+- 新增 schema、migration、repo、usecase、API、RBAC 权限、状态、字段或配置前，先证明现有真源不能承接，并说明新增复杂度的收益和退出边界。
+- 优先主路径修复，不用页面私有逻辑、脚本补写、兼容 fallback、重复派生字段或宽松校验掩盖后端合同缺口。
+- 字段残值/缺值、幂等、事务、权限和客户/模板差异必须可测试、可解释、可回滚；不能只让当前 happy path 通过。
+- 若任务跨太多层，先收窄成一个可验证切片；不在一轮里无约束扩张到 schema、RBAC、UI、docs、deploy 全链路。
+
 ## 真源链 Truth Chain
 
 - 先读 `AGENTS.md`、`README.md`、`docs/architecture.md`、`docs/operations.md`、server/web/deploy docs 和相关 tests。

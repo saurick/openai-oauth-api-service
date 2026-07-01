@@ -9,6 +9,15 @@ description: openai-oauth-api-service 项目发布、部署、版本与回滚治
 
 用这个 skill 处理 `openai-oauth-api-service` 的 release、deploy、version、migration、rollback 和 release evidence。版本管理默认并入发布证据，不另起重流程。
 
+## OpenAI OAuth 发布质量门禁 Release Quality Gate
+
+发布治理的质量不是把版本推上去，而是可复现、可回滚、可证明。
+
+- 只发布已提交、已验证、已绑定版本证据的范围；不要把未归属 dirty worktree、临时脚本或手工远端改动混进 release truth。
+- 低配服务器默认不构建；本地/CI 构建，远端只加载制品、执行 migration、启动、health/ready/smoke 和必要清理。
+- 涉及 migration、配置、镜像或数据状态的发布，要说明 rollback point、不可逆风险、前向修复路径和保留证据。
+- 运行版本必须用目标 runtime evidence 证明，包括 commit/tag、image、migration 状态、服务健康、日志和业务 smoke。
+
 ## 真源链 Truth Chain
 
 - 先读 `AGENTS.md`、`README.md`、`docs/architecture.md`、`docs/operations.md`、server/web/deploy docs 和相关 tests。

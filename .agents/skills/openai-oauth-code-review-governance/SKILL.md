@@ -9,6 +9,15 @@ description: openai-oauth-api-service 项目代码审查治理。Use when Codex 
 
 用这个 skill 审查 `/Users/simon/projects/openai-oauth-api-service` 的代码和正式文档改动。默认只审查，不改代码。
 
+## OpenAI OAuth 工程质量门禁 Engineering Quality Gate
+
+review 不能只找会不会报错。要把可维护性、可扩展性、复杂度预算和长期真源稳定性当成一等审查目标。
+
+- 新增 helper、组件、schema、migration、API、RBAC 权限、Workflow/业务规则、配置、QA 脚本或部署步骤时，检查现有能力是否可以承接。
+- 警惕为通过当前页面或当前测试而加入局部 fallback、重复派生、页面私有真源、宽松校验、隐藏兼容分支或后处理补丁。
+- 实现如果把一个可验证切片扩张成 schema、RBAC、runtime、docs、deployment 多层大改，要检查是否越界、是否能拆小、是否缺少中间验收。
+- 质量问题不等于一律阻断；但必须明确当前复杂度和验证范围为什么恰当。
+
 ## 范围解析 Scope
 
 1. 用户指定 commit、branch、文件、目录或 PR 时，只审指定范围。

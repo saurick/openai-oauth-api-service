@@ -9,6 +9,15 @@ description: openai-oauth-api-service 项目测试治理。Use when Codex choose
 
 用这份 skill 把 openai-oauth-api-service 的验证范围落到真实风险：鉴权、API key、额度、usage logging、Codex backend、上游失败、管理端页面、migration、低配部署和 secrets。
 
+## OpenAI OAuth 测试质量门禁 Test Quality Gate
+
+测试治理不是跑得越多越好，也不是用一个全量命令替代关键场景。
+
+- 按改动影响面选择最小必要验证组合；docs/skill-only 不机械跑全量，业务真源、RBAC、migration、页面交互或发布链路必须升级验证。
+- 测试要覆盖本轮最可能出错的合同、状态、权限、旧数据、边界值、浏览器状态或目标环境；不能只证明 happy path。
+- 测试通过不能替代业务边界、字段真源、客户/模板差异、可维护性、可回滚性和文档同步判断。
+- 最终必须说明验证层级、测试形态、证据环境、未跑项和剩余盲区，避免“已通过测试”被误读成全系统已验收。
+
 ## Workflow
 
 1. 先判断改动触达 server、web、migration、deploy、proxy/upstream、Codex backend、管理端页面或文档。

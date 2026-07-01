@@ -9,6 +9,15 @@ description: openai-oauth-api-service 项目页面设计治理。Use when Codex 
 
 Use this skill to keep `openai-oauth-api-service` admin pages useful, safe, and verifiable. This is project-specific admin-console guidance, not OpenAI official product documentation and not ERP page governance.
 
+## OpenAI OAuth 页面质量门禁 Page Quality Gate
+
+页面治理不能只追求好看或少一点。要把每个可见模块、字段、按钮、状态和文案压回真实业务意义。
+
+- 每个元素都要支持明确角色、判断、动作或反馈；无决策价值、重复入口、假快捷方式和装饰性卡片应删除、合并或降级。
+- 页面不能补造后端事实、隐藏 API/RBAC/业务边界缺口、显示裸技术字段，或用页面私有映射替代共享 helper / API 合同。
+- 降低信息密度必须通过信息分组、任务优先级、可读标签和可验证交互完成，不能隐藏必要状态或吞掉错误。
+- 样式、布局和交互要覆盖默认态、交互态、恢复态、长文本/大数字/多标签、暗色/移动端和相邻区域；共享组件按影响面升级验证。
+
 ## Workflow
 
 1. Establish scope and current truth.

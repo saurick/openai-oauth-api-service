@@ -1,4 +1,4 @@
 interface:
   display_name: "OpenAI OAuth Page Governance"
-  short_description: "页面设计治理 Page"
-  default_prompt: "Use $openai-oauth-page-governance 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险。"
+  short_description: "页面设计治理 Page / 页面质量门禁"
+  default_prompt: "Use $openai-oauth-page-governance 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险；执行页面质量门禁，评估页面主任务、功能细节、信息密度、真实后端/RBAC 支撑、字段残值/缺值、可访问性和浏览器回归，优先复用共享组件并避免页面私有真源。"
