@@ -85,3 +85,9 @@
 - 验证：追加前 `progress.md` 为 79 行、17021 字节，未达到归档阈值；已执行 54 个目标 skill 的语义门禁/metadata 扫描和 54 个 `agents/openai.yaml` Ruby YAML 解析，均通过。
 - 下一步：后续 openai-oauth skill 继续围绕 auth、API key、quota、usage、upstream、deploy 和 secrets 语义补充，不复制 ERP 或模板项目事实。
 - 阻塞/风险：本组只改 `.agents/skills` 和 `progress.md`；不改 runtime、schema、auth、API key、usage、上游策略、部署或生产配置。
+
+## 2026-07-02 governance skills 职业任务文案门禁
+
+- 完成：在 `openai-oauth-*` 相关治理 skills 中补入“职业任务文案”门禁，覆盖管理端页面、文档、提示词、代码审查、测试和可观测/错误提示；要求用户可见页面、帮助、错误提示和管理端说明用目标角色能理解的业务语言，不把内部实现细节直接暴露给非开发读者。
+- 下一步：后续管理端、错误提示、帮助文档或提示词生成时，区分管理员/运维/开发读者；内部 error code、request_id、上游细节和 SQL/API 证据留给日志、诊断和开发文档。
+- 阻塞/风险：追加前 `progress.md` 为 87 行、18165 字节，未达到归档阈值。本组只改 `.agents/skills` 和 `progress.md`；不改 runtime、schema、auth、API key、usage、上游策略、部署或生产配置。
