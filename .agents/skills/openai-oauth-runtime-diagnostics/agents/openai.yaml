@@ -1,4 +1,4 @@
 interface:
   display_name: "OpenAI OAuth Runtime Diagnostics"
   short_description: "运行时诊断 Runtime / 根因质量门禁"
-  default_prompt: "Use $openai-oauth-runtime-diagnostics 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险；执行根因定位质量门禁（含边界清晰、合理严谨、模块化、高内聚、低耦合、单一职责），用 browser/network/logs/request_id/DB/migration/config/deploy evidence 分层定位，不用代码补丁掩盖环境、数据、权限或发布漂移。"
+  default_prompt: "Use $openai-oauth-runtime-diagnostics 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险；执行根因定位质量门禁（含语义清晰、边界清晰、合理严谨、模块化、高内聚、低耦合、单一职责），用 browser/network/logs/request_id/DB/migration/config/deploy evidence 分层定位，不用代码补丁掩盖环境、数据、权限或发布漂移。"

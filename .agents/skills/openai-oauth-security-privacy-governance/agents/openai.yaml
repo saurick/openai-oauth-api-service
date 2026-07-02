@@ -1,4 +1,4 @@
 interface:
   display_name: "OpenAI OAuth Security Privacy Governance"
   short_description: "安全/隐私 Security / 安全质量门禁"
-  default_prompt: "Use $openai-oauth-security-privacy-governance 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险；执行安全质量门禁（含边界清晰、合理严谨、模块化、高内聚、低耦合、单一职责），确认后端 RBAC、安全边界、least privilege、secrets/PII/客户资料/导出/日志脱敏、生产访问和验证证据，不把前端隐藏当安全控制。"
+  default_prompt: "Use $openai-oauth-security-privacy-governance 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险；执行安全质量门禁（含语义清晰、边界清晰、合理严谨、模块化、高内聚、低耦合、单一职责），确认后端 RBAC、安全边界、least privilege、secrets/PII/客户资料/导出/日志脱敏、生产访问和验证证据，不把前端隐藏当安全控制。"

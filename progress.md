@@ -77,3 +77,11 @@
 - 完成：同步 `agents/openai.yaml` 默认提示词，让 `$openai-oauth-*` 的质量门禁显式包含边界清晰、合理严谨、模块化、高内聚、低耦合、单一职责。
 - 下一步：后续 openai-oauth skill 继续围绕 auth、API key、quota、usage、upstream、deploy 和 secrets 边界补充，不复制 ERP 或模板项目事实。
 - 阻塞/风险：追加前 `progress.md` 为 72 行、16097 字节，未达到归档阈值。本组只改 `.agents/skills` 和 `progress.md`；不改 runtime、schema、auth、API key、usage、上游策略、部署或生产配置。
+
+## 2026-07-02 governance skills 语义清晰门禁
+
+- 完成：在 `openai-oauth-*` 项目治理 skills 的结构质量检查中补入类型化短门禁：语义清晰；覆盖文档、管理端页面、业务边界、代码审查、测试、提示词、运行时诊断、可观测错误、安全和发布，不改变 skill 名称、职责或触发边界。
+- 完成：同步 `agents/openai.yaml` 默认提示词，让 `$openai-oauth-*` 的质量门禁显式包含语义清晰，避免 auth、API key、quota、usage、upstream、错误、日志、发布证据或管理端页面含义被泛称掩盖。
+- 验证：追加前 `progress.md` 为 79 行、17021 字节，未达到归档阈值；已执行 54 个目标 skill 的语义门禁/metadata 扫描和 54 个 `agents/openai.yaml` Ruby YAML 解析，均通过。
+- 下一步：后续 openai-oauth skill 继续围绕 auth、API key、quota、usage、upstream、deploy 和 secrets 语义补充，不复制 ERP 或模板项目事实。
+- 阻塞/风险：本组只改 `.agents/skills` 和 `progress.md`；不改 runtime、schema、auth、API key、usage、上游策略、部署或生产配置。

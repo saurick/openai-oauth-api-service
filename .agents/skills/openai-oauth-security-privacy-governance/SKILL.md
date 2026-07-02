@@ -23,6 +23,7 @@ description: 项目安全与隐私治理（openai-oauth-api-service）。Use whe
 ## 结构质量门禁 Structure Quality Gate
 
 - 边界清晰、合理严谨：说明本轮管什么、不管什么、依赖哪个真源，以及为什么当前拆分、抽象和验证足够但不过度。
+- 语义清晰：身份、权限、数据范围、公开/私有、secret、脱敏和审计语义必须精确，避免用泛称放宽安全边界。
 - 模块化：authentication、authorization、secret handling、privacy logging、export 和 deploy access 分层治理，不把 UI hidden 当安全模块。
 - 高内聚：同一权限判断、secret 来源、脱敏规则和审计证据收口到统一 usecase/helper/preflight，不在页面和脚本里各写一套。
 - 低耦合：安全边界由后端/API/部署配置执行，前端只做展示和预提示；日志、文档和测试不得耦合真实 secrets/PII。

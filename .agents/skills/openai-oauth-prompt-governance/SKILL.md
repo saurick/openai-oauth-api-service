@@ -47,6 +47,7 @@ Use "不要 / 禁止" only for expensive mistakes:
 Structure constraints to include when relevant:
 
 - 边界清晰、合理严谨：说明本轮管什么、不管什么、依赖哪个真源，以及为什么当前拆分、抽象和验证足够但不过度。
+- 语义清晰：提示词要定义关键名词、目标输出、范围、非目标、验收和后果，避免泛称驱动无约束实现。
 - 模块化：提示词要要求按真实职责拆分，不做无意义拆文件，也不把多个阶段塞进一次大改。
 - 高内聚：同一规则、字段真源、权限判断、错误处理或文档口径要收口到同一 usecase/helper/config/test source。
 - 低耦合：要求页面、usecase、repo、schema、配置、部署和测试的依赖方向清楚，不跨层偷做逻辑。

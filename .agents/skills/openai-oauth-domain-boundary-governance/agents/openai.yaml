@@ -1,4 +1,4 @@
 interface:
   display_name: "OpenAI OAuth Domain Boundary Governance"
   short_description: "业务边界/真源 Domain / 工程质量门禁"
-  default_prompt: "Use $openai-oauth-domain-boundary-governance 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险；执行工程质量门禁（含边界清晰、合理严谨、模块化、高内聚、低耦合、单一职责），优先复用现有 schema/usecase/repo/API/RBAC 和字段真源，严控新增复杂度、业务边界、字段残值/缺值、客户/模板差异和主路径修复。"
+  default_prompt: "Use $openai-oauth-domain-boundary-governance 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险；执行工程质量门禁（含语义清晰、边界清晰、合理严谨、模块化、高内聚、低耦合、单一职责），优先复用现有 schema/usecase/repo/API/RBAC 和字段真源，严控新增复杂度、业务边界、字段残值/缺值、客户/模板差异和主路径修复。"
