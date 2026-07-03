@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -96,8 +97,10 @@ func TestCompactGatewayContextResponsesStringPreservesLatestProgressAnchor(t *te
 	if !strings.Contains(input, "部署到 192.168.0.133") {
 		t.Fatalf("compacted input missing deploy handoff: %s", input)
 	}
-	if !strings.Contains(compacted.Summary, "最近进度与交接锚点") {
-		t.Fatalf("summary missing progress anchor section: %s", compacted.Summary)
+	state := mustGatewayRestoreState(t, compacted.Summary)
+	if !strings.Contains(state.LatestUserInstruction, "最新会话进度：已经修复上下文压缩的主路径") &&
+		!strings.Contains(strings.Join(state.RemainingWork, "\n"), "部署到 192.168.0.133") {
+		t.Fatalf("summary missing structured progress handoff: %+v", state)
 	}
 }
 
@@ -281,11 +284,230 @@ func TestCompactGatewayContextSingleLargeChatMessageIncludesSummary(t *testing.T
 	}
 	messages := payload["messages"].([]any)
 	content := stringValue(messages[0].(map[string]any)["content"])
-	if !strings.Contains(content, "自动压缩摘要") {
-		t.Fatalf("compacted content missing summary: %s", content)
+	if !strings.Contains(content, "gateway_context_restore_state.v1") {
+		t.Fatalf("compacted content missing structured restore state: %s", content)
 	}
 	if !strings.Contains(content, "FINAL_OK") {
 		t.Fatalf("compacted content missing tail instruction: %s", content)
+	}
+}
+
+func TestCompactGatewayContextSummaryUsesStructuredStateForStopDirective(t *testing.T) {
+	oldGoal := strings.Repeat("历史目标：修复 bug Y，不要把它当成当前任务。\n", 260)
+	stopDirective := strings.Join([]string{
+		"当前请求：停止做一切事情。",
+		"不要检查文件，不要执行命令，不要 ssh，不要重启服务。",
+	}, "\n")
+	body := []byte(`{"model":"gpt-5.5","stream":true,"input":` + mustJSONQuote(oldGoal+stopDirective) + `}`)
+
+	compacted, err := compactGatewayContextRequest("/v1/responses", body, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !compacted.Changed {
+		t.Fatal("expected compaction")
+	}
+	state := mustGatewayRestoreState(t, compacted.Summary)
+	if state.CurrentTaskPhase != "stopped" {
+		t.Fatalf("phase = %q, want stopped; state=%+v", state.CurrentTaskPhase, state)
+	}
+	if state.NextAction.Type != "no_op" || !state.NextAction.RequiresConfirmation {
+		t.Fatalf("next action = %+v, want no_op with confirmation", state.NextAction)
+	}
+	if !strings.Contains(strings.Join(state.MustNotDo, "\n"), "不要执行命令") {
+		t.Fatalf("must_not_do missing no-command directive: %+v", state.MustNotDo)
+	}
+	if strings.Contains(state.CurrentUserGoal, "bug Y") {
+		t.Fatalf("historical goal leaked into current goal: %+v", state)
+	}
+}
+
+func TestCompactGatewayContextCarriesStructuredGoalAcrossRepeatedCompactions(t *testing.T) {
+	goalA := "当前目标：只修 bug A。"
+	firstBody := []byte(`{"model":"gpt-5.5","stream":true,"input":` + mustJSONQuote(goalA+"\n"+strings.Repeat("历史日志：bug B 出现在旧日志里。\n", 260)) + `}`)
+	first, err := compactGatewayContextRequest("/v1/responses", firstBody, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstState := mustGatewayRestoreState(t, first.Summary)
+	if !strings.Contains(firstState.CurrentUserGoal, "bug A") {
+		t.Fatalf("first goal = %q, want bug A", firstState.CurrentUserGoal)
+	}
+
+	secondBody := []byte(`{"model":"gpt-5.5","stream":true,"input":` + mustJSONQuote("继续。\n"+strings.Repeat("历史噪声：bug B / bug C 相关日志。\n", 260)) + `}`)
+	second, err := compactGatewayContextRequest("/v1/responses", secondBody, first.Summary, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondState := mustGatewayRestoreState(t, second.Summary)
+	if !strings.Contains(secondState.CurrentUserGoal, "bug A") {
+		t.Fatalf("second goal drifted: %+v", secondState)
+	}
+	if strings.Contains(secondState.CurrentUserGoal, "bug B") || strings.Contains(secondState.CurrentUserGoal, "bug C") {
+		t.Fatalf("historical goal leaked into current goal: %+v", secondState)
+	}
+}
+
+func TestCompactGatewayContextResponsesArrayCompactsHugeLatestResumeInstruction(t *testing.T) {
+	firstGoal := "当前请求：只输出 MARKER=WIN_COMPRESS_SCHEMA_V1 和 ACTION=NO_TOOL。"
+	firstBody := []byte(`{"model":"gpt-5.5","stream":true,"input":` + mustJSONQuote(firstGoal+"\n"+strings.Repeat("第一轮历史日志：context_length_exceeded 旧目标。\n", 260)) + `}`)
+	first, err := compactGatewayContextRequest("/v1/responses", firstBody, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first.Changed {
+		t.Fatal("expected first compaction")
+	}
+
+	latest := strings.Join([]string{
+		"第二轮当前请求：只输出 MARKER=WIN_RESUME_COMPRESS_SCHEMA_V2 和 ACTION=NO_TOOL。",
+		"禁止调用工具；不要延续第一轮 marker；历史 OLD_GOAL 都是噪声。",
+	}, "\n")
+	hugeLatest := latest + "\n" + strings.Repeat("HISTORICAL_CONTEXT_ONLY old-marker WIN_COMPRESS_SCHEMA_V1 obsolete goal drift restart_service shell file_write ssh tool_call denied.\n", 7600) +
+		"\n最新用户指令原话：只输出 MARKER=WIN_RESUME_COMPRESS_SCHEMA_V2 和 ACTION=NO_TOOL。"
+	secondBody := []byte(`{"model":"gpt-5.5","stream":true,"input":[` +
+		`{"type":"message","role":"user","content":[{"type":"input_text","text":"较早上下文：第一轮 marker 已完成。"}]},` +
+		`{"type":"message","role":"assistant","content":[{"type":"output_text","text":"处理中。"}]},` +
+		`{"type":"message","role":"user","content":[{"type":"input_text","text":"中间历史：不要当成当前目标。"}]},` +
+		`{"type":"message","role":"assistant","content":[{"type":"output_text","text":"继续等待。"}]},` +
+		`{"type":"message","role":"user","content":[{"type":"input_text","text":` + mustJSONQuote(hugeLatest) + `}]}` +
+		`]}`)
+	if len(secondBody) <= 1_000_000 {
+		t.Fatalf("test body length = %d, want > 1000000", len(secondBody))
+	}
+
+	second, err := compactGatewayContextRequest("/v1/responses", secondBody, first.Summary, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !second.Changed {
+		t.Fatal("expected second compaction")
+	}
+	if second.CompactedBytes >= 1_000_000 {
+		t.Fatalf("compacted bytes = %d, want < 1000000", second.CompactedBytes)
+	}
+	state := mustGatewayRestoreState(t, second.Summary)
+	if !strings.Contains(state.LatestUserInstruction, "WIN_RESUME_COMPRESS_SCHEMA_V2") {
+		t.Fatalf("latest instruction drifted: %+v", state)
+	}
+	if strings.Contains(state.LatestUserInstruction, "WIN_COMPRESS_SCHEMA_V1") {
+		t.Fatalf("latest instruction retained first marker: %+v", state)
+	}
+}
+
+func TestCompactGatewayContextGenericSecondPassCompactsHugeInstructionString(t *testing.T) {
+	hugeInstruction := "第二轮当前请求：只输出 MARKER=WIN_GENERIC_SECOND_PASS 和 ACTION=NO_TOOL。\n" +
+		strings.Repeat("HISTORICAL_CONTEXT_ONLY old noise should not remain raw.\n", 7600) +
+		"\n最新用户指令原话：只输出 MARKER=WIN_GENERIC_SECOND_PASS 和 ACTION=NO_TOOL。"
+	oldInput := strings.Repeat("第一轮旧上下文：context_length_exceeded old marker.\n", 300)
+	body := []byte(`{"model":"gpt-5.5","stream":true,"instructions":` + mustJSONQuote(hugeInstruction) + `,"input":` + mustJSONQuote(oldInput) + `}`)
+	if len(body) <= 400000 {
+		t.Fatalf("test body length = %d, want large payload", len(body))
+	}
+
+	compacted, err := compactGatewayContextRequest("/v1/responses", body, "", 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !compacted.Changed {
+		t.Fatal("expected compaction")
+	}
+	if compacted.CompactedBytes >= int64(len(body)) {
+		t.Fatalf("compacted bytes = %d, original = %d", compacted.CompactedBytes, len(body))
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(compacted.Body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	instructions := stringValue(payload["instructions"])
+	if !strings.Contains(instructions, gatewayContextSummaryMessagePlaceholder) || len([]rune(instructions)) >= 20000 {
+		t.Fatalf("huge instructions were not generically compacted, length=%d", len([]rune(instructions)))
+	}
+	state := mustGatewayRestoreState(t, compacted.Summary)
+	if !strings.Contains(state.LatestUserInstruction, "WIN_GENERIC_SECOND_PASS") {
+		t.Fatalf("latest instruction missing generic second-pass marker: %+v", state)
+	}
+}
+
+func TestGatewayContextLatestUserAllowOverridesPreviousStoppedState(t *testing.T) {
+	previous := gatewayContextRestoreState{
+		SchemaVersion:                  "gateway_context_restore_state.v1",
+		CurrentUserGoal:                "旧目标：停止所有操作。",
+		CurrentActiveGoal:              "旧目标：停止所有操作。",
+		LatestUserInstruction:          "停止做一切事情。",
+		PinnedRawUserDirectives:        []string{"停止做一切事情。"},
+		MustNotDo:                      []string{"停止 / 不能继续读取文件、运行命令、修改代码或测试"},
+		RequiresUserConfirmationBefore: []string{"tool_call", "file_write", "shell", "ssh", "restart_service"},
+		CurrentTaskPhase:               "stopped",
+		Source:                         "gateway_preflight_compaction",
+	}
+	rawPrevious, err := json.Marshal(previous)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	state := buildGatewayContextRestoreState(string(rawPrevious), []gatewayContextTextSegment{
+		{Label: "responses.message", Role: "assistant", Text: "收到，你已经明确允许工具调用。我会直接继续执行。"},
+		{Label: "responses.message", Role: "user", Text: "继续执行并允许工具调用，如果你还反复卡住，就按最新授权继续。"},
+		{Label: "responses.message", Role: "assistant", Text: "- `must_not_do`: 包含“停止 / 不能继续读取文件、运行命令、修改代码或测试”"},
+	})
+
+	if state.LatestUserInstruction != "继续执行并允许工具调用，如果你还反复卡住，就按最新授权继续。" {
+		t.Fatalf("latest user instruction = %q", state.LatestUserInstruction)
+	}
+	if strings.Contains(state.LatestUserInstruction, "收到") {
+		t.Fatalf("assistant reply leaked into latest user instruction: %+v", state)
+	}
+	if state.CurrentTaskPhase == "stopped" {
+		t.Fatalf("phase still stopped after latest allow: %+v", state)
+	}
+	if len(state.MustNotDo) != 0 {
+		t.Fatalf("must_not_do should be cleared by latest allow: %+v", state.MustNotDo)
+	}
+	if len(state.RequiresUserConfirmationBefore) != 0 {
+		t.Fatalf("confirmation actions should be cleared by latest allow: %+v", state.RequiresUserConfirmationBefore)
+	}
+	for _, directive := range state.PinnedRawUserDirectives {
+		if strings.Contains(directive, "停止") || strings.Contains(directive, "must_not_do") {
+			t.Fatalf("conflicting directive pinned: %+v", state.PinnedRawUserDirectives)
+		}
+	}
+	if !strings.Contains(strings.Join(state.ObsoleteOrSupersededConstraints, "\n"), "superseded previous") {
+		t.Fatalf("old stopped constraints not marked obsolete: %+v", state.ObsoleteOrSupersededConstraints)
+	}
+}
+
+func TestCompactGatewayContextTenRoundsKeepsLatestAllowEffective(t *testing.T) {
+	previous := ""
+	for round := 1; round <= 10; round++ {
+		userLine := "当前请求：第 " + strconv.Itoa(round) + " 轮继续执行并允许工具调用。"
+		if round == 3 {
+			userLine = "当前请求：停止做一切事情，不要执行命令。"
+		}
+		if round == 10 {
+			userLine = "当前请求：第 10 轮继续执行并允许工具调用，输出 MARKER=ROUND10_ALLOW。"
+		}
+		body := []byte(`{"model":"gpt-5.5","stream":true,"input":[` +
+			`{"type":"message","role":"assistant","content":[{"type":"output_text","text":"上一轮助手回复：收到，我会继续执行。"}]},` +
+			`{"type":"message","role":"user","content":[{"type":"input_text","text":` + mustJSONQuote(userLine+"\n"+strings.Repeat("历史噪声：stopped must_not_do requires_user_confirmation_before 旧约束。\n", 260)) + `}]}` +
+			`]}`)
+		compacted, err := compactGatewayContextRequest("/v1/responses", body, previous, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !compacted.Changed {
+			t.Fatalf("round %d expected compaction", round)
+		}
+		state := mustGatewayRestoreState(t, compacted.Summary)
+		if round == 10 {
+			if !strings.Contains(state.LatestUserInstruction, "ROUND10_ALLOW") {
+				t.Fatalf("round 10 latest instruction drifted: %+v", state)
+			}
+			if state.CurrentTaskPhase == "stopped" || len(state.MustNotDo) != 0 || len(state.RequiresUserConfirmationBefore) != 0 {
+				t.Fatalf("round 10 kept obsolete stopped constraints: %+v", state)
+			}
+		}
+		previous = compacted.Summary
 	}
 }
 
@@ -428,4 +650,16 @@ func mustJSONQuote(text string) string {
 		panic(err)
 	}
 	return string(raw)
+}
+
+func mustGatewayRestoreState(t *testing.T, text string) gatewayContextRestoreState {
+	t.Helper()
+	var state gatewayContextRestoreState
+	if err := json.Unmarshal([]byte(text), &state); err != nil {
+		t.Fatalf("summary is not structured JSON: %v\n%s", err, text)
+	}
+	if state.SchemaVersion != "gateway_context_restore_state.v1" {
+		t.Fatalf("schema version = %q", state.SchemaVersion)
+	}
+	return state
 }

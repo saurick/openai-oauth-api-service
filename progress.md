@@ -3,6 +3,34 @@
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 - 2026-06-25：旧 `progress.md` 已按超过 80KB 阈值归档到 `docs/archive/progress-2026-06-25-before-skill-scenario-matrix.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-07-02 Codex 上下文压缩结构化状态包
+
+- 完成：针对 2026-07-03 多轮压缩后 `stopped / must_not_do` 与“继续执行并允许工具调用”同时存在的问题，修正结构化状态包的冲突解析：`latest_user_instruction` 只从 user-eligible 片段提取，不再把 assistant 回复、工具输出、恢复规则说明或旧状态包字段当作最新用户消息。
+- 完成：新增 `latest_uncompressed_user_instruction`、`current_effective_constraints` 和 `obsolete_or_superseded_constraints` 字段；当最新未压缩用户消息明确允许继续 / 工具调用时，旧的 `current_task_phase=stopped`、`must_not_do` 和 `requires_user_confirmation_before` 会进入 obsolete，不再阻塞当前任务。
+- 完成：`pinned_raw_user_directives` 会按最新指令过滤冲突项，避免同时 pin “继续”和“停止”；`must_not_do` 过滤 `latest_user_instruction`、`must_not_do`、`requires_user_confirmation_before` 等恢复规则说明，避免把状态包字段说明反向污染为当前禁止事项。
+- 完成：新增 `TestGatewayContextLatestUserAllowOverridesPreviousStoppedState` 和 `TestCompactGatewayContextTenRoundsKeepsLatestAllowEffective`，覆盖朋友提供的冲突状态包形态，以及 10 轮压缩后最新允许继续仍有效、不继承旧停止约束。
+- 验证：已通过 `cd server && go test -count=1 ./internal/server -run 'TestCompactGatewayContext|TestGatewayContext|TestPrepareGatewayContext|TestEffectiveGatewayContextPolicy'`、`cd server && go test -count=1 ./...`、`bash scripts/qa/secrets.sh` 和 `git diff --check`。
+- 部署：已按低配发布主路径在本地构建 linux/amd64 镜像 `oauth-api-service-server:20260703T175800-14c7fae1-local`，上传到 `192.168.0.133:/data/openai-oauth-api-service/releases/20260703T175800-14c7fae1-local-context-conflict-resolve-v2`；远端只执行 checksum、`docker load`、宿主机 `/usr/local/bin/atlas migrate status`、备份 `.env` 为 `.env.bak.20260703T175800-context-conflict-resolve-v2`、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在 133 构建。Atlas 当前版本 `20260604123931`、pending 0。
+- 线上验证：当前 `app-server` 运行镜像为 `oauth-api-service-server:20260703T175800-14c7fae1-local`，容器环境包含 `GIT_SHA_SHORT=14c7fae1-local` 和 `IMAGE_TAG=20260703T175800-14c7fae1-local`；本机与公网 `/healthz` / `/readyz` 均通过，`codex-runtime-health-check.py --auto-upgrade` 后所有 health checks 为 `ok`，Codex 为 `0.142.5`。
+- Windows 10 轮回归：已在 `ssh sauri@192.168.0.45` 上确认 Codex `0.142.5`，且 `npm view @openai/codex version` 返回 `0.142.5`。在 `C:\Users\sauri\codex-compaction-10round-20260703-1805` 初始化 `.git` 目录后，通过 `saurick-oauth` provider 对同一 session `019f2781-35b0-7bb2-98e2-1f4875ab9419` 连续执行 10 轮 `codex exec resume <session_id>`，未使用 `resume --last`。每轮均输出对应 `ROUND*_ALLOW_CONTINUE` marker 和 `ACTION=NO_TOOL`，无 413、无 input too large、无“已停止 / 需要确认 / 无法继续”误停文本。
+- 133 数据库证据：`gateway_usage_logs` 近 15 分钟记录 `context_compacted=true` 19 条、413 为 0；原始上下文最大 `10021191` bytes、压缩后最大 `112135` bytes。第 10 轮状态包为 `current_task_phase=executing`、`latest_user_instruction` 保留 `ROUND10_ALLOW_CONTINUE` 用户原话、`must_not_do=0`、`requires_user_confirmation_before=0`，`current_effective_constraints=["latest_user_instruction 明确允许继续执行和工具调用"]`。
+- 清理：部署和 10 轮回归通过后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧镜像并回收约 `1.638GB`；未执行 volume prune。根分区从 42% 使用降到 39%，当前 app-server 仍运行新镜像。
+- 完成：将网关预压缩摘要从自由 Markdown 摘要改为 `gateway_context_restore_state.v1` JSON 状态包，显式保留 `current_user_goal`、`latest_user_instruction`、`pinned_raw_user_directives`、`must_not_do`、`current_task_phase`、`next_action`、`restore_audit`、`historical_context_only` 和 `obsolete_or_superseded_goals`，避免恢复后从历史路径、日志或旧目标碎片里自行生成新目标。
+- 完成：压缩插入提示改为要求先读取 schema 并执行 restore audit；当最新指令包含停止、暂停、只读、不要执行、不要 SSH、不要重启或需要确认等语义时，状态包会把下一步收口为 `no_op` 或 `ask_user`，并把 shell / file write / tool call / ssh / restart 标记为需确认动作。
+- 完成：补充单测覆盖最近进度锚点结构化保存、停止后不得继续工具调用的状态表达、重复 compaction 后目标 A 不被历史 bug B/C 噪声污染，以及旧 summary 继续作为 `historical_context_only` 而非当前目标真源。
+- 完成：Windows 显式 `resume <session_id>` 第二轮大上下文回归暴露出数组型 Responses 压缩只压旧段落、不压保留下来的超大最新 user item，导致压缩后仍 1.12MB 并返回 413；已改为对保留的最近 Responses items 做二次大内容压缩，让第二轮最新用户指令进入结构化状态包而不是原样撑爆请求。
+- 完成：新增 `TestCompactGatewayContextResponsesArrayCompactsHugeLatestResumeInstruction`，覆盖“第一轮已有结构化摘要 + 第二轮 resume 末尾 1MB 级最新用户指令”的目标不漂移和压缩后低于 1MB。
+- 完成：二次部署后的 Windows 真实 resume 请求仍返回 413，诊断显示真实请求形态里的第二轮大文本不在原 `responsesItem` 读取路径；已补通用第二道压缩，递归扫描 `input/content/text/arguments/output/instructions` 的超大字符串并跳过 tools / metadata，让非标准位置里的最新用户指令也进入同一个结构化状态包。
+- 完成：新增 `TestCompactGatewayContextGenericSecondPassCompactsHugeInstructionString`，覆盖最新大文本落在 `instructions` 这类非标准字段时仍能压缩、保留 marker 并明显收缩请求体。
+- 完成：同步 `server/docs/config.md` 的上下文压缩口径，明确网关能稳定传递状态包和禁止事项，但真正拒绝客户端本地工具调用仍取决于 Codex / OpenCode runtime 的工具层执行；本服务不代理本机 shell、文件或 SSH 工具。
+- 验证：已通过 `cd server && go test -count=1 ./internal/server -run 'TestCompactGatewayContext|TestPrepareGatewayContext|TestEffectiveGatewayContextPolicy'`、`cd server && go test -count=1 ./...`、`bash scripts/qa/secrets.sh` 和 `git diff --check`。期间全量测试首次因本机 Codex balance 外部依赖瞬时 502 失败，单独重跑该用例和再次全量重跑均通过。后续还需重新构建部署到 133，并在 Windows 端用 `saurick-oauth` provider 重跑显式 resume 压缩恢复回归。
+- 部署：已按低配发布主路径在本地构建 linux/amd64 镜像 `oauth-api-service-server:20260702T232900-14c7fae1-local`，上传到 `192.168.0.133:/data/openai-oauth-api-service/releases/20260702T232900-14c7fae1-local-context-generic-compact`；远端只执行 checksum、`docker load`、宿主机 `/usr/local/bin/atlas migrate status`、备份 `.env` 为 `.env.bak.20260702T232900-context-generic-compact`、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在 133 构建。Atlas 当前版本 `20260604123931`、pending 0。
+- 线上验证：当前 `app-server` 运行镜像为 `oauth-api-service-server:20260702T232900-14c7fae1-local`，容器环境包含 `GIT_SHA_SHORT=14c7fae1-local` 和 `IMAGE_TAG=20260702T232900-14c7fae1-local`；本机与公网 `/healthz` / `/readyz` 均通过，`codex-runtime-health-check.py --auto-upgrade` 后容器内 Codex 为 `0.142.5` 且所有 health checks 为 `ok`。近 3 分钟 app 日志未见 WARN / ERROR / PANIC / FATAL。
+- Windows 回归：已在 `ssh sauri@192.168.0.45` 上确认 Codex `0.142.5`，在 `C:\Users\sauri\codex-compression-regression-20260702` 初始化 git 目录后通过 `saurick-oauth` provider 测试。第一轮大请求 session `019f236e-fb6a-7d02-a145-45cd42734cfe` 输出 `MARKER=WIN_COMPRESS_SCHEMA_V1C` / `ACTION=NO_TOOL`；显式 `codex exec resume 019f236e-fb6a-7d02-a145-45cd42734cfe` 第二轮输出 `MARKER=WIN_RESUME_COMPRESS_SCHEMA_V2C` / `ACTION=NO_TOOL`，未使用 `resume --last`。服务端 `gateway_usage_logs` 记录第二轮原始 `2187420` bytes，压缩后 `104793` bytes，`context_compacted=true` 且状态包包含第二轮 marker。
+- 清理：部署和 Windows 回归通过后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧镜像并回收约 `1.06GB`；未执行 volume prune。根分区从约 `55G` 可用恢复到约 `57G` 可用，当前 app-server 仍运行新镜像。
+- 下一步：后续若继续收口“停止 / 暂停必须由工具层硬拒绝”，应在 Codex / OpenCode runtime 增加外部状态机和 goal / permission guard；本服务端已把这些字段稳定写入结构化状态包，但不代理客户端本地工具执行。
+- 阻塞/风险：本轮代码不改 schema、migration、auth、API key、quota、usage 真源、上游策略或 admin UI；页面只会显示新的结构化压缩摘要文本。客户端 runtime 若忽略状态包，仍可能绕过“停止/暂停”的硬权限语义，需通过 Windows 实测和上游 runtime 修复继续验证。
+
 ## 2026-06-29 凭据统计 Token 表头点击排序
 
 - 完成：参考 `trade-erp` 表头排序的“当前排序列 + 升降序状态 + 稳定兜底”模式，为 `/admin-usage` 的「凭据统计」Token 窗口表头增加点击排序；未手动排序时继续沿用今天优先、空窗口自动降级到 24h / 7 天 / 更长窗口的默认降序规则。
