@@ -2,6 +2,45 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 
+const DEV_HOST = '127.0.0.1'
+const DEV_PORT = 5176
+const DEV_ORIGIN = `http://${DEV_HOST}:${DEV_PORT}`
+
+const normalizeDevLocalUrl = (url) => {
+  return String(url || '').replace(`http://localhost:${DEV_PORT}`, DEV_ORIGIN)
+}
+
+const devLocalhostOriginNormalizer = () => ({
+  name: 'openai-oauth-dev-localhost-origin-normalizer',
+  apply: 'serve',
+  configureServer(server) {
+    const printUrls = server.printUrls.bind(server)
+    server.printUrls = () => {
+      if (server.resolvedUrls?.local) {
+        server.resolvedUrls.local =
+          server.resolvedUrls.local.map(normalizeDevLocalUrl)
+      }
+      printUrls()
+    }
+  },
+  transformIndexHtml() {
+    return [
+      {
+        tag: 'script',
+        injectTo: 'head-prepend',
+        children: `
+;(function () {
+  var loc = window.location
+  if (loc.protocol === 'http:' && loc.hostname === 'localhost' && loc.port === '${DEV_PORT}') {
+    loc.replace('${DEV_ORIGIN}' + loc.pathname + loc.search + loc.hash)
+  }
+})()
+`,
+      },
+    ]
+  },
+})
+
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => {
   // 读取 .env.* 文件
@@ -9,7 +48,7 @@ export default defineConfig(({ command, mode }) => {
 
   const isProd = mode === 'production'
   const isDev = mode === 'development'
-  const apiProxyTarget = env.VITE_API_PROXY_TARGET || 'http://localhost:8400'
+  const apiProxyTarget = env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8400'
 
   // 只在开发环境打印调试信息，避免打包时报一堆东西
   if (!isProd) {
@@ -22,8 +61,10 @@ export default defineConfig(({ command, mode }) => {
     base: isDev ? '/' : env.VITE_BASE_URL || '/', // dev 在根，构建/预览在子路径
 
     plugins: [
+      // 本机开发统一用 IPv4 origin，避免 localhost 解析或代理链路导致源模块加载抖动。
+      isDev && devLocalhostOriginNormalizer(),
       react(), // 处理react
-    ],
+    ].filter(Boolean),
 
     /**
      * 用 esbuild 在【生产环境】移除所有 console / debugger
@@ -90,9 +131,14 @@ export default defineConfig(({ command, mode }) => {
 
     server: {
       host: '0.0.0.0', // 监听所有地址，方便局域网测试
-      port: 5176,
+      port: DEV_PORT,
       strictPort: true,
-      open: true,
+      open: DEV_ORIGIN,
+      // 本机开发固定 IPv4，避免 localhost 优先解析到 ::1 时 HMR / 代理间歇失败。
+      hmr: {
+        host: DEV_HOST,
+        clientPort: DEV_PORT,
+      },
       proxy: {
         '/rpc': {
           target: apiProxyTarget,

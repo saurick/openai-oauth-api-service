@@ -119,3 +119,15 @@
 - 完成：在 `openai-oauth-*` 相关治理 skills 中补入“职业任务文案”门禁，覆盖管理端页面、文档、提示词、代码审查、测试和可观测/错误提示；要求用户可见页面、帮助、错误提示和管理端说明用目标角色能理解的业务语言，不把内部实现细节直接暴露给非开发读者。
 - 下一步：后续管理端、错误提示、帮助文档或提示词生成时，区分管理员/运维/开发读者；内部 error code、request_id、上游细节和 SQL/API 证据留给日志、诊断和开发文档。
 - 阻塞/风险：追加前 `progress.md` 为 87 行、18165 字节，未达到归档阈值。本组只改 `.agents/skills` 和 `progress.md`；不改 runtime、schema、auth、API key、usage、上游策略、部署或生产配置。
+
+## 2026-07-07 本地 Vite HMR / proxy IPv4 固定
+
+- 完成：排查 `/Users/simon/projects` 下同类 Vite dev runtime 风险后，将 `web/vite.config.mjs` 的 HMR 目标固定为 `127.0.0.1:5176`，并把本地 API proxy 默认目标从 `localhost:8400` 收口到 `127.0.0.1:8400`。
+- 下一步：后续如通过 `VITE_API_PROXY_TARGET` 指向非本机后端，可继续显式覆盖；本轮只改变未配置时的本地默认值。
+- 阻塞/风险：追加前 `progress.md` 为 121 行、28557 字节，未达到 600 行或 80KB 归档阈值。本轮只改本地开发 Vite 配置，不改 OAuth/API key/usage 业务逻辑、schema、生产部署或正式文档。
+
+## 2026-07-08 本地 Vite 开发入口 IPv4 统一
+
+- 完成：继续收口本地 Vite dev origin：`web/vite.config.mjs` 保留 `host: 0.0.0.0` 和局域网 `Network` 地址，但将自动打开地址、终端 `Local:` 打印和 `localhost:5176` 页面访问统一规范到 `http://127.0.0.1:5176`；同步更新 `web/README.md` 默认本地地址和 proxy 默认值说明。
+- 下一步：后续若改前端端口或通过 `VITE_API_PROXY_TARGET` 指向其他后端，继续保持本机默认入口使用明确 IPv4 loopback。
+- 阻塞/风险：追加前 `progress.md` 为 127 行、29229 字节，未达到 600 行或 80KB 归档阈值。本轮只改本地开发 Vite 配置和前端 README，不改 OAuth、API key、usage、上游策略、schema、生产部署或真实密钥。
