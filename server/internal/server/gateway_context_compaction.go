@@ -761,6 +761,9 @@ func buildGatewayContextRestoreState(previous string, segments []gatewayContextT
 	}
 	directives = gatewayResolveDirectiveConflicts(directives, latestInstruction)
 	currentGoal := currentGatewayGoal(segments)
+	if currentGoal == "" && latestFromCurrentSegments != "" {
+		currentGoal = latestFromCurrentSegments
+	}
 	if currentGoal == "" && hasPreviousState {
 		currentGoal = previousState.CurrentUserGoal
 	}
@@ -858,8 +861,13 @@ func pinnedGatewayRawDirectives(segments []gatewayContextTextSegment, limit int)
 }
 
 func latestGatewayUserInstruction(segments []gatewayContextTextSegment) string {
-	markers := append([]string{"当前请求", "最新用户", "最近一条用户", "本轮目标", "当前目标"}, gatewayStopOrRestrictionMarkers()...)
-	lines := gatewayDirectiveLines(gatewayUserProgressLines(segments), markers)
+	lines := gatewayCurrentDirectiveLines(gatewayUserProgressLines(segments), []string{
+		"当前请求", "最新用户", "最近一条用户", "本轮目标", "当前目标",
+		"current request", "latest user", "current goal",
+	})
+	if len(lines) == 0 {
+		lines = gatewayDirectiveLines(gatewayUserProgressLines(segments), gatewayStopOrRestrictionMarkers())
+	}
 	if len(lines) == 0 {
 		return ""
 	}
@@ -867,7 +875,7 @@ func latestGatewayUserInstruction(segments []gatewayContextTextSegment) string {
 }
 
 func currentGatewayGoal(segments []gatewayContextTextSegment) string {
-	lines := gatewayDirectiveLines(gatewayUserProgressLines(segments), []string{"本轮目标", "当前目标", "当前请求", "current goal", "current request"})
+	lines := gatewayCurrentDirectiveLines(gatewayUserProgressLines(segments), []string{"本轮目标", "当前目标", "当前请求", "current goal", "current request"})
 	if len(lines) == 0 {
 		return ""
 	}
@@ -948,6 +956,47 @@ func gatewayDirectiveLines(lines []string, markers []string) []string {
 		return out[len(out)-16:]
 	}
 	return out
+}
+
+func gatewayCurrentDirectiveLines(lines []string, markers []string) []string {
+	out := make([]string, 0, len(lines))
+	seen := make(map[string]struct{})
+	for _, line := range lines {
+		if !gatewayLineHasCurrentDirectiveMarker(line, markers) {
+			continue
+		}
+		if _, ok := seen[line]; ok {
+			continue
+		}
+		seen[line] = struct{}{}
+		out = append(out, line)
+	}
+	if len(out) > 16 {
+		return out[len(out)-16:]
+	}
+	return out
+}
+
+func gatewayLineHasCurrentDirectiveMarker(line string, markers []string) bool {
+	lower := strings.ToLower(strings.TrimSpace(line))
+	if lower == "" || gatewayLineIsCompactionMeta(line) {
+		return false
+	}
+	head := lower
+	runes := []rune(head)
+	if len(runes) > 32 {
+		head = string(runes[:32])
+	}
+	for _, marker := range markers {
+		marker = strings.ToLower(strings.TrimSpace(marker))
+		if marker == "" {
+			continue
+		}
+		if strings.HasPrefix(lower, marker) || strings.Contains(head, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func gatewayResolveDirectiveConflicts(directives []string, latest string) []string {

@@ -395,6 +395,33 @@ func TestCompactGatewayContextResponsesArrayCompactsHugeLatestResumeInstruction(
 	}
 }
 
+func TestCompactGatewayContextLatestInstructionPrefersCurrentRequestOverRestrictionNoise(t *testing.T) {
+	current := strings.Join([]string{
+		"当前最新用户请求：只输出 MARKER=CURRENT_REQUEST_WINS ROUND=4 STATUS=OK。不要解释。",
+		"当前验收标准：回答必须包含 MARKER=CURRENT_REQUEST_WINS，不能把旧历史噪声当成当前目标。",
+	}, "\n")
+	noise := strings.Repeat("旧历史噪声：不能覆盖最新目标；编号=00001。\n", 7600)
+	body := []byte(`{"model":"gpt-5.5","stream":true,"input":` + mustJSONQuote(current+"\n"+noise) + `}`)
+
+	compacted, err := compactGatewayContextRequest("/v1/responses", body, "", 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !compacted.Changed {
+		t.Fatal("expected compaction")
+	}
+	state := mustGatewayRestoreState(t, compacted.Summary)
+	if !strings.Contains(state.LatestUserInstruction, "CURRENT_REQUEST_WINS") {
+		t.Fatalf("latest instruction drifted to restriction noise: %+v", state)
+	}
+	if strings.HasPrefix(state.LatestUserInstruction, "旧历史噪声") {
+		t.Fatalf("latest instruction should not use historical noise: %+v", state)
+	}
+	if !strings.Contains(state.CurrentUserGoal, "CURRENT_REQUEST_WINS") || strings.HasPrefix(state.CurrentUserGoal, "旧历史噪声") {
+		t.Fatalf("current goal drifted to historical noise: %+v", state)
+	}
+}
+
 func TestCompactGatewayContextGenericSecondPassCompactsHugeInstructionString(t *testing.T) {
 	hugeInstruction := "第二轮当前请求：只输出 MARKER=WIN_GENERIC_SECOND_PASS 和 ACTION=NO_TOOL。\n" +
 		strings.Repeat("HISTORICAL_CONTEXT_ONLY old noise should not remain raw.\n", 7600) +
