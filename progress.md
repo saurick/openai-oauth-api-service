@@ -7,7 +7,10 @@
 
 - 完成：后台共享表格分页默认页容量从 8 条改为 50 条，页容量选项统一为 `50/100/200/500/1000`；同步放宽服务端管理端 list limit 上限到 1000，避免前端 500 / 1000 选项与真实返回数量不一致。
 - 完成：分页控件宽度和 `style:l1` 回归同步调整到最长 `1000 条/页` 不裁切；mock 数据扩到超过 50 条，继续覆盖下一页请求、表头全选当前页和每日模型详情分页。修正 `style:l1` 启动非默认端口时 Vite HMR 仍固定指向 5176 的误报，不改变生产构建端口。
-- 下一步：部署到 133 后需用生产页面确认分页下拉显示 50/100/200/500/1000，健康检查通过，再按 Git closeout 规则提交推送。
+- 验证：本地已通过 `go test -count=1 ./...`、`/usr/local/bin/pnpm lint`、`/usr/local/bin/pnpm css`、`/usr/local/bin/pnpm test`、`/usr/local/bin/pnpm build`、无代理环境全量 `pnpm style:l1`、`bash scripts/qa/secrets.sh` 和 `git diff --check`。提交推送时 pre-push `qa:full` 也通过；`govulncheck` 仍提示 Go 1.26.4 标准库和 `pgx/v5@v5.9.0` 的已知漏洞，当前脚本按既有规则提示但不阻断。
+- 部署：已基于提交 `b1c83f1b3cc488bb5c4ae3b07c76d550960b96e7` 在本地构建 linux/amd64 镜像 `oauth-api-service-server:20260709T161200-b1c83f1b-pagination-50`，上传到 `192.168.0.133:/data/openai-oauth-api-service/releases/20260709T161200-b1c83f1b-pagination-50`；远端只执行 checksum、`docker load`、宿主机 `/usr/local/bin/atlas migrate status`、备份 `.env` 为 `.env.bak.20260709T161200-pagination-50`、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在 133 构建。Atlas 当前版本 `20260604123931`、pending 0。
+- 线上验证：当前 `app-server` 运行镜像为 `oauth-api-service-server:20260709T161200-b1c83f1b-pagination-50`，容器环境包含 `GIT_SHA=b1c83f1b3cc488bb5c4ae3b07c76d550960b96e7`、`GIT_SHA_SHORT=b1c83f1b` 和 `IMAGE_TAG=20260709T161200-b1c83f1b-pagination-50`；远端本机和公网 `/healthz` / `/readyz` 均通过，`/public/codex/balance` 首次因 ChatGPT `wham/usage` 上游读取失败返回 502，重试后返回 200。生产 Playwright 登录 `/admin-keys` 与 `/admin-usage` 后确认分页默认 `50 条/页`，下拉只包含 `50/100/200/500/1000 条/页`，`1000 条/页` 不裁切，浏览器控制台无错误。
+- 清理：部署验证后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧镜像 `oauth-api-service-server:20260703T175800-14c7fae1-local`，回收 353.4MB；未执行 volume prune。根分区从 41% 降到 40%，当前 app-server 仍运行新镜像，近 1 分钟日志未见 WARN / ERROR / PANIC / FATAL。
 - 阻塞/风险：本轮不改 schema、migration、auth、API key 生命周期、usage 真源、上游策略或 quota 语义；首页最近调用样本仍是固定摘要数量，不属于可切换分页控件。
 
 ## 2026-07-02 Codex 上下文压缩结构化状态包
