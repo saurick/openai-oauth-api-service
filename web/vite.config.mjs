@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 
 const DEV_HOST = '127.0.0.1'
-const DEV_PORT = 5176
+const DEV_PORT = Number(process.env.STYLE_L1_PORT || 5176)
 const DEV_ORIGIN = `http://${DEV_HOST}:${DEV_PORT}`
 
 const normalizeDevLocalUrl = (url) => {

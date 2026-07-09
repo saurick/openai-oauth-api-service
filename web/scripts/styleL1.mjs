@@ -608,6 +608,7 @@ function startDevServer() {
       env: {
         ...process.env,
         BROWSER: 'none',
+        STYLE_L1_PORT: String(devServerPort),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     }
@@ -1629,7 +1630,7 @@ async function assertUsageTableVisuals(page, scenarioName) {
       hasDetailsDefault:
         document.body.innerText.includes('调用明细') &&
         document.body.innerText.includes('按请求级 usage 真源直接展示状态'),
-      hasPagination: document.body.innerText.includes('共 12 条'),
+      hasPagination: document.body.innerText.includes('共 64 条'),
       hasSidebarUsageNav: document.body.innerText.includes('用量日志'),
       hasTableRefreshAction: Array.from(
         main?.querySelectorAll('button') || []
@@ -1921,7 +1922,7 @@ async function assertUsageDailyModelDetailPagination(page, scenarioName) {
   const startIndex = calls.length
   const modal = page.locator('.admin-usage-day-model-modal')
   const pagination = modal.locator('.admin-table-pagination')
-  await expectText(page, '共 12 条')
+  await expectText(page, '共 64 条')
   const firstPageMetrics = await pagination.evaluate((node) => {
     const pageSize = node.querySelector('.admin-table-page-size-input')
     const rect = node.getBoundingClientRect()
@@ -1930,7 +1931,7 @@ async function assertUsageDailyModelDetailPagination(page, scenarioName) {
       currentPageLabel:
         node.querySelector('.admin-page-button-current')?.textContent.trim() ||
         '',
-      hasPageSize: pageSize?.value === '8 条/页',
+      hasPageSize: pageSize?.value === '50 条/页',
       isVisible: rect.width > 0 && rect.height > 0,
       overflowsX: pageSize
         ? pageSize.scrollWidth > pageSize.clientWidth + 1
@@ -1943,8 +1944,8 @@ async function assertUsageDailyModelDetailPagination(page, scenarioName) {
     firstPageMetrics.isVisible &&
       firstPageMetrics.currentPageLabel === '1' &&
       firstPageMetrics.hasPageSize &&
-      firstPageMetrics.pageSizeWidth >= 118 &&
-      firstPageMetrics.pageSizeWidth <= 122 &&
+      firstPageMetrics.pageSizeWidth >= 138 &&
+      firstPageMetrics.pageSizeWidth <= 142 &&
       firstPageMetrics.pageSizeHeight <= 38 &&
       !firstPageMetrics.overflowsX,
     `${scenarioName} 每日模型详情分页器初始状态异常: ${JSON.stringify(
@@ -1958,8 +1959,8 @@ async function assertUsageDailyModelDetailPagination(page, scenarioName) {
       return (
         call.method === 'usage_list' &&
         call.params?.model === 'gpt-5.4' &&
-        call.params?.limit === 8 &&
-        call.params?.offset === 8
+        call.params?.limit === 50 &&
+        call.params?.offset === 50
       )
     })
     if (matched) {
@@ -1972,11 +1973,11 @@ async function assertUsageDailyModelDetailPagination(page, scenarioName) {
       return (
         call.method === 'usage_list' &&
         call.params?.model === 'gpt-5.4' &&
-        call.params?.limit === 8 &&
-        call.params?.offset === 8
+        call.params?.limit === 50 &&
+        call.params?.offset === 50
       )
     }),
-    `${scenarioName} 每日模型详情点击下一页后未请求 offset=8: ${JSON.stringify(
+    `${scenarioName} 每日模型详情点击下一页后未请求 offset=50: ${JSON.stringify(
       calls.slice(startIndex)
     )}`
   )
@@ -1992,7 +1993,7 @@ async function assertUsageDailyModelDetailPagination(page, scenarioName) {
 
 async function assertUsageDailyModelPagination(page, scenarioName) {
   const dailyPagination = page.locator('.admin-table-pagination').last()
-  await expectText(page, '共 12 条')
+  await expectText(page, '共 64 条')
   await dailyPagination.getByRole('button', { name: '下一页' }).click()
   await expectText(page, 'gpt-5.3-codex')
   const metrics = await dailyPagination.evaluate((node) => {
@@ -2003,7 +2004,7 @@ async function assertUsageDailyModelPagination(page, scenarioName) {
       currentPageLabel:
         node.querySelector('.admin-page-button-current')?.textContent.trim() ||
         '',
-      hasPageSize: pageSize?.value === '8 条/页',
+      hasPageSize: pageSize?.value === '50 条/页',
       isVisible: rect.width > 0 && rect.height > 0,
       overflowsX: pageSize
         ? pageSize.scrollWidth > pageSize.clientWidth + 1
@@ -2016,8 +2017,8 @@ async function assertUsageDailyModelPagination(page, scenarioName) {
     metrics.isVisible &&
       metrics.currentPageLabel === '2' &&
       metrics.hasPageSize &&
-      metrics.pageSizeWidth >= 118 &&
-      metrics.pageSizeWidth <= 122 &&
+      metrics.pageSizeWidth >= 138 &&
+      metrics.pageSizeWidth <= 142 &&
       metrics.pageSizeHeight <= 38 &&
       !metrics.overflowsX,
     `${scenarioName} 每日模型分页器盒模型或状态异常: ${JSON.stringify(metrics)}`
@@ -2159,7 +2160,7 @@ async function assertUsageDetailsTab(page, scenarioName) {
     hasHeaderTooltips:
       document.querySelectorAll('main table .admin-th-help[data-tooltip]')
         .length >= 4,
-    hasPagination: document.body.innerText.includes('共 12 条'),
+    hasPagination: document.body.innerText.includes('共 64 条'),
     hasRequestID: document.body.innerText.includes('req_style_l1_prod_1'),
     hasSessionID: document.body.innerText.includes('session-style-l1'),
     hasClientIP: document.body.innerText.includes('203.0.113.9'),
@@ -2498,7 +2499,7 @@ async function assertUsagePaginationRequest(page, scenarioName) {
       calls
         .slice(startIndex)
         .some(
-          (call) => call.method === 'usage_list' && call.params?.offset === 8
+          (call) => call.method === 'usage_list' && call.params?.offset === 50
         )
     ) {
       await firstPagination.getByRole('button', { name: '上一页' }).click()
@@ -2508,7 +2509,7 @@ async function assertUsagePaginationRequest(page, scenarioName) {
   }
 
   assert.fail(
-    `${scenarioName} 点击 usage 下一页后未请求 offset=8: ${JSON.stringify(
+    `${scenarioName} 点击 usage 下一页后未请求 offset=50: ${JSON.stringify(
       calls.slice(startIndex)
     )}`
   )
@@ -3118,21 +3119,21 @@ async function assertKeyTableVisuals(page, scenarioName) {
     `${scenarioName} API 凭据表格不应再展示行内操作列`
   )
   assert(
-    metrics.createdAtCells.length === 8 &&
+    metrics.createdAtCells.length === 50 &&
       metrics.createdAtCells.every(
         (value) => value !== '-' && /\d/.test(value)
       ),
     `${scenarioName} 创建时间列展示异常: ${JSON.stringify(metrics.createdAtCells)}`
   )
   assert(
-    metrics.updatedAtCells.length === 8 &&
+    metrics.updatedAtCells.length === 50 &&
       metrics.updatedAtCells.every(
         (value) => value !== '-' && /\d/.test(value)
       ),
     `${scenarioName} 更新时间列展示异常: ${JSON.stringify(metrics.updatedAtCells)}`
   )
   assert(
-    metrics.lastUsedCells.length === 8 &&
+    metrics.lastUsedCells.length === 50 &&
       metrics.lastUsedCells.some(
         (value) => value !== '-' && /\d/.test(value)
       ) &&
@@ -3172,7 +3173,11 @@ async function assertKeyTableVisuals(page, scenarioName) {
     'fixed',
     `${scenarioName} key 表格应使用固定列宽避免 Windows 下凭据列被压窄: ${JSON.stringify(metrics)}`
   )
-  assert.equal(metrics.keyCells.length, 8, `${scenarioName} key 凭据列数量异常`)
+  assert.equal(
+    metrics.keyCells.length,
+    50,
+    `${scenarioName} key 凭据列数量异常`
+  )
   for (const [index, keyCell] of metrics.keyCells.entries()) {
     assert(
       keyCell.cellWidth >= 220 && keyCell.valueWidth >= 140,
@@ -3199,7 +3204,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
   }
   assert.equal(
     metrics.selectionCheckboxes.length,
-    8,
+    50,
     `${scenarioName} key 表格选择框数量异常`
   )
   for (const [index, checkbox] of metrics.selectionCheckboxes.entries()) {
@@ -3219,7 +3224,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
   }
   assert.equal(
     metrics.statusCells.length,
-    8,
+    50,
     `${scenarioName} key 表格状态列数量异常`
   )
   for (const [index, statusCell] of metrics.statusCells.entries()) {
@@ -3242,7 +3247,7 @@ async function assertKeyTableVisuals(page, scenarioName) {
   await assertKeyDarkTokenLimitModal(page, scenarioName)
   await assertKeyDoubleClickEdit(page, scenarioName)
   await assertTablePagination(page, scenarioName, {
-    nextText: 'extraapikey9',
+    nextText: 'extraapikey51',
     previousText: 'productionapikey',
   })
   await assertKeySearchAutoQuery(page, scenarioName)
@@ -3728,7 +3733,7 @@ async function assertTablePagination(
     placement: 'top',
   })
   await page.keyboard.press('Escape')
-  await pageSizeInput.fill('8')
+  await pageSizeInput.fill('50')
   await pageSizeInput.press('Enter')
   const paginationMetrics = await firstPagination.evaluate((node) => {
     const current = node.querySelector('.admin-page-button-current')
@@ -3824,7 +3829,7 @@ async function assertTablePagination(
   )
   assert.equal(
     paginationMetrics.pageSizeValue,
-    '8 条/页',
+    '50 条/页',
     `${scenarioName} 分页每页条数未使用 trade-erp 文案: ${JSON.stringify(
       paginationMetrics
     )}`
@@ -3836,10 +3841,10 @@ async function assertTablePagination(
       paginationMetrics.currentHeight >= 34 &&
       paginationMetrics.currentHeight <= 38 &&
       paginationMetrics.currentBorderRadius.includes('50%') &&
-      paginationMetrics.pageSizeWidth >= 118 &&
-      paginationMetrics.pageSizeWidth <= 122 &&
+      paginationMetrics.pageSizeWidth >= 138 &&
+      paginationMetrics.pageSizeWidth <= 142 &&
       paginationMetrics.pageSizeHeight <= 38 &&
-      paginationMetrics.pageSizeContentWidth >= 78 &&
+      paginationMetrics.pageSizeContentWidth >= 94 &&
       !paginationMetrics.overflowsX &&
       !paginationMetrics.overflowsY,
     `${scenarioName} 分页数字页码盒模型异常: ${JSON.stringify(
@@ -3865,14 +3870,14 @@ async function assertTablePagination(
   )
   assert(
     !paginationMetrics.text.includes('第 1 /') &&
-      !paginationMetrics.text.includes('1-8'),
+      !paginationMetrics.text.includes('1-50'),
     `${scenarioName} 分页仍残留旧范围/页数摘要: ${JSON.stringify(
       paginationMetrics
     )}`
   )
-  await pageSizeInput.fill('100')
+  await pageSizeInput.fill('1000')
   await pageSizeInput.press('Enter')
-  const pageSize100Metrics = await firstPagination.evaluate((node) => {
+  const pageSize1000Metrics = await firstPagination.evaluate((node) => {
     const pageSize = node.querySelector('.admin-table-page-size-input')
     const pageSizeStyle = pageSize ? window.getComputedStyle(pageSize) : null
     const pageSizeRect = pageSize?.getBoundingClientRect()
@@ -3894,15 +3899,15 @@ async function assertTablePagination(
     }
   })
   assert(
-    pageSize100Metrics.pageSizeValue === '100 条/页' &&
-      pageSize100Metrics.pageSizeContentWidth >= 78 &&
-      pageSize100Metrics.pageSizeScrollWidth <=
-        pageSize100Metrics.pageSizeClientWidth,
+    pageSize1000Metrics.pageSizeValue === '1000 条/页' &&
+      pageSize1000Metrics.pageSizeContentWidth >= 94 &&
+      pageSize1000Metrics.pageSizeScrollWidth <=
+        pageSize1000Metrics.pageSizeClientWidth,
     `${scenarioName} 分页每页条数最长选项显示不完整: ${JSON.stringify(
-      pageSize100Metrics
+      pageSize1000Metrics
     )}`
   )
-  await pageSizeInput.fill('8')
+  await pageSizeInput.fill('50')
   await pageSizeInput.press('Enter')
   assert(
     await page.getByText(previousText).first().isVisible(),
@@ -4023,12 +4028,14 @@ async function assertOpenSelectMenuNotClipped(
 async function assertKeyTableSelectionInteraction(page, scenarioName) {
   const rows = page.locator('main table tbody tr')
   const checkboxes = page.locator('main table tbody input[type="checkbox"]')
+  const expectedChecked = (selectedIndexes = []) =>
+    Array.from({ length: 50 }, (_, index) => selectedIndexes.includes(index))
 
   await rows.nth(0).click()
   assert.deepEqual(
     await readKeyTableSelectionState(page),
     {
-      checked: [true, false, false, false, false, false, false, false],
+      checked: expectedChecked([0]),
       headerChecked: false,
       headerIndeterminate: true,
       selectedRows: 1,
@@ -4040,7 +4047,7 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
   assert.deepEqual(
     await readKeyTableSelectionState(page),
     {
-      checked: [false, true, false, false, false, false, false, false],
+      checked: expectedChecked([1]),
       headerChecked: false,
       headerIndeterminate: true,
       selectedRows: 1,
@@ -4052,7 +4059,7 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
   assert.deepEqual(
     await readKeyTableSelectionState(page),
     {
-      checked: [false, false, false, false, false, false, false, false],
+      checked: expectedChecked(),
       headerChecked: false,
       headerIndeterminate: false,
       selectedRows: 0,
@@ -4067,10 +4074,10 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
   assert.deepEqual(
     await readKeyTableSelectionState(page),
     {
-      checked: [true, true, true, true, true, true, true, true],
+      checked: expectedChecked(Array.from({ length: 50 }, (_, index) => index)),
       headerChecked: true,
       headerIndeterminate: false,
-      selectedRows: 8,
+      selectedRows: 50,
     },
     `${scenarioName} 表头全选应选中当前页所有凭据`
   )
@@ -4079,7 +4086,7 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
   assert.deepEqual(
     await readKeyTableSelectionState(page),
     {
-      checked: [false, false, false, false, false, false, false, false],
+      checked: expectedChecked(),
       headerChecked: false,
       headerIndeterminate: false,
       selectedRows: 0,
@@ -4091,7 +4098,7 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
   assert.deepEqual(
     await readKeyTableSelectionState(page),
     {
-      checked: [false, true, false, false, false, false, false, false],
+      checked: expectedChecked([1]),
       headerChecked: false,
       headerIndeterminate: true,
       selectedRows: 1,
@@ -4103,7 +4110,7 @@ async function assertKeyTableSelectionInteraction(page, scenarioName) {
   assert.deepEqual(
     await readKeyTableSelectionState(page),
     {
-      checked: [false, true, true, false, false, false, false, false],
+      checked: expectedChecked([1, 2]),
       headerChecked: false,
       headerIndeterminate: true,
       selectedRows: 2,
@@ -4931,7 +4938,7 @@ function getApiMockData(method, params = {}, state = {}) {
         quota_weekly_tokens: 0,
       },
     ]
-    const extraKeys = Array.from({ length: 8 }, (_, index) => {
+    const extraKeys = Array.from({ length: 58 }, (_, index) => {
       const id = index + 3
       return {
         allowed_models: ['gpt-5.3-codex'],
@@ -5216,7 +5223,7 @@ function getApiMockData(method, params = {}, state = {}) {
           upstream_mode: 'codex_cli',
         },
       ],
-      total: 12,
+      total: 64,
     }
   }
 
@@ -5397,7 +5404,7 @@ function createMockUsageBuckets() {
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
-  return Array.from({ length: 12 }, (_, index) => {
+  return Array.from({ length: 64 }, (_, index) => {
     const d = new Date(todayStart)
     d.setDate(todayStart.getDate() - (11 - index))
     const calls = index % 5 === 0 ? 4 : 18 + index * 3
@@ -5406,7 +5413,7 @@ function createMockUsageBuckets() {
     const outputTokens = calls * (220 + index * 16)
     const reasoningTokens = calls * (40 + index * 3)
     const model =
-      index === 2
+      index === 2 || index === 52
         ? 'gpt-5.3-codex'
         : index % 5 === 0
           ? 'gpt-5.4-mini'

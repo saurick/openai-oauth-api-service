@@ -70,8 +70,8 @@ func (r *userAdminRepo) ListUsers(ctx context.Context, limit, offset int, userna
 	if limit <= 0 {
 		limit = 30
 	}
-	if limit > 200 {
-		limit = 200
+	if limit > 1000 {
+		limit = 1000
 	}
 	if offset < 0 {
 		offset = 0

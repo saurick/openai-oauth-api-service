@@ -109,6 +109,26 @@ func TestDetectGatewayClientType(t *testing.T) {
 	}
 }
 
+func TestNormalizeLimitCapsAtPaginationMaximum(t *testing.T) {
+	tests := []struct {
+		name  string
+		limit int
+		want  int
+	}{
+		{name: "default", limit: 0, want: 30},
+		{name: "keeps requested page size", limit: 500, want: 500},
+		{name: "caps at maximum page size", limit: 1200, want: 1000},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeLimit(tt.limit); got != tt.want {
+				t.Fatalf("normalizeLimit(%d) = %d, want %d", tt.limit, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGatewayUsecaseCreateAPIKeyAllowsBlankRemark(t *testing.T) {
 	repo := &gatewayPolicyTestRepo{}
 	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)

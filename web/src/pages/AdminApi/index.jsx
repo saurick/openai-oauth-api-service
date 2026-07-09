@@ -29,13 +29,13 @@ import {
 
 const PAGE_SIZE = 30
 const DASHBOARD_USAGE_SIZE = 8
-const DEFAULT_TABLE_PAGE_SIZE = 8
-const TABLE_PAGE_SIZE_OPTIONS = [8, 10, 20, 50, 100]
+const DEFAULT_TABLE_PAGE_SIZE = 50
+const TABLE_PAGE_SIZE_OPTIONS = [50, 100, 200, 500, 1000]
 const TABLE_PAGE_SIZE_SELECT_OPTIONS = TABLE_PAGE_SIZE_OPTIONS.map((value) => ({
   label: `${value} 条/页`,
   value,
 }))
-const MAX_TABLE_FETCH_SIZE = 200
+const MAX_TABLE_FETCH_SIZE = 1000
 const KEY_TOKEN_WINDOWS = [
   { key: 'today', label: '今天' },
   { key: '24h', label: '24h', seconds: DAY_SECONDS },
