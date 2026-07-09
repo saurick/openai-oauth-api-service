@@ -8,8 +8,11 @@
 - 完成：将 `server/go.mod` 声明工具链从 `go1.26.4` 升级到 `go1.26.5`，将 `github.com/jackc/pgx/v5` 从 `v5.9.0` 升级到 `v5.9.2`，并同步 `server/Dockerfile` / `server/Makefile` 默认 `GO_BUILDER_IMAGE=golang:1.26.5`，避免本地扫描和发布镜像构建工具链分叉。
 - 完成：全量 QA 首次暴露本机临时端口压力下 `TestCodexBackendRefreshesExpiredAccessToken` 偶发 `Can't assign requested address`；已将该测试从两个 `httptest` server 收敛为同一 server 下的 `/oauth/token` 和 `/responses` 两条路径，并在 cleanup 关闭 idle connection，降低全量测试端口压力，不改变生产刷新逻辑。
 - 验证：已通过 `bash scripts/qa/govulncheck.sh`，可达漏洞从 Go 标准库 `GO-2026-5856` 和 `pgx` `GO-2026-5004` 收敛为 0；已通过 `cd server && go test -count=1 ./...`、`cd server && go test -count=1 ./internal/server -run TestCodexBackendRefreshesExpiredAccessToken` 和 `PATH="/usr/local/bin:$PATH" bash scripts/qa/full.sh`。本轮不改 OAuth、网关压缩、usage 统计、schema、migration、admin UI 或生产配置语义。
-- 下一步：提交推送后按低配发布主路径本机构建镜像并部署到 133；远端只执行 `docker load`、Atlas status、更新 `APP_IMAGE`、重建 app-server、health/ready 和必要 smoke。
-- 阻塞/风险：`govulncheck` 仍提示依赖树中存在未被当前代码调用的漏洞项，当前脚本只阻断可达漏洞；生产只有在新镜像部署后才真正使用 `go1.26.5` 标准库。
+- 部署：已提交并推送 `1ec2e44cec382286fe46d697af1e89aa4ee7b031`；按低配发布主路径在本地构建 linux/amd64 镜像 `oauth-api-service-server:20260710T002309-1ec2e44c-govulncheck-clean`，上传到 `192.168.0.133:/data/openai-oauth-api-service/releases/20260710T002309-1ec2e44c-govulncheck-clean`。远端只执行 `docker load`、宿主机 `/usr/local/bin/atlas migrate status`、备份 `.env` 为 `.env.bak.20260710T002309-1ec2e44c-govulncheck-clean`、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在 133 构建。Atlas 当前版本 `20260604123931`、pending 0。
+- 线上验证：当前 app-server 运行镜像为 `oauth-api-service-server:20260710T002309-1ec2e44c-govulncheck-clean`，容器环境 `GIT_SHA=1ec2e44cec382286fe46d697af1e89aa4ee7b031`、`GIT_SHA_SHORT=1ec2e44c`、`IMAGE_TAG=20260710T002309-1ec2e44c-govulncheck-clean`；远端本机 `/healthz` / `/readyz` 均通过，`/v1/models` 使用测试 key smoke 返回 6 个模型。启动日志显示 `service.version=1ec2e44cec382286fe46d697af1e89aa4ee7b031`。
+- 清理：部署验证后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未被容器使用的旧镜像 `oauth-api-service-server:20260709T233619-41b03fa4-natural-facts`，回收 `353.5MB`；未执行 volume prune。根分区从 42% 回到 41%，当前 app-server 仍运行新镜像。
+- 下一步：后续若开启 `GOVULNCHECK_STRICT=1`，当前可达漏洞已满足阻断要求；仍可择机处理 govulncheck 报告中“依赖树存在但当前代码不可达”的非阻断项。
+- 阻塞/风险：本轮只处理可达漏洞和构建工具链一致性；没有升级 Alpine runtime、Node/Codex CLI runtime、OpenTelemetry 或其他未调用漏洞来源。
 
 ## 2026-07-10 压缩 live 回归脚本化
 
