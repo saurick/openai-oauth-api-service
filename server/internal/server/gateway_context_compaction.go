@@ -1005,9 +1005,29 @@ func gatewayFactLines(segments []gatewayContextTextSegment, limit int) []string 
 			for _, match := range factPattern.FindAllString(line, -1) {
 				gatewayAppendDurableFact(&out, seen, match, limit)
 			}
+			if fact := gatewayNaturalFactLine(line); fact != "" {
+				gatewayAppendDurableFact(&out, seen, fact, limit)
+			}
 		}
 	}
 	return out
+}
+
+func gatewayNaturalFactLine(line string) string {
+	line = strings.TrimSpace(line)
+	for _, marker := range []string{"已登记事实：", "已登记事实:", "durable fact:", "registered fact:"} {
+		if strings.HasPrefix(strings.ToLower(line), strings.ToLower(marker)) {
+			return strings.TrimSpace(line[len(marker):])
+		}
+	}
+	if strings.HasPrefix(line, "当前最新用户请求：登记自然语言事实") || strings.HasPrefix(line, "当前最新用户请求：登记事实") {
+		start := strings.IndexAny(line, "“\"")
+		end := strings.LastIndexAny(line, "”\"")
+		if start >= 0 && end > start {
+			return strings.TrimSpace(strings.Trim(line[start:end], "“”\""))
+		}
+	}
+	return ""
 }
 
 func gatewayCurrentDirectiveLines(lines []string, markers []string) []string {
