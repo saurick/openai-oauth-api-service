@@ -23,6 +23,16 @@
 - 清理：部署和回归通过后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧镜像 `20260709T221549-18d76221-agent-passthrough` 和 `20260709T161200-b1c83f1b-pagination-50`，回收 `706.9MB`；未执行 volume prune。根分区从 42% 回到 41%，当前 app-server 仍运行 `ed8102f0` 新镜像。
 - 阻塞/风险：本轮不改 schema、migration、auth、API key 生命周期、quota 语义、上游策略和 admin UI；Codex CLI 验证中本机 TCP `TIME_WAIT` 一度达到约 7700，造成局部 SSH/curl/MCP 连接抖动，已通过放慢连接和禁用测试脚本代理规避。passthrough 模式仍按设计把真实超长上下文交给 Agent 客户端自己的 compact / summarization 处理。
 
+## 2026-07-09 压缩事实链 durable_facts 回归
+
+- 诊断：在 `ed8102f0` 线上版本补跑事实链回归时，9 轮登记事实后第 10 轮不携带事实值、只要求从同 session 压缩摘要回忆，官方回答只能恢复 R9，R1/R3/R6 丢失。根因是旧状态包只把上一轮完整 JSON 放入 `historical_context_only` 并截断到 1000 字，长期事实没有单独结构化字段，早期事实会被后续摘要覆盖。
+- 完成：新增 `durable_facts` 字段，压缩时从上一轮状态和当前 user-eligible 片段合并 `FACT_x=value` / “已登记事实”类稳定事实，最多保留 64 条，避免靠截断历史摘要保留长期关联。旧 summary 没有该字段仍可正常解析，不涉及 DB schema 或 migration。
+- 验证：已通过 `cd server && go test -count=1 ./internal/server -run 'TestCompactGatewayContextCarriesDurableFactsAcrossRepeatedCompactions|TestCompactGatewayContextLatestInstructionPrefersCurrentRequestOverRestrictionNoise|TestCompactGatewayContext'`、无代理环境 `cd server && go test -count=1 ./...`、`bash scripts/qa/secrets.sh`、`git diff --check` 和 `PATH="/usr/local/bin:$PATH" env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u NO_PROXY -u http_proxy -u https_proxy -u all_proxy -u no_proxy bash scripts/qa/full.sh`。`qa:full` 仍提示既有 Go 1.26.4 与 `pgx/v5@5.9.0` govulncheck 风险，按当前脚本仅提示不阻断。
+- 部署：基于 `b427e0d92fb0cb53e6d0b27e97a21749ff8848bc` 在本地构建 linux/amd64 镜像 `oauth-api-service-server:20260709T231533-b427e0d9-durable-facts`，上传到 `192.168.0.133:/data/openai-oauth-api-service/releases/20260709T231533-b427e0d9-durable-facts`；远端只执行 `docker load`、宿主机 `/usr/local/bin/atlas migrate status`、备份 `.env` 为 `.env.bak.20260709T231533-b427e0d9-durable-facts`、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在 133 构建。Atlas 当前版本 `20260604123931`、pending 0。
+- 线上验证：当前 `app-server` 运行镜像为 `oauth-api-service-server:20260709T231533-b427e0d9-durable-facts`，日志 `service.version=b427e0d92fb0cb53e6d0b27e97a21749ff8848bc`；远端本机 `/healthz` / `/readyz` 通过。线上 run `gw-fact-durable-20260709-16533985` 连续 10 轮均 `status=200`、`success=true`、`context_compacted=true`，`context_compaction_count=1..10`；前 9 轮登记 `FACT_R1..FACT_R9`，第 10 轮正文不提供事实值，只要求从同 session 压缩摘要回忆，官方回答正确返回 R1/R3/R6/R9。DB 最终 summary 的 `durable_facts` 保留 R1-R9 全部事实。
+- 清理：部署和回归通过后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧镜像 `20260709T222744-ed8102f0-context-latest-instruction`，回收 `353.4MB`；未执行 volume prune。根分区维持约 41%，当前 app-server 仍运行 `b427e0d9` 新镜像。
+- 阻塞/风险：本轮保证的是可识别稳定事实锚点（如 `FACT_x=value` / “已登记事实”）跨压缩保留；普通长篇自然语言事实如果没有明确锚点，仍可能只按当前摘要启发式保留，不应承诺任意细节 100% 永久保留。
+
 ## 2026-07-09 后台分页页容量统一
 
 - 完成：后台共享表格分页默认页容量从 8 条改为 50 条，页容量选项统一为 `50/100/200/500/1000`；同步放宽服务端管理端 list limit 上限到 1000，避免前端 500 / 1000 选项与真实返回数量不一致。
