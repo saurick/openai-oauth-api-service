@@ -95,7 +95,7 @@ ENV TZ=Asia/Shanghai
 
 RUN apk add --no-cache tini tzdata ca-certificates nodejs npm && \
     npm config set registry https://registry.npmmirror.com && \
-    npm install -g @openai/codex@0.133.0 && \
+    npm install -g @openai/codex@0.143.0 && \
     npm cache clean --force
 
 WORKDIR /app

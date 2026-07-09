@@ -14,6 +14,15 @@
 - 下一步：后续若开启 `GOVULNCHECK_STRICT=1`，当前可达漏洞已满足阻断要求；仍可择机处理 govulncheck 报告中“依赖树存在但当前代码不可达”的非阻断项。
 - 阻塞/风险：本轮只处理可达漏洞和构建工具链一致性；没有升级 Alpine runtime、Node/Codex CLI runtime、OpenTelemetry 或其他未调用漏洞来源。
 
+## 2026-07-10 133 最新代码部署与 Codex runtime 持久同步
+
+- 完成：先确认本地 `main` 与 `origin/main` 同步后，将最新 HEAD `79c20c83768b3f2419f17a54a9221b4db52768b7` 打包部署到 133；部署后发现运行容器可通过健康脚本临时升级到 `@openai/codex@0.143.0`，但镜像真源仍固定 `0.133.0`，因此将 `server/Dockerfile` 的镜像内 Codex CLI 固定版本同步提升到当前 npm latest `0.143.0`，避免后续容器重建回退。
+- 线上压缩验证：在 133 新镜像上通过 `scripts/qa/live-context-compaction.py` 连续跑 3 个 `rounds=3` 隔离 session 和 1 个 `rounds=4` session；每轮登记均返回 `ACK_LIVE_CONTEXT_ROUND_*`，最终轮正文不再提供客户代号，只要求从同 session 压缩摘要回忆。前三个 session 均正确返回第 1 / 第 3 轮事实，`rounds=4` session 正确返回第 1 / 第 2 / 第 4 轮事实。
+- DB 证据：4 个线上 session 的 `gateway_context_summaries.compaction_count` 分别为 `4/4/4/5`，`durable_facts` 分别保留各自随机 token 的自然语言事实；`gateway_usage_logs` 按 session 聚合均为全 200 成功，原始约 `1.007MB` 的请求经网关压缩后入库 request_bytes 约 `19.7KB..21.8KB`，未观察到跨 session 串事实或目标漂移。
+- 部署验证：远端只执行 `docker load`、宿主机 Atlas status、更新 Compose `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`；Atlas 当前版本 `20260604123931`、pending 0。远端 `/healthz` / `/readyz` 通过，`/v1/models` smoke 返回 6 个模型，启动日志 `service.version` 与镜像内 `GIT_SHA` 对齐。
+- 下一步：后续若 npm latest 再变化，优先先判断是否需要同步镜像固定版本；运行时健康脚本的 auto-upgrade 只作为兜底，不替代镜像构建真源。
+- 阻塞/风险：线上 live 压缩回归覆盖的是明确登记的自然语言事实和 session 级 durable_facts，不承诺任意无结构长文本细节 100% 永久保留；Codex runtime 健康脚本仍可作为兜底自动升级，但镜像固定版本才是可复现发布真源。
+
 ## 2026-07-10 压缩 live 回归脚本化
 
 - 完成：新增 `scripts/qa/live-context-compaction.py`，用于手动线上多轮上下文压缩回归。脚本必须显式提供 `GATEWAY_BASE_URL` 和 `GATEWAY_API_KEY`，默认生成独立 `session_id`，连续登记自然语言事实并在最终轮不提供客户代号值，只验证官方回答能从同 session 压缩摘要 / `durable_facts` 回忆早期事实。
