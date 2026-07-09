@@ -285,6 +285,7 @@ type gatewayContextRestoreState struct {
 	CurrentActiveGoal                 string                          `json:"current_active_goal"`
 	LatestUserInstruction             string                          `json:"latest_user_instruction"`
 	LatestUncompressedUserInstruction string                          `json:"latest_uncompressed_user_instruction,omitempty"`
+	DurableFacts                      []string                        `json:"durable_facts,omitempty"`
 	PinnedRawUserDirectives           []string                        `json:"pinned_raw_user_directives"`
 	CurrentEffectiveConstraints       []string                        `json:"current_effective_constraints,omitempty"`
 	MustNotDo                         []string                        `json:"must_not_do"`
@@ -767,6 +768,7 @@ func buildGatewayContextRestoreState(previous string, segments []gatewayContextT
 	if currentGoal == "" && hasPreviousState {
 		currentGoal = previousState.CurrentUserGoal
 	}
+	durableFacts := gatewayDurableFacts(previousState, hasPreviousState, segments, 64)
 	phase := gatewayTaskPhase(latestInstruction, directives)
 	mustNotDo := gatewayDirectiveLines(directives, gatewayStopOrRestrictionMarkers())
 	if gatewayInstructionAllowsContinue(latestInstruction) {
@@ -800,6 +802,7 @@ func buildGatewayContextRestoreState(previous string, segments []gatewayContextT
 		CurrentActiveGoal:                 currentGoal,
 		LatestUserInstruction:             latestInstruction,
 		LatestUncompressedUserInstruction: latestFromCurrentSegments,
+		DurableFacts:                      durableFacts,
 		PinnedRawUserDirectives:           directives,
 		CurrentEffectiveConstraints:       currentEffectiveConstraints,
 		MustNotDo:                         mustNotDo,
@@ -954,6 +957,55 @@ func gatewayDirectiveLines(lines []string, markers []string) []string {
 	}
 	if len(out) > 16 {
 		return out[len(out)-16:]
+	}
+	return out
+}
+
+func gatewayDurableFacts(previous gatewayContextRestoreState, hasPrevious bool, segments []gatewayContextTextSegment, limit int) []string {
+	if limit <= 0 {
+		return nil
+	}
+	out := make([]string, 0, limit)
+	seen := make(map[string]struct{})
+	if hasPrevious {
+		for _, fact := range previous.DurableFacts {
+			gatewayAppendDurableFact(&out, seen, fact, limit)
+		}
+	}
+	for _, fact := range gatewayFactLines(segments, limit) {
+		gatewayAppendDurableFact(&out, seen, fact, limit)
+	}
+	return out
+}
+
+func gatewayAppendDurableFact(out *[]string, seen map[string]struct{}, fact string, limit int) {
+	fact = strings.TrimSpace(fact)
+	if fact == "" || gatewayLineIsCompactionMeta(fact) {
+		return
+	}
+	fact = limitRunes(fact, 300)
+	if _, ok := seen[fact]; ok {
+		return
+	}
+	seen[fact] = struct{}{}
+	*out = append(*out, fact)
+	if len(*out) > limit {
+		delete(seen, (*out)[0])
+		*out = (*out)[1:]
+	}
+}
+
+func gatewayFactLines(segments []gatewayContextTextSegment, limit int) []string {
+	factPattern := regexp.MustCompile(`(?i)\bFACT_[A-Z0-9_-]+=[A-Z0-9_.:-]+`)
+	out := make([]string, 0, limit)
+	seen := make(map[string]struct{})
+	for _, line := range gatewayUserProgressLines(segments) {
+		lower := strings.ToLower(line)
+		if strings.Contains(line, "事实") || strings.Contains(lower, "fact") {
+			for _, match := range factPattern.FindAllString(line, -1) {
+				gatewayAppendDurableFact(&out, seen, match, limit)
+			}
+		}
 	}
 	return out
 }

@@ -422,6 +422,51 @@ func TestCompactGatewayContextLatestInstructionPrefersCurrentRequestOverRestrict
 	}
 }
 
+func TestCompactGatewayContextCarriesDurableFactsAcrossRepeatedCompactions(t *testing.T) {
+	previous := ""
+	facts := []string{
+		"FACT_R1=VALUE_ALPHA",
+		"FACT_R2=VALUE_BRAVO",
+		"FACT_R3=VALUE_CHARLIE",
+		"FACT_R4=VALUE_DELTA",
+	}
+	for round, fact := range facts {
+		body := []byte(`{"model":"gpt-5.5","stream":true,"input":` + mustJSONQuote(strings.Join([]string{
+			"当前最新用户请求：登记事实 " + fact + "，只输出 ACK。",
+			"已登记事实：" + strings.Join(facts[:round+1], "\n已登记事实："),
+			strings.Repeat("旧历史噪声：不是事实，不要引用。\n", 320),
+		}, "\n")) + `}`)
+		compacted, err := compactGatewayContextRequest("/v1/responses", body, previous, 8)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !compacted.Changed {
+			t.Fatalf("round %d expected compaction", round+1)
+		}
+		previous = compacted.Summary
+	}
+
+	finalBody := []byte(`{"model":"gpt-5.5","stream":true,"input":` + mustJSONQuote(strings.Join([]string{
+		"当前最新用户请求：从同一个 session 的压缩摘要中回忆第1/3/4轮事实。",
+		"当前正文不提供事实值；必须依赖 durable_facts。",
+		strings.Repeat("最终回忆轮噪声：不是事实。\n", 320),
+	}, "\n")) + `}`)
+	final, err := compactGatewayContextRequest("/v1/responses", finalBody, previous, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !final.Changed {
+		t.Fatal("expected final compaction")
+	}
+	state := mustGatewayRestoreState(t, final.Summary)
+	joined := strings.Join(state.DurableFacts, "\n")
+	for _, fact := range []string{facts[0], facts[2], facts[3]} {
+		if !strings.Contains(joined, fact) {
+			t.Fatalf("durable facts missing %s: %+v", fact, state.DurableFacts)
+		}
+	}
+}
+
 func TestCompactGatewayContextGenericSecondPassCompactsHugeInstructionString(t *testing.T) {
 	hugeInstruction := "第二轮当前请求：只输出 MARKER=WIN_GENERIC_SECOND_PASS 和 ACTION=NO_TOOL。\n" +
 		strings.Repeat("HISTORICAL_CONTEXT_ONLY old noise should not remain raw.\n", 7600) +
