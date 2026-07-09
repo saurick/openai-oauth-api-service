@@ -7,6 +7,9 @@
 
 - 完成：新增 `scripts/qa/live-context-compaction.py`，用于手动线上多轮上下文压缩回归。脚本必须显式提供 `GATEWAY_BASE_URL` 和 `GATEWAY_API_KEY`，默认生成独立 `session_id`，连续登记自然语言事实并在最终轮不提供客户代号值，只验证官方回答能从同 session 压缩摘要 / `durable_facts` 回忆早期事实。
 - 完成：更新 `scripts/README.md`，明确该脚本会消耗真实上游额度、可能触发大请求突发保护，因此不纳入 `fast.sh` / `full.sh` / `strict.sh`，只作为发布后或问题复现时的 live 手动回归入口。
+- 线上验证：本机直连 `192.168.0.133:8400` 首次 run `live-context-compaction-20260710-000804-9b352e6e` 前两轮返回官方 ACK，第三轮在本机 Python 建连时触发 `Can't assign requested address`，判断为本机网络栈 / 临时端口抖动而非网关压缩失败。随后将同一脚本放到 133 并通过 `127.0.0.1:8400` 跑完整 run `live-context-compaction-20260710-000916-0b5c59b4`：3 轮登记均返回 `ACK_LIVE_CONTEXT_ROUND_*`，最终轮正文不提供客户代号，官方回答正确返回第 1 / 第 3 轮事实。
+- DB 证据：`live-context-compaction-20260710-000916-0b5c59b4` 在 `gateway_usage_logs` 有 4 条记录，均 `status_code=200`、`success=true`、`context_compacted=true`，`context_compaction_count=1..4`；原始请求约 `1.107MB`，压缩后约 `19.7KB..21.8KB`。最终 `gateway_context_summaries.summary.durable_facts` 包含第 1/2/3 轮自然语言事实，`current_user_goal` 指向当前“从同一个 session 的压缩摘要 durable_facts 中回忆指定轮次事实”请求，没有漂到旧目标。
+- 清理：远端 `/tmp/live-context-compaction.py` 已移动到 `/tmp/openai-oauth-qa-used/live-context-compaction-20260710-000916.py` 作为临时证据文件；本轮不重新部署服务端，线上仍运行已验证镜像 `oauth-api-service-server:20260709T233619-41b03fa4-natural-facts`。
 - 下一步：如后续继续出现“上下文没错乱但事实不关联”，优先用该脚本复现并记录 `session_id`，再结合线上 `gateway_usage_logs` / `gateway_context_summaries` 核对 `context_compacted`、`context_compaction_count` 和最终 `durable_facts`。
 - 阻塞/风险：脚本只覆盖明确登记的自然语言事实契约，不声称任意无结构长文本都能 100% 保留；真实运行需要有效 gateway key，默认本地质量门禁不执行。
 
