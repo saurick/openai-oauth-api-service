@@ -1000,6 +1000,12 @@ func mapGatewayUsageDiagnosticForRPC(item biz.GatewayUsageDiagnostic) map[string
 	if item.FallbackBlocked {
 		out["fallback_blocked"] = true
 	}
+	if item.AgentPassthrough {
+		out["agent_passthrough"] = true
+	}
+	if item.AgentPassthroughReason != "" {
+		out["agent_passthrough_reason"] = item.AgentPassthroughReason
+	}
 	if item.ReasoningEffort != "" {
 		out["reasoning_effort"] = item.ReasoningEffort
 	}

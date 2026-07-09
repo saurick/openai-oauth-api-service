@@ -121,6 +121,8 @@ type GatewayUsageDiagnostic struct {
 	BackendOnly                     bool   `json:"backend_only"`
 	FallbackEnabled                 bool   `json:"fallback_enabled"`
 	FallbackBlocked                 bool   `json:"fallback_blocked"`
+	AgentPassthrough                bool   `json:"agent_passthrough"`
+	AgentPassthroughReason          string `json:"agent_passthrough_reason"`
 	ReasoningEffort                 string `json:"reasoning_effort"`
 	UpstreamHTTPStatus              int    `json:"upstream_http_status"`
 	UpstreamErrorCode               string `json:"upstream_error_code"`
@@ -161,6 +163,12 @@ func (d GatewayUsageDiagnostic) Summary() string {
 		parts = append(parts, "fallback-blocked")
 	} else if d.FallbackEnabled {
 		parts = append(parts, "fallback-enabled")
+	}
+	if d.AgentPassthrough {
+		parts = append(parts, "agent-passthrough")
+		if d.AgentPassthroughReason != "" {
+			parts = append(parts, "agent_passthrough_reason="+d.AgentPassthroughReason)
+		}
 	}
 	if d.ReasoningEffort != "" {
 		parts = append(parts, "effort="+d.ReasoningEffort)

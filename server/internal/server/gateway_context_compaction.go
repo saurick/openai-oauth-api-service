@@ -32,6 +32,11 @@ type gatewayContextPreparation struct {
 	Diagnostic biz.GatewayUsageDiagnostic
 }
 
+type gatewayRequestOptions struct {
+	AgentPassthrough       bool
+	AgentPassthroughReason string
+}
+
 type gatewayContextCompaction struct {
 	Body            []byte
 	Summary         string
@@ -43,7 +48,7 @@ type gatewayContextCompaction struct {
 	Changed         bool
 }
 
-func (h *openAIGatewayHandler) prepareGatewayContext(ctx context.Context, key *biz.GatewayAPIKey, requestID string, sessionID string, path string, body []byte, requestModel string, reasoningEffort string) (gatewayContextPreparation, error) {
+func (h *openAIGatewayHandler) prepareGatewayContext(ctx context.Context, key *biz.GatewayAPIKey, requestID string, sessionID string, path string, body []byte, requestModel string, reasoningEffort string, options gatewayRequestOptions) (gatewayContextPreparation, error) {
 	diagnostic := gatewayUsageDiagnosticForRequest(path, body, reasoningEffort)
 	policy := h.effectiveGatewayContextPolicy(ctx, requestModel)
 	diagnostic.ContextOriginalBytes = int64(len(body))
@@ -54,6 +59,13 @@ func (h *openAIGatewayHandler) prepareGatewayContext(ctx context.Context, key *b
 	diagnostic.ContextCompactByteLimit = policy.ContextCompactBytes
 	diagnostic.ContextHardByteLimit = policy.ContextHardBytes
 	diagnostic.ContextKeepItems = policy.ContextKeepItems
+
+	if options.AgentPassthrough {
+		diagnostic.AgentPassthrough = true
+		diagnostic.AgentPassthroughReason = strings.TrimSpace(options.AgentPassthroughReason)
+		diagnostic.ContextCompactionReason = "agent_passthrough"
+		return gatewayContextPreparation{Body: body, Diagnostic: diagnostic}, nil
+	}
 
 	if !gatewayContextNeedsCompaction(len(body), diagnostic.ContextOriginalEstimatedTokens, policy) {
 		return gatewayContextPreparation{Body: body, Diagnostic: diagnostic}, nil

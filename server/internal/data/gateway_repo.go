@@ -1950,6 +1950,12 @@ func mapGatewayUsageDiagnosticForDB(item biz.GatewayUsageDiagnostic) map[string]
 	if item.FallbackBlocked {
 		out["fallback_blocked"] = true
 	}
+	if item.AgentPassthrough {
+		out["agent_passthrough"] = true
+	}
+	if item.AgentPassthroughReason != "" {
+		out["agent_passthrough_reason"] = item.AgentPassthroughReason
+	}
 	if item.ReasoningEffort != "" {
 		out["reasoning_effort"] = item.ReasoningEffort
 	}
@@ -2032,6 +2038,8 @@ func mapGatewayUsageDiagnosticFromDB(raw map[string]any) biz.GatewayUsageDiagnos
 		BackendOnly:                     diagnosticBool(raw["backend_only"]),
 		FallbackEnabled:                 diagnosticBool(raw["fallback_enabled"]),
 		FallbackBlocked:                 diagnosticBool(raw["fallback_blocked"]),
+		AgentPassthrough:                diagnosticBool(raw["agent_passthrough"]),
+		AgentPassthroughReason:          diagnosticString(raw["agent_passthrough_reason"]),
 		ReasoningEffort:                 strings.TrimSpace(fmt.Sprint(raw["reasoning_effort"])),
 		UpstreamHTTPStatus:              int(diagnosticInt64(raw["upstream_http_status"])),
 		UpstreamErrorCode:               diagnosticString(raw["upstream_error_code"]),

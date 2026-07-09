@@ -162,7 +162,7 @@ echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1,"tota
 		if err != nil {
 			t.Fatal(err)
 		}
-		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "responses", model, effort, stream, body, time.Now(), biz.GatewayUsageDiagnostic{})
+		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "responses", model, effort, stream, body, time.Now(), biz.GatewayUsageDiagnostic{}, gatewayRequestOptions{})
 	}))
 	defer server.Close()
 
@@ -221,7 +221,7 @@ echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1,"tota
 		if err != nil {
 			t.Fatal(err)
 		}
-		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "responses", model, effort, stream, body, time.Now(), biz.GatewayUsageDiagnostic{})
+		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "responses", model, effort, stream, body, time.Now(), biz.GatewayUsageDiagnostic{}, gatewayRequestOptions{})
 	}))
 	defer server.Close()
 
@@ -281,7 +281,7 @@ echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1,"tota
 		if err != nil {
 			t.Fatal(err)
 		}
-		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "chat.completions", model, effort, stream, body, time.Now(), biz.GatewayUsageDiagnostic{})
+		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "chat.completions", model, effort, stream, body, time.Now(), biz.GatewayUsageDiagnostic{}, gatewayRequestOptions{})
 	}))
 	defer server.Close()
 
@@ -342,7 +342,7 @@ func TestStreamResponsesReturnsSSEErrorAfterHeaders(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "responses", model, effort, stream, body, time.Now(), biz.GatewayUsageDiagnostic{})
+		handler.handleCodexCLIProxy(w, r, &biz.GatewayAPIKey{ID: 1, KeyPrefix: "ogw_test"}, "req_test", "", "responses", model, effort, stream, body, time.Now(), biz.GatewayUsageDiagnostic{}, gatewayRequestOptions{})
 	}))
 	defer server.Close()
 
@@ -1126,6 +1126,49 @@ func TestCodexBackendRequestAppendsResumeRuleToExplicitInstructions(t *testing.T
 	}
 }
 
+func TestCodexBackendRequestAgentPassthroughDoesNotInjectPrompts(t *testing.T) {
+	body := []byte(`{
+		"model": "gpt-5.5",
+		"instructions": "Client-managed agent system prompt.",
+		"reasoning": {"summary": "concise"},
+		"input": "continue"
+	}`)
+
+	req, _, err := codexBackendRequestFromGatewayWithOptions("/v1/responses", body, "", "", gatewayRequestOptions{AgentPassthrough: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	instructions := stringValue(req["instructions"])
+	if instructions != "Client-managed agent system prompt." {
+		t.Fatalf("instructions = %q, want exact client instructions", instructions)
+	}
+	if strings.Contains(instructions, "Before any non-trivial tool call") || strings.Contains(instructions, "When this conversation is resumed") {
+		t.Fatalf("agent passthrough instructions must not include gateway prompts: %q", instructions)
+	}
+	reasoning := mapValue(req["reasoning"])
+	if got := stringValue(reasoning["summary"]); got != "concise" {
+		t.Fatalf("reasoning summary = %q, want concise", got)
+	}
+}
+
+func TestCodexBackendRequestAgentPassthroughOmitsDefaultInstructions(t *testing.T) {
+	body := []byte(`{
+		"model": "gpt-5.5",
+		"input": "Reply OK"
+	}`)
+
+	req, _, err := codexBackendRequestFromGatewayWithOptions("/v1/responses", body, "", "", gatewayRequestOptions{AgentPassthrough: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := req["instructions"]; ok {
+		t.Fatalf("agent passthrough should not inject default instructions: %#v", req["instructions"])
+	}
+	if _, ok := req["reasoning"]; ok {
+		t.Fatalf("agent passthrough should not inject default reasoning: %#v", req["reasoning"])
+	}
+}
+
 func TestCodexBackendInstructionsAreIdempotent(t *testing.T) {
 	body := []byte(`{
 		"model": "gpt-5.5",
@@ -1269,6 +1312,48 @@ echo '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","tex
 	}
 	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
 		t.Fatalf("CLI fallback was invoked, marker stat err=%v", statErr)
+	}
+}
+
+func TestRunCodexUpstreamDoesNotFallbackForAgentPassthrough(t *testing.T) {
+	tmp := t.TempDir()
+	marker := filepath.Join(tmp, "cli-called")
+	bin := filepath.Join(tmp, "fake-codex")
+	script := `#!/bin/sh
+touch "$FAKE_CODEX_MARKER"
+cat >/dev/null
+echo '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"OK"}}'
+`
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CODEX_UPSTREAM_MODE", "codex_backend")
+	t.Setenv("CODEX_UPSTREAM_FALLBACK_ENABLED", "true")
+	t.Setenv("CODEX_AUTH_FILE", filepath.Join(tmp, "missing-auth.json"))
+	t.Setenv("CODEX_CLI_BIN", bin)
+	t.Setenv("FAKE_CODEX_MARKER", marker)
+
+	result, err := (&openAIGatewayHandler{}).runCodexUpstreamWithOptions(
+		context.Background(),
+		codexUpstreamModeBackend,
+		true,
+		"/v1/responses",
+		[]byte(`{"input":"Reply OK"}`),
+		"gpt-5.5",
+		"low",
+		gatewayRequestOptions{AgentPassthrough: true, AgentPassthroughReason: "agent_client_type"},
+	)
+	if err == nil {
+		t.Fatal("expected backend failure without CLI fallback")
+	}
+	if !strings.Contains(err.Error(), "agent passthrough requests cannot fallback") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Diagnostic.AgentPassthrough || !result.Diagnostic.FallbackBlocked {
+		t.Fatalf("unexpected diagnostic: %#v", result.Diagnostic)
+	}
+	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
+		t.Fatalf("CLI fallback was invoked for agent passthrough, marker stat err=%v", statErr)
 	}
 }
 
@@ -2091,6 +2176,38 @@ func TestGatewayClientTypeFromRequest(t *testing.T) {
 				t.Fatalf("gatewayClientTypeFromRequest() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestGatewayRequestOptionsEnableAgentPassthroughForAgentClients(t *testing.T) {
+	req := httptest.NewRequest("POST", "/v1/responses", nil)
+	req.Header.Set("User-Agent", "codex-cli/0.143.0")
+
+	options := gatewayRequestOptionsFromRequest(req, []byte(`{"model":"gpt-5.5","input":"Reply OK"}`))
+	if !options.AgentPassthrough || options.AgentPassthroughReason != "agent_client_type" {
+		t.Fatalf("options = %#v, want agent client passthrough", options)
+	}
+}
+
+func TestGatewayRequestOptionsSupportExplicitPassthroughFlags(t *testing.T) {
+	req := httptest.NewRequest("POST", "/v1/responses", nil)
+	req.Header.Set("User-Agent", "curl/8.7.1")
+	body := []byte(`{"model":"gpt-5.5","input":"Reply OK","metadata":{"disable_context_compression":true}}`)
+
+	options := gatewayRequestOptionsFromRequest(req, body)
+	if !options.AgentPassthrough || options.AgentPassthroughReason != "explicit_body" {
+		t.Fatalf("options = %#v, want explicit body passthrough", options)
+	}
+}
+
+func TestGatewayRequestOptionsAllowHeaderDisableForAgentClients(t *testing.T) {
+	req := httptest.NewRequest("POST", "/v1/responses", nil)
+	req.Header.Set("User-Agent", "OpenCode/1.14.48")
+	req.Header.Set("X-Gateway-Agent-Passthrough", "false")
+
+	options := gatewayRequestOptionsFromRequest(req, []byte(`{"model":"gpt-5.5","input":"Reply OK"}`))
+	if options.AgentPassthrough {
+		t.Fatalf("options = %#v, want passthrough disabled by header", options)
 	}
 }
 

@@ -69,11 +69,19 @@ func codexUpstreamMode() string {
 }
 
 func (h *openAIGatewayHandler) runCodexBackend(ctx context.Context, path string, body []byte, requestModel string, reasoningEffort string) (string, gatewayReasoningSummary, []gatewayToolCall, openAIUsageMetrics, error) {
-	return defaultCodexBackendClient.run(ctx, path, body, requestModel, reasoningEffort)
+	return h.runCodexBackendWithOptions(ctx, path, body, requestModel, reasoningEffort, gatewayRequestOptions{})
+}
+
+func (h *openAIGatewayHandler) runCodexBackendWithOptions(ctx context.Context, path string, body []byte, requestModel string, reasoningEffort string, options gatewayRequestOptions) (string, gatewayReasoningSummary, []gatewayToolCall, openAIUsageMetrics, error) {
+	return defaultCodexBackendClient.runWithOptions(ctx, path, body, requestModel, reasoningEffort, options)
 }
 
 func (c *codexBackendClient) run(ctx context.Context, path string, body []byte, requestModel string, reasoningEffort string) (string, gatewayReasoningSummary, []gatewayToolCall, openAIUsageMetrics, error) {
-	requestBody, model, err := codexBackendRequestFromGateway(path, body, requestModel, reasoningEffort)
+	return c.runWithOptions(ctx, path, body, requestModel, reasoningEffort, gatewayRequestOptions{})
+}
+
+func (c *codexBackendClient) runWithOptions(ctx context.Context, path string, body []byte, requestModel string, reasoningEffort string, options gatewayRequestOptions) (string, gatewayReasoningSummary, []gatewayToolCall, openAIUsageMetrics, error) {
+	requestBody, model, err := codexBackendRequestFromGatewayWithOptions(path, body, requestModel, reasoningEffort, options)
 	if err != nil {
 		return "", gatewayReasoningSummary{}, nil, openAIUsageMetrics{}, err
 	}
@@ -289,6 +297,10 @@ func requestCodexTokenRefresh(ctx context.Context, client *stdhttp.Client, refre
 }
 
 func codexBackendRequestFromGateway(path string, body []byte, requestModel string, reasoningEffort string) (map[string]any, string, error) {
+	return codexBackendRequestFromGatewayWithOptions(path, body, requestModel, reasoningEffort, gatewayRequestOptions{})
+}
+
+func codexBackendRequestFromGatewayWithOptions(path string, body []byte, requestModel string, reasoningEffort string, options gatewayRequestOptions) (map[string]any, string, error) {
 	var payload map[string]any
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, "", err
@@ -323,17 +335,26 @@ func codexBackendRequestFromGateway(path string, body []byte, requestModel strin
 		"stream":              true,
 		"include":             []any{},
 	}
-	if strings.TrimSpace(instructions) == "" {
-		instructions = defaultCodexBackendPrompt
+	if options.AgentPassthrough {
+		if strings.TrimSpace(instructions) != "" {
+			req["instructions"] = strings.TrimSpace(instructions)
+		}
+	} else {
+		if strings.TrimSpace(instructions) == "" {
+			instructions = defaultCodexBackendPrompt
+		}
+		req["instructions"] = codexBackendInstructions(instructions)
 	}
-	req["instructions"] = codexBackendInstructions(instructions)
-	reasoning := map[string]any{
-		"summary": reasoningSummaryFromPayload(payload),
+	reasoning := map[string]any{}
+	if summary, ok := reasoningSummaryFromPayloadForMode(payload, options.AgentPassthrough); ok {
+		reasoning["summary"] = summary
 	}
 	if reasoningEffort != "" {
 		reasoning["effort"] = reasoningEffort
 	}
-	req["reasoning"] = reasoning
+	if len(reasoning) > 0 {
+		req["reasoning"] = reasoning
+	}
 	return req, model, nil
 }
 
@@ -351,6 +372,11 @@ func codexBackendInstructions(instructions string) string {
 }
 
 func reasoningSummaryFromPayload(payload map[string]any) string {
+	summary, _ := reasoningSummaryFromPayloadForMode(payload, false)
+	return summary
+}
+
+func reasoningSummaryFromPayloadForMode(payload map[string]any, passthrough bool) (string, bool) {
 	raw := stringValue(mapValue(payload["reasoning"])["summary"])
 	if raw == "" {
 		raw = stringValue(payload["reasoning_summary"])
@@ -359,14 +385,20 @@ func reasoningSummaryFromPayload(payload map[string]any) string {
 		raw = stringValue(payload["reasoningSummary"])
 	}
 	if raw == "" {
-		return defaultCodexBackendSummary
+		if passthrough {
+			return "", false
+		}
+		return defaultCodexBackendSummary, true
 	}
 	summary := strings.ToLower(strings.TrimSpace(raw))
 	switch summary {
 	case "auto", "concise", "detailed":
-		return summary
+		return summary, true
 	default:
-		return defaultCodexBackendSummary
+		if passthrough {
+			return "", false
+		}
+		return defaultCodexBackendSummary, true
 	}
 }
 

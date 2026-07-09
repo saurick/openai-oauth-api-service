@@ -318,6 +318,7 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		return
 	}
 	reasoningEffort = h.effectiveReasoningEffort(r.Context(), key, reasoningEffort)
+	requestOptions := gatewayRequestOptionsFromRequest(r, body)
 	if err := h.gatewayUC.ValidateModelAccess(r.Context(), key, requestModel); err != nil {
 		status := stdhttp.StatusForbidden
 		h.writeGatewayError(w, status, err, gatewayErrorType(err))
@@ -418,7 +419,7 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 	}
 
 	_, upstreamMode, fallbackEnabled := h.effectiveCodexUpstream(r.Context(), key)
-	prepared, prepareErr := h.prepareGatewayContext(r.Context(), key, requestID, sessionID, r.URL.Path, body, requestModel, reasoningEffort)
+	prepared, prepareErr := h.prepareGatewayContext(r.Context(), key, requestID, sessionID, r.URL.Path, body, requestModel, reasoningEffort, requestOptions)
 	if prepareErr != nil {
 		status := stdhttp.StatusRequestEntityTooLarge
 		errorType := gatewayContextErrorType
@@ -462,11 +463,11 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 	}
 
 	if stream && r.URL.Path == "/v1/responses" && upstreamMode == codexUpstreamModeBackend {
-		h.handleCodexBackendResponsesStream(w, r, key, requestID, sessionID, endpoint, requestModel, reasoningEffort, body, start, prepared.Diagnostic, fallbackEnabled)
+		h.handleCodexBackendResponsesStream(w, r, key, requestID, sessionID, endpoint, requestModel, reasoningEffort, body, start, prepared.Diagnostic, fallbackEnabled, requestOptions)
 		return
 	}
 
-	h.handleCodexCLIProxy(w, r, key, requestID, sessionID, endpoint, requestModel, reasoningEffort, stream, body, start, prepared.Diagnostic)
+	h.handleCodexCLIProxy(w, r, key, requestID, sessionID, endpoint, requestModel, reasoningEffort, stream, body, start, prepared.Diagnostic, requestOptions)
 }
 
 func (h *openAIGatewayHandler) writeGatewayLargeRequestLimit(
@@ -694,8 +695,9 @@ func (h *openAIGatewayHandler) handleCodexBackendResponsesStream(
 	start time.Time,
 	requestDiagnostic biz.GatewayUsageDiagnostic,
 	fallbackEnabled bool,
+	options gatewayRequestOptions,
 ) {
-	result, err := h.streamCodexBackendResponses(r.Context(), w, r.URL.Path, body, requestModel, reasoningEffort, fallbackEnabled)
+	result, err := h.streamCodexBackendResponsesWithOptions(r.Context(), w, r.URL.Path, body, requestModel, reasoningEffort, fallbackEnabled, options)
 	diagnostic := mergeGatewayUsageDiagnostic(requestDiagnostic, result.Diagnostic)
 	if result.ResponseBytes > 0 {
 		diagnostic.ResponseBytes = result.ResponseBytes
@@ -774,11 +776,15 @@ func (h *openAIGatewayHandler) handleCodexBackendResponsesStream(
 }
 
 func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, w stdhttp.ResponseWriter, path string, body []byte, requestModel string, reasoningEffort string, fallbackEnabled bool) (codexBackendResponsesStreamResult, error) {
-	requestBody, model, err := codexBackendRequestFromGateway(path, body, requestModel, reasoningEffort)
+	return h.streamCodexBackendResponsesWithOptions(ctx, w, path, body, requestModel, reasoningEffort, fallbackEnabled, gatewayRequestOptions{})
+}
+
+func (h *openAIGatewayHandler) streamCodexBackendResponsesWithOptions(ctx context.Context, w stdhttp.ResponseWriter, path string, body []byte, requestModel string, reasoningEffort string, fallbackEnabled bool, options gatewayRequestOptions) (codexBackendResponsesStreamResult, error) {
+	requestBody, model, err := codexBackendRequestFromGatewayWithOptions(path, body, requestModel, reasoningEffort, options)
 	if err != nil {
 		return codexBackendResponsesStreamResult{
 			ErrorType:  upstreamErrorType(err, codexUpstreamModeBackend),
-			Diagnostic: gatewayUsageDiagnosticForUpstreamFailure(path, body, reasoningEffort, err, fallbackEnabled),
+			Diagnostic: gatewayUsageDiagnosticForUpstreamFailureWithOptions(path, body, reasoningEffort, err, fallbackEnabled, options),
 		}, err
 	}
 	if ctx == nil {
@@ -834,7 +840,7 @@ func (h *openAIGatewayHandler) streamCodexBackendResponses(ctx context.Context, 
 			if err != nil {
 				result.ResponseBytes += writeGatewayResponsesStreamFailure(w, flusher, upstreamErrorType(err, codexUpstreamModeBackend), err)
 				result.ErrorType = upstreamErrorType(err, codexUpstreamModeBackend)
-				result.Diagnostic = gatewayUsageDiagnosticForUpstreamFailure(path, body, reasoningEffort, err, fallbackEnabled)
+				result.Diagnostic = gatewayUsageDiagnosticForUpstreamFailureWithOptions(path, body, reasoningEffort, err, fallbackEnabled, options)
 				result.Diagnostic.ResponseBytes = result.ResponseBytes
 				return result, err
 			}
@@ -1010,6 +1016,10 @@ func mergeGatewayUsageDiagnostic(base biz.GatewayUsageDiagnostic, overlay biz.Ga
 	out.BackendOnly = out.BackendOnly || overlay.BackendOnly
 	out.FallbackEnabled = out.FallbackEnabled || overlay.FallbackEnabled
 	out.FallbackBlocked = out.FallbackBlocked || overlay.FallbackBlocked
+	out.AgentPassthrough = out.AgentPassthrough || overlay.AgentPassthrough
+	if overlay.AgentPassthroughReason != "" {
+		out.AgentPassthroughReason = overlay.AgentPassthroughReason
+	}
 	if overlay.ReasoningEffort != "" {
 		out.ReasoningEffort = overlay.ReasoningEffort
 	}
@@ -1266,6 +1276,7 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 	body []byte,
 	start time.Time,
 	requestDiagnostic biz.GatewayUsageDiagnostic,
+	options gatewayRequestOptions,
 ) {
 	_, upstreamMode, fallbackEnabled := h.effectiveCodexUpstream(r.Context(), key)
 	var streamWriter *gatewayStreamWriter
@@ -1273,7 +1284,7 @@ func (h *openAIGatewayHandler) handleCodexCLIProxy(
 		streamWriter = newGatewayStreamWriter(w, r.URL.Path, requestModel)
 	}
 
-	result, err := h.runCodexUpstreamWithStreamHeartbeat(r, streamWriter, upstreamMode, fallbackEnabled, body, requestModel, reasoningEffort)
+	result, err := h.runCodexUpstreamWithStreamHeartbeat(r, streamWriter, upstreamMode, fallbackEnabled, body, requestModel, reasoningEffort, options)
 	if err != nil {
 		status := stdhttp.StatusBadGateway
 		errorType := result.UpstreamErrorType
@@ -1473,13 +1484,17 @@ func (h *openAIGatewayHandler) effectiveReasoningEffort(ctx context.Context, key
 }
 
 func (h *openAIGatewayHandler) runCodexUpstream(ctx context.Context, upstreamMode string, fallbackEnabled bool, path string, body []byte, requestModel string, reasoningEffort string) (codexUpstreamCallResult, error) {
+	return h.runCodexUpstreamWithOptions(ctx, upstreamMode, fallbackEnabled, path, body, requestModel, reasoningEffort, gatewayRequestOptions{})
+}
+
+func (h *openAIGatewayHandler) runCodexUpstreamWithOptions(ctx context.Context, upstreamMode string, fallbackEnabled bool, path string, body []byte, requestModel string, reasoningEffort string, options gatewayRequestOptions) (codexUpstreamCallResult, error) {
 	upstreamMode = biz.NormalizeGatewayUpstreamMode(upstreamMode)
 	if upstreamMode == "" {
 		upstreamMode = codexUpstreamMode()
 	}
 	switch upstreamMode {
 	case codexUpstreamModeBackend:
-		content, reasoningSummary, toolCalls, metrics, err := h.runCodexBackend(ctx, path, body, requestModel, reasoningEffort)
+		content, reasoningSummary, toolCalls, metrics, err := h.runCodexBackendWithOptions(ctx, path, body, requestModel, reasoningEffort, options)
 		if err == nil {
 			return codexUpstreamCallResult{
 				Content:          content,
@@ -1493,9 +1508,13 @@ func (h *openAIGatewayHandler) runCodexUpstream(ctx context.Context, upstreamMod
 			h.log.WithContext(ctx).Warnf("codex backend upstream failed before fallback: %v", err)
 		}
 		errorType := upstreamErrorType(err, codexUpstreamModeBackend)
-		diagnostic := gatewayUsageDiagnosticForUpstreamFailure(path, body, reasoningEffort, err, fallbackEnabled)
+		diagnostic := gatewayUsageDiagnosticForUpstreamFailureWithOptions(path, body, reasoningEffort, err, fallbackEnabled, options)
 		if !fallbackEnabled {
 			return codexUpstreamCallResult{ActualMode: codexUpstreamModeBackend, UpstreamErrorType: errorType, Diagnostic: diagnostic}, fmt.Errorf("codex backend upstream failed: %w", err)
+		}
+		if options.AgentPassthrough {
+			diagnostic.FallbackBlocked = true
+			return codexUpstreamCallResult{ActualMode: codexUpstreamModeBackend, UpstreamErrorType: errorType, Diagnostic: diagnostic}, fmt.Errorf("codex backend upstream failed: %v; agent passthrough requests cannot fallback to codex_cli", err)
 		}
 		if diagnostic.BackendOnly {
 			diagnostic.FallbackBlocked = true
@@ -1517,7 +1536,7 @@ func (h *openAIGatewayHandler) runCodexUpstream(ctx context.Context, upstreamMod
 	default:
 		content, metrics, err := h.runCodexCLI(ctx, path, body, requestModel, reasoningEffort)
 		if err != nil {
-			diagnostic := gatewayUsageDiagnosticForUpstreamFailure(path, body, reasoningEffort, err, false)
+			diagnostic := gatewayUsageDiagnosticForUpstreamFailureWithOptions(path, body, reasoningEffort, err, false, options)
 			return codexUpstreamCallResult{ActualMode: codexUpstreamModeCLI, UpstreamErrorType: upstreamErrorType(err, codexUpstreamModeCLI), Diagnostic: diagnostic}, err
 		}
 		return codexUpstreamCallResult{
@@ -1541,14 +1560,15 @@ func (h *openAIGatewayHandler) runCodexUpstreamWithStreamHeartbeat(
 	body []byte,
 	requestModel string,
 	reasoningEffort string,
+	options gatewayRequestOptions,
 ) (codexUpstreamCallResult, error) {
 	if streamWriter == nil {
-		return h.runCodexUpstream(r.Context(), upstreamMode, fallbackEnabled, r.URL.Path, body, requestModel, reasoningEffort)
+		return h.runCodexUpstreamWithOptions(r.Context(), upstreamMode, fallbackEnabled, r.URL.Path, body, requestModel, reasoningEffort, options)
 	}
 
 	done := make(chan codexUpstreamAsyncResult, 1)
 	go func() {
-		result, err := h.runCodexUpstream(r.Context(), upstreamMode, fallbackEnabled, r.URL.Path, body, requestModel, reasoningEffort)
+		result, err := h.runCodexUpstreamWithOptions(r.Context(), upstreamMode, fallbackEnabled, r.URL.Path, body, requestModel, reasoningEffort, options)
 		done <- codexUpstreamAsyncResult{result: result, err: err}
 	}()
 
@@ -1699,7 +1719,15 @@ func gatewayUsageDiagnosticForRequest(path string, body []byte, reasoningEffort 
 }
 
 func gatewayUsageDiagnosticForUpstreamFailure(path string, body []byte, reasoningEffort string, err error, fallbackEnabled bool) biz.GatewayUsageDiagnostic {
+	return gatewayUsageDiagnosticForUpstreamFailureWithOptions(path, body, reasoningEffort, err, fallbackEnabled, gatewayRequestOptions{})
+}
+
+func gatewayUsageDiagnosticForUpstreamFailureWithOptions(path string, body []byte, reasoningEffort string, err error, fallbackEnabled bool, options gatewayRequestOptions) biz.GatewayUsageDiagnostic {
 	diagnostic := gatewayUsageDiagnosticForRequest(path, body, reasoningEffort)
+	if options.AgentPassthrough {
+		diagnostic.AgentPassthrough = true
+		diagnostic.AgentPassthroughReason = strings.TrimSpace(options.AgentPassthroughReason)
+	}
 	diagnostic.FallbackEnabled = fallbackEnabled
 	if fallbackEnabled && diagnostic.BackendOnly {
 		diagnostic.FallbackBlocked = true
@@ -3416,6 +3444,89 @@ func gatewayClientTypeFromRequest(r *stdhttp.Request) string {
 		r.Header.Get("X-App-Name"),
 		r.Header.Get("User-Agent"),
 	)
+}
+
+func gatewayRequestOptionsFromRequest(r *stdhttp.Request, body []byte) gatewayRequestOptions {
+	if enabled, ok := explicitGatewayAgentPassthroughHeader(r); ok {
+		if !enabled {
+			return gatewayRequestOptions{}
+		}
+		return gatewayRequestOptions{AgentPassthrough: true, AgentPassthroughReason: "explicit_header"}
+	}
+	if gatewayAgentPassthroughBodyFlag(body) {
+		return gatewayRequestOptions{AgentPassthrough: true, AgentPassthroughReason: "explicit_body"}
+	}
+	switch gatewayClientTypeFromRequest(r) {
+	case biz.GatewayClientTypeCodex, biz.GatewayClientTypeOpenCode:
+		return gatewayRequestOptions{AgentPassthrough: true, AgentPassthroughReason: "agent_client_type"}
+	default:
+		return gatewayRequestOptions{}
+	}
+}
+
+func explicitGatewayAgentPassthroughHeader(r *stdhttp.Request) (bool, bool) {
+	if r == nil {
+		return false, false
+	}
+	for _, key := range []string{"X-Gateway-Agent-Passthrough", "X-Agent-Passthrough", "X-Raw-OpenAI-Compatible"} {
+		raw := strings.TrimSpace(r.Header.Get(key))
+		if raw == "" {
+			continue
+		}
+		if enabled, ok := parseGatewayBool(raw); ok {
+			return enabled, true
+		}
+	}
+	return false, false
+}
+
+func gatewayAgentPassthroughBodyFlag(body []byte) bool {
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return false
+	}
+	return gatewayAgentPassthroughMapFlag(payload) || gatewayAgentPassthroughMapFlag(mapValue(payload["metadata"]))
+}
+
+func gatewayAgentPassthroughMapFlag(payload map[string]any) bool {
+	if len(payload) == 0 {
+		return false
+	}
+	for _, key := range []string{
+		"passthrough",
+		"agent_passthrough",
+		"raw_openai_compatible",
+		"disable_auto_summarization",
+		"disable_context_compression",
+		"disable_resume_prompt_injection",
+		"preserve_messages",
+		"preserve_tool_calls",
+		"preserve_system_messages",
+		"preserve_developer_messages",
+	} {
+		if enabled, ok := parseGatewayBool(payload[key]); ok && enabled {
+			return true
+		}
+	}
+	return false
+}
+
+func parseGatewayBool(value any) (bool, bool) {
+	switch v := value.(type) {
+	case bool:
+		return v, true
+	case string:
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "1", "true", "yes", "y", "on":
+			return true, true
+		case "0", "false", "no", "n", "off":
+			return false, true
+		default:
+			return false, false
+		}
+	default:
+		return false, false
+	}
 }
 
 func gatewayClientTypeFromContext(ctx context.Context) string {

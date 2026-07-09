@@ -3,6 +3,15 @@
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 - 2026-06-25：旧 `progress.md` 已按超过 80KB 阈值归档到 `docs/archive/progress-2026-06-25-before-skill-scenario-matrix.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-07-09 Agent passthrough 上下文压缩边界
+
+- 完成：Codex / OpenCode 客户端按 `client_type=codex/opencode` 默认进入 Agent passthrough；其他 Agent 可通过 `X-Gateway-Agent-Passthrough: true`、`X-Agent-Passthrough: true`、`X-Raw-OpenAI-Compatible: true`，或请求体 / `metadata` 中的 `passthrough`、`raw_openai_compatible`、`disable_context_compression` 等布尔开关显式启用。`X-Gateway-Agent-Passthrough: false` 可覆盖自动判定，临时回到旧网关压缩路径。
+- 完成：passthrough 请求继续走 auth、API key、quota、限流、路由、模型映射、reasoning effort 策略和 usage 记录，但跳过网关上下文预压缩、`gateway_context_restore_state.v1` 注入、context summary 持久化、默认工程助手 prompt、visible process prompt 和 resume prompt；普通非 passthrough 请求保留原结构化压缩主路径。
+- 完成：usage diagnostic 增加 `agent_passthrough` 和 `agent_passthrough_reason`，并在 DB JSON、RPC 输出和 summary 中保留，便于区分“网关透明转发后上游返回 context_length_exceeded”和“网关预压缩失败”。
+- 完成：同步 `README.md` 与 `server/docs/config.md`，明确普通聊天压缩和 Agent 透明转发的边界。
+- 验证：已通过 `cd server && go test -count=1 ./internal/server -run 'TestGatewayRequestOptions|TestPrepareGatewayContext|TestCodexBackendRequest|TestGatewayUsageDiagnostic'`、`cd server && go test -count=1 ./...`、`bash scripts/qa/secrets.sh` 和 `git diff --check`。本机 PATH Codex CLI 已从 `0.142.2` 更新到 `0.143.0`；用 `saurick` provider 新建 thread `019f472b-99f4-7f12-aa5f-ae9911e6be55` 输出 `MARKER=AGENT_PASSTHROUGH_CLI_0143_ROUND1`，再显式 `codex exec resume 019f472b-99f4-7f12-aa5f-ae9911e6be55` 输出 `MARKER=AGENT_PASSTHROUGH_CLI_0143_RESUME`，未使用 `resume --last`。
+- 阻塞/风险：本轮不改 schema、migration、auth、API key 生命周期、quota 语义、上游策略和 admin UI；passthrough 模式不再替 Agent 客户端“救”超长上下文，真实超限会由上游 / 客户端自身 compact 机制处理并在 usage 中记录错误分类。当前本机 `local` provider 真实请求回归被 dev Postgres 认证失败挡住，`8400` 旧 dev 进程已停止；上述 Codex CLI 回归验证的是 `0.143.0` 显式 resume 流程和线上 provider 可用性，不等同于本轮新服务端代码已部署到线上。
+
 ## 2026-07-09 后台分页页容量统一
 
 - 完成：后台共享表格分页默认页容量从 8 条改为 50 条，页容量选项统一为 `50/100/200/500/1000`；同步放宽服务端管理端 list limit 上限到 1000，避免前端 500 / 1000 选项与真实返回数量不一致。

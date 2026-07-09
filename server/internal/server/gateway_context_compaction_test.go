@@ -532,6 +532,7 @@ func TestPrepareGatewayContextCompactsBeforeUpstream(t *testing.T) {
 		body,
 		"unknown-test-model",
 		"xhigh",
+		gatewayRequestOptions{},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -550,6 +551,45 @@ func TestPrepareGatewayContextCompactsBeforeUpstream(t *testing.T) {
 	}
 }
 
+func TestPrepareGatewayContextSkipsCompactionForAgentPassthrough(t *testing.T) {
+	t.Setenv("GATEWAY_CONTEXT_COMPACT_BYTES", "1000")
+	t.Setenv("GATEWAY_CONTEXT_HARD_BYTES", "1000000")
+	oldText := strings.Repeat("old client-managed codex history with tool output\n", 200)
+	body := []byte(`{"model":"gpt-5.5","messages":[` +
+		`{"role":"system","content":"client system prompt"},` +
+		`{"role":"user","content":` + mustJSONQuote(oldText) + `},` +
+		`{"role":"assistant","content":"old answer"},` +
+		`{"role":"user","content":"latest request"}` +
+		`]}`)
+
+	prepared, err := (&openAIGatewayHandler{}).prepareGatewayContext(
+		context.Background(),
+		&biz.GatewayAPIKey{ID: 12, KeyPrefix: "ogw_test"},
+		"req_test",
+		"session_test",
+		"/v1/chat/completions",
+		body,
+		"unknown-test-model",
+		"xhigh",
+		gatewayRequestOptions{AgentPassthrough: true, AgentPassthroughReason: "agent_client_type"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(prepared.Body) != string(body) {
+		t.Fatal("agent passthrough must not rewrite request body")
+	}
+	if prepared.Diagnostic.ContextCompacted {
+		t.Fatal("agent passthrough must not be marked compacted")
+	}
+	if !prepared.Diagnostic.AgentPassthrough || prepared.Diagnostic.AgentPassthroughReason != "agent_client_type" {
+		t.Fatalf("unexpected passthrough diagnostic: %#v", prepared.Diagnostic)
+	}
+	if prepared.Diagnostic.ContextCompactionReason != "agent_passthrough" {
+		t.Fatalf("context reason = %q, want agent_passthrough", prepared.Diagnostic.ContextCompactionReason)
+	}
+}
+
 func TestPrepareGatewayContextBlocksUncompactableOversizedRequest(t *testing.T) {
 	t.Setenv("GATEWAY_CONTEXT_COMPACT_BYTES", "1000")
 	body := []byte(`{"model":"gpt-5.5","messages":[{"role":"user","content":"tiny"}],"metadata":{"blob":` + mustJSONQuote(strings.Repeat("x", 2000)) + `}}`)
@@ -563,6 +603,7 @@ func TestPrepareGatewayContextBlocksUncompactableOversizedRequest(t *testing.T) 
 		body,
 		"unknown-test-model",
 		"xhigh",
+		gatewayRequestOptions{},
 	)
 	if !errors.Is(err, errGatewayContextLengthExceeded) {
 		t.Fatalf("err = %v, want errGatewayContextLengthExceeded", err)
@@ -612,6 +653,7 @@ func TestPrepareGatewayContextCompactsLargeRequestBelowPreviousByteLimit(t *test
 		body,
 		"gpt-5.5",
 		"high",
+		gatewayRequestOptions{},
 	)
 	if err != nil {
 		t.Fatal(err)
