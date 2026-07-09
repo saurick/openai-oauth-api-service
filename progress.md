@@ -3,6 +3,13 @@
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 - 2026-06-25：旧 `progress.md` 已按超过 80KB 阈值归档到 `docs/archive/progress-2026-06-25-before-skill-scenario-matrix.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-07-10 压缩 live 回归脚本化
+
+- 完成：新增 `scripts/qa/live-context-compaction.py`，用于手动线上多轮上下文压缩回归。脚本必须显式提供 `GATEWAY_BASE_URL` 和 `GATEWAY_API_KEY`，默认生成独立 `session_id`，连续登记自然语言事实并在最终轮不提供客户代号值，只验证官方回答能从同 session 压缩摘要 / `durable_facts` 回忆早期事实。
+- 完成：更新 `scripts/README.md`，明确该脚本会消耗真实上游额度、可能触发大请求突发保护，因此不纳入 `fast.sh` / `full.sh` / `strict.sh`，只作为发布后或问题复现时的 live 手动回归入口。
+- 下一步：如后续继续出现“上下文没错乱但事实不关联”，优先用该脚本复现并记录 `session_id`，再结合线上 `gateway_usage_logs` / `gateway_context_summaries` 核对 `context_compacted`、`context_compaction_count` 和最终 `durable_facts`。
+- 阻塞/风险：脚本只覆盖明确登记的自然语言事实契约，不声称任意无结构长文本都能 100% 保留；真实运行需要有效 gateway key，默认本地质量门禁不执行。
+
 ## 2026-07-09 Agent passthrough 上下文压缩边界
 
 - 完成：Codex / OpenCode 客户端按 `client_type=codex/opencode` 默认进入 Agent passthrough；其他 Agent 可通过 `X-Gateway-Agent-Passthrough: true`、`X-Agent-Passthrough: true`、`X-Raw-OpenAI-Compatible: true`，或请求体 / `metadata` 中的 `passthrough`、`raw_openai_compatible`、`disable_context_compression` 等布尔开关显式启用。`X-Gateway-Agent-Passthrough: false` 可覆盖自动判定，临时回到旧网关压缩路径。

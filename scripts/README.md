@@ -15,6 +15,7 @@
 | `bash scripts/qa/fast.sh` | 开发期快速检查 |
 | `bash scripts/qa/full.sh` | 提交/推送前全量检查 |
 | `bash scripts/qa/strict.sh` | 发版前严格检查 |
+| `python3 scripts/qa/live-context-compaction.py` | 手动线上多轮上下文压缩回归；必须显式提供 `GATEWAY_BASE_URL` 和 `GATEWAY_API_KEY` |
 
 ## 质量脚本
 
@@ -30,6 +31,26 @@
 | `scripts/qa/golangci-lint.sh` | Go lint |
 | `scripts/qa/govulncheck.sh` | Go 漏洞扫描 |
 | `scripts/qa/yamllint.sh` | YAML 检查 |
+
+## Live 回归
+
+`scripts/qa/live-context-compaction.py` 会向真实 gateway `/v1/responses` 连续发送大上下文请求，验证同一 `session_id` 多次压缩后，最终官方回答仍能回忆早期 `durable_facts` 自然语言事实。它会消耗真实上游额度，也可能触发线上大请求突发保护，因此不纳入 `fast.sh` / `full.sh` / `strict.sh`。
+
+最小运行方式：
+
+```bash
+GATEWAY_BASE_URL=https://example.com \
+GATEWAY_API_KEY="$GATEWAY_API_KEY" \
+python3 scripts/qa/live-context-compaction.py
+```
+
+常用调参：
+
+```bash
+GATEWAY_COMPACTION_ROUNDS=4 \
+GATEWAY_COMPACTION_SLEEP_SECONDS=20 \
+python3 scripts/qa/live-context-compaction.py
+```
 
 前端样式或布局改动时，`fast/full` 不能替代浏览器级回归；还需要执行：
 
