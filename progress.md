@@ -33,6 +33,16 @@
 - 清理：部署和回归通过后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧镜像 `20260709T222744-ed8102f0-context-latest-instruction`，回收 `353.4MB`；未执行 volume prune。根分区维持约 41%，当前 app-server 仍运行 `b427e0d9` 新镜像。
 - 阻塞/风险：本轮保证的是可识别稳定事实锚点（如 `FACT_x=value` / “已登记事实”）跨压缩保留；普通长篇自然语言事实如果没有明确锚点，仍可能只按当前摘要启发式保留，不应承诺任意细节 100% 永久保留。
 
+## 2026-07-09 自然语言事实链 durable_facts 回归
+
+- 诊断：在 `b427e0d9` 线上版本补跑自然语言事实链时，6 轮登记“客户代号是 NATURAL_x”后第 7 轮只靠同 session 压缩摘要回忆，官方回答只恢复第 6 轮，第 1/3 轮丢失。DB 显示 7/7 轮已压缩，但 `durable_facts` 为空，原因是上一轮只提取 `FACT_x=value` 形式，没有收录“已登记事实：...”自然语言事实行。
+- 完成：将 durable facts 提取扩展到明确事实前缀：`已登记事实：`、`已登记事实:`、`durable fact:`、`registered fact:`，并支持“当前最新用户请求：登记自然语言事实“...””中的引号内容；仍不把任意包含“事实”的噪声行纳入，避免过度抓取。
+- 验证：已通过 `cd server && go test -count=1 ./internal/server -run 'TestCompactGatewayContextCarriesNaturalLanguageDurableFacts|TestCompactGatewayContextCarriesDurableFactsAcrossRepeatedCompactions|TestCompactGatewayContext'`、无代理环境 `cd server && go test -count=1 ./...`、`bash scripts/qa/secrets.sh`、`git diff --check` 和 `PATH="/usr/local/bin:$PATH" env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u NO_PROXY -u http_proxy -u https_proxy -u all_proxy -u no_proxy bash scripts/qa/full.sh`。`qa:full` 仍提示既有 Go 1.26.4 与 `pgx/v5@5.9.0` govulncheck 风险，按当前脚本仅提示不阻断。
+- 部署：基于 `41b03fa49c9181c51a95600f9f17be7a78f3843c` 在本地构建 linux/amd64 镜像 `oauth-api-service-server:20260709T233619-41b03fa4-natural-facts`，上传到 `192.168.0.133:/data/openai-oauth-api-service/releases/20260709T233619-41b03fa4-natural-facts`；远端只执行 `docker load`、宿主机 `/usr/local/bin/atlas migrate status`、备份 `.env` 为 `.env.bak.20260709T233619-41b03fa4-natural-facts`、更新 `APP_IMAGE` 和 `docker compose up -d --no-deps --force-recreate app-server`，未在 133 构建。Atlas 当前版本 `20260604123931`、pending 0。
+- 线上验证：当前 `app-server` 运行镜像为 `oauth-api-service-server:20260709T233619-41b03fa4-natural-facts`，日志 `service.version=41b03fa49c9181c51a95600f9f17be7a78f3843c`；远端本机 `/healthz` / `/readyz` 通过。线上 run `gw-natural-fixed-20260709-5d8963ff` 共 7 轮均 `status=200`、`success=true`、`context_compacted=true`，`context_compaction_count=1..7`；前 6 轮登记自然语言事实，第 7 轮正文不提供事实值，只要求从同 session 压缩摘要回忆，官方回答正确返回第 1/3/6 轮事实。DB 最终 summary 的 `durable_facts` 保留第 1-6 轮全部自然语言事实。
+- 清理：部署和回归通过后执行 `docker image prune -a -f` 与 `docker builder prune -f`，删除未使用旧镜像 `20260709T231533-b427e0d9-durable-facts`，回收 `353.4MB`；未执行 volume prune。根分区从 42% 回到 41%，当前 app-server 仍运行 `41b03fa4` 新镜像。
+- 阻塞/风险：当前保证的是明确登记的事实行跨压缩保留；完全无结构、无“已登记事实”前缀的普通段落仍只按摘要启发式处理，不承诺任意自然语言细节永久保留。
+
 ## 2026-07-09 后台分页页容量统一
 
 - 完成：后台共享表格分页默认页容量从 8 条改为 50 条，页容量选项统一为 `50/100/200/500/1000`；同步放宽服务端管理端 list limit 上限到 1000，避免前端 500 / 1000 选项与真实返回数量不一致。
