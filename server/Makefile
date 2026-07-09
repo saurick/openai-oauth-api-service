@@ -316,7 +316,7 @@ image_gc:
 # 部署时就可以一直写 oauth-api-service-server:dev（或 :latest）
 FIXED_TAG ?= dev
 NODE_BUILDER_IMAGE ?= node:24.14.0
-GO_BUILDER_IMAGE ?= golang:1.26.4
+GO_BUILDER_IMAGE ?= golang:1.26.5
 RUNTIME_BASE_IMAGE ?= alpine:3.21
 
 # 构建服务器镜像（在 server/ 目录执行）

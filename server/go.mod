@@ -2,7 +2,7 @@ module server
 
 go 1.25.11
 
-toolchain go1.26.4
+toolchain go1.26.5
 
 require (
 	entgo.io/ent v0.14.5
@@ -13,7 +13,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/wire v0.7.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0
-	github.com/jackc/pgx/v5 v5.9.0
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/jwalton/gchalk v1.3.0
 	github.com/jwalton/go-supportscolor v1.2.0
 	go.opentelemetry.io/otel v1.43.0

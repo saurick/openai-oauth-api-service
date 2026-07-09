@@ -2051,39 +2051,39 @@ func TestCodexBackendRefreshesExpiredAccessToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	refresh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/oauth/token" {
-			t.Fatalf("refresh path = %s", r.URL.Path)
-		}
-		var body map[string]string
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatal(err)
-		}
-		if body["grant_type"] != "refresh_token" || body["refresh_token"] != "old-refresh" {
-			t.Fatalf("unexpected refresh request: %#v", body)
-		}
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"access_token":  freshToken,
-			"refresh_token": "new-refresh",
-		})
-	}))
-	defer refresh.Close()
-
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("Authorization"); got != "Bearer "+freshToken {
-			t.Fatalf("authorization header = %q", got)
+		switch r.URL.Path {
+		case "/oauth/token":
+			var body map[string]string
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body["grant_type"] != "refresh_token" || body["refresh_token"] != "old-refresh" {
+				t.Fatalf("unexpected refresh request: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"access_token":  freshToken,
+				"refresh_token": "new-refresh",
+			})
+		case "/responses":
+			if got := r.Header.Get("Authorization"); got != "Bearer "+freshToken {
+				t.Fatalf("authorization header = %q", got)
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = w.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"OK\"}\n\n"))
+			_, _ = w.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}}\n\n"))
+		default:
+			t.Fatalf("unexpected path = %s", r.URL.Path)
 		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = w.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"OK\"}\n\n"))
-		_, _ = w.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}}\n\n"))
 	}))
 	defer upstream.Close()
 
 	t.Setenv("CODEX_AUTH_FILE", authPath)
 	t.Setenv("CODEX_BACKEND_BASE_URL", upstream.URL)
-	t.Setenv("CODEX_REFRESH_TOKEN_URL_OVERRIDE", refresh.URL+"/oauth/token")
+	t.Setenv("CODEX_REFRESH_TOKEN_URL_OVERRIDE", upstream.URL+"/oauth/token")
 
 	client := &codexBackendClient{httpClient: upstream.Client()}
+	t.Cleanup(client.httpClient.CloseIdleConnections)
 	content, _, _, _, err := client.run(
 		context.Background(),
 		"/v1/chat/completions",
