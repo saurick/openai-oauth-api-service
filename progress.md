@@ -3,6 +3,14 @@
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 - 2026-06-25：旧 `progress.md` 已按超过 80KB 阈值归档到 `docs/archive/progress-2026-06-25-before-skill-scenario-matrix.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-07-10 Codex 余额瞬时上游失败恢复与 runtime 更新
+
+- 诊断：截图对应的红色失败不是 `account/rateLimits/read` 协议字段变更。官方 Codex App Server 当前仍将该方法定义为 ChatGPT 限额读取入口；133 日志记录的是调用 `https://chatgpt.com/backend-api/wham/usage` 时的 `error sending request`。同一生产接口随后恢复为 HTTP 200，且 payload 已包含新 `codex_bengalfox`（`GPT-5.3-Codex-Spark`）限额分组；后台现有动态卡片会正常展示它。
+- 完成：`readCodexRateLimits` 对 `error sending request`、连接重置/拒绝、`unexpected EOF` 与 TLS handshake timeout 等短暂网络错误，在同一个 15 秒总预算内延迟 250ms 后只重试一次；认证、协议和其他错误不重试。最终失败日志补充 `attempts`，缓存与 `stale=true` 语义不变，不把失败伪装成实时成功。
+- 完成：镜像内固定 Codex CLI 从 `0.143.0` 提升到 npm latest `0.144.1`，避免容器重建后再依赖健康脚本的临时升级。
+- 验证：已通过 `cd server && go test -count=1 ./...`、`cd server && go test -count=1 ./internal/server -run 'TestCodexBalanceRoute'`、`bash scripts/qa/secrets.sh`、`git diff --check`；新增 fake app-server 回归覆盖“首读网络发送失败、二次读取成功”返回 200。已用本地 linux/amd64 Docker 构建并在成品中确认 `codex-cli 0.144.1`。首次构建被本机代理传入 Docker 后导致 Alpine TLS EOF，清除本次构建命令的代理环境后构建通过，未改动系统代理。
+- 线上核对：133 当前运行容器仍为原镜像，但健康脚本已将运行时临时升级到 `codex-cli 0.144.0`；公网 `/public/codex/balance` 与生产后台 `/admin-codex-balance` 当前均显示正常，新增 `GPT-5.3-Codex-Spark` 卡片可见。尚未提交、推送或重建 133 容器，因此本轮的一次重试和 `0.144.1` 固定镜像仍待发布。
+
 ## 2026-07-10 govulncheck 可达漏洞收敛
 
 - 完成：将 `server/go.mod` 声明工具链从 `go1.26.4` 升级到 `go1.26.5`，将 `github.com/jackc/pgx/v5` 从 `v5.9.0` 升级到 `v5.9.2`，并同步 `server/Dockerfile` / `server/Makefile` 默认 `GO_BUILDER_IMAGE=golang:1.26.5`，避免本地扫描和发布镜像构建工具链分叉。

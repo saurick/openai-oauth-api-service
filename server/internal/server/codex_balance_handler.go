@@ -23,6 +23,7 @@ import (
 const defaultCodexBalanceTimeout = 15 * time.Second
 const defaultCodexBalanceCacheTTL = 30 * time.Second
 const defaultCodexRateLimitResetCreditsURL = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"
+const codexRateLimitsRetryDelay = 250 * time.Millisecond
 
 type codexBalanceHTTPHandler struct {
 	log *log.Helper
@@ -150,12 +151,13 @@ func (h *codexBalanceHTTPHandler) ServeHTTP(ctx context.Context, w stdhttp.Respo
 	}
 
 	now := time.Now()
-	rateLimits, err := readCodexRateLimits(ctx)
+	rateLimits, attempts, err := readCodexRateLimits(ctx)
 	if err != nil {
 		h.log.WithContext(ctx).Warnw(
 			"msg", "codex balance query failed",
 			"request_id", requestIDFromRequest(r),
 			"trace_id", traceIDFromContext(ctx),
+			"attempts", attempts,
 			"error", err.Error(),
 		)
 		if stale := h.staleBalance(now); stale != nil {
@@ -184,13 +186,53 @@ func (h *codexBalanceHTTPHandler) ServeHTTP(ctx context.Context, w stdhttp.Respo
 	writeJSON(w, stdhttp.StatusOK, payload)
 }
 
-func readCodexRateLimits(ctx context.Context) (*codexRateLimitsReadResponse, error) {
+func readCodexRateLimits(ctx context.Context) (*codexRateLimitsReadResponse, int, error) {
 	timeout := codexBalanceTimeout()
 	reqCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	result, err := readCodexRateLimitsOnce(reqCtx)
+	if err == nil {
+		return result, 1, nil
+	}
+	if !shouldRetryCodexRateLimits(err) || reqCtx.Err() != nil {
+		return nil, 1, err
+	}
+
+	timer := time.NewTimer(codexRateLimitsRetryDelay)
+	defer timer.Stop()
+	select {
+	case <-reqCtx.Done():
+		return nil, 1, reqCtx.Err()
+	case <-timer.C:
+	}
+
+	result, err = readCodexRateLimitsOnce(reqCtx)
+	if err != nil {
+		return nil, 2, err
+	}
+	return result, 2, nil
+}
+
+func shouldRetryCodexRateLimits(err error) bool {
+	message := strings.ToLower(err.Error())
+	for _, marker := range []string{
+		"error sending request",
+		"connection reset",
+		"connection refused",
+		"unexpected eof",
+		"tls handshake timeout",
+	} {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func readCodexRateLimitsOnce(ctx context.Context) (*codexRateLimitsReadResponse, error) {
 	bin := codexAppServerBin()
-	cmd := codexAppServerCommandContext(reqCtx, bin, "app-server", "--listen", "stdio://")
+	cmd := codexAppServerCommandContext(ctx, bin, "app-server", "--listen", "stdio://")
 	cmd.Env = append(os.Environ(), "NO_COLOR=1")
 
 	stdin, err := cmd.StdinPipe()
@@ -276,8 +318,8 @@ func readCodexRateLimits(ctx context.Context) (*codexRateLimitsReadResponse, err
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	if reqCtx.Err() != nil {
-		return nil, fmt.Errorf("codex app-server timed out after %s", timeout)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 	if !requestedRateLimits {
 		return nil, errors.New("codex app-server exited before rate limit request")

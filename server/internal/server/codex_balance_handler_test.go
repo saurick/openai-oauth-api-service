@@ -34,7 +34,7 @@ done
 		t.Fatal(err)
 	}
 	t.Setenv("CODEX_APP_SERVER_BIN", bin)
-	t.Setenv("CODEX_BALANCE_TIMEOUT_SECONDS", "2")
+	t.Setenv("CODEX_BALANCE_TIMEOUT_SECONDS", "5")
 	t.Setenv("CODEX_AUTH_FILE", writeFakeCodexAuthFile(t))
 	t.Setenv("CODEX_RATE_LIMIT_RESET_CREDITS_URL", fakeResetCreditsURL(t, http.StatusOK, `{
       "available_count": 1,
@@ -131,7 +131,7 @@ done
 		t.Fatal(err)
 	}
 	t.Setenv("CODEX_APP_SERVER_BIN", successBin)
-	t.Setenv("CODEX_BALANCE_TIMEOUT_SECONDS", "2")
+	t.Setenv("CODEX_BALANCE_TIMEOUT_SECONDS", "5")
 	t.Setenv("CODEX_BALANCE_CACHE_SECONDS", "60")
 	t.Setenv("CODEX_AUTH_FILE", writeFakeCodexAuthFile(t))
 	t.Setenv("CODEX_RATE_LIMIT_RESET_CREDITS_URL", fakeResetCreditsURL(t, http.StatusOK, `{
@@ -192,6 +192,57 @@ done
 	}
 }
 
+func TestCodexBalanceRouteRetriesTransientRateLimitReadFailure(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "fake-codex")
+	script := `#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"initialize"'*)
+      echo '{"id":1,"result":{}}'
+      ;;
+    *'"method":"account/rateLimits/read"'*)
+      if [ -f "$CODEX_TEST_RATE_LIMIT_RETRY_STATE" ]; then
+        echo '{"id":2,"result":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":12},"credits":{"balance":"7"}}}}'
+      else
+        : > "$CODEX_TEST_RATE_LIMIT_RETRY_STATE"
+        echo '{"id":2,"error":{"code":-32000,"message":"failed to fetch codex rate limits: error sending request"}}'
+      fi
+      exit 0
+      ;;
+  esac
+done
+`
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CODEX_APP_SERVER_BIN", bin)
+	t.Setenv("CODEX_BALANCE_TIMEOUT_SECONDS", "5")
+	t.Setenv("CODEX_TEST_RATE_LIMIT_RETRY_STATE", filepath.Join(t.TempDir(), "retry-state"))
+	t.Setenv("CODEX_AUTH_FILE", writeFakeCodexAuthFile(t))
+	t.Setenv("CODEX_RATE_LIMIT_RESET_CREDITS_URL", fakeResetCreditsURL(t, http.StatusOK, `{
+      "available_count": 0,
+      "total_earned_count": 0,
+      "credits": []
+    }`))
+
+	handler := &codexBalanceHTTPHandler{log: klog.NewHelper(&captureLogger{})}
+	req := httptest.NewRequest(http.MethodGet, "/public/codex/balance", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(context.Background(), recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	credits := body["credits"].(map[string]any)
+	if credits["balance"] != "7" {
+		t.Fatalf("credits.balance = %v, want 7", credits["balance"])
+	}
+}
+
 func TestCodexBalanceRouteKeepsBalanceWhenResetCreditsFail(t *testing.T) {
 	bin := filepath.Join(t.TempDir(), "fake-codex")
 	script := `#!/bin/sh
@@ -211,7 +262,7 @@ done
 		t.Fatal(err)
 	}
 	t.Setenv("CODEX_APP_SERVER_BIN", bin)
-	t.Setenv("CODEX_BALANCE_TIMEOUT_SECONDS", "2")
+	t.Setenv("CODEX_BALANCE_TIMEOUT_SECONDS", "5")
 	t.Setenv("CODEX_AUTH_FILE", writeFakeCodexAuthFile(t))
 	t.Setenv("CODEX_RATE_LIMIT_RESET_CREDITS_URL", fakeResetCreditsURL(t, http.StatusBadGateway, `{"error":"temporary"}`))
 
