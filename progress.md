@@ -9,7 +9,9 @@
 - 完成：`readCodexRateLimits` 对 `error sending request`、连接重置/拒绝、`unexpected EOF` 与 TLS handshake timeout 等短暂网络错误，在同一个 15 秒总预算内延迟 250ms 后只重试一次；认证、协议和其他错误不重试。最终失败日志补充 `attempts`，缓存与 `stale=true` 语义不变，不把失败伪装成实时成功。
 - 完成：镜像内固定 Codex CLI 从 `0.143.0` 提升到 npm latest `0.144.1`，避免容器重建后再依赖健康脚本的临时升级。
 - 验证：已通过 `cd server && go test -count=1 ./...`、`cd server && go test -count=1 ./internal/server -run 'TestCodexBalanceRoute'`、`bash scripts/qa/secrets.sh`、`git diff --check`；新增 fake app-server 回归覆盖“首读网络发送失败、二次读取成功”返回 200。已用本地 linux/amd64 Docker 构建并在成品中确认 `codex-cli 0.144.1`。首次构建被本机代理传入 Docker 后导致 Alpine TLS EOF，清除本次构建命令的代理环境后构建通过，未改动系统代理。
-- 线上核对：133 当前运行容器仍为原镜像，但健康脚本已将运行时临时升级到 `codex-cli 0.144.0`；公网 `/public/codex/balance` 与生产后台 `/admin-codex-balance` 当前均显示正常，新增 `GPT-5.3-Codex-Spark` 卡片可见。尚未提交、推送或重建 133 容器，因此本轮的一次重试和 `0.144.1` 固定镜像仍待发布。
+- 部署：已提交功能版本 `b5ba554be431423b7c83b57d65f209c8d47883c0`，本地构建 linux/amd64 镜像 `oauth-api-service-server:20260710T215258-b5ba554-codex-balance-retry` 并上传 133。远端校验镜像与迁移压缩包 SHA-256 后执行 `docker load`、宿主机 Atlas status、备份 `.env` 为 `.env.bak.20260710T215258-b5ba554-codex-balance-retry`、更新 `APP_IMAGE` 和仅重建 `app-server`，未在 133 构建；Atlas 当前版本 `20260604123931`、pending 0。首次重建被远端 shell 继承的旧 `APP_IMAGE` 覆盖，已立即使用显式新镜像变量重建修正，未影响 PostgreSQL。
+- 线上验证：当前 app-server 运行 `oauth-api-service-server:20260710T215258-b5ba554-codex-balance-retry`，容器环境 `GIT_SHA=b5ba554be431423b7c83b57d65f209c8d47883c0`、`GIT_SHA_SHORT=b5ba554`、`IMAGE_TAG=20260710T215258-b5ba554-codex-balance-retry`，镜像内 `codex-cli 0.144.1`。远端与公网 `/healthz` / `/readyz`、`/public/codex/balance` 均通过且为实时 `status=ok`、`stale=false`，返回 `codex` 与 `codex_bengalfox` 分组。生产 Playwright 登录 `/admin-codex-balance` 后接口状态为“正常”，`GPT-5.3-Codex-Spark` 卡片和重置券均可见，无红色失败提示。
+- 清理与回滚：发布后执行 `docker image prune -a -f` 与 `docker builder prune -f`，回收 `689.8MB`，根分区可用空间由约 `51G` 回升至约 `53G`；未执行 volume prune。当前 release 目录与 `.env` 备份保留，回滚时需先重新导入上一 release 镜像，再恢复对应 `APP_IMAGE`，不能假定已被 prune 的旧镜像仍在本机。
 
 ## 2026-07-10 govulncheck 可达漏洞收敛
 
