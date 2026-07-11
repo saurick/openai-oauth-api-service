@@ -18,6 +18,9 @@ const scenarioFilter = String(process.env.STYLE_L1_SCENARIOS || '')
   .map((name) => name.trim())
   .filter(Boolean)
 const CODEX_MODEL_IDS = [
+  'gpt-5.6',
+  'gpt-5.6-terra',
+  'gpt-5.6-luna',
   'gpt-5.5',
   'gpt-5.4',
   'gpt-5.4-mini',
@@ -2753,7 +2756,7 @@ async function assertPublicClientConfigVisuals(page, scenarioName) {
     return (
       pre?.innerText.includes('"baseURL": "https://proxy.example.test/v1"') &&
       pre?.innerText.includes('"apiKey": "ogw_demo_public_key"') &&
-      pre?.innerText.includes('"model": "oauth-api-service/gpt-5.5"')
+      pre?.innerText.includes('"model": "oauth-api-service/gpt-5.6"')
     )
   })
 
@@ -4348,7 +4351,9 @@ async function assertModelTableVisuals(page, scenarioName) {
       hasDisableButton: Array.from(main?.querySelectorAll('button') || []).some(
         (node) => node.textContent.trim() === '禁用'
       ),
-      hasPagination: document.body.innerText.includes('共 6 条'),
+      hasPagination: document.body.innerText.includes(
+        `共 ${codexModelIDs.length} 条`
+      ),
       hasFixedListHint:
         document.body.innerText.includes('模型列表随代码固定维护'),
       hasModelCreateButton: Array.from(
@@ -5010,6 +5015,9 @@ function getApiMockData(method, params = {}, state = {}) {
 
   if (method === 'model_list') {
     const contextByModel = {
+      'gpt-5.6': [1_050_000, 260_000, 380_000, 1_000_000, 1_900_000, 8],
+      'gpt-5.6-terra': [1_050_000, 260_000, 380_000, 1_000_000, 1_900_000, 8],
+      'gpt-5.6-luna': [1_050_000, 260_000, 380_000, 1_000_000, 1_900_000, 8],
       'gpt-5.5': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
       'gpt-5.4': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
       'gpt-5.4-mini': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
@@ -5020,6 +5028,9 @@ function getApiMockData(method, params = {}, state = {}) {
       'gpt-5.2': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
     }
     const baseModels = [
+      'gpt-5.6',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
       'gpt-5.5',
       'gpt-5.4',
       'gpt-5.4-mini',
@@ -5063,6 +5074,24 @@ function getApiMockData(method, params = {}, state = {}) {
   if (method === 'official_model_price_list') {
     return {
       items: [
+        {
+          cached_input_usd_per_million: 0.5,
+          input_usd_per_million: 5,
+          model_id: 'gpt-5.6',
+          output_usd_per_million: 30,
+        },
+        {
+          cached_input_usd_per_million: 0.25,
+          input_usd_per_million: 2.5,
+          model_id: 'gpt-5.6-terra',
+          output_usd_per_million: 15,
+        },
+        {
+          cached_input_usd_per_million: 0.1,
+          input_usd_per_million: 1,
+          model_id: 'gpt-5.6-luna',
+          output_usd_per_million: 6,
+        },
         {
           cached_input_usd_per_million: 0.5,
           input_usd_per_million: 5,

@@ -22,7 +22,7 @@ sandbox_mode = "danger-full-access"
 check_for_update_on_startup = true
 personality = "pragmatic"
 
-model = "gpt-5.5"
+model = "gpt-5.6"
 model_provider = "openai"
 model_reasoning_effort = "medium"
 model_reasoning_summary = "detailed"
@@ -31,7 +31,7 @@ hide_agent_reasoning = false
 
 [profiles."openai"]
 model_provider = "openai"
-model = "gpt-5.5"
+model = "gpt-5.6"
 model_reasoning_effort = "medium"
 model_reasoning_summary = "detailed"
 model_supports_reasoning_summaries = true
@@ -46,7 +46,7 @@ experimental_bearer_token = "{{API_KEY}}"
 
 [profiles."{{PROFILE}}"]
 model_provider = "oauth-api-service"
-model = "gpt-5.5"
+model = "gpt-5.6"
 model_reasoning_effort = "medium"
 model_reasoning_summary = "detailed"
 model_supports_reasoning_summaries = true
@@ -55,7 +55,7 @@ personality = "pragmatic"
 
 [profiles.fast]
 model_provider = "oauth-api-service"
-model = "gpt-5.5"
+model = "gpt-5.6"
 model_reasoning_effort = "low"
 model_reasoning_summary = "detailed"
 model_supports_reasoning_summaries = true
@@ -64,7 +64,7 @@ personality = "pragmatic"
 
 [profiles.medium]
 model_provider = "oauth-api-service"
-model = "gpt-5.5"
+model = "gpt-5.6"
 model_reasoning_effort = "medium"
 model_reasoning_summary = "detailed"
 model_supports_reasoning_summaries = true
@@ -73,7 +73,7 @@ personality = "pragmatic"
 
 [profiles.high]
 model_provider = "oauth-api-service"
-model = "gpt-5.5"
+model = "gpt-5.6"
 model_reasoning_effort = "high"
 model_reasoning_summary = "detailed"
 model_supports_reasoning_summaries = true
@@ -82,7 +82,7 @@ personality = "pragmatic"
 
 [profiles.deep]
 model_provider = "oauth-api-service"
-model = "gpt-5.5"
+model = "gpt-5.6"
 model_reasoning_effort = "xhigh"
 model_reasoning_summary = "detailed"
 model_supports_reasoning_summaries = true
@@ -114,7 +114,7 @@ const OPENCODE_TEMPLATE = `{
   "default_agent": "build",
   "agent": {
     "build": {
-      "model": "oauth-api-service/gpt-5.5",
+      "model": "oauth-api-service/gpt-5.6",
       "variant": "medium",
       "options": {
         "store": false
@@ -122,7 +122,7 @@ const OPENCODE_TEMPLATE = `{
       "permission": {}
     },
     "plan": {
-      "model": "oauth-api-service/gpt-5.5",
+      "model": "oauth-api-service/gpt-5.6",
       "variant": "medium",
       "options": {
         "store": false
@@ -143,8 +143,8 @@ const OPENCODE_TEMPLATE = `{
         "timeout": 600000
       },
       "models": {
-        "gpt-5.5": {
-          "name": "gpt-5.5",
+        "gpt-5.6": {
+          "name": "gpt-5.6",
           "reasoning": true,
           "reasoningEffort": "medium",
           "variants": {
@@ -184,7 +184,9 @@ const INSTALL_PATHS = {
 }
 
 export function normalizeBaseUrl(value) {
-  return String(value || '').trim().replace(/\/+$/u, '')
+  return String(value || '')
+    .trim()
+    .replace(/\/+$/u, '')
 }
 
 export function normalizeApiKey(value) {
@@ -209,7 +211,13 @@ export function getClientConfigTemplate(tool, os) {
   return OPENCODE_TEMPLATE
 }
 
-export function renderClientConfigTemplate({ tool, os, baseUrl, apiKey, profile }) {
+export function renderClientConfigTemplate({
+  tool,
+  os,
+  baseUrl,
+  apiKey,
+  profile,
+}) {
   const replacements = {
     '{{BASE_URL}}': normalizeBaseUrl(baseUrl) || CLIENT_CONFIG_DEFAULTS.baseUrl,
     '{{API_KEY}}': normalizeApiKey(apiKey) || CLIENT_CONFIG_DEFAULTS.apiKey,

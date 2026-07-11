@@ -251,6 +251,24 @@ const CODEX_MODEL_CATALOG = [
   {
     cached_input_usd_per_million: 0.5,
     input_usd_per_million: 5,
+    model_id: 'gpt-5.6',
+    output_usd_per_million: 30,
+  },
+  {
+    cached_input_usd_per_million: 0.25,
+    input_usd_per_million: 2.5,
+    model_id: 'gpt-5.6-terra',
+    output_usd_per_million: 15,
+  },
+  {
+    cached_input_usd_per_million: 0.1,
+    input_usd_per_million: 1,
+    model_id: 'gpt-5.6-luna',
+    output_usd_per_million: 6,
+  },
+  {
+    cached_input_usd_per_million: 0.5,
+    input_usd_per_million: 5,
     model_id: 'gpt-5.5',
     output_usd_per_million: 30,
   },

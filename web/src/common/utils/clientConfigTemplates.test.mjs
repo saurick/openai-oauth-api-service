@@ -5,7 +5,10 @@ import path from 'node:path'
 import vm from 'node:vm'
 
 function loadClientConfigTemplateModule() {
-  const filePath = path.resolve(import.meta.dirname, './clientConfigTemplates.js')
+  const filePath = path.resolve(
+    import.meta.dirname,
+    './clientConfigTemplates.js'
+  )
   const source = fs.readFileSync(filePath, 'utf8')
   const transformed = source
     .replace(/export const /g, 'const ')
@@ -60,17 +63,26 @@ test('clientConfigTemplates: opencode 模板替换 baseURL、apiKey 并保留模
   })
   const parsed = JSON.parse(content)
 
-  assert.equal(parsed.provider['oauth-api-service'].options.baseURL, 'http://localhost:8400/v1')
+  assert.equal(
+    parsed.provider['oauth-api-service'].options.baseURL,
+    'http://localhost:8400/v1'
+  )
   assert.equal(parsed.provider['oauth-api-service'].options.apiKey, 'ogw_local')
-  assert.equal(parsed.agent.build.model, 'oauth-api-service/gpt-5.5')
+  assert.equal(parsed.agent.build.model, 'oauth-api-service/gpt-5.6')
   assert.equal(parsed.agent.build.variant, 'medium')
   assert.equal(parsed.agent.plan.variant, 'medium')
-  assert.equal(parsed.provider['oauth-api-service'].models['gpt-5.5'].reasoningEffort, 'medium')
   assert.equal(
-    parsed.provider['oauth-api-service'].models['gpt-5.5'].variants.xhigh.reasoningEffort,
+    parsed.provider['oauth-api-service'].models['gpt-5.6'].reasoningEffort,
+    'medium'
+  )
+  assert.equal(
+    parsed.provider['oauth-api-service'].models['gpt-5.6'].variants.xhigh
+      .reasoningEffort,
     'xhigh'
   )
-  assert.deepEqual(Object.keys(parsed.provider['oauth-api-service'].models), ['gpt-5.5'])
+  assert.deepEqual(Object.keys(parsed.provider['oauth-api-service'].models), [
+    'gpt-5.6',
+  ])
 })
 
 test('clientConfigTemplates: 下载文件名使用真实配置文件名，安装路径区分 mac 和 win', () => {
@@ -78,7 +90,13 @@ test('clientConfigTemplates: 下载文件名使用真实配置文件名，安装
   assert.equal(getClientConfigFilename('codex', 'win'), 'config.toml')
   assert.equal(getClientConfigFilename('opencode', 'mac'), 'opencode.json')
   assert.equal(getClientConfigFilename('opencode', 'win'), 'opencode.json')
-  assert.equal(getClientConfigInstallPath('codex', 'mac'), '~/.codex/config.toml')
-  assert.equal(getClientConfigInstallPath('codex', 'win'), '%USERPROFILE%\\.codex\\config.toml')
+  assert.equal(
+    getClientConfigInstallPath('codex', 'mac'),
+    '~/.codex/config.toml'
+  )
+  assert.equal(
+    getClientConfigInstallPath('codex', 'win'),
+    '%USERPROFILE%\\.codex\\config.toml'
+  )
   assert.equal(normalizeProfile('  team/main 中文  '), 'team-main')
 })
