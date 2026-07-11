@@ -62,8 +62,11 @@ func TestOfficialModelPriceMapContainsStandardTokenRates(t *testing.T) {
 	if OfficialModelPriceMap()["gpt-5.6-sol"].InputUSDPerMillion != 5 {
 		t.Fatalf("official price map should return independent copies")
 	}
-	if prices["gpt-5.6-terra"].InputUSDPerMillion != 2.5 || prices["gpt-5.6-luna"].OutputUSDPerMillion != 6 {
-		t.Fatalf("expected GPT-5.6 tier prices, got terra=%+v luna=%+v", prices["gpt-5.6-terra"], prices["gpt-5.6-luna"])
+	if prices["gpt-5.6-terra"].InputUSDPerMillion != 2.5 {
+		t.Fatalf("expected GPT-5.6 Terra price, got %+v", prices["gpt-5.6-terra"])
+	}
+	if IsOfficialCodexModelID("gpt-5.6-luna") {
+		t.Fatalf("gpt-5.6-luna should stay unavailable until the Codex backend rollout reaches this account")
 	}
 	if OfficialModelContextWindowTokens(DefaultCodexModelID) != 1_050_000 {
 		t.Fatalf("default model context window = %d, want 1050000", OfficialModelContextWindowTokens(DefaultCodexModelID))

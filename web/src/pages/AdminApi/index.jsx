@@ -261,12 +261,6 @@ const CODEX_MODEL_CATALOG = [
     output_usd_per_million: 15,
   },
   {
-    cached_input_usd_per_million: 0.1,
-    input_usd_per_million: 1,
-    model_id: 'gpt-5.6-luna',
-    output_usd_per_million: 6,
-  },
-  {
     cached_input_usd_per_million: 0.5,
     input_usd_per_million: 5,
     model_id: 'gpt-5.5',

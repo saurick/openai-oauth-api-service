@@ -5,7 +5,6 @@ const DefaultCodexModelID = "gpt-5.6-sol"
 var CodexModelIDs = []string{
 	DefaultCodexModelID,
 	"gpt-5.6-terra",
-	"gpt-5.6-luna",
 	"gpt-5.5",
 	"gpt-5.4",
 	"gpt-5.4-mini",
@@ -17,7 +16,6 @@ var CodexModelIDs = []string{
 var OfficialModelContextWindows = map[string]int64{
 	DefaultCodexModelID:   1_050_000,
 	"gpt-5.6-terra":       1_050_000,
-	"gpt-5.6-luna":        1_050_000,
 	"gpt-5.5":             400_000,
 	"gpt-5.4":             400_000,
 	"gpt-5.4-mini":        400_000,
@@ -31,7 +29,6 @@ var OfficialModelContextWindows = map[string]int64{
 var OfficialModelPrices = []*GatewayModelPrice{
 	{ModelID: DefaultCodexModelID, InputUSDPerMillion: 5, CachedInputUSDPerMillion: 0.5, OutputUSDPerMillion: 30},
 	{ModelID: "gpt-5.6-terra", InputUSDPerMillion: 2.5, CachedInputUSDPerMillion: 0.25, OutputUSDPerMillion: 15},
-	{ModelID: "gpt-5.6-luna", InputUSDPerMillion: 1, CachedInputUSDPerMillion: 0.1, OutputUSDPerMillion: 6},
 	{ModelID: "gpt-5.5", InputUSDPerMillion: 5, CachedInputUSDPerMillion: 0.5, OutputUSDPerMillion: 30},
 	{ModelID: "gpt-5.4", InputUSDPerMillion: 2.5, CachedInputUSDPerMillion: 0.25, OutputUSDPerMillion: 15},
 	{ModelID: "gpt-5.4-mini", InputUSDPerMillion: 0.75, CachedInputUSDPerMillion: 0.075, OutputUSDPerMillion: 4.5},

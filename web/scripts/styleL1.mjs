@@ -20,7 +20,6 @@ const scenarioFilter = String(process.env.STYLE_L1_SCENARIOS || '')
 const CODEX_MODEL_IDS = [
   'gpt-5.6-sol',
   'gpt-5.6-terra',
-  'gpt-5.6-luna',
   'gpt-5.5',
   'gpt-5.4',
   'gpt-5.4-mini',
@@ -5024,7 +5023,6 @@ function getApiMockData(method, params = {}, state = {}) {
     const contextByModel = {
       'gpt-5.6-sol': [1_050_000, 260_000, 380_000, 1_000_000, 1_900_000, 8],
       'gpt-5.6-terra': [1_050_000, 260_000, 380_000, 1_000_000, 1_900_000, 8],
-      'gpt-5.6-luna': [1_050_000, 260_000, 380_000, 1_000_000, 1_900_000, 8],
       'gpt-5.5': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
       'gpt-5.4': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
       'gpt-5.4-mini': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
@@ -5037,7 +5035,6 @@ function getApiMockData(method, params = {}, state = {}) {
     const baseModels = [
       'gpt-5.6-sol',
       'gpt-5.6-terra',
-      'gpt-5.6-luna',
       'gpt-5.5',
       'gpt-5.4',
       'gpt-5.4-mini',
@@ -5092,12 +5089,6 @@ function getApiMockData(method, params = {}, state = {}) {
           input_usd_per_million: 2.5,
           model_id: 'gpt-5.6-terra',
           output_usd_per_million: 15,
-        },
-        {
-          cached_input_usd_per_million: 0.1,
-          input_usd_per_million: 1,
-          model_id: 'gpt-5.6-luna',
-          output_usd_per_million: 6,
         },
         {
           cached_input_usd_per_million: 0.5,

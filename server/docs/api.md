@@ -445,14 +445,14 @@ HTTP 路由：
 
 ### `api.official_model_price_list`
 
-返回当前代码内置的 Codex 客户端可用模型中已定价模型的价格表，用于前端费用展示和费用估算兜底；当前已定价模型为 `gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5`、`gpt-5.4`、`gpt-5.4-mini`、`gpt-5.3-codex`、`gpt-5.2`：
+返回当前代码内置的 Codex 客户端可用模型中已定价模型的价格表，用于前端费用展示和费用估算兜底；当前已定价模型为 `gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.5`、`gpt-5.4`、`gpt-5.4-mini`、`gpt-5.3-codex`、`gpt-5.2`：
 
 - `items[].model_id`
 - `items[].input_usd_per_million`
 - `items[].cached_input_usd_per_million`
 - `items[].output_usd_per_million`
 
-说明：价格单位为 USD / 1M tokens。GPT-5.6 三档当前记录官方短上下文 Standard 输入、缓存输入和输出单价；本项目通过 ChatGPT Codex backend 运行，因此 Sol 使用 `gpt-5.6-sol`，不使用仅适用于 OpenAI API alias 的无后缀 `gpt-5.6`。`gpt-5.3-codex-spark` 保留在 Codex 客户端可用模型候选中，但仍是 research preview，价格未定，不进入费用估算单价表；超过 272K 输入的长上下文加价、cache write、Batch、Flex、Priority 和区域处理加价需要新增口径字段后再接入。
+说明：价格单位为 USD / 1M tokens。GPT-5.6 Sol / Terra 当前记录官方短上下文 Standard 输入、缓存输入和输出单价；本项目通过 ChatGPT Codex backend 运行，因此 Sol 使用 `gpt-5.6-sol`，不使用仅适用于 OpenAI API alias 的无后缀 `gpt-5.6`。官方 `gpt-5.6-luna` 在当前账号真实请求仍返回 404，暂不进入可用目录和价格接口。`gpt-5.3-codex-spark` 保留在 Codex 客户端可用模型候选中，但仍是 research preview，价格未定，不进入费用估算单价表；超过 272K 输入的长上下文加价、cache write、Batch、Flex、Priority 和区域处理加价需要新增口径字段后再接入。
 
 ## 不再属于模板主干的业务能力
 
