@@ -3,6 +3,13 @@
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 - 2026-06-25：旧 `progress.md` 已按超过 80KB 阈值归档到 `docs/archive/progress-2026-06-25-before-skill-scenario-matrix.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-07-11 客户端配置生成器同步 Codex profile v2 与四模型
+
+- 完成：客户端配置生成器模型选择收口为 `gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5`，Codex 与 opencode 默认模型联动更新；opencode provider 只生成这四个模型及 low / medium / high / xhigh variants，不再混入目录外模型。
+- 完成：Codex 模板适配本机 `codex-cli 0.144.1` 的 profile v2 合同，下载文件改为 `<配置名>.config.toml`，安装到 `$CODEX_HOME/<配置名>.config.toml` 并通过 `codex --profile <配置名>` 叠加；删除旧 `profile = ...` 和 `[profiles.*]` 内嵌配置，不覆盖根 `config.toml`。
+- 验证：模板单测 18/18、前端 lint/css/build 通过；`style:l1` 的后台与公开页桌面/移动 4 个场景通过，覆盖浅色、暗色、四模型选项、Luna 切换、预览内容、API Key 缺失弹窗和盒模型。本机用页面模板生成隔离 `saurick.config.toml`，`codex-cli 0.144.1 --strict-config --profile saurick` 经线上 Sol 返回 `CLIENT_CONFIG_PROFILE_V2_LIVE_OK`，确认文件被真实加载；`bash scripts/qa/full.sh` 全部通过，包含 secrets、错误码同步、govulncheck（可达漏洞 0）、前端全量检查和 Go test/build。133 部署后实页回归待完成。
+- 阻塞/风险：本轮不改模型目录真源、数据库、schema、migration、API key、配额、usage、上游策略或压缩逻辑；页面仍只在当前浏览器内生成含 API Key 的文件，不保存或上传该值。
+
 ## 2026-07-11 GPT-5.5 / GPT-5.6 四模型收口
 
 - 完成：固定模型目录收口为 `gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5`，默认仍为 Sol；启动同步沿用现有主路径，删除目录外模型及其价格、模型策略和 key `allowed_models` 残值，不改写历史 usage。

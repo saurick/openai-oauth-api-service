@@ -2543,11 +2543,12 @@ async function assertClientConfigVisuals(page, scenarioName, options = {}) {
         text.includes('不会保存到本系统'),
       hasRequiredKeyHint: text.includes('复制或下载前请填写 API Key'),
       hasNoRepositoryHint: !text.includes('固化进仓库'),
-      hasInstallPath: text.includes('~/.codex/config.toml'),
+      hasInstallPath: text.includes('~/.codex/saurick.config.toml'),
       hasPlaceholders:
         pre?.innerText.includes('https://oauth-api.saurick.me/v1') &&
         pre?.innerText.includes('<API_KEY>') &&
-        pre?.innerText.includes('[profiles."saurick"]'),
+        pre?.innerText.includes('model = "gpt-5.6-sol"') &&
+        !pre?.innerText.includes('[profiles.'),
       hasNoUploadArea:
         !text.includes('上传已有模板') && !text.includes('选择配置文件'),
       mainHeight: mainRect?.height || 0,
@@ -2614,6 +2615,15 @@ async function assertClientConfigVisuals(page, scenarioName, options = {}) {
     `${scenarioName} 缺少复制下载前填写 key 的提示`
   )
   assert(metrics.hasNoRepositoryHint, `${scenarioName} 不应出现仓库固化文案`)
+  const modelOptions = await page
+    .getByLabel('默认模型')
+    .locator('option')
+    .allTextContents()
+  assert.deepEqual(
+    modelOptions,
+    ['GPT-5.6 Sol', 'GPT-5.6 Terra', 'GPT-5.6 Luna', 'GPT-5.5'],
+    `${scenarioName} 模型选择器未收口为四模型`
+  )
   assert(metrics.hasPlaceholders, `${scenarioName} 配置预览未渲染默认占位模板`)
   assert(metrics.hasInstallPath, `${scenarioName} 缺少目标安装路径说明`)
   assert(
@@ -2629,6 +2639,14 @@ async function assertClientConfigVisuals(page, scenarioName, options = {}) {
   )
 
   await assertClientConfigRequiresApiKey(page, scenarioName)
+  await page.getByLabel('默认模型').selectOption('gpt-5.6-luna')
+  await page.waitForFunction(() => {
+    const pre = document.querySelector('main pre')
+    return (
+      pre?.innerText.includes('model = "gpt-5.6-luna"') &&
+      !pre?.innerText.includes('[profiles.')
+    )
+  })
 
   await page.locator('[data-admin-theme-option="dark"]').click()
   await page.waitForFunction(
@@ -2751,7 +2769,11 @@ async function assertPublicClientConfigVisuals(page, scenarioName) {
     return (
       pre?.innerText.includes('"baseURL": "https://proxy.example.test/v1"') &&
       pre?.innerText.includes('"apiKey": "ogw_demo_public_key"') &&
-      pre?.innerText.includes('"model": "oauth-api-service/gpt-5.6-sol"')
+      pre?.innerText.includes('"model": "oauth-api-service/gpt-5.6-luna"') &&
+      pre?.innerText.includes('"gpt-5.6-sol"') &&
+      pre?.innerText.includes('"gpt-5.6-terra"') &&
+      pre?.innerText.includes('"gpt-5.6-luna"') &&
+      pre?.innerText.includes('"gpt-5.5"')
     )
   })
 

@@ -3,12 +3,14 @@ import SurfacePanel from '@/common/components/layout/SurfacePanel'
 import { useAppAlert } from '@/common/components/modal/AppAlertProvider'
 import {
   CLIENT_CONFIG_DEFAULTS,
+  CLIENT_CONFIG_MODEL_OPTIONS,
   CLIENT_CONFIG_OS_OPTIONS,
   CLIENT_CONFIG_TOOL_OPTIONS,
   getClientConfigFilename,
   getClientConfigInstallPath,
   normalizeApiKey,
   normalizeBaseUrl,
+  normalizeModel,
   normalizeProfile,
   renderClientConfigTemplate,
 } from '@/common/utils/clientConfigTemplates'
@@ -26,6 +28,7 @@ export default function ClientConfigBuilder({ publicMode = false }) {
   const [os, setOs] = useState('mac')
   const [baseUrl, setBaseUrl] = useState(CLIENT_CONFIG_DEFAULTS.baseUrl)
   const [apiKey, setApiKey] = useState('')
+  const [model, setModel] = useState(CLIENT_CONFIG_DEFAULTS.model)
   const [profile, setProfile] = useState(CLIENT_CONFIG_DEFAULTS.profile)
   const [copyStatus, setCopyStatus] = useState('')
   const apiKeyInputRef = useRef(null)
@@ -34,19 +37,20 @@ export default function ClientConfigBuilder({ publicMode = false }) {
     () => ({
       apiKey: normalizeApiKey(apiKey),
       baseUrl: normalizeBaseUrl(baseUrl),
+      model: normalizeModel(model),
       os,
       profile: normalizeProfile(profile),
       tool,
     }),
-    [apiKey, baseUrl, os, profile, tool]
+    [apiKey, baseUrl, model, os, profile, tool]
   )
 
   const templateContent = useMemo(
     () => renderClientConfigTemplate(renderValues),
     [renderValues]
   )
-  const filename = getClientConfigFilename(tool, os)
-  const installPath = getClientConfigInstallPath(tool, os)
+  const filename = getClientConfigFilename(tool, os, renderValues.profile)
+  const installPath = getClientConfigInstallPath(tool, os, renderValues.profile)
 
   const ensureApiKey = () => {
     if (normalizeApiKey(apiKey)) return true
@@ -105,7 +109,7 @@ export default function ClientConfigBuilder({ publicMode = false }) {
               />
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <label className={fieldClass}>
                 Base URL
                 <input
@@ -134,7 +138,24 @@ export default function ClientConfigBuilder({ publicMode = false }) {
                 <span className={hintClass}>复制或下载前请填写 API Key。</span>
               </label>
               <label className={fieldClass}>
-                Codex profile
+                默认模型
+                <select
+                  className={inputClass}
+                  value={model}
+                  onChange={(event) => setModel(event.target.value)}
+                >
+                  {CLIENT_CONFIG_MODEL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <span className={hintClass}>
+                  仅提供 GPT-5.5 与 GPT-5.6 Sol / Terra / Luna。
+                </span>
+              </label>
+              <label className={fieldClass}>
+                Codex 配置名
                 <input
                   className={inputClass}
                   value={profile}
@@ -145,7 +166,7 @@ export default function ClientConfigBuilder({ publicMode = false }) {
                   spellCheck={false}
                 />
                 <span className={hintClass}>
-                  仅 Codex 使用；opencode 通过 agent model 选择 provider。
+                  仅 Codex 使用；生成同名 profile v2 独立配置文件。
                 </span>
               </label>
             </div>
@@ -159,7 +180,9 @@ export default function ClientConfigBuilder({ publicMode = false }) {
               <li>
                 在本页填入目标服务 <strong>Base URL</strong>、
                 <strong>API Key</strong>
-                {tool === 'codex' ? '，再确认 profile。' : '。'}
+                {tool === 'codex'
+                  ? '，再确认配置名和默认模型。'
+                  : ' 和默认模型。'}
               </li>
               <li>填写完成后复制内容，或下载配置文件到本机。</li>
               <li>
@@ -167,11 +190,12 @@ export default function ClientConfigBuilder({ publicMode = false }) {
                 ，先运行一次让它创建配置目录。
               </li>
               <li>
-                备份旧文件，再把下载文件改名并放到：<code>{installPath}</code>
+                如目标文件已存在请先备份，再把下载文件放到：
+                <code>{installPath}</code>
               </li>
               <li>
                 {tool === 'codex'
-                  ? `执行 codex --profile ${renderValues.profile} 验证。`
+                  ? `执行 codex --profile ${renderValues.profile} 验证；根 config.toml 保持不变。`
                   : '执行 opencode 并选择 build / plan agent 验证。'}
               </li>
             </ol>

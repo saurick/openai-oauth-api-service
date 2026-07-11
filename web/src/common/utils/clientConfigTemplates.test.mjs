@@ -14,7 +14,7 @@ function loadClientConfigTemplateModule() {
     .replace(/export const /g, 'const ')
     .replace(/export function /g, 'function ')
     .concat(
-      '\nmodule.exports = { CLIENT_CONFIG_DEFAULTS, normalizeBaseUrl, normalizeApiKey, normalizeProfile, getClientConfigTemplate, renderClientConfigTemplate, getClientConfigFilename, getClientConfigInstallPath };\n'
+      '\nmodule.exports = { CLIENT_CONFIG_DEFAULTS, CLIENT_CONFIG_MODEL_OPTIONS, normalizeBaseUrl, normalizeApiKey, normalizeProfile, normalizeModel, getClientConfigTemplate, renderClientConfigTemplate, getClientConfigFilename, getClientConfigInstallPath };\n'
     )
 
   const sandbox = {
@@ -26,24 +26,35 @@ function loadClientConfigTemplateModule() {
 }
 
 const {
+  CLIENT_CONFIG_MODEL_OPTIONS,
   getClientConfigFilename,
   getClientConfigInstallPath,
+  normalizeModel,
   normalizeProfile,
   renderClientConfigTemplate,
 } = loadClientConfigTemplateModule()
 
-test('clientConfigTemplates: Codex Windows 模板只渲染必要 provider 字段和 Windows 沙箱', () => {
+const expectedModels = [
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  'gpt-5.6-luna',
+  'gpt-5.5',
+]
+
+test('clientConfigTemplates: Codex Windows 生成 profile v2 独立配置并选择目标模型', () => {
   const content = renderClientConfigTemplate({
     tool: 'codex',
     os: 'win',
     baseUrl: 'https://example.com/v1/',
     apiKey: 'ogw_test_key',
-    profile: 'team main',
+    model: 'gpt-5.6-terra',
   })
 
   assert.match(content, /base_url = "https:\/\/example\.com\/v1"/u)
   assert.match(content, /experimental_bearer_token = "ogw_test_key"/u)
-  assert.match(content, /profile = "team-main"/u)
+  assert.match(content, /model = "gpt-5\.6-terra"/u)
+  assert.doesNotMatch(content, /(^|\n)profile =/u)
+  assert.doesNotMatch(content, /\[profiles\./u)
   assert.match(content, /model_reasoning_effort = "medium"/u)
   assert.match(content, /model_reasoning_summary = "detailed"/u)
   assert.match(content, /model_supports_reasoning_summaries = true/u)
@@ -53,13 +64,13 @@ test('clientConfigTemplates: Codex Windows 模板只渲染必要 provider 字段
   assert.doesNotMatch(content, /notify =/u)
 })
 
-test('clientConfigTemplates: opencode 模板替换 baseURL、apiKey 并保留模型变体', () => {
+test('clientConfigTemplates: opencode 只包含四模型并按选择更新 agent 默认模型', () => {
   const content = renderClientConfigTemplate({
     tool: 'opencode',
     os: 'mac',
     baseUrl: 'http://localhost:8400/v1/',
     apiKey: 'ogw_local',
-    profile: 'ignored-by-opencode',
+    model: 'gpt-5.6-luna',
   })
   const parsed = JSON.parse(content)
 
@@ -68,7 +79,8 @@ test('clientConfigTemplates: opencode 模板替换 baseURL、apiKey 并保留模
     'http://localhost:8400/v1'
   )
   assert.equal(parsed.provider['oauth-api-service'].options.apiKey, 'ogw_local')
-  assert.equal(parsed.agent.build.model, 'oauth-api-service/gpt-5.6-sol')
+  assert.equal(parsed.agent.build.model, 'oauth-api-service/gpt-5.6-luna')
+  assert.equal(parsed.agent.plan.model, 'oauth-api-service/gpt-5.6-luna')
   assert.equal(parsed.agent.build.variant, 'medium')
   assert.equal(parsed.agent.plan.variant, 'medium')
   assert.equal(
@@ -80,23 +92,46 @@ test('clientConfigTemplates: opencode 模板替换 baseURL、apiKey 并保留模
       .reasoningEffort,
     'xhigh'
   )
-  assert.deepEqual(Object.keys(parsed.provider['oauth-api-service'].models), [
-    'gpt-5.6-sol',
-  ])
+  assert.deepEqual(
+    Object.keys(parsed.provider['oauth-api-service'].models),
+    expectedModels
+  )
+  for (const model of expectedModels) {
+    assert.equal(
+      parsed.provider['oauth-api-service'].models[model].variants.xhigh
+        .reasoningEffort,
+      'xhigh'
+    )
+  }
 })
 
-test('clientConfigTemplates: 下载文件名使用真实配置文件名，安装路径区分 mac 和 win', () => {
-  assert.equal(getClientConfigFilename('codex', 'mac'), 'config.toml')
-  assert.equal(getClientConfigFilename('codex', 'win'), 'config.toml')
+test('clientConfigTemplates: Codex profile v2 文件名和路径区分 mac 与 Windows', () => {
+  assert.equal(
+    getClientConfigFilename('codex', 'mac', 'team main'),
+    'team-main.config.toml'
+  )
+  assert.equal(
+    getClientConfigFilename('codex', 'win', 'team main'),
+    'team-main.config.toml'
+  )
   assert.equal(getClientConfigFilename('opencode', 'mac'), 'opencode.json')
   assert.equal(getClientConfigFilename('opencode', 'win'), 'opencode.json')
   assert.equal(
-    getClientConfigInstallPath('codex', 'mac'),
-    '~/.codex/config.toml'
+    getClientConfigInstallPath('codex', 'mac', 'team main'),
+    '~/.codex/team-main.config.toml'
   )
   assert.equal(
-    getClientConfigInstallPath('codex', 'win'),
-    '%USERPROFILE%\\.codex\\config.toml'
+    getClientConfigInstallPath('codex', 'win', 'team main'),
+    '%USERPROFILE%\\.codex\\team-main.config.toml'
   )
   assert.equal(normalizeProfile('  team/main 中文  '), 'team-main')
+})
+
+test('clientConfigTemplates: 模型目录固定且未知模型回退 Sol', () => {
+  assert.deepEqual(
+    Array.from(CLIENT_CONFIG_MODEL_OPTIONS, (option) => option.value),
+    expectedModels
+  )
+  assert.equal(normalizeModel('gpt-5.5'), 'gpt-5.5')
+  assert.equal(normalizeModel('gpt-4.1'), 'gpt-5.6-sol')
 })
