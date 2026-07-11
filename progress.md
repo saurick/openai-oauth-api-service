@@ -7,7 +7,10 @@
 
 - 完成：客户端配置生成器模型选择收口为 `gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5`，Codex 与 opencode 默认模型联动更新；opencode provider 只生成这四个模型及 low / medium / high / xhigh variants，不再混入目录外模型。
 - 完成：Codex 模板适配本机 `codex-cli 0.144.1` 的 profile v2 合同，下载文件改为 `<配置名>.config.toml`，安装到 `$CODEX_HOME/<配置名>.config.toml` 并通过 `codex --profile <配置名>` 叠加；删除旧 `profile = ...` 和 `[profiles.*]` 内嵌配置，不覆盖根 `config.toml`。
-- 验证：模板单测 18/18、前端 lint/css/build 通过；`style:l1` 的后台与公开页桌面/移动 4 个场景通过，覆盖浅色、暗色、四模型选项、Luna 切换、预览内容、API Key 缺失弹窗和盒模型。本机用页面模板生成隔离 `saurick.config.toml`，`codex-cli 0.144.1 --strict-config --profile saurick` 经线上 Sol 返回 `CLIENT_CONFIG_PROFILE_V2_LIVE_OK`，确认文件被真实加载；`bash scripts/qa/full.sh` 全部通过，包含 secrets、错误码同步、govulncheck（可达漏洞 0）、前端全量检查和 Go test/build。133 部署后实页回归待完成。
+- 验证：模板单测 18/18、前端 lint/css/build 通过；`style:l1` 的后台与公开页桌面/移动 4 个场景通过，覆盖浅色、暗色、四模型选项、Luna 切换、预览内容、API Key 缺失弹窗和盒模型。本机用页面模板生成隔离 `saurick.config.toml`，`codex-cli 0.144.1 --strict-config --profile saurick` 经线上 Sol 返回 `CLIENT_CONFIG_PROFILE_V2_LIVE_OK`，确认文件被真实加载；`bash scripts/qa/full.sh` 全部通过，包含 secrets、错误码同步、govulncheck（可达漏洞 0）、前端全量检查和 Go test/build。
+- 部署：功能提交 `0c936a5f100910234d198f2987364d744acffaba` 在本地构建 linux/amd64 镜像 `oauth-api-service-server:20260711T051018Z-0c936a5f-client-config-profile-v2`；133 逐项校验镜像与 migration SHA-256 后执行 `docker load`、宿主机 Atlas status、备份 `.env`、更新 `APP_IMAGE` 并只重建 `app-server`，未在低配服务器构建。Atlas 当前版本 `20260604123931`、pending 0，容器内 Codex CLI 为 `0.144.1`。
+- 线上验证：远端与公网 `/healthz` / `/readyz`、`/public/codex/balance` 通过，`/v1/models` 只返回四模型。生产 Playwright 验证公开页与后台页的四模型选项、Codex 默认 Sol、切换 Luna、无旧 `[profiles.*]`、独立 `saurick.config.toml` 路径，以及 opencode JSON 四模型目录；后台暗色桌面和 390px 移动端均无横向溢出。首次自动化脚本因等待条件误把 `/admin-login` 当作已跳转并提前导航，产生一条 `context canceled` 登录时间更新日志；修正等待条件后的完整回归通过，之后无新增 WARN / ERROR。
+- 清理与回滚：发布后执行 `docker image prune -a -f` 与 `docker builder prune -f`，回收 1.038GB，根分区可用空间由 49GB 回升到 51GB；未执行 volume prune。最终 release 包和 `.env.bak.20260711T051018Z-0c936a5f-client-config-profile-v2` 保留；旧运行镜像已清理，回滚需从上一 release 包重新 `docker load`。
 - 阻塞/风险：本轮不改模型目录真源、数据库、schema、migration、API key、配额、usage、上游策略或压缩逻辑；页面仍只在当前浏览器内生成含 API Key 的文件，不保存或上传该值。
 
 ## 2026-07-11 GPT-5.5 / GPT-5.6 四模型收口
