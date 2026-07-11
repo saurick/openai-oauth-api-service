@@ -10,8 +10,10 @@
 - 完成：生产页面回归发现模型表已显示 1,050,000 tokens，但问号说明仍残留“默认 400K”旧口径；已改为按模型目录继承，并明确 GPT-5.6 为 1.05M、旧模型按各自目录值，避免可见数据与帮助文案冲突。
 - 本地工具：本机 Codex CLI 已从 `0.143.0` 更新到 npm stable latest `0.144.1`，并安装官方 OpenAI Developer Docs MCP；仓库镜像真源 `server/Dockerfile` 已是 `@openai/codex@0.144.1`，本轮无需重复改版本。
 - 验证：已通过 `go test -count=1 ./...`、`/usr/local/bin/pnpm --dir web lint`、`css`、`test`、`build`；`style:l1` 通过模型管理、后台客户端配置、公开客户端配置的桌面 / 移动 6 个场景，覆盖模型上下文弹窗浅色 / 暗色、保存 / 恢复态、表格盒模型与 `gpt-5.6-sol` 配置生成。
-- 下一步：重新完成 full QA 后提交 Codex backend 模型 ID 修正；按低配主路径重建 linux/amd64 镜像并部署 133，再用本机最新 Codex CLI 经 `saurick-oauth` provider 对 133 的 `gpt-5.6-sol` 做新 thread + 显式 resume 回归，最后补齐部署证据并推送。
-- 阻塞/风险：当前只同步模型目录、默认值、价格/context 元数据和客户端模板；不改 schema、migration、auth、API key 生命周期、quota、usage 历史、上游重试或代理策略。GPT-5.6 超过 272K 输入的长上下文计费与 cache write 尚未进入现有费用估算字段，后台估算不覆盖这两类附加费用。
+- 部署：最终提交 `88a53e83a4c6d1d61e3ba997eef59732d3129be0` 在本地构建 linux/amd64 镜像 `oauth-api-service-server:20260711T115506-88a53e83-gpt-5.6-sol-final`；远端校验镜像与 migration 包 SHA-256 后执行 `docker load`、宿主机 Atlas status、备份 `.env`、更新 `APP_IMAGE` 和仅重建 `app-server`，未在 133 构建。Atlas 当前版本 `20260604123931`、pending 0，容器内 Codex CLI 为 `0.144.1`。
+- 线上验证：远端本机与公网 `/healthz` / `/readyz` 均通过，`/public/codex/balance` 与 Codex runtime health 均为 `status=ok`，runtime 记录 `before/latest=0.144.1`、`action=already_latest`。本机 Codex CLI `0.144.1` 经 `saurick-oauth` provider 使用 `gpt-5.6-sol` 新建 thread `019f4f4c-7d9b-7df0-86cd-11a900b20111` 后返回指定 marker，并两次显式 `codex exec resume <thread_id>` 成功；usage 落库为 3 条 `model=gpt-5.6-sol status=200 success=true client_type=codex`。生产 Playwright 登录 `/admin-models` 后在暗色模式确认 9 个模型、三档 GPT-5.6 价格、1,050,000 context 和新帮助文案均正确。
+- 清理与回滚：发布验证后执行 `docker image prune -a -f` 与 `docker builder prune -f`，回收 1.432GB，根分区可用空间由约 49GB 回升到约 52GB；未执行 volume prune，当前容器仍运行最终镜像。最终 release 包与 `.env` 备份保留，回滚时可重新 `docker load` 上一 release 并恢复 `APP_IMAGE`。
+- 阻塞/风险：本轮不改 schema、migration、auth、API key 生命周期、quota、usage 历史、上游重试或代理策略。GPT-5.6 超过 272K 输入的长上下文计费与 cache write 尚未进入现有费用估算字段，后台估算不覆盖这两类附加费用。本机旧 `[profiles.saurick]` 配置仍可正常加载，但 Codex CLI `0.144.1` 的新 `-p` profile v2 参数会要求独立 `~/.codex/saurick.config.toml`；本轮为避免扩大个人配置迁移范围，真实回归使用显式 `model_provider="saurick-oauth"` 覆盖。
 
 ## 2026-07-10 Codex 余额瞬时上游失败恢复与 runtime 更新
 
