@@ -3,6 +3,7 @@ package biz
 import (
 	"context"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -50,6 +51,9 @@ func TestNewGatewayAPIKeySecretWithRemarkPrefixesPlainKey(t *testing.T) {
 
 func TestOfficialModelPriceMapContainsStandardTokenRates(t *testing.T) {
 	prices := OfficialModelPriceMap()
+	if len(prices) != 4 {
+		t.Fatalf("official price count = %d, want 4", len(prices))
+	}
 	price := prices["gpt-5.6-sol"]
 	if price == nil {
 		t.Fatalf("expected gpt-5.6-sol official price")
@@ -65,14 +69,25 @@ func TestOfficialModelPriceMapContainsStandardTokenRates(t *testing.T) {
 	if prices["gpt-5.6-terra"].InputUSDPerMillion != 2.5 {
 		t.Fatalf("expected GPT-5.6 Terra price, got %+v", prices["gpt-5.6-terra"])
 	}
-	if IsOfficialCodexModelID("gpt-5.6-luna") {
-		t.Fatalf("gpt-5.6-luna should stay unavailable until the Codex backend rollout reaches this account")
+	if luna := prices["gpt-5.6-luna"]; luna == nil || luna.InputUSDPerMillion != 1 || luna.CachedInputUSDPerMillion != 0.1 || luna.OutputUSDPerMillion != 6 {
+		t.Fatalf("unexpected GPT-5.6 Luna price: %+v", luna)
 	}
 	if OfficialModelContextWindowTokens(DefaultCodexModelID) != 1_050_000 {
 		t.Fatalf("default model context window = %d, want 1050000", OfficialModelContextWindowTokens(DefaultCodexModelID))
 	}
-	if !IsOfficialCodexModelID("gpt-5.3-codex-spark") {
-		t.Fatalf("expected spark research preview to be allowed")
+	wantModels := []string{"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"}
+	if !reflect.DeepEqual(CodexModelIDs, wantModels) {
+		t.Fatalf("CodexModelIDs = %#v, want %#v", CodexModelIDs, wantModels)
+	}
+	for _, modelID := range wantModels {
+		if !IsOfficialCodexModelID(modelID) || OfficialModelContextWindowTokens(modelID) != 1_050_000 {
+			t.Fatalf("model %q missing or has unexpected context window", modelID)
+		}
+	}
+	for _, modelID := range []string{"gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.3-codex-spark", "gpt-5.2"} {
+		if IsOfficialCodexModelID(modelID) {
+			t.Fatalf("retired model %q should not stay in the fixed catalog", modelID)
+		}
 	}
 }
 

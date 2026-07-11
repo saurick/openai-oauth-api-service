@@ -172,7 +172,7 @@ const KEY_DEFAULT_REASONING_EFFORT_OPTIONS = [
 ]
 const MODEL_CONTEXT_HELP = {
   window:
-    '表格显示当前生效值；弹窗保存的是模型覆盖值。默认按模型目录继承，GPT-5.6 为 1.05M，旧模型按各自目录值；留空或 0 表示继承，不是无限制。',
+    '表格显示当前生效值；弹窗保存的是模型覆盖值。当前 GPT-5.5 与 GPT-5.6 均按官方目录继承 1.05M；留空或 0 表示继承，不是无限制。',
   compact:
     '表格显示当前生效值；弹窗保存的是模型覆盖值。开始压缩是转发前先摘要历史；硬拦截是压缩后仍过大则返回 413。留空或 0 表示继承默认 260K / 380K，不是关闭压缩。',
   bytes:
@@ -261,38 +261,16 @@ const CODEX_MODEL_CATALOG = [
     output_usd_per_million: 15,
   },
   {
+    cached_input_usd_per_million: 0.1,
+    input_usd_per_million: 1,
+    model_id: 'gpt-5.6-luna',
+    output_usd_per_million: 6,
+  },
+  {
     cached_input_usd_per_million: 0.5,
     input_usd_per_million: 5,
     model_id: 'gpt-5.5',
     output_usd_per_million: 30,
-  },
-  {
-    cached_input_usd_per_million: 0.25,
-    input_usd_per_million: 2.5,
-    model_id: 'gpt-5.4',
-    output_usd_per_million: 15,
-  },
-  {
-    cached_input_usd_per_million: 0.075,
-    input_usd_per_million: 0.75,
-    model_id: 'gpt-5.4-mini',
-    output_usd_per_million: 4.5,
-  },
-  {
-    cached_input_usd_per_million: 0.175,
-    input_usd_per_million: 1.75,
-    model_id: 'gpt-5.3-codex',
-    output_usd_per_million: 14,
-  },
-  {
-    model_id: 'gpt-5.3-codex-spark',
-    price_note: 'research preview，价格未定',
-  },
-  {
-    cached_input_usd_per_million: 0.175,
-    input_usd_per_million: 1.75,
-    model_id: 'gpt-5.2',
-    output_usd_per_million: 14,
   },
 ]
 const CODEX_MODEL_IDS = new Set(
@@ -4066,8 +4044,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   Token 阈值
                 </div>
                 <div className={fieldHintClass}>
-                  硬拦截必须大于开始压缩；0 使用推荐值；支持 K / M 单位。默认按
-                  Codex 体验控制在 400K 窗口内。
+                  硬拦截必须大于开始压缩；0 使用推荐值；支持 K / M 单位。当前
+                  GPT-5.5 与 GPT-5.6 的官方窗口均为 1.05M。
                 </div>
               </div>
               <div className="admin-model-context-grid">
@@ -4079,7 +4057,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
                   'effective_context_window_tokens',
                   {
                     effectiveSuffix: 'tokens',
-                    placeholder: '留空=继承，如需覆盖填 400K',
+                    placeholder: '留空=继承，如需覆盖填 1.05M',
                   }
                 )}
                 {renderModelContextInput(

@@ -3,6 +3,15 @@
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 - 2026-06-25：旧 `progress.md` 已按超过 80KB 阈值归档到 `docs/archive/progress-2026-06-25-before-skill-scenario-matrix.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-07-11 GPT-5.5 / GPT-5.6 四模型收口
+
+- 完成：固定模型目录收口为 `gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5`，默认仍为 Sol；启动同步沿用现有主路径，删除目录外模型及其价格、模型策略和 key `allowed_models` 残值，不改写历史 usage。
+- 完成：四模型官方 context window 统一为 1,050,000 tokens；Luna Standard 单价补为输入 `$1`、缓存输入 `$0.1`、输出 `$6`，前端固定目录、上下文帮助、模型管理 mock、API/config/web 文档同步收口。超过 272K 输入的长上下文加价、cache write、Batch、Flex、Priority 与区域处理仍不进入现有三字段估算。
+- 本地工具：本机 Codex CLI 与 npm stable latest 均为 `0.144.1`；使用本机 ChatGPT 登录态直接调用 `gpt-5.6-luna` 已返回指定 marker `LUNA_DIRECT_56_OK`，确认当前账号 rollout 已不再是上一轮 404。
+- 验证：`bash scripts/qa/full.sh` 全部通过，包含 secrets、错误码同步、govulncheck（可达漏洞 0）、前端 lint/css/test/build、全量 Go test/build；`style:l1` 的 `admin-models-desktop` / `admin-models-mobile` 通过，覆盖浅色、暗色、上下文弹窗、桌面和移动盒模型。
+- 下一步：以本提交构建 linux/amd64 镜像并按低配发布路径部署 133；部署后核对数据库仅剩四模型及关联残值清理，再分别验证四模型真实请求，并运行多组同 session 连续压缩、跨 session 隔离与数据库摘要事实 / 当前目标对齐回归。
+- 阻塞/风险：本轮不改 schema、migration、auth、API key 生命周期、quota、usage 历史、上游重试或代理策略。生产数据库若保留旧的模型级 context override，需要在部署后按当前官方窗口复核并清除过期覆盖值；压缩阈值仍维持 260K / 380K 与 1.0MB / 1.9MB 的既有安全口径。
+
 ## 2026-07-11 GPT-5.6 模型目录同步
 
 - 完成：按 OpenAI 官方模型文档与真实 ChatGPT Codex backend 回归，将默认模型从 `gpt-5.5` 更新为 `gpt-5.6-sol`，新增已真实验证的 `gpt-5.6-terra`，两档官方 context window 均为 1,050,000 tokens；无后缀 `gpt-5.6` 虽是 OpenAI API 的 Sol alias，但 Codex backend 会返回“不支持 ChatGPT account”，因此不进入本项目模型目录。官方 `gpt-5.6-luna` 在当前账号仍返回 404 `Model not found`，暂缓接入。保留 `gpt-5.5` 和既有旧模型，避免现有 key 的 `allowed_models`、模型策略与历史 usage 被启动清理。

@@ -163,7 +163,7 @@ OAuth provider 的回调地址固定登记后端 `/auth/oauth/callback`，例如
 - `rateLimitEnabled=true` 时，`/v1/chat/completions` 与 `/v1/responses` 会在转发前检查 key+model 策略；关闭后仍保留 key 状态与模型权限校验。
 - `exportMaxDays` 控制 `/admin/exports/usage.csv` 和 `/admin/exports/usage.json` 的最大导出时间范围。
 - `alertRetentionDays` 是站内告警事件保留天数的生产配置口径，当前事件写入与确认已落库，清理任务后续接入时复用该字段。
-- usage 费用估算优先使用数据库模型价格表覆盖值；未配置覆盖值时，回落到服务端内置 Codex 客户端可用模型中已定价模型的价格表。当前默认模型为 ChatGPT Codex backend 可用的 `gpt-5.6-sol`，候选集合另含已真实验证的 `gpt-5.6-terra`、`gpt-5.5`、`gpt-5.4`、`gpt-5.4-mini`、`gpt-5.3-codex`、`gpt-5.3-codex-spark`、`gpt-5.2`；OpenAI API 的无后缀 `gpt-5.6` Sol alias 不作为本项目 Codex backend 模型 ID。官方已发布的 `gpt-5.6-luna` 在当前 ChatGPT Codex backend / 账号仍返回 404，暂不进入可用目录和费用估算，待真实 rollout 可用后再接入。`gpt-5.3-codex-spark` 为 research preview，价格未定，不进入费用估算单价表。GPT-5.6 Sol / Terra 按官方短上下文 Standard token 单价估算；超过 272K 输入的长上下文加价、cache write、Batch、Flex、Priority 和区域处理加价暂不纳入当前估算口径。
+- usage 费用估算优先使用数据库模型价格表覆盖值；未配置覆盖值时，回落到服务端内置 Codex 客户端可用模型价格表。当前默认模型为 `gpt-5.6-sol`，固定候选只包含 `gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna` 与 `gpt-5.5`；OpenAI API 的无后缀 `gpt-5.6` Sol alias 不作为本项目 Codex backend 模型 ID。四个模型均按官方 Standard 输入、缓存输入和输出单价估算，官方 context window 均为 1,050,000 tokens；超过 272K 输入的长上下文加价、cache write、Batch、Flex、Priority 和区域处理加价暂不纳入当前估算口径。
 
 ## 初始化后必须改的字段
 

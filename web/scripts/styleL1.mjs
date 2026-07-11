@@ -20,12 +20,8 @@ const scenarioFilter = String(process.env.STYLE_L1_SCENARIOS || '')
 const CODEX_MODEL_IDS = [
   'gpt-5.6-sol',
   'gpt-5.6-terra',
+  'gpt-5.6-luna',
   'gpt-5.5',
-  'gpt-5.4',
-  'gpt-5.4-mini',
-  'gpt-5.3-codex',
-  'gpt-5.3-codex-spark',
-  'gpt-5.2',
 ]
 
 let devServerProcess = null
@@ -4373,20 +4369,24 @@ async function assertModelTableVisuals(page, scenarioName) {
         document.body.innerText.includes('缓存输入 $/1M') &&
         document.body.innerText.includes('输出 $/1M'),
       hasPriceValues:
-        document.body.innerText.includes('$1.75') &&
-        document.body.innerText.includes('$0.175') &&
-        document.body.innerText.includes('$14'),
+        document.body.innerText.includes('$1') &&
+        document.body.innerText.includes('$0.1') &&
+        document.body.innerText.includes('$6'),
       hasContextHeaders:
         document.body.innerText.includes('上下文窗口') &&
         document.body.innerText.includes('压缩阈值') &&
         document.body.innerText.includes('字节阈值'),
       hasCurrentContextHelp:
-        Boolean(document.querySelector('[aria-label*="GPT-5.6 为 1.05M"]')) &&
+        Boolean(
+          document.querySelector(
+            '[aria-label*="GPT-5.5 与 GPT-5.6 均按官方目录继承 1.05M"]'
+          )
+        ) &&
         !document.querySelector('[aria-label*="默认按 Codex 使用体验取 400K"]'),
       hasContextValues:
-        document.body.innerText.includes('400,000 tokens') &&
+        document.body.innerText.includes('1,050,000 tokens') &&
         document.body.innerText.includes('260,000 / 380,000') &&
-        document.body.innerText.includes('1,040,000 / 1,900,000'),
+        document.body.innerText.includes('1,000,000 / 1,900,000'),
       hasContextButton: Array.from(main?.querySelectorAll('button') || []).some(
         (node) => node.textContent.trim() === '上下文'
       ),
@@ -5023,24 +5023,14 @@ function getApiMockData(method, params = {}, state = {}) {
     const contextByModel = {
       'gpt-5.6-sol': [1_050_000, 260_000, 380_000, 1_000_000, 1_900_000, 8],
       'gpt-5.6-terra': [1_050_000, 260_000, 380_000, 1_000_000, 1_900_000, 8],
-      'gpt-5.5': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
-      'gpt-5.4': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
-      'gpt-5.4-mini': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
-      'gpt-5.3-codex': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
-      'gpt-5.3-codex-spark': [
-        400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8,
-      ],
-      'gpt-5.2': [400_000, 260_000, 380_000, 1_040_000, 1_900_000, 8],
+      'gpt-5.6-luna': [1_050_000, 260_000, 380_000, 1_000_000, 1_900_000, 8],
+      'gpt-5.5': [1_050_000, 260_000, 380_000, 1_000_000, 1_900_000, 8],
     }
     const baseModels = [
       'gpt-5.6-sol',
       'gpt-5.6-terra',
+      'gpt-5.6-luna',
       'gpt-5.5',
-      'gpt-5.4',
-      'gpt-5.4-mini',
-      'gpt-5.3-codex',
-      'gpt-5.3-codex-spark',
-      'gpt-5.2',
       'gpt-5.5-pro',
     ].map((modelID, index) => ({
       enabled: true,
@@ -5091,44 +5081,16 @@ function getApiMockData(method, params = {}, state = {}) {
           output_usd_per_million: 15,
         },
         {
+          cached_input_usd_per_million: 0.1,
+          input_usd_per_million: 1,
+          model_id: 'gpt-5.6-luna',
+          output_usd_per_million: 6,
+        },
+        {
           cached_input_usd_per_million: 0.5,
           input_usd_per_million: 5,
           model_id: 'gpt-5.5',
           output_usd_per_million: 30,
-        },
-        {
-          cached_input_usd_per_million: 0.25,
-          input_usd_per_million: 2.5,
-          model_id: 'gpt-5.4',
-          output_usd_per_million: 15,
-        },
-        {
-          cached_input_usd_per_million: 0.075,
-          input_usd_per_million: 0.75,
-          model_id: 'gpt-5.4-mini',
-          output_usd_per_million: 4.5,
-        },
-        {
-          cached_input_usd_per_million: 30,
-          input_usd_per_million: 30,
-          model_id: 'gpt-5.5-pro',
-          output_usd_per_million: 180,
-        },
-        {
-          cached_input_usd_per_million: 0.175,
-          input_usd_per_million: 1.75,
-          model_id: 'gpt-5.3-codex',
-          output_usd_per_million: 14,
-        },
-        {
-          model_id: 'gpt-5.3-codex-spark',
-          price_note: 'research preview，价格未定',
-        },
-        {
-          cached_input_usd_per_million: 0.175,
-          input_usd_per_million: 1.75,
-          model_id: 'gpt-5.2',
-          output_usd_per_million: 14,
         },
       ],
     }

@@ -790,9 +790,9 @@ func TestEffectiveGatewayContextPolicyUsesOfficialModelRecommendation(t *testing
 	t.Setenv("GATEWAY_CONTEXT_HARD_TOKENS", "")
 	t.Setenv("GATEWAY_CONTEXT_COMPACT_BYTES", "")
 	t.Setenv("GATEWAY_CONTEXT_HARD_BYTES", "")
-	policy := (&openAIGatewayHandler{}).effectiveGatewayContextPolicy(context.Background(), "gpt-5.3-codex")
-	if policy.ContextWindowTokens != 400_000 {
-		t.Fatalf("window = %d, want 400000", policy.ContextWindowTokens)
+	policy := (&openAIGatewayHandler{}).effectiveGatewayContextPolicy(context.Background(), "gpt-5.5")
+	if policy.ContextWindowTokens != 1_050_000 {
+		t.Fatalf("window = %d, want 1050000", policy.ContextWindowTokens)
 	}
 	if policy.ContextCompactTokens != 260_000 || policy.ContextHardTokens != 380_000 {
 		t.Fatalf("token thresholds = %d/%d, want 260000/380000", policy.ContextCompactTokens, policy.ContextHardTokens)
