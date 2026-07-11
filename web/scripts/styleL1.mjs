@@ -4381,6 +4381,9 @@ async function assertModelTableVisuals(page, scenarioName) {
         document.body.innerText.includes('上下文窗口') &&
         document.body.innerText.includes('压缩阈值') &&
         document.body.innerText.includes('字节阈值'),
+      hasCurrentContextHelp:
+        Boolean(document.querySelector('[aria-label*="GPT-5.6 为 1.05M"]')) &&
+        !document.querySelector('[aria-label*="默认按 Codex 使用体验取 400K"]'),
       hasContextValues:
         document.body.innerText.includes('400,000 tokens') &&
         document.body.innerText.includes('260,000 / 380,000') &&
@@ -4406,6 +4409,10 @@ async function assertModelTableVisuals(page, scenarioName) {
   assert(metrics.hasPriceHeaders, `${scenarioName} 缺少模型费用列`)
   assert(metrics.hasPriceValues, `${scenarioName} 缺少模型官方费用展示`)
   assert(metrics.hasContextHeaders, `${scenarioName} 缺少上下文策略列`)
+  assert(
+    metrics.hasCurrentContextHelp,
+    `${scenarioName} 上下文窗口说明仍是旧口径`
+  )
   assert(metrics.hasContextValues, `${scenarioName} 缺少上下文策略数值`)
   assert(metrics.hasContextButton, `${scenarioName} 缺少上下文策略操作`)
   assert(metrics.hasDisableButton, `${scenarioName} 缺少模型启停操作`)
