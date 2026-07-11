@@ -251,7 +251,7 @@ const CODEX_MODEL_CATALOG = [
   {
     cached_input_usd_per_million: 0.5,
     input_usd_per_million: 5,
-    model_id: 'gpt-5.6',
+    model_id: 'gpt-5.6-sol',
     output_usd_per_million: 30,
   },
   {

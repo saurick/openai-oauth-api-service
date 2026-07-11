@@ -5,11 +5,11 @@
 
 ## 2026-07-11 GPT-5.6 模型目录同步
 
-- 完成：按 OpenAI 官方模型文档将默认模型从 `gpt-5.5` 更新为 `gpt-5.6`（GPT-5.6 Sol 别名），新增 `gpt-5.6-terra` 与 `gpt-5.6-luna`，三档官方 context window 均为 1,050,000 tokens；保留 `gpt-5.5` 和既有旧模型，避免现有 key 的 `allowed_models`、模型策略与历史 usage 被启动清理。
+- 完成：按 OpenAI 官方模型文档与真实 ChatGPT Codex backend 回归，将默认模型从 `gpt-5.5` 更新为 `gpt-5.6-sol`，新增 `gpt-5.6-terra` 与 `gpt-5.6-luna`，三档官方 context window 均为 1,050,000 tokens；无后缀 `gpt-5.6` 虽是 OpenAI API 的 Sol alias，但 Codex backend 会返回“不支持 ChatGPT account”，因此不进入本项目模型目录。保留 `gpt-5.5` 和既有旧模型，避免现有 key 的 `allowed_models`、模型策略与历史 usage 被启动清理。
 - 完成：服务端内置价格表同步 GPT-5.6 Sol / Terra / Luna 的 Standard 短上下文输入、缓存输入、输出单价；前端固定目录、模型管理 mock、Codex/opencode 客户端配置模板和 API/config 文档同步更新。长上下文加价、cache write、Batch、Flex、Priority 与区域处理仍不进入当前费用估算，避免把未建模计费维度混入现有三字段价格真源。
 - 本地工具：本机 Codex CLI 已从 `0.143.0` 更新到 npm stable latest `0.144.1`，并安装官方 OpenAI Developer Docs MCP；仓库镜像真源 `server/Dockerfile` 已是 `@openai/codex@0.144.1`，本轮无需重复改版本。
-- 验证：已通过 `go test -count=1 ./...`、`/usr/local/bin/pnpm --dir web lint`、`css`、`test`、`build`；`style:l1` 通过模型管理、后台客户端配置、公开客户端配置的桌面 / 移动 6 个场景，覆盖模型上下文弹窗浅色 / 暗色、保存 / 恢复态、表格盒模型与 `gpt-5.6` 配置生成。
-- 下一步：完成 full QA、secrets、Compose preflight 后提交形成发布 SHA；按低配主路径本地构建 linux/amd64 镜像、上传并部署 133，再用本机最新 Codex CLI 经 `saurick-oauth` provider 对 133 的 `gpt-5.6` 做新 thread + 显式 resume 回归，最后补齐部署证据并推送。
+- 验证：已通过 `go test -count=1 ./...`、`/usr/local/bin/pnpm --dir web lint`、`css`、`test`、`build`；`style:l1` 通过模型管理、后台客户端配置、公开客户端配置的桌面 / 移动 6 个场景，覆盖模型上下文弹窗浅色 / 暗色、保存 / 恢复态、表格盒模型与 `gpt-5.6-sol` 配置生成。
+- 下一步：重新完成 full QA 后提交 Codex backend 模型 ID 修正；按低配主路径重建 linux/amd64 镜像并部署 133，再用本机最新 Codex CLI 经 `saurick-oauth` provider 对 133 的 `gpt-5.6-sol` 做新 thread + 显式 resume 回归，最后补齐部署证据并推送。
 - 阻塞/风险：当前只同步模型目录、默认值、价格/context 元数据和客户端模板；不改 schema、migration、auth、API key 生命周期、quota、usage 历史、上游重试或代理策略。GPT-5.6 超过 272K 输入的长上下文计费与 cache write 尚未进入现有费用估算字段，后台估算不覆盖这两类附加费用。
 
 ## 2026-07-10 Codex 余额瞬时上游失败恢复与 runtime 更新

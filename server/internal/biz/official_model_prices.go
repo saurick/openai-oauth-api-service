@@ -1,6 +1,6 @@
 package biz
 
-const DefaultCodexModelID = "gpt-5.6"
+const DefaultCodexModelID = "gpt-5.6-sol"
 
 var CodexModelIDs = []string{
 	DefaultCodexModelID,

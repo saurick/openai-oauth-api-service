@@ -68,20 +68,20 @@ test('clientConfigTemplates: opencode 模板替换 baseURL、apiKey 并保留模
     'http://localhost:8400/v1'
   )
   assert.equal(parsed.provider['oauth-api-service'].options.apiKey, 'ogw_local')
-  assert.equal(parsed.agent.build.model, 'oauth-api-service/gpt-5.6')
+  assert.equal(parsed.agent.build.model, 'oauth-api-service/gpt-5.6-sol')
   assert.equal(parsed.agent.build.variant, 'medium')
   assert.equal(parsed.agent.plan.variant, 'medium')
   assert.equal(
-    parsed.provider['oauth-api-service'].models['gpt-5.6'].reasoningEffort,
+    parsed.provider['oauth-api-service'].models['gpt-5.6-sol'].reasoningEffort,
     'medium'
   )
   assert.equal(
-    parsed.provider['oauth-api-service'].models['gpt-5.6'].variants.xhigh
+    parsed.provider['oauth-api-service'].models['gpt-5.6-sol'].variants.xhigh
       .reasoningEffort,
     'xhigh'
   )
   assert.deepEqual(Object.keys(parsed.provider['oauth-api-service'].models), [
-    'gpt-5.6',
+    'gpt-5.6-sol',
   ])
 })
 

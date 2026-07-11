@@ -50,16 +50,16 @@ func TestNewGatewayAPIKeySecretWithRemarkPrefixesPlainKey(t *testing.T) {
 
 func TestOfficialModelPriceMapContainsStandardTokenRates(t *testing.T) {
 	prices := OfficialModelPriceMap()
-	price := prices["gpt-5.6"]
+	price := prices["gpt-5.6-sol"]
 	if price == nil {
-		t.Fatalf("expected gpt-5.6 official price")
+		t.Fatalf("expected gpt-5.6-sol official price")
 	}
 	if price.InputUSDPerMillion != 5 || price.CachedInputUSDPerMillion != 0.5 || price.OutputUSDPerMillion != 30 {
-		t.Fatalf("unexpected gpt-5.6 price: %+v", price)
+		t.Fatalf("unexpected gpt-5.6-sol price: %+v", price)
 	}
 
 	price.InputUSDPerMillion = 999
-	if OfficialModelPriceMap()["gpt-5.6"].InputUSDPerMillion != 5 {
+	if OfficialModelPriceMap()["gpt-5.6-sol"].InputUSDPerMillion != 5 {
 		t.Fatalf("official price map should return independent copies")
 	}
 	if prices["gpt-5.6-terra"].InputUSDPerMillion != 2.5 || prices["gpt-5.6-luna"].OutputUSDPerMillion != 6 {
