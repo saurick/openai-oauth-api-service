@@ -10,8 +10,12 @@
 - 本地工具：本机 Codex CLI 与 npm stable latest 均为 `0.144.1`；使用本机 ChatGPT 登录态直接调用 `gpt-5.6-luna` 已返回指定 marker `LUNA_DIRECT_56_OK`，确认当前账号 rollout 已不再是上一轮 404。
 - 修复：首轮 133 部署后，Sol / Terra 网关调用成功，但 Luna direct backend 仍因旧 `User-Agent=codex-cli` 且缺少官方 `originator` 返回 404；同一服务器登录态通过 Codex CLI 和强制 SSE 均成功。按 Codex CLI 当前 wire contract 补齐 `originator=codex_cli_rs`，并把 direct backend 默认 `User-Agent` 收口为 `codex_cli_rs`；133 原始请求对照验证这两个 header 同时存在时 Luna 从 404 恢复 200，不引入 Luna 专属 fallback。
 - 验证：`bash scripts/qa/full.sh` 全部通过，包含 secrets、错误码同步、govulncheck（可达漏洞 0）、前端 lint/css/test/build、全量 Go test/build；`style:l1` 的 `admin-models-desktop` / `admin-models-mobile` 通过，覆盖浅色、暗色、上下文弹窗、桌面和移动盒模型。
-- 下一步：以本提交构建 linux/amd64 镜像并按低配发布路径部署 133；部署后核对数据库仅剩四模型及关联残值清理，再分别验证四模型真实请求，并运行多组同 session 连续压缩、跨 session 隔离与数据库摘要事实 / 当前目标对齐回归。
-- 阻塞/风险：本轮不改 schema、migration、auth、API key 生命周期、quota、usage 历史、上游重试或代理策略。生产数据库若保留旧的模型级 context override，需要在部署后按当前官方窗口复核并清除过期覆盖值；压缩阈值仍维持 260K / 380K 与 1.0MB / 1.9MB 的既有安全口径。
+- 部署：最终代码提交 `81bc5970eb1298c69d218e60310ccfeceb75de1d` 在本地构建 linux/amd64 镜像 `oauth-api-service-server:20260711T123640-81bc5970-codex-backend-identity`；133 校验 image / migration SHA-256 后执行 `docker load`、宿主机 Atlas status、备份 `.env`、更新 `APP_IMAGE` / `CODEX_BACKEND_USER_AGENT` 和仅重建 `app-server`，未在低配服务器构建。Atlas 当前版本 `20260604123931`、pending 0，容器内 Codex CLI 为 `0.144.1`。
+- 数据真源：部署后 `gateway_models` 仅剩四模型，目录外模型、价格覆盖、模型策略和 key `allowed_models` 残值均为 0；7,751 条旧模型历史 usage 仍保留。通过正式 `model_context_update` RPC 清除 5.5 的旧 `400K/180K/260K/850K` 覆盖后，四模型均生效为 `1.05M/260K/380K/1.0MB/1.9MB/8`。
+- 线上验证：本机 Codex CLI `0.144.1` 经 133 分别调用 Sol / Terra / Luna / 5.5 均返回指定 marker。四个隔离 session 共 25 次连续大上下文请求全部 `200`、`context_compacted=true`，Sol 压缩计数连续 `1..7`，Terra / Luna / 5.5 均连续 `1..6`；最终无事实明文提示的回忆均准确命中第 1 / 中间 / 最后轮事实。数据库 summary 的 `durable_facts`、`current_user_goal`、`latest_user_instruction` 全部对齐最终请求，每个 summary 只出现自己的随机事实码，没有跨 session 串线；约 1.108MB 原始请求压到约 21.9–22.0KB。
+- 线上页面：公网 `/healthz` / `/readyz`、`/public/codex/balance` 和 `/v1/models` 通过，后者只返回四模型。生产 Playwright 登录 `/admin-models` 后确认共 4 条、四模型均启用、价格和 1.05M / 压缩阈值正确；暗色模式和上下文弹窗实页通过，未出现旧模型。
+- 清理与回滚：发布后检查窗口无新增 WARN / ERROR，执行 `docker image prune -a -f` 与 `docker builder prune -f`，回收 1.408GB，根分区可用空间由 49GB 回升到 52GB；未执行 volume prune。最终 release 包与 `.env` 备份均保留，需要回滚时可重新 `docker load` 对应 release 并恢复 `APP_IMAGE`。
+- 阻塞/风险：本轮不改 schema、migration、auth、API key 生命周期、quota、usage 历史、上游重试或代理策略。压缩阈值仍维持 260K / 380K 与 1.0MB / 1.9MB 的既有安全口径；超过 272K 输入的长上下文附加计费尚未进入三字段费用估算。
 
 ## 2026-07-11 GPT-5.6 模型目录同步
 
