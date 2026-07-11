@@ -99,7 +99,7 @@
 - `CODEX_BACKEND_BASE_URL`：direct backend 基础地址，默认 `https://chatgpt.com/backend-api/codex`。
 - `CODEX_BACKEND_TIMEOUT_SECONDS`：direct backend 单次请求超时，默认 `28800` 秒。
 - `CODEX_BACKEND_RETRY_ATTEMPTS`：direct backend 瞬时失败重试次数，默认 `2`；仅对 HTTP `429` / `5xx` 和连接类错误生效，`response.failed` / `response.incomplete` 这类上游终态事件不做服务端盲重试。
-- `CODEX_BACKEND_USER_AGENT`：direct backend 请求 `User-Agent`，默认 `codex-cli`。
+- `CODEX_BACKEND_USER_AGENT`：direct backend 请求 `User-Agent`，默认 `codex_cli_rs`；请求同时固定携带官方 Codex 客户端 `originator=codex_cli_rs`，避免新模型被 ChatGPT Codex backend 按旧客户端口径返回 404。
 - `GATEWAY_TRUSTED_PROXY_CIDRS`：可选可信反代 CIDR 列表，多个值用逗号分隔；设置后只有匹配的直连来源才采信 `X-Forwarded-For` / `X-Real-IP`。留空时默认信任本机、内网和 link-local 直连来源，适配 Docker/Nginx 反代部署。
 - `GATEWAY_STREAM_HEARTBEAT_SECONDS`：`stream=true` 请求等待上游期间的 SSE keepalive 间隔，默认 `15` 秒；backend Responses 流会在连接上游前先建立下游 SSE 并持续输出 keepalive，用于避免 Codex / OpenCode / Cloudflare / 代理在长请求无输出时断开连接。
 - `GATEWAY_LARGE_REQUEST_MIN_BYTES`：大上下文保护的请求体阈值，默认 `65536` 字节；设为 `0` 可关闭该保护。

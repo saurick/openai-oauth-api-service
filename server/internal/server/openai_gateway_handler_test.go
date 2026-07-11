@@ -1375,6 +1375,12 @@ func TestRunCodexBackendPostsResponsesAndParsesSSE(t *testing.T) {
 		if got := r.Header.Get("ChatGPT-Account-Id"); got != "acct_123" {
 			t.Fatalf("account header = %q", got)
 		}
+		if got := r.Header.Get("Originator"); got != "codex_cli_rs" {
+			t.Fatalf("originator header = %q", got)
+		}
+		if got := r.Header.Get("User-Agent"); got != "codex_cli_rs" {
+			t.Fatalf("user-agent header = %q", got)
+		}
 		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
 			t.Fatal(err)
 		}

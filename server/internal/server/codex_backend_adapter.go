@@ -25,6 +25,8 @@ const (
 	codexUpstreamModeBackend = biz.GatewayUpstreamModeCodexBackend
 
 	defaultCodexBackendBaseURL       = "https://chatgpt.com/backend-api/codex"
+	defaultCodexBackendOriginator    = "codex_cli_rs"
+	defaultCodexBackendUserAgent     = "codex_cli_rs"
 	defaultCodexBackendTimeout       = 28800 * time.Second
 	defaultCodexBackendRetries       = 2
 	codexOAuthClientID               = "app_EMoamEEZ73f0CkXaXp7hrann"
@@ -165,6 +167,7 @@ func (c *codexBackendClient) openResponses(ctx context.Context, body map[string]
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Originator", defaultCodexBackendOriginator)
 	req.Header.Set("User-Agent", codexBackendUserAgent())
 	if accountID != "" {
 		req.Header.Set("ChatGPT-Account-Id", accountID)
@@ -1122,7 +1125,7 @@ func codexBackendUserAgent() string {
 	if raw := strings.TrimSpace(os.Getenv("CODEX_BACKEND_USER_AGENT")); raw != "" {
 		return raw
 	}
-	return "codex-cli"
+	return defaultCodexBackendUserAgent
 }
 
 func promptTextForUsageEstimate(path string, body []byte) string {

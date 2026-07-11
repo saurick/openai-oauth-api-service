@@ -8,6 +8,7 @@
 - 完成：固定模型目录收口为 `gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5`，默认仍为 Sol；启动同步沿用现有主路径，删除目录外模型及其价格、模型策略和 key `allowed_models` 残值，不改写历史 usage。
 - 完成：四模型官方 context window 统一为 1,050,000 tokens；Luna Standard 单价补为输入 `$1`、缓存输入 `$0.1`、输出 `$6`，前端固定目录、上下文帮助、模型管理 mock、API/config/web 文档同步收口。超过 272K 输入的长上下文加价、cache write、Batch、Flex、Priority 与区域处理仍不进入现有三字段估算。
 - 本地工具：本机 Codex CLI 与 npm stable latest 均为 `0.144.1`；使用本机 ChatGPT 登录态直接调用 `gpt-5.6-luna` 已返回指定 marker `LUNA_DIRECT_56_OK`，确认当前账号 rollout 已不再是上一轮 404。
+- 修复：首轮 133 部署后，Sol / Terra 网关调用成功，但 Luna direct backend 仍因旧 `User-Agent=codex-cli` 且缺少官方 `originator` 返回 404；同一服务器登录态通过 Codex CLI 和强制 SSE 均成功。按 Codex CLI 当前 wire contract 补齐 `originator=codex_cli_rs`，并把 direct backend 默认 `User-Agent` 收口为 `codex_cli_rs`；133 原始请求对照验证这两个 header 同时存在时 Luna 从 404 恢复 200，不引入 Luna 专属 fallback。
 - 验证：`bash scripts/qa/full.sh` 全部通过，包含 secrets、错误码同步、govulncheck（可达漏洞 0）、前端 lint/css/test/build、全量 Go test/build；`style:l1` 的 `admin-models-desktop` / `admin-models-mobile` 通过，覆盖浅色、暗色、上下文弹窗、桌面和移动盒模型。
 - 下一步：以本提交构建 linux/amd64 镜像并按低配发布路径部署 133；部署后核对数据库仅剩四模型及关联残值清理，再分别验证四模型真实请求，并运行多组同 session 连续压缩、跨 session 隔离与数据库摘要事实 / 当前目标对齐回归。
 - 阻塞/风险：本轮不改 schema、migration、auth、API key 生命周期、quota、usage 历史、上游重试或代理策略。生产数据库若保留旧的模型级 context override，需要在部署后按当前官方窗口复核并清除过期覆盖值；压缩阈值仍维持 260K / 380K 与 1.0MB / 1.9MB 的既有安全口径。
