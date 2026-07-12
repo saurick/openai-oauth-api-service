@@ -1,6 +1,6 @@
 ---
 name: openai-oauth-code-review-governance
-description: 项目代码审查治理（openai-oauth-api-service）。Use when Codex reviews openai-oauth-api-service code changes in any conversation, including side chats, new main chats, post-implementation reviews, pre-commit reviews, PR-style reviews, current worktree review, staged/unstaged diff review, commit review, or when the user mentions OAuth API service with code review, 审查代码, 查 bug, 独立审查, API key, OAuth, usage, gateway_usage_logs, upstream, Codex backend, CLI fallback, secrets, deployment, admin console, or 不要改只看.
+description: 项目代码审查治理（openai-oauth-api-service）。Use when reviewing service diffs, commits, pull requests, or working-tree changes for OAuth, gateway, usage, security, deployment, and regression risks.
 ---
 
 # OpenAI OAuth 代码审查治理 Code Review Governance

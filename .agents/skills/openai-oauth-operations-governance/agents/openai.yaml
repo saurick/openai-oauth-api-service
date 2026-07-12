@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenAI OAuth Operations Governance"
+  short_description: "网关诊断、安全、可观测与低配发布 Operations"
+  default_prompt: "Use $openai-oauth-operations-governance 诊断或执行 OAuth 服务运行与发布任务，核对脱敏证据、镜像、迁移和回滚。"

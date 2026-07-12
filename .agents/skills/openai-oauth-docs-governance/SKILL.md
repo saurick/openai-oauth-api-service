@@ -1,6 +1,6 @@
 ---
 name: openai-oauth-docs-governance
-description: 项目文档治理（openai-oauth-api-service）。Use when Codex reviews, creates, renames, reorganizes, simplifies, or updates this project's Markdown docs, README files, docs/README.md, architecture docs, operations docs, server/deploy docs, web README, progress.md, admin-console docs, OAuth/API key/usage/upstream strategy docs, deployment instructions, tables, classification matrices, Mermaid diagrams, reader paths, conclusion-first structure, copyable commands, links, anchors, or when the user mentions openai-oauth-api-service with 文档治理, docs, 真源, progress, architecture, operations, deploy, admin 可见性, low-spec, gateway_usage_logs, 上游策略, 表格, 矩阵, 命令可复制, or asks whether this project's docs guidance should become reusable.
+description: 项目文档治理（openai-oauth-api-service）。Use when creating, reviewing, renaming, reorganizing, or updating service architecture, operations, deployment, README, AGENTS, or progress docs.
 ---
 
 # OpenAI OAuth Docs Governance

@@ -1,6 +1,6 @@
 ---
 name: openai-oauth-page-governance
-description: 项目页面设计治理（openai-oauth-api-service）。Use when Codex designs, reviews, simplifies, or implements this project's admin console pages, API operations dashboard, usage logs, upstream strategy page, API key tables and dialogs, OAuth/admin login, client-config generator, model/limit settings, public balance page, buttons, filters, tables, charts, empty/error states, light/dark theme, responsive layout, credential/key reset actions, accessibility, keyboard/focus behavior, or when the user mentions openai-oauth-api-service with 页面治理, 简洁易用, 心智负担, 信息密度, admin 页面, usage 可见性, key 管理, 上游策略, style:l1, 暗色模式, 表格, 弹窗, or asks whether admin-console guidance should become reusable.
+description: 项目页面治理（openai-oauth-api-service）。Use when designing, reviewing, or changing admin login, API-key, usage, upstream strategy, dashboard, theme, or browser regression behavior.
 ---
 
 # OpenAI OAuth Page Governance

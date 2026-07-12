@@ -1,6 +1,6 @@
 ---
 name: openai-oauth-test-governance
-description: 项目测试治理（openai-oauth-api-service）。Use when Codex chooses, runs, reviews, or explains validation scope for OpenAI OAuth API service changes, including Go unit/integration tests, web tests, admin UI style:l1, migration checks, auth/API-key/quota/usage logging validation, Codex backend behavior, proxy/upstream failure handling, secrets checks, deploy preflight, smoke tests, or when the user asks 测试分类/测试治理/怎么测/要不要补测试.
+description: 项目测试治理（openai-oauth-api-service）。Use when choosing, running, reviewing, or explaining Go, web, admin UI, auth/key/quota/usage, migration, secret, or deploy validation.
 ---
 
 # OpenAI OAuth Test Governance

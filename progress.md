@@ -257,3 +257,15 @@
 - 完成：继续收口本地 Vite dev origin：`web/vite.config.mjs` 保留 `host: 0.0.0.0` 和局域网 `Network` 地址，但将自动打开地址、终端 `Local:` 打印和 `localhost:5176` 页面访问统一规范到 `http://127.0.0.1:5176`；同步更新 `web/README.md` 默认本地地址和 proxy 默认值说明。
 - 下一步：后续若改前端端口或通过 `VITE_API_PROXY_TARGET` 指向其他后端，继续保持本机默认入口使用明确 IPv4 loopback。
 - 阻塞/风险：追加前 `progress.md` 为 127 行、29229 字节，未达到 600 行或 80KB 归档阈值。本轮只改本地开发 Vite 配置和前端 README，不改 OAuth、API key、usage、上游策略、schema、生产部署或真实密钥。
+
+## 2026-07-12 自定义 Skills 瘦身与 Operations 合并
+
+- 完成：项目 skills 从 10 个收敛为 6 个；新增 `$openai-oauth-operations-governance` 统一 502/balance/usage 诊断、stale/日志、keys/tokens 安全、133 低配发布和回滚，删除项目 prompt 及 4 个被替代 skill；保留代码审查、文档、服务边界、页面和测试专项 SOP，并缩短 discovery description。同步 `AGENTS.md`、根 README 和 skills 导航；提示词整理改用仅显式触发的全局 `$prompt-governance`。
+- 下一步：通过真实 gateway/upstream 故障与低配发布任务观察 operations workflow 是否足够，不为一次性场景新增 skill。
+- 阻塞/风险：本轮不改服务 runtime、OAuth/API key/usage 语义、schema、生产配置、真实密钥或部署现场；更新前 `progress.md` 为 259 行 / 67,509 字节，未达到归档阈值。
+
+## 2026-07-12 项目 AGENTS 分层压缩
+
+- 完成：将项目 AGENTS 从 81 行 / 8,304 字节压缩为 44 行 / 3,280 字节，保留 OAuth 服务真源、keys/tokens/usage 安全、Ent/Atlas、低配 Compose、主题回归和显式 thread 恢复特例；通用工程、Git 和 GPT 规则回归全局 AGENTS，并与 6 个项目 skills 对齐。
+- 下一步：服务专项细节优先进入 architecture/operations/deploy docs 或项目 skill，不在根 AGENTS 重复。
+- 阻塞/风险：本轮不改 runtime、OAuth/API key/usage、schema、生产配置或真实密钥；更新前 265 行 / 68,401 字节，未达到归档阈值。

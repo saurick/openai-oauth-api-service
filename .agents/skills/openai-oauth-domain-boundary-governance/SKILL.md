@@ -1,6 +1,6 @@
 ---
 name: openai-oauth-domain-boundary-governance
-description: 项目业务边界与数据真源治理（openai-oauth-api-service）。Use when Codex implements or reviews openai-oauth-api-service feature work that may affect data ownership, domain models, workflows, facts, schemas, APIs, permissions, frontend/backend responsibility, customer-specific behavior, source-of-truth fields, stale/missing field values, or cross-module boundaries.
+description: 项目服务边界治理（openai-oauth-api-service）。Use when work may change OAuth/auth, gateway/proxy, upstream providers, admin API, usage logging, persistence, or configuration truth.
 ---
 
 # OpenAI OAuth 业务边界治理 Domain Boundary Governance
