@@ -2,6 +2,11 @@
 
 本仓库长期维护 OAuth 登录、下游 API key 与 token/usage 管理；不是通用网关或纯转发项目。通用工程、Git、删除和文档规则使用全局 AGENTS。
 
+## AGENTS 体积治理
+
+- 本仓库所有 `AGENTS.md` 目标小于 16 KiB；达到 16 KiB 先去重，超过 24 KiB 必须按全局治理顺序精简，`bash scripts/qa/agents-size.sh` 负责预警和阻断。
+- 脚本只检查大小，不自动改写；OAuth、token、usage、secret、迁移和低配发布边界不得为过门禁被删除。
+
 ## 当前真源
 
 - 后端：`server/`；前端：`web/`；Compose：`server/deploy/compose/prod/`。

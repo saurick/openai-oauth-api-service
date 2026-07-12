@@ -269,3 +269,9 @@
 - 完成：将项目 AGENTS 从 81 行 / 8,304 字节压缩为 44 行 / 3,280 字节，保留 OAuth 服务真源、keys/tokens/usage 安全、Ent/Atlas、低配 Compose、主题回归和显式 thread 恢复特例；通用工程、Git 和 GPT 规则回归全局 AGENTS，并与 6 个项目 skills 对齐。
 - 下一步：服务专项细节优先进入 architecture/operations/deploy docs 或项目 skill，不在根 AGENTS 重复。
 - 阻塞/风险：本轮不改 runtime、OAuth/API key/usage、schema、生产配置或真实密钥；更新前 265 行 / 68,401 字节，未达到归档阈值。
+
+## 2026-07-12 AGENTS 体积自动门禁
+
+- 完成：全局与项目 AGENTS 增加 16 KiB 预警、超过 24 KiB 阻断和固定治理优先级；新增 `scripts/qa/agents-size.sh` 并接入 fast QA，检查只报告/阻断，不自动改写。
+- 下一步：OAuth、token、usage 和部署细节继续由正式 docs 与专项 Skill 承接。
+- 阻塞/风险：本轮不改 runtime、OAuth/API key/usage、schema 或生产配置；大小门禁不能替代安全审查。

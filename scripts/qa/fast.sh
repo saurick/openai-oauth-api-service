@@ -10,6 +10,7 @@ print_help() {
   执行开发期高频快速检查
 
 检查内容:
+  agents-size: AGENTS.md 体积预警与阻断
   error-code-sync: 前端生成错误码同步检查
   error-codes: 统一错误码魔法数字检查
   web: pnpm lint -> pnpm css
@@ -33,6 +34,8 @@ fi
 
 ROOT_DIR="$(git rev-parse --show-toplevel)"
 cd "$ROOT_DIR"
+
+bash "$ROOT_DIR/scripts/qa/agents-size.sh"
 
 if ! command -v pnpm >/dev/null 2>&1; then
 	echo "[qa:fast] 未找到 pnpm，请先安装 pnpm"
