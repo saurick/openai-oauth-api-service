@@ -24,6 +24,8 @@ pnpm start
 
 默认地址：`http://127.0.0.1:5176`；开发服务器会把 `http://localhost:5176` 自动规范到同一 IPv4 地址。
 
+Vite 从仓库根目录 `config/dev-ports.env` 读取固定前端端口并启用 `strictPort`；正常 `pnpm start` 不再复用 QA 的 `STYLE_L1_PORT`。样式回归使用清单里的独立 `6176`，`pnpm preview` 使用辅助区间内的 `15390`，两者都把实际端口显式传给 Vite 并 fail-fast。主端口占用应先定位占用者或整组覆盖，不能静默顺延。
+
 ```bash
 cd web
 pnpm lint
@@ -49,6 +51,7 @@ pnpm build
 - `VITE_APP_TITLE`：页面标题
 - `VITE_ENABLE_RPC_MOCK`：是否启用本地 RPC mock
 - `VITE_API_PROXY_TARGET`：本地 Vite 代理的后端地址，默认 `http://127.0.0.1:8400`
+- `DEV_WEB_PORT`：显式覆盖当前 Vite 进程的前端端口；普通开发默认读取 `config/dev-ports.env`
   说明：前端只保存本系统管理员登录返回的 JWT。下游 `ogw_` key 由管理员在 `/admin-keys` 页面生成和维护，OpenAI 兼容客户端使用本服务 `/v1` Base URL 和该 key 调用。
 
 管理员 OAuth 登录按钮只在后端 `/auth/oauth/config` 返回启用时显示。授权完成后前端 `/oauth/callback` 从 URL fragment 读取管理员 JWT 并写入 `admin_access_token`，随后跳转到后台页面；本地 Vite 端口变化不需要改前端配置。

@@ -24,6 +24,8 @@ make init
 make run
 ```
 
+`make run` / `make dev` 会先校验仓库根目录 `config/dev-ports.env`，再把固定 HTTP `8400`、gRPC `9400` 注入 dev 配置；production 配置不消费这组覆盖。`make dev_stop` / `make dev_restart` 只会停止 cwd 位于本仓库的已登记 listener，遇到其他项目占用时报告 PID、cwd 和命令并拒绝按端口强杀。OAuth provider 的本地后端回调因此保持 `http://localhost:8400/auth/oauth/callback`，不会自动顺延。
+
 ## 常用命令
 
 ```bash

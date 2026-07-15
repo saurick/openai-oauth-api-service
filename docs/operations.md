@@ -21,6 +21,8 @@ make run
 - 管理登录：`/admin-login`
 - API 运营控制台：`/admin-api`
 
+本地固定端口组由 `config/dev-ports.env` 管理。前端 `5176`、HTTP `8400`、gRPC `9400` 均为 fail-fast 主端口；`style:l1` 使用独立 `6176`。`make dev_stop` 只停止 cwd 属于本仓库的 listener，禁止因端口相同误杀兄弟项目。OAuth 后端回调 `8400` 属于 provider 登记合同，不允许自动顺延。
+
 ## 配置
 
 开发环境私有配置复制后填写：

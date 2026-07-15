@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"math"
+	"strings"
 	"testing"
+
+	"server/internal/conf"
 
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	oteltrace "go.opentelemetry.io/otel/trace"
@@ -33,6 +36,66 @@ func TestNormalizeTraceRatio(t *testing.T) {
 				t.Fatalf("normalizeTraceRatio(%v) = %v, want %v", tc.input, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestOverrideDevServerPortsAppliesFixedOAuthBundle(t *testing.T) {
+	t.Parallel()
+	cfg := &conf.Server{
+		Http: &conf.Server_HTTP{Addr: "0.0.0.0:8400"},
+		Grpc: &conf.Server_GRPC{Addr: "[::]:9400"},
+	}
+	values := map[string]string{"DEV_HTTP_PORT": "8410", "DEV_GRPC_PORT": "9410"}
+	if err := overrideDevServerPorts("./configs/dev/config.yaml", cfg, func(key string) string {
+		return values[key]
+	}); err != nil {
+		t.Fatalf("overrideDevServerPorts returned error: %v", err)
+	}
+	if cfg.Http.Addr != "0.0.0.0:8410" || cfg.Grpc.Addr != "[::]:9410" {
+		t.Fatalf("unexpected overridden addresses: %#v", cfg)
+	}
+}
+
+func TestOverrideDevServerPortsRecognizesDevConfigDirectory(t *testing.T) {
+	t.Parallel()
+	cfg := &conf.Server{
+		Http: &conf.Server_HTTP{Addr: "0.0.0.0:8400"},
+		Grpc: &conf.Server_GRPC{Addr: "[::]:9400"},
+	}
+	values := map[string]string{"DEV_HTTP_PORT": "8410", "DEV_GRPC_PORT": "9410"}
+	if err := overrideDevServerPorts("./server/configs/dev", cfg, func(key string) string {
+		return values[key]
+	}); err != nil {
+		t.Fatalf("overrideDevServerPorts returned error: %v", err)
+	}
+	if cfg.Http.Addr != "0.0.0.0:8410" || cfg.Grpc.Addr != "[::]:9410" {
+		t.Fatalf("development directory override was not applied: %#v", cfg)
+	}
+}
+
+func TestOverrideDevServerPortsDoesNotChangeProduction(t *testing.T) {
+	t.Parallel()
+	cfg := &conf.Server{
+		Http: &conf.Server_HTTP{Addr: "0.0.0.0:8400"},
+		Grpc: &conf.Server_GRPC{Addr: "0.0.0.0:9400"},
+	}
+	if err := overrideDevServerPorts("./configs/prod/config.yaml", cfg, func(string) string { return "8500" }); err != nil {
+		t.Fatalf("production config returned error: %v", err)
+	}
+	if cfg.Http.Addr != "0.0.0.0:8400" || cfg.Grpc.Addr != "0.0.0.0:9400" {
+		t.Fatalf("production addresses changed: %#v", cfg)
+	}
+}
+
+func TestOverrideDevServerPortsRejectsDuplicatePorts(t *testing.T) {
+	t.Parallel()
+	cfg := &conf.Server{
+		Http: &conf.Server_HTTP{Addr: "0.0.0.0:8400"},
+		Grpc: &conf.Server_GRPC{Addr: "0.0.0.0:9400"},
+	}
+	err := overrideDevServerPorts("./configs/dev/config.yaml", cfg, func(string) string { return "8500" })
+	if err == nil || !strings.Contains(err.Error(), "duplicates") {
+		t.Fatalf("expected duplicate development port error, got %v", err)
 	}
 }
 

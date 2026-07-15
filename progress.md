@@ -283,3 +283,11 @@
 - 验证：项目 skill health 6 / 6、官方 `quick_validate.py` 6 / 6、YAML/metadata、过期路径扫描与限定 `git diff --check` 通过。
 - 下一步：真实上游行为变化时按任务显式运行 live context-compaction，并单列目标、额度与 session 证据；普通 fast/full/strict 不冒充该覆盖。
 - 阻塞/风险：本轮未调用真实 OpenAI/Codex 上游、未消耗额度，未改 runtime、OAuth/API key/usage、schema、生产配置，也未发布、提交或推送。
+
+## 2026-07-15 本地开发固定端口组治理
+
+- 完成：新增 `config/dev-ports.env`，统一登记前端 `5176`、HTTP `8400`、gRPC `9400`、style `6176` 和独占辅助块 `15300-15399`；Vite、API proxy、style 回归与 `make dev` 共同消费清单，正常前端入口不再借用 `STYLE_L1_PORT`，preview 固定使用 `15390`。
+- 完成：后端只在 dev 配置应用 `DEV_HTTP_PORT / DEV_GRPC_PORT`，文件路径和 Kratos 支持的 dev 目录路径都能正确识别，production 配置不受影响；`make dev_stop / dev_restart` 改为先核对 listener cwd，其他项目占用相同端口时 fail closed，不再按端口强杀。
+- 验证：端口清单 Node 测试 2/2、`go test ./cmd/server`、production build、Vite 配置加载、`make dev_ports_preflight`、ShellCheck、`git diff --check` 与 `bash scripts/qa/fast.sh` 通过；Go 定向测试额外覆盖 `-conf ./server/configs/dev` 目录形式。style 在 `6176` 完成指定场景，preview 在 `15390` 实际监听并响应，传入其他项目 runtime port 会 fail fast。未启动真实 OAuth 登录或调用上游。
+- 下一步：新本机实例若需覆盖，使用 ignored 的完整 `config/dev-ports.local.env`，并同步 provider 登记的固定后端回调；不要让 `8400` 自动顺延。
+- 阻塞/风险：本轮不改 OAuth/API key/usage/schema/生产端口或生产部署；本地自动化通过不等于 provider 回调、真实登录或目标环境发布已验收。

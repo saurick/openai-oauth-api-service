@@ -1,9 +1,30 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
+import { loadDevPorts } from '../scripts/dev-ports.mjs'
 
 const DEV_HOST = '127.0.0.1'
-const DEV_PORT = Number(process.env.STYLE_L1_PORT || 5176)
+const devPorts = loadDevPorts(resolve(import.meta.dirname, '..'))
+const resolveRuntimeWebPort = (rawValue) => {
+  const normalized = String(rawValue || '').trim()
+  if (!normalized) return devPorts.web
+  const port = Number(normalized)
+  const auxEnd = devPorts.auxStart + 99
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+    throw new Error('DEV_WEB_RUNTIME_PORT 必须是 1024..65535 的整数端口')
+  }
+  if (
+    port !== devPorts.web &&
+    port !== devPorts.style &&
+    (port < devPorts.auxStart || port > auxEnd)
+  ) {
+    throw new Error(
+      `DEV_WEB_RUNTIME_PORT=${port} 必须使用固定 Web/Style 端口或辅助区间 ${devPorts.auxStart}-${auxEnd}`
+    )
+  }
+  return port
+}
+const DEV_PORT = resolveRuntimeWebPort(process.env.DEV_WEB_RUNTIME_PORT)
 const DEV_ORIGIN = `http://${DEV_HOST}:${DEV_PORT}`
 
 const normalizeDevLocalUrl = (url) => {
@@ -48,7 +69,8 @@ export default defineConfig(({ command, mode }) => {
 
   const isProd = mode === 'production'
   const isDev = mode === 'development'
-  const apiProxyTarget = env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8400'
+  const apiProxyTarget =
+    env.VITE_API_PROXY_TARGET || `http://127.0.0.1:${devPorts.http}`
 
   // 只在开发环境打印调试信息，避免打包时报一堆东西
   if (!isProd) {
@@ -158,6 +180,12 @@ export default defineConfig(({ command, mode }) => {
       //   usePolling: true,
       //   interval: 100,
       // },
+    },
+
+    preview: {
+      host: '127.0.0.1',
+      port: devPorts.auxStart + 90,
+      strictPort: true,
     },
 
     optimizeDeps: {

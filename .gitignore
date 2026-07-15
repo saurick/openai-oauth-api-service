@@ -8,3 +8,4 @@ web/.vite-cache/
 server/bin/
 output/
 .playwright-cli/
+config/dev-ports.local.env

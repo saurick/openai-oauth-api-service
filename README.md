@@ -33,6 +33,8 @@ pnpm start
 
 默认地址：`http://localhost:5176`
 
+本地 `pnpm start` / `make dev` 的固定端口组以 [`config/dev-ports.env`](config/dev-ports.env) 为真源：前端 `5176`、HTTP `8400`、gRPC `9400`。主开发入口启用 fail-fast，不会在占用时静默顺延；这也保证 Google/OIDC 的后端回调继续稳定落在 `8400`。整组本机覆盖可写入 ignored 的 `config/dev-ports.local.env`，必须同时填写完整端口组。
+
 ### 后端
 
 ```bash

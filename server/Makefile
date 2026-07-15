@@ -229,12 +229,22 @@ MAIN_PKG ?= ./cmd/server
 DEV_BIN ?= ./bin/server-dev
 ARGS ?=
 
-# 当前项目本地 dev 会占用的端口；dev_stop/dev_restart 只清理这些端口，避免误杀别的项目。
-DEV_PORTS ?= 8400 9400
+DEV_MAKEFILE_DIR := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
+DEV_PORTS_FILE ?= $(abspath $(DEV_MAKEFILE_DIR)/../config/dev-ports.env)
+DEV_PORTS_LOCAL_FILE ?= $(abspath $(DEV_MAKEFILE_DIR)/../config/dev-ports.local.env)
+include $(DEV_PORTS_FILE)
+-include $(DEV_PORTS_LOCAL_FILE)
+export DEV_PROJECT_ID DEV_WEB_PORT DEV_HTTP_PORT DEV_GRPC_PORT DEV_STYLE_PORT DEV_AUX_PORT_START
 
-.PHONY: dev_build
+# 端口只用于查找候选进程；停止前必须校验 listener cwd 属于本仓库。
+DEV_PORTS := $(DEV_HTTP_PORT) $(DEV_GRPC_PORT)
+
+.PHONY: dev_ports_preflight dev_build
+dev_ports_preflight:
+	@node ../scripts/dev-ports.mjs --check --project-root ..
+
 # build dev binary (stable path)
-dev_build:
+dev_build: dev_ports_preflight
 	@mkdir -p $(dir $(DEV_BIN))
 	@echo ">>> building $(DEV_BIN) from $(MAIN_PKG)"
 	@go build -ldflags "-X main.Version=$(VERSION)" -o $(DEV_BIN) $(MAIN_PKG)
@@ -250,34 +260,10 @@ run: dev_build
 dev: run
 
 .PHONY: dev_stop
-# stop local dev process by known ports (兼容 macOS / Ubuntu)
-dev_stop:
+# stop only listeners owned by this repository; foreign processes fail closed.
+dev_stop: dev_ports_preflight
 	@echo ">>> stopping dev listeners on: $(DEV_PORTS)"
-	@for p in $(DEV_PORTS); do \
-		if command -v lsof >/dev/null 2>&1; then \
-			pids="$$(lsof -tiTCP:$$p -sTCP:LISTEN 2>/dev/null || true)"; \
-			if [ -n "$$pids" ]; then \
-				echo ">>> kill port $$p via lsof: $$pids"; \
-				kill $$pids 2>/dev/null || true; \
-			fi; \
-		elif command -v fuser >/dev/null 2>&1; then \
-			echo ">>> kill port $$p via fuser"; \
-			fuser -k $$p/tcp >/dev/null 2>&1 || true; \
-		else \
-			echo "ERROR: neither lsof nor fuser is available; cannot stop port $$p"; \
-			exit 1; \
-		fi; \
-	done
-	@sleep 1
-	@for p in $(DEV_PORTS); do \
-		if command -v lsof >/dev/null 2>&1; then \
-			pids="$$(lsof -tiTCP:$$p -sTCP:LISTEN 2>/dev/null || true)"; \
-			if [ -n "$$pids" ]; then \
-				echo ">>> force kill port $$p: $$pids"; \
-				kill -9 $$pids 2>/dev/null || true; \
-			fi; \
-		fi; \
-	done
+	@bash ../scripts/dev-listener-stop.sh .. $(DEV_PORTS)
 
 .PHONY: dev_restart
 # restart local dev binary after clearing stale listeners
