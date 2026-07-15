@@ -5,23 +5,7 @@ description: 项目文档治理（openai-oauth-api-service）。Use when creatin
 
 # OpenAI OAuth Docs Governance
 
-阅读口径：正文默认中文主线 + English anchors；`name` / `display_name` 保持英文，`Workflow / Fact / RBAC / API / migration / runtime` 等术语按需保留，方便触发、检索和跨工具引用。
-
 Use this skill to keep `openai-oauth-api-service` docs concise, source-grounded, and operationally safe. This is local project documentation governance; use `openai-docs` separately for official OpenAI API/Product documentation questions.
-
-## OpenAI OAuth 文档质量门禁 Docs Quality Gate
-
-文档治理不能只追求写得多或排版整齐。要保护当前真源、降低心智负担、避免文档漂移，并控制文档体系复杂度。
-
-### 结构质量检查 Structure Quality Checks
-
-- 边界清晰、合理严谨：说明本轮管什么、不管什么、依赖哪个真源，以及为什么当前拆分、抽象和验证足够但不过度。
-- 语义清晰：标题、术语、表格、图、链接和锚点必须指向明确真源；读者能知道它是什么、适用哪里、下一步去哪。
-- 职业任务文案：面向业务、运营、管理或客户阅读的文档，用读者岗位语言说明任务、影响和下一步；工程术语只在开发、诊断、部署、接口或规则文档中使用，并补业务释义。
-- 模块化：按读者任务和真源边界组织文档；能在一页讲清就不拆，长文才用索引、摘要表和专题页。
-- 高内聚：同一口径、命令、状态、链接和跳转锚点尽量收口到一个真源或索引，不在多处复制近似说明。
-- 低耦合：文档引用代码、脚本、页面和正式真源位置，不复写易漂移的实现细节；过程记录不覆盖正式文档。
-- 单一职责：README 管导航，专题文档管业务/操作，progress/changelog 管过程；图表和表格只在降低理解成本时使用。
 
 - 先确认代码、migration、测试、README、正式 docs 和 AGENTS 的优先级，不让过程记录覆盖当前真源。
 - 结论、适用范围、主路径、验收方式和风险边界前置；表格、Mermaid、链接和摘要只在减少查找成本时使用。

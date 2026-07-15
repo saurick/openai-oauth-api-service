@@ -275,3 +275,11 @@
 - 完成：全局与项目 AGENTS 增加 16 KiB 预警、超过 24 KiB 阻断和固定治理优先级；新增 `scripts/qa/agents-size.sh` 并接入 fast QA，检查只报告/阻断，不自动改写。
 - 下一步：OAuth、token、usage 和部署细节继续由正式 docs 与专项 Skill 承接。
 - 阻塞/风险：本轮不改 runtime、OAuth/API key/usage、schema 或生产配置；大小门禁不能替代安全审查。
+
+## 2026-07-15 项目 Skills 真源与健康门禁收口
+
+- 完成：删除项目 skills 重复的通用质量段，清理 ERP 客户/模板/打印残留，修正 production preflight 路径与 env 参数，并把真实上游 context-compaction 明确为消耗额度、需显式目标与脱敏、且不进入 fast/full/strict 的独立验证形态。同步缩短 metadata 提示并补齐短描述规范。
+- 完成：新增 `scripts/qa/skill-health.mjs`，机械检查 frontmatter、目录名、metadata、README 索引和相对引用，并接入 `fast.sh`、`full.sh`、`strict.sh`。
+- 验证：项目 skill health 6 / 6、官方 `quick_validate.py` 6 / 6、YAML/metadata、过期路径扫描与限定 `git diff --check` 通过。
+- 下一步：真实上游行为变化时按任务显式运行 live context-compaction，并单列目标、额度与 session 证据；普通 fast/full/strict 不冒充该覆盖。
+- 阻塞/风险：本轮未调用真实 OpenAI/Codex 上游、未消耗额度，未改 runtime、OAuth/API key/usage、schema、生产配置，也未发布、提交或推送。

@@ -10,6 +10,7 @@ print_help() {
   执行推送前全量质量检查（pre-push 默认调用）
 
 检查内容:
+  skill-health: 项目 Skill 结构、metadata、索引和引用
   error-code-sync: 前端生成错误码同步检查
   error-codes: 统一错误码魔法数字检查
   web: pnpm lint -> pnpm css -> (若存在 test 脚本则 pnpm test) -> pnpm build
@@ -37,6 +38,13 @@ fi
 
 ROOT_DIR="$(git rev-parse --show-toplevel)"
 cd "$ROOT_DIR"
+
+if ! command -v node >/dev/null 2>&1; then
+	echo "[qa:full] 未找到 node，请先安装 Node.js"
+	exit 1
+fi
+
+node "$ROOT_DIR/scripts/qa/skill-health.mjs"
 
 if ! command -v pnpm >/dev/null 2>&1; then
 	echo "[qa:full] 未找到 pnpm，请先安装 pnpm"

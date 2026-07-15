@@ -10,7 +10,7 @@ print_help() {
   执行严格质量检查（warning 也视为失败）
 
 检查内容:
-  1) db-guard + secrets
+  1) skill-health + db-guard + secrets
   2) shellcheck + shfmt（可选）
   3) govulncheck（可选）
   4) web: eslint --max-warnings=0 + stylelint --max-warnings=0 + (可选 test) + build
@@ -40,6 +40,13 @@ fi
 
 ROOT_DIR="$(git rev-parse --show-toplevel)"
 cd "$ROOT_DIR"
+
+if ! command -v node >/dev/null 2>&1; then
+	echo "[qa:strict] 未找到 node，请先安装 Node.js"
+	exit 1
+fi
+
+node "$ROOT_DIR/scripts/qa/skill-health.mjs"
 
 if ! command -v pnpm >/dev/null 2>&1; then
 	echo "[qa:strict] 未找到 pnpm，请先安装 pnpm"

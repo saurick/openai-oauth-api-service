@@ -1,4 +1,4 @@
 interface:
   display_name: "OpenAI OAuth Code Review Governance"
   short_description: "代码审查治理 Code review / 工程质量门禁"
-  default_prompt: "Use $openai-oauth-code-review-governance 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险；执行工程质量门禁（含语义清晰、职业任务文案、边界清晰、合理严谨、模块化、高内聚、低耦合、单一职责），严格审查 bug、业务边界、RBAC/API、字段残值/缺值、文档漂移、测试盲区、可维护性、可扩展性、复杂度预算、复用优先和主路径修复，先列 findings；无阻断问题也说明质量结论、未验证项和剩余风险。"
+  default_prompt: "Use $openai-oauth-code-review-governance 审查 OAuth 服务 diff，先列安全、数据、上游与发布 findings，再说明测试盲区。"

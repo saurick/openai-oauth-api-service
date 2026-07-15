@@ -1,4 +1,4 @@
 interface:
   display_name: "OpenAI OAuth Test Governance"
-  short_description: "测试治理 Test / 测试质量门禁"
-  default_prompt: "Use $openai-oauth-test-governance 按中文主线 + English anchors 处理：先收敛真源、范围、验证和风险；执行测试质量门禁（含语义清晰、职业任务文案、边界清晰、合理严谨、模块化、高内聚、低耦合、单一职责），按影响面选择验证层级、测试形态和证据环境，做到足够但不过度，明确关键场景、未跑项、剩余盲区，不用全量测试掩盖缺失合同。"
+  short_description: "OAuth 服务测试、真实上游、迁移、页面与发布证据治理 Test"
+  default_prompt: "Use $openai-oauth-test-governance 按 OAuth 服务风险选择本地、真实上游、浏览器、迁移和发布验证，并说明盲区。"

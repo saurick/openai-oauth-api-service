@@ -23,6 +23,7 @@
 | --- | --- |
 | `scripts/qa/db-guard.sh` | Ent schema / ent 变更必须配套 migration |
 | `scripts/qa/agents-size.sh` | 扫描全部 AGENTS.md；16 KiB 预警、超过 24 KiB 阻断，不自动改写 |
+| `scripts/qa/skill-health.mjs` | 检查项目 Skill frontmatter、目录名、metadata、README 索引和相对引用；不依赖 PyYAML，并由 fast/full/strict 调用 |
 | `scripts/qa/error-code-sync.sh` | 前端生成错误码必须与服务端目录同步 |
 | `scripts/qa/error-codes.sh` | 业务代码禁止裸写已注册错误码 |
 | `scripts/qa/secrets.sh` | 扫描疑似密钥泄露 |
