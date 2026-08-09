@@ -300,6 +300,7 @@ const scenarios = [
     path: '/admin-codex-balance',
     viewport: { width: 1440, height: 900 },
     adminAuth: true,
+    mockApiRpc: true,
     mockCodexBalance: true,
     verify: async (page) => {
       await expectText(page, 'Codex 余额')
@@ -308,6 +309,9 @@ const scenarios = [
       await expectText(page, '接口状态')
       await expectText(page, '正常')
       await expectText(page, 'Credits remaining')
+      await expectText(page, '本服务调用估算')
+      await expectText(page, '今日费用估算')
+      await expectRole(page, 'link', '查看用量明细')
       await assertAdminChrome(page, 'admin-codex-balance-desktop')
       await assertThemeToggle(
         page,
@@ -322,6 +326,7 @@ const scenarios = [
     path: '/admin-codex-balance',
     viewport: { width: 390, height: 844 },
     adminAuth: true,
+    mockApiRpc: true,
     mockCodexBalance: true,
     verify: async (page) => {
       await expectText(page, 'Codex 余额')
@@ -329,6 +334,8 @@ const scenarios = [
       await expectRole(page, 'button', '刷新')
       await expectText(page, '5 小时额度')
       await expectText(page, '每周额度')
+      await expectText(page, '本服务调用估算')
+      await expectRole(page, 'link', '查看用量明细')
       await assertAdminChrome(page, 'admin-codex-balance-mobile')
       await assertCodexBalanceVisuals(page, 'admin-codex-balance-mobile')
     },
@@ -2846,6 +2853,20 @@ async function assertCodexBalanceVisuals(page, scenarioName) {
       hasResetCreditsOverview:
         document.body.innerText.includes('可用重置券') &&
         document.body.innerText.includes('3 / 3'),
+      hasUsageChart: Boolean(
+        document.querySelector('[data-codex-usage-chart]')
+      ),
+      hasUsageEstimate:
+        document.body.innerText.includes('本服务调用估算') &&
+        document.body.innerText.includes('近 30 天费用估算') &&
+        document.body.innerText.includes('近 30 天 Token') &&
+        document.body.innerText.includes('主模型：'),
+      hasUsageEstimateDisclaimer:
+        document.body.innerText.includes('不是订阅账单'),
+      hasWeeklyPace:
+        document.body.innerText.includes('每周额度 6% 已用') &&
+        document.body.innerText.includes('用量正常') &&
+        document.body.innerText.includes('预计'),
       hasSparkCard: document.body.innerText.includes('GPT-5.3-Codex-Spark'),
       linkHeight: linkRect?.height || 0,
       linkRel: link?.getAttribute('rel') || '',
@@ -2905,14 +2926,44 @@ async function assertCodexBalanceVisuals(page, scenarioName) {
   )
   assert(metrics.hasCodexCard, `${scenarioName} 缺少 Codex 限额卡`)
   assert(metrics.hasSparkCard, `${scenarioName} 缺少 Spark 限额卡`)
+  assert(metrics.hasWeeklyPace, `${scenarioName} 缺少每周线性节奏估算`)
+  assert(metrics.hasUsageEstimate, `${scenarioName} 缺少本服务调用估算`)
+  assert(metrics.hasUsageChart, `${scenarioName} 缺少近 30 天调用柱状图`)
   assert(
-    metrics.panelCount >= 4,
+    metrics.hasUsageEstimateDisclaimer,
+    `${scenarioName} 缺少费用估算口径说明`
+  )
+  assert(
+    metrics.panelCount >= 5,
     `${scenarioName} 余额页卡片数量异常: ${metrics.panelCount}`
   )
   assert(
     metrics.progressBarWidths.length >= 4 &&
       metrics.progressBarWidths.every((width) => width >= 0),
     `${scenarioName} 限额进度条渲染异常: ${JSON.stringify(metrics.progressBarWidths)}`
+  )
+
+  const rpcCalls = page.__styleL1ApiRpcCalls || []
+  const summaryCalls = rpcCalls.filter((call) => call.method === 'summary')
+  const uniqueSummaryWindows = new Set(
+    summaryCalls.map((call) =>
+      JSON.stringify({
+        end_time: call.params?.end_time,
+        start_time: call.params?.start_time,
+      })
+    )
+  )
+  assert.equal(
+    uniqueSummaryWindows.size,
+    2,
+    `${scenarioName} Today / 30d summary 窗口异常: ${JSON.stringify(rpcCalls)}`
+  )
+  assert(
+    rpcCalls.some(
+      (call) =>
+        call.method === 'usage_buckets' && call.params?.group_by === 'day_model'
+    ),
+    `${scenarioName} 未按 day_model 请求近 30 天主模型与日柱图: ${JSON.stringify(rpcCalls)}`
   )
 
   await page.locator('[data-admin-theme-option="dark"]').click()
@@ -4714,12 +4765,19 @@ async function installAuthConfigMock(page) {
 
 async function installCodexBalanceMock(page) {
   await page.route('**/public/codex/balance', async (route) => {
+    const now = new Date()
+    const primaryReset = new Date(now.getTime() + 4 * 60 * 60 * 1000)
+    const weeklyReset = new Date(now.getTime() + (6 * 24 + 16) * 60 * 60 * 1000)
+    const sparkPrimaryReset = new Date(now.getTime() + 3.5 * 60 * 60 * 1000)
+    const sparkWeeklyReset = new Date(
+      now.getTime() + (6 * 24 + 12) * 60 * 60 * 1000
+    )
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         status: 'ok',
-        fetched_at: '2026-05-19T12:00:00Z',
+        fetched_at: now.toISOString(),
         credits: {
           hasCredits: false,
           unlimited: false,
@@ -4738,13 +4796,13 @@ async function installCodexBalanceMock(page) {
             used_percent: 16,
             remaining_percent: 84,
             window_duration_mins: 300,
-            resets_at_time: '2026-05-19T17:00:00Z',
+            resets_at_time: primaryReset.toISOString(),
           },
           secondary: {
-            used_percent: 8,
-            remaining_percent: 92,
+            used_percent: 6,
+            remaining_percent: 94,
             window_duration_mins: 10080,
-            resets_at_time: '2026-05-26T12:00:00Z',
+            resets_at_time: weeklyReset.toISOString(),
           },
         },
         rate_limits_by_limit_id: {
@@ -4761,13 +4819,13 @@ async function installCodexBalanceMock(page) {
               used_percent: 16,
               remaining_percent: 84,
               window_duration_mins: 300,
-              resets_at_time: '2026-05-19T17:00:00Z',
+              resets_at_time: primaryReset.toISOString(),
             },
             secondary: {
-              used_percent: 8,
-              remaining_percent: 92,
+              used_percent: 6,
+              remaining_percent: 94,
               window_duration_mins: 10080,
-              resets_at_time: '2026-05-26T12:00:00Z',
+              resets_at_time: weeklyReset.toISOString(),
             },
           },
           'gpt-5.3-codex-spark': {
@@ -4783,13 +4841,13 @@ async function installCodexBalanceMock(page) {
               used_percent: 36,
               remaining_percent: 64,
               window_duration_mins: 300,
-              resets_at_time: '2026-05-19T16:30:00Z',
+              resets_at_time: sparkPrimaryReset.toISOString(),
             },
             secondary: {
               used_percent: 24,
               remaining_percent: 76,
               window_duration_mins: 10080,
-              resets_at_time: '2026-05-26T12:00:00Z',
+              resets_at_time: sparkWeeklyReset.toISOString(),
             },
           },
         },

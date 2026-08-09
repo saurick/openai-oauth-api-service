@@ -177,6 +177,8 @@ HTTP 路由：
 
 该接口不会返回账号邮箱、access token、refresh token、上游内部 credit id、头像 URL、profile user id、请求正文或模型输出正文。若生产环境不希望任何人看到余额 / 限额百分比 / 重置券数量，应在反代或边缘层增加 IP allowlist、独立查询 token 或直接屏蔽该路径。
 
+管理后台 `/admin-codex-balance` 会在管理员登录态下另行调用 `api.summary` 与 `api.usage_buckets group_by=day_model`，展示本服务 Today / 30d usage 估算。该区域与公开额度接口是两类独立真源：本地 usage 不用于改写或推断上游订阅额度，费用估算也不作为订阅账单；未经过本服务的调用不会出现在本地统计中。
+
 ## 默认返回结构
 
 所有 JSON-RPC 响应统一返回：

@@ -3,6 +3,14 @@
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 - 2026-06-25：旧 `progress.md` 已按超过 80KB 阈值归档到 `docs/archive/progress-2026-06-25-before-skill-scenario-matrix.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-08-09 CodexBar 统计口径与额度节奏增强
+
+- 真源核对：本机 CodexBar 为 `0.48.0`、源码提交 `5bd587850`。其普通 pace 使用“实际已用比例 - 窗口时间进度”，窗口前 3% 不预测，并按当前速率估算是否会在重置前用尽；Automatic 还会使用最多 8 周账户额度历史。当前服务没有账户级额度历史真源，因此只复用可复核的线性算法，不伪称历史个性化预测。
+- 完成：`/admin-codex-balance` 的 5 小时 / 每周窗口改为展示已用比例、相对重置时间、可持续节奏标记和预计用尽 / 可持续到重置文案；上游额度、套餐、reset credits 仍只读 `/public/codex/balance`，不由本地 usage 反推。
+- 完成：同页新增“本服务调用估算”，复用管理员 `api.summary` 的 Today / 30d 汇总和 `api.usage_buckets group_by=day_model`，展示今日 / 30 天费用估算、最近有记录日 / 30 天 Token、每日柱图、主模型和请求数。主模型在全部价格可用时按费用、存在任一缺价时按 Token 排名；价格缺失保持未知。页面明确说明只统计经本服务落库的 usage、不是 Codex 订阅账单，也不推测当前接口未提供的账号邮箱或续费日。
+- 验证：新增 7 条统计 / pace 单测，前端基线共 24/24 通过；`admin-codex-balance-desktop` / `mobile` 的 `style:l1` 通过，覆盖浅色、暗色、390px、Today / 30d 两个 summary 窗口、`day_model`、节奏、柱图和无横向溢出；人工查看两张浏览器截图无布局异常。`bash scripts/qa/full.sh` 全部通过，包含 secrets、前端 lint/css/test/build、全量 Go test/build；govulncheck 仍按既有非阻断策略报告 gRPC、x/text、OpenTelemetry 三项当前可达依赖告警，本轮不混入依赖升级。
+- 发布前核对：npm `@openai/codex` latest、`server/Dockerfile` 固定版本和 133 容器运行版本均为 `0.147.0`；133 当前旧镜像健康、restart 0，远端 / 公网 health、ready、实时余额与重置券正常。下一步按精确提交、推送、本地构建 linux/amd64 制品、133 load / migration / 单容器重建和生产页面验收收口。
+
 ## 2026-08-09 生产额度凭据自动恢复、证书续签与 Codex runtime 更新
 
 - 根因：133 的 Codex access token 已于 2026-07-28 过期，旧 `/public/codex/balance` 直接启动 app-server 读取 `account/rateLimits/read`，没有复用 direct backend 已有的 refresh-token 路径，因此持续收到 `401 token_expired`；同时公网 `oauth-api.saurick.me` 证书已于 2026-08-08 13:59:44 UTC 过期，acme.sh 自 2026-07-10 起因宿主机 DNS 解析 Let's Encrypt 超时而连续续签失败。容器、PostgreSQL、代理 failover 和 Codex binary 本身均正常，两个故障互相独立。
