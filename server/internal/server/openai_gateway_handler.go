@@ -278,7 +278,6 @@ func codexModelReasoningLevels(modelID string) []map[string]string {
 		biz.GatewayReasoningEffortHigh:  "Greater reasoning depth for complex problems",
 		biz.GatewayReasoningEffortXHigh: "Extra high reasoning depth for complex problems",
 		biz.GatewayReasoningEffortMax:   "Maximum reasoning depth for the hardest problems",
-		biz.GatewayReasoningEffortUltra: "Maximum reasoning with automatic task delegation",
 	}
 	efforts := biz.OfficialModelReasoningEffortsForModel(modelID)
 	levels := make([]map[string]string, 0, len(efforts))

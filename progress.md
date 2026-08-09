@@ -3,12 +3,13 @@
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 - 2026-06-25：旧 `progress.md` 已按超过 80KB 阈值归档到 `docs/archive/progress-2026-06-25-before-skill-scenario-matrix.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
-## 2026-08-09 GPT-5.6 Sol Max / Ultra 档位修复
+## 2026-08-09 GPT-5.6 Sol Max 档位修复
 
-- 线上根因：本机经公网 `https://oauth-api.saurick.me/v1` 使用可回收临时 key 对 `gpt-5.6-sol` 六个 reasoning 档位逐个执行真实非流式 `/v1/responses`。`low / medium / high / xhigh` 均经 `codex_backend` 返回 200 和指定 marker，`max / ultra` 则在 1ms 内被网关本地校验拦为 400 `gateway_reasoning_effort_invalid`，没有到达上游；同时线上 `/v1/models` 只声明旧四档且把 Sol 默认档位误报为 `medium`。两轮探针临时 key 均已删除，按备注复查残留为 0。
-- 完成：服务端固定模型目录补齐模型级 reasoning 真源：Sol / Terra 支持 `low / medium / high / xhigh / max / ultra`，Luna 支持到 `max`，5.5 支持到 `xhigh`，Sol 默认档位为 `low`；请求解析、key / 全局覆盖、`/v1/models` 元数据、usage 记录与后台 RPC 共用该目录。最终档位与模型不匹配时明确返回 400，不静默降级，也不引入 fallback。
-- 完成：后台全局与 key 默认档位、usage 筛选 / 展示补齐 Max / Ultra，并明确模型支持边界；客户端配置生成器按模型输出 opencode variants，避免给 5.5 或 Luna 生成不支持的档位。README、API、配置与前端文档同步更新；不改 schema、migration、auth、API key 生命周期、quota、usage 历史、上游重试或代理策略。
-- 本地验证：定向 biz / data / server 测试、全量 `go test -count=1 ./...`、前端 lint / css / 26 条测试 / build 均通过；`style:l1` 的 `admin-upstream-desktop`、新增 390px `admin-upstream-mobile`、凭据桌面 / 移动和 usage 桌面共 5 个场景通过，覆盖 Max 写入、Ultra 可见、暗色 / 移动布局和相邻后台页面。`bash scripts/qa/full.sh` 全部通过；govulncheck 按既有非阻断策略报告 grpc、x/text、OpenTelemetry 三项当前可达依赖告警，本轮不扩大为依赖升级。
+- 线上根因：本机经公网 `https://oauth-api.saurick.me/v1` 使用可回收临时 key 执行真实非流式 `/v1/responses`。旧线上版本的 `low / medium / high / xhigh` 均经 `codex_backend` 返回 200 和指定 marker，`max` 则在到达上游前被旧四档校验拦为 400 `gateway_reasoning_effort_invalid`；同时 `/v1/models` 只声明旧四档且把 Sol 默认档位误报为 `medium`。
+- 边界复核：首个修复镜像放行 Max 后，本机公网探针证明 `low / medium / high / xhigh / max` 全部经 Backend 返回 200；额外探测本机 Codex 目录中的 Ultra 时，上游明确返回 400，并声明最高只接受 `max`。Ultra 是客户端编排档，不是 Backend reasoning effort；网关不将它静默映射成 Max，也不再把它声明为公网能力。
+- 完成：服务端固定模型目录补齐模型级 reasoning 真源：Sol / Terra / Luna 支持 `low / medium / high / xhigh / max`，5.5 支持到 `xhigh`，Sol 默认档位为 `low`；请求解析、key / 全局覆盖、`/v1/models` 元数据、usage 记录与后台 RPC 共用该目录。非法或模型不支持的最终档位在网关本地明确返回 400，不引入 fallback。
+- 完成：后台全局与 key 默认档位、usage 筛选 / 展示补齐 Max，客户端配置生成器按模型输出 opencode variants，避免生成 Backend 不接受的 Ultra 或给 5.5 生成 Max。README、API、配置与前端文档同步更新；不改 schema、migration、auth、API key 生命周期、quota、usage 历史、上游重试或代理策略。
+- 本地验证：定向 biz / data / server 测试、全量 `go test -count=1 ./...`、前端 lint / css / 26 条测试 / build 均通过；`style:l1` 的 `admin-upstream-desktop`、390px `admin-upstream-mobile`、凭据桌面 / 移动和 usage 桌面共 5 个场景通过，覆盖 Max 可见、Ultra 不再暴露、暗色 / 移动布局和相邻后台页面。`bash scripts/qa/full.sh` 全部通过；govulncheck 按既有非阻断策略报告 grpc、x/text、OpenTelemetry 三项当前可达依赖告警，本轮不扩大为依赖升级。
 
 ## 2026-08-09 CodexBar 统计口径与额度节奏增强
 

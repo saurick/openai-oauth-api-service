@@ -536,7 +536,7 @@ func TestChatUsagePayloadIncludesCachedAndReasoningTokens(t *testing.T) {
 }
 
 func TestParseRequestReasoningEffort(t *testing.T) {
-	for _, wantEffort := range []string{"low", "medium", "high", "xhigh", "max", "ultra"} {
+	for _, wantEffort := range []string{"low", "medium", "high", "xhigh", "max"} {
 		t.Run(wantEffort, func(t *testing.T) {
 			body := []byte(`{"model":"gpt-5.6-sol","stream":true,"reasoning_effort":"` + wantEffort + `"}`)
 
@@ -564,16 +564,16 @@ func TestParseRequestReasoningEffortFromNestedPayload(t *testing.T) {
 }
 
 func TestParseRequestReasoningEffortRejectsUnknownValue(t *testing.T) {
-	body := []byte(`{"model":"gpt-5.5","reasoning_effort":"extreme"}`)
-
-	_, _, _, err := parseRequestModelStreamAndReasoningEffort(body)
-	if err == nil {
-		t.Fatal("expected invalid reasoning effort error")
+	for _, effort := range []string{"extreme", "ultra"} {
+		body := []byte(`{"model":"gpt-5.6-sol","reasoning_effort":"` + effort + `"}`)
+		if _, _, _, err := parseRequestModelStreamAndReasoningEffort(body); err == nil {
+			t.Fatalf("expected invalid reasoning effort error for %q", effort)
+		}
 	}
 }
 
 func TestCodexBackendRequestPassesAllReasoningEfforts(t *testing.T) {
-	for _, effort := range []string{"low", "medium", "high", "xhigh", "max", "ultra"} {
+	for _, effort := range []string{"low", "medium", "high", "xhigh", "max"} {
 		t.Run(effort, func(t *testing.T) {
 			req, _, err := codexBackendRequestFromGateway(
 				"/v1/chat/completions",
@@ -688,7 +688,7 @@ echo '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":1,"tot
 	t.Setenv("CODEX_CLI_BIN", bin)
 	t.Setenv("CODEX_CLI_TIMEOUT_SECONDS", "30")
 
-	for _, effort := range []string{"low", "medium", "high", "xhigh", "max", "ultra"} {
+	for _, effort := range []string{"low", "medium", "high", "xhigh", "max"} {
 		t.Run(effort, func(t *testing.T) {
 			seenPath := filepath.Join(tmp, "seen-"+effort)
 			t.Setenv("SEEN_CODEX_CONFIG_PATH", seenPath)
@@ -722,8 +722,8 @@ func TestCodexModelReasoningLevelsMatchOfficialCatalog(t *testing.T) {
 		modelID string
 		want    []string
 	}{
-		{modelID: "gpt-5.6-sol", want: []string{"low", "medium", "high", "xhigh", "max", "ultra"}},
-		{modelID: "gpt-5.6-terra", want: []string{"low", "medium", "high", "xhigh", "max", "ultra"}},
+		{modelID: "gpt-5.6-sol", want: []string{"low", "medium", "high", "xhigh", "max"}},
+		{modelID: "gpt-5.6-terra", want: []string{"low", "medium", "high", "xhigh", "max"}},
 		{modelID: "gpt-5.6-luna", want: []string{"low", "medium", "high", "xhigh", "max"}},
 		{modelID: "gpt-5.5", want: []string{"low", "medium", "high", "xhigh"}},
 	}

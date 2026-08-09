@@ -97,8 +97,8 @@ func TestOfficialModelReasoningCatalogMatchesCurrentCodexModels(t *testing.T) {
 		want    []string
 		def     string
 	}{
-		{modelID: "gpt-5.6-sol", want: []string{"low", "medium", "high", "xhigh", "max", "ultra"}, def: "low"},
-		{modelID: "gpt-5.6-terra", want: []string{"low", "medium", "high", "xhigh", "max", "ultra"}, def: "medium"},
+		{modelID: "gpt-5.6-sol", want: []string{"low", "medium", "high", "xhigh", "max"}, def: "low"},
+		{modelID: "gpt-5.6-terra", want: []string{"low", "medium", "high", "xhigh", "max"}, def: "medium"},
 		{modelID: "gpt-5.6-luna", want: []string{"low", "medium", "high", "xhigh", "max"}, def: "medium"},
 		{modelID: "gpt-5.5", want: []string{"low", "medium", "high", "xhigh"}, def: "medium"},
 	}
@@ -123,8 +123,8 @@ func TestOfficialModelReasoningCatalogMatchesCurrentCodexModels(t *testing.T) {
 	if IsOfficialModelReasoningEffortSupported("gpt-5.5", GatewayReasoningEffortMax) {
 		t.Fatal("gpt-5.5 must not accept max")
 	}
-	if IsOfficialModelReasoningEffortSupported("gpt-5.6-luna", GatewayReasoningEffortUltra) {
-		t.Fatal("gpt-5.6-luna must not accept ultra")
+	if IsOfficialModelReasoningEffortSupported(DefaultCodexModelID, "ultra") {
+		t.Fatal("gpt-5.6-sol must not advertise the Codex orchestration-only ultra profile as a backend effort")
 	}
 	copyForCaller := OfficialModelReasoningEffortsForModel(DefaultCodexModelID)
 	copyForCaller[0] = "mutated"
@@ -260,23 +260,33 @@ func TestGatewayUsecaseCreateAPIKeyNormalizesDefaultReasoningEffort(t *testing.T
 	}
 }
 
-func TestGatewayUsecaseCreateAPIKeyAcceptsSolMaxReasoningEfforts(t *testing.T) {
-	for _, effort := range []string{GatewayReasoningEffortMax, GatewayReasoningEffortUltra} {
-		t.Run(effort, func(t *testing.T) {
-			repo := &gatewayPolicyTestRepo{}
-			uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+func TestGatewayUsecaseCreateAPIKeyAcceptsSolMaxReasoningEffort(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
 
-			if _, err := uc.CreateAPIKey(context.Background(), CreateGatewayAPIKeyInput{
-				Name:                   "client7",
-				AllowedModels:          []string{DefaultCodexModelID},
-				DefaultReasoningEffort: strings.ToUpper(effort),
-			}); err != nil {
-				t.Fatalf("CreateAPIKey() error = %v", err)
-			}
-			if repo.createdInput.DefaultReasoningEffort != effort {
-				t.Fatalf("default reasoning = %q, want %q", repo.createdInput.DefaultReasoningEffort, effort)
-			}
-		})
+	if _, err := uc.CreateAPIKey(context.Background(), CreateGatewayAPIKeyInput{
+		Name:                   "client7",
+		AllowedModels:          []string{DefaultCodexModelID},
+		DefaultReasoningEffort: strings.ToUpper(GatewayReasoningEffortMax),
+	}); err != nil {
+		t.Fatalf("CreateAPIKey() error = %v", err)
+	}
+	if repo.createdInput.DefaultReasoningEffort != GatewayReasoningEffortMax {
+		t.Fatalf("default reasoning = %q, want max", repo.createdInput.DefaultReasoningEffort)
+	}
+}
+
+func TestGatewayUsecaseCreateAPIKeyRejectsUltraReasoningEffort(t *testing.T) {
+	repo := &gatewayPolicyTestRepo{}
+	uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+
+	_, err := uc.CreateAPIKey(context.Background(), CreateGatewayAPIKeyInput{
+		Name:                   "client7",
+		AllowedModels:          []string{DefaultCodexModelID},
+		DefaultReasoningEffort: "ultra",
+	})
+	if err != ErrGatewayReasoningInvalid {
+		t.Fatalf("CreateAPIKey() error = %v, want ErrGatewayReasoningInvalid", err)
 	}
 }
 

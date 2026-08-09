@@ -98,9 +98,8 @@ test('clientConfigTemplates: opencode 只包含四模型并按选择更新 agent
     'max'
   )
   assert.equal(
-    parsed.provider['oauth-api-service'].models['gpt-5.6-sol'].variants.ultra
-      .reasoningEffort,
-    'ultra'
+    parsed.provider['oauth-api-service'].models['gpt-5.6-sol'].variants.ultra,
+    undefined
   )
   assert.deepEqual(
     Object.keys(parsed.provider['oauth-api-service'].models),
@@ -117,7 +116,7 @@ test('clientConfigTemplates: opencode 只包含四模型并按选择更新 agent
     Object.keys(
       parsed.provider['oauth-api-service'].models['gpt-5.6-terra'].variants
     ),
-    ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+    ['low', 'medium', 'high', 'xhigh', 'max']
   )
   assert.deepEqual(
     Object.keys(

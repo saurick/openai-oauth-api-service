@@ -189,7 +189,7 @@ const scenarios = [
       await expectText(page, '全局默认推理档位')
       await expectText(page, '默认关闭')
       await expectText(page, 'Max')
-      await expectText(page, 'Ultra')
+      await expectNoText(page, 'Ultra')
       await expectNoText(page, '最近上游请求')
       await expectNoText(page, '每日模型汇总')
       await expectNoText(page, '会话聚合')
@@ -271,7 +271,7 @@ const scenarios = [
       await expectText(page, '上游策略')
       await expectText(page, '全局默认推理档位')
       await expectText(page, 'Max')
-      await expectText(page, 'Ultra')
+      await expectNoText(page, 'Ultra')
       await assertAdminChrome(page, 'admin-upstream-mobile')
     },
   },
@@ -4984,7 +4984,6 @@ function getApiMockData(method, params = {}, state = {}) {
         { label: 'High', value: 'high' },
         { label: 'Deep', value: 'xhigh' },
         { label: 'Max', value: 'max' },
-        { label: 'Ultra', value: 'ultra' },
       ],
     }
   }
@@ -5018,7 +5017,6 @@ function getApiMockData(method, params = {}, state = {}) {
         { label: 'High', value: 'high' },
         { label: 'Deep', value: 'xhigh' },
         { label: 'Max', value: 'max' },
-        { label: 'Ultra', value: 'ultra' },
       ],
     }
   }

@@ -45,7 +45,7 @@ const GATEWAY_ERROR_TYPES = {
     label: 'Effort 非法',
     statusHint: '400',
     description:
-      '请求传入的 reasoning_effort 非法，或所选模型不支持该档位；Sol / Terra 支持到 Ultra，Luna 支持到 Max，5.5 支持到 XHigh。',
+      '请求传入的 reasoning_effort 非法，或所选模型不支持该档位；GPT-5.6 支持到 Max，5.5 支持到 XHigh。',
   },
   gateway_error: {
     label: '网关错误',

@@ -161,11 +161,6 @@ const DEFAULT_REASONING_EFFORT_OPTIONS = [
     value: 'max',
     description: '默认使用 max；当前 Sol / Terra / Luna 支持',
   },
-  {
-    label: 'Ultra',
-    value: 'ultra',
-    description: '默认使用 ultra；当前仅 Sol / Terra 支持',
-  },
 ]
 const KEY_DEFAULT_REASONING_EFFORT_OPTIONS = [
   {
@@ -242,7 +237,6 @@ const CODEX_REASONING_EFFORT_OPTIONS = [
   { label: 'High', value: 'high' },
   { label: 'XHigh', value: 'xhigh' },
   { label: 'Max', value: 'max' },
-  { label: 'Ultra', value: 'ultra' },
 ]
 const USAGE_REASONING_EFFORT_FILTER_OPTIONS = [
   { label: '全部 Effort', value: '' },
@@ -3852,7 +3846,7 @@ export default function AdminApiPage({ view = 'dashboard' }) {
               />
               <span className={fieldHintClass}>
                 该设置会覆盖客户端传入的
-                reasoning_effort；关闭默认时保留客户端原始档位。Max / Ultra
+                reasoning_effort；关闭默认时保留客户端原始档位。Max
                 只对目录声明支持的模型生效。
               </span>
             </label>
@@ -4590,8 +4584,8 @@ export default function AdminApiPage({ view = 'dashboard' }) {
             </h3>
             <div className="mt-1 text-sm text-[#7b8780]">
               默认关闭；开启后会覆盖客户端传入的 reasoning_effort，key
-              可单独覆盖或关闭。Max / Ultra 只对目录声明支持的模型生效，
-              不支持时返回 400，不会静默降级。
+              可单独覆盖或关闭。Max 只对目录声明支持的模型生效， 不支持时返回
+              400，不会静默降级。
             </div>
           </div>
           <div

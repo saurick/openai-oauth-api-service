@@ -59,7 +59,6 @@ const CODEX_REASONING_EFFORT_OPTIONS = [
   { label: 'High', value: 'high' },
   { label: 'XHigh', value: 'xhigh' },
   { label: 'Max', value: 'max' },
-  { label: 'Ultra', value: 'ultra' },
 ]
 
 const tableWrapClass = 'overflow-hidden rounded-lg border border-[#dde8df]'

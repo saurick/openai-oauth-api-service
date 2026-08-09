@@ -90,7 +90,7 @@ func TestMapGatewayUpstreamModeForRPCIncludesDefaultReasoningEffort(t *testing.T
 		t.Fatalf("default_reasoning_effort = %#v, want low", got["default_reasoning_effort"])
 	}
 	options, ok := got["reasoning_effort_options"].([]any)
-	if !ok || len(options) != 7 {
+	if !ok || len(options) != 6 {
 		t.Fatalf("missing reasoning_effort_options: %#v", got["reasoning_effort_options"])
 	}
 	values := make([]string, 0, len(options))
@@ -98,7 +98,7 @@ func TestMapGatewayUpstreamModeForRPCIncludesDefaultReasoningEffort(t *testing.T
 		option, _ := raw.(map[string]any)
 		values = append(values, option["value"].(string))
 	}
-	wantValues := []string{"", "low", "medium", "high", "xhigh", "max", "ultra"}
+	wantValues := []string{"", "low", "medium", "high", "xhigh", "max"}
 	if !reflect.DeepEqual(values, wantValues) {
 		t.Fatalf("reasoning_effort_options values = %#v, want %#v", values, wantValues)
 	}

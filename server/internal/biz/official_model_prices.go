@@ -1,5 +1,7 @@
 package biz
 
+import "strings"
+
 const DefaultCodexModelID = "gpt-5.6-sol"
 
 var CodexModelIDs = []string{
@@ -30,7 +32,6 @@ var OfficialModelReasoningEfforts = map[string][]string{
 		GatewayReasoningEffortHigh,
 		GatewayReasoningEffortXHigh,
 		GatewayReasoningEffortMax,
-		GatewayReasoningEffortUltra,
 	},
 	"gpt-5.6-terra": {
 		GatewayReasoningEffortLow,
@@ -38,7 +39,6 @@ var OfficialModelReasoningEfforts = map[string][]string{
 		GatewayReasoningEffortHigh,
 		GatewayReasoningEffortXHigh,
 		GatewayReasoningEffortMax,
-		GatewayReasoningEffortUltra,
 	},
 	"gpt-5.6-luna": {
 		GatewayReasoningEffortLow,
@@ -93,9 +93,13 @@ func OfficialModelReasoningEffortsForModel(modelID string) []string {
 }
 
 func IsOfficialModelReasoningEffortSupported(modelID string, effort string) bool {
+	raw := strings.TrimSpace(effort)
+	if raw == "" {
+		return true
+	}
 	effort = NormalizeGatewayReasoningEffort(effort)
 	if effort == "" {
-		return true
+		return false
 	}
 	efforts, ok := OfficialModelReasoningEfforts[modelID]
 	if !ok {
