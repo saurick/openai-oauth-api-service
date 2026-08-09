@@ -3,6 +3,18 @@
 - 2026-06-04：旧 `progress.md` 已按超过 600 行阈值归档到 `docs/archive/progress-2026-06-04-before-govulncheck.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 - 2026-06-25：旧 `progress.md` 已按超过 80KB 阈值归档到 `docs/archive/progress-2026-06-25-before-skill-scenario-matrix.md`。归档内容只作历史追溯线索，不替代当前代码、README、docs 或部署真源。
 
+## 2026-08-09 生产额度凭据自动恢复、证书续签与 Codex runtime 更新
+
+- 根因：133 的 Codex access token 已于 2026-07-28 过期，旧 `/public/codex/balance` 直接启动 app-server 读取 `account/rateLimits/read`，没有复用 direct backend 已有的 refresh-token 路径，因此持续收到 `401 token_expired`；同时公网 `oauth-api.saurick.me` 证书已于 2026-08-08 13:59:44 UTC 过期，acme.sh 自 2026-07-10 起因宿主机 DNS 解析 Let's Encrypt 超时而连续续签失败。容器、PostgreSQL、代理 failover 和 Codex binary 本身均正常，两个故障互相独立。
+- 完成：额度查询在启动 Codex app-server 前复用 `codexAccessToken`，access token 临近到期或已经到期时使用 refresh token 刷新，并按既有 `0600` 合同写回同一 `auth.json`；refresh token 失效时仍诚实失败，不伪造余额。新增回归覆盖过期 token、刷新请求、新 token 持久化和额度成功读取。
+- 完成：Codex runtime 健康检查增加公网严格 TLS 握手、证书 `notAfter` 与默认 21 天预警；健康脚本、installer、API / 部署 / 运维文档同步更新。镜像内固定 Codex 从 `0.144.1` 提升到 `0.147.0`，避免容器重建后回退。发布构建同时发现 `a07e4e5` 引入端口真源后 Dockerfile 未复制 `config/dev-ports.env`，已补齐构建上下文并把合同测试纳入 full QA。
+- 证书恢复：公网宿主机持久 DNS 已收口到 `/etc/netplan/60-codex-dns.yaml` 的 `223.5.5.5`、`119.29.29.29`、`1.1.1.1`；旧证书与配置备份在 `/root/ops-backups/oauth-api-cert-20260809T043846Z`。只对 `oauth-api.saurick.me` 执行 ECC 强制续签，Nginx 配置检查和 reload 成功；新证书有效期为 2026-08-09 03:40:39 UTC 至 2026-11-07 03:40:38 UTC。
+- 验证：定向 Go 回归、Python TLS 回归、shell 语法、Docker web-builder 合同测试、`git diff --check` 与两次 pre-push `bash scripts/qa/full.sh` 全部通过，包含 secrets、前端 18/18、全量 Go test/build。govulncheck 按既有非阻断策略报告 `grpc@v1.80.0`、`x/text@v0.36.0`、`otel@v1.43.0` 三项当前可达依赖告警，本轮未扩大到依赖升级。
+- Git 与部署：功能提交 `a716eee844523755c098d5a4546ff49681513636`、构建修复提交 `3cd35ba56d603ead57af132f9bcdcc09d174c0ec` 均已推送 `origin/main`。最终在本机构建并验证 linux/amd64 镜像 `oauth-api-service-server:20260809T045013Z-3cd35ba5-quota-token-refresh`，上传至 133 的 `/data/openai-oauth-api-service/releases/20260809T045013Z-3cd35ba5-quota-token-refresh`；远端逐项校验发布包 SHA-256、Atlas migration status 当前版本 `20260604123931` / pending 0 后，仅重建 `app-server`，PostgreSQL 未重启、低配服务器未执行构建。
+- 线上验收：容器运行 SHA `3cd35ba56d60`、restart 0；Codex 已显式执行 latest 安装，before / latest / after 均为 `0.147.0`。远端与公网 `/healthz`、`/readyz`、`/public/codex/balance` 均为 HTTP 200，额度 `status=ok`、非 stale、3 个限额分组、重置券 `status=ok`；当前 access token 有效至 2026-08-19 04:39:35 UTC。通过临时 key 对 `gpt-5.6-sol` 的真实 `/v1/responses` 请求返回 `DEPLOY_QUOTA_RECOVERY_OK_20260809`，usage `id=61945` 记录 `200 / codex_backend`，临时 key 已删除且残留 0。新版 runtime timer 已启用，10 项检查全部 `ok`，公网证书剩余约 90 天，容器启动后无 WARN / ERROR / PANIC / FATAL。
+- 回滚：旧运行镜像 `oauth-api-service-server:20260711T051018Z-0c936a5f-client-config-profile-v2` 仍保留；旧 `.env` 位于 `/data/openai-oauth-api-service/compose/.env.bak.20260809T045013Z-3cd35ba5-quota-token-refresh`，刷新前登录态位于 `/root/ops-backups/oauth-api-service-20260809T045013Z-3cd35ba5-quota-token-refresh/auth.json.pre-refresh`。本轮未执行 image / builder / volume prune，回滚点未清理。
+- 后续风险：三项 govulncheck 依赖告警需要单独评估兼容性并升级，不应与本次额度、证书或发布恢复混成未经验证的依赖大升级；公网额度接口仍是无鉴权只读接口，如需限制可见范围，应在入口层单独增加 allowlist 或查询 token。
+
 ## 2026-07-11 客户端配置生成器同步 Codex profile v2 与四模型
 
 - 完成：客户端配置生成器模型选择收口为 `gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5`，Codex 与 opencode 默认模型联动更新；opencode provider 只生成这四个模型及 low / medium / high / xhigh variants，不再混入目录外模型。
