@@ -96,6 +96,7 @@ bash scripts/ops/install-codex-runtime-health-check.sh
 - `codex --version`；默认 `CODEX_RUNTIME_MODE=auto`，宿主机无 `codex` 时改查 app-server 容器内的 `codex`
 - `/healthz`、`/readyz`
 - `/public/codex/balance`，其中 `stale=true` 记为 warning
+- `https://oauth-api.saurick.me` 的严格 TLS 握手与证书剩余天数；默认剩余 21 天进入 warning，握手或证书校验失败记为 fail
 - `openai-oauth-api-service-server` 容器运行状态
 - Codex 上游代理 failover 配置检查
 - 根分区磁盘余量
@@ -133,6 +134,27 @@ CODEX_RUNTIME_UPGRADE_COMMAND='npm install -g @openai/codex@latest'
 ```
 
 不同安装方式的服务器迁移时，只需要调整 `CODEX_RUNTIME_MODE`、`CODEX_RUNTIME_BIN`、`CODEX_RUNTIME_LATEST_VERSION_COMMAND` 和 `CODEX_RUNTIME_UPGRADE_COMMAND`，不需要修改 app-server 代码。当前 133 Codex 随 app-server 容器运行，timer 会升级运行中容器内的 Codex；后续 app-server 镜像重建后，仍以镜像内版本为启动基线，再由 timer 拉到 latest。
+
+运行时 auto-upgrade 只用于当前容器应急同步，不是可复现发布真源。确认新版本稳定后，应同步更新 `server/Dockerfile` 的固定 Codex 版本并重新构建、部署镜像，避免下一次容器重建回退。
+
+可覆盖公网证书检查目标和预警窗口：
+
+```bash
+OAUTH_API_PUBLIC_BASE_URL=https://oauth-api.saurick.me
+CODEX_RUNTIME_PUBLIC_TLS_WARN_DAYS=21
+```
+
+## Codex 额度凭据恢复
+
+`/public/codex/balance` 在启动 app-server 前会复用 direct backend 的凭据刷新路径：access token 临近到期或已经到期时，通过 refresh token 换取新 token 并以 `0600` 写回同一 `auth.json`。正常情况下不需要人工周期性重新登录。
+
+如果日志仍显示 `token_expired` 且 token refresh 明确失败，说明 refresh token 已失效、撤销或上游拒绝刷新。此时不要复制 token 到日志或聊天；应在目标服务器通过 Codex 官方登录命令重新授权，再依次验证 `codex login status`、本机 `/public/codex/balance` 与公网严格 TLS 接口。
+
+## 公网证书续签排障
+
+宿主机 acme.sh / Certbot 续签前先验证 ACME API 的域名解析和 HTTP-01 路径。`curl` error 28 且耗时停在 resolving 表示 DNS 层失败，不是 challenge 或 Nginx 证书安装失败；先核对 netplan/systemd-networkd 与 `resolvectl status` 的实际 DNS，再执行单域续签。共享宿主机不要为本项目无差别强制续签其他域名。
+
+续签后必须同时验证：证书 `notAfter`、`nginx -t`、Nginx reload、严格 TLS `/healthz` 与 `/public/codex/balance`。不得用 `curl -k` 作为最终验收。
 
 后端：
 

@@ -161,10 +161,11 @@ HTTP 路由：
 鉴权：
 
 - 不要求管理员登录，也不要求下游 `ogw_` key。
-- 服务端使用服务器自己的 Codex 登录态，通过 Codex app-server 的 `account/rateLimits/read` 读取限额和 credits。
+- 服务端使用服务器自己的 Codex 登录态。读取前会复用 direct backend 的统一凭据入口检查 access token，临近到期或已经到期时通过 refresh token 刷新并写回同一 `auth.json`，再通过 Codex app-server 的 `account/rateLimits/read` 读取限额和 credits。
 - 服务端使用同一服务器 Codex 登录态只读获取 `rate-limit-reset-credits`，并只返回展示所需字段。
 - 默认使用 30 秒内存缓存，避免公开查询频繁启动 Codex app-server 子进程；可通过 `CODEX_BALANCE_CACHE_SECONDS` 调整。
 - 如果实时读取 Codex app-server 或 ChatGPT usage 接口临时失败，但进程内已有上次成功结果，接口会返回 HTTP 200 和上次成功结果，并带 `stale=true`、`stale_reason=codex_balance_query_failed` 与 `last_error_at`；首次启动且没有成功缓存时仍返回 `codex_balance_query_failed`。如果只有重置券读取失败，接口仍返回余额和限额窗口，并将 `rate_limit_reset_credits.status` 置为 `unavailable`。
+- 如果 refresh token 已失效或被撤销，自动刷新会失败且不会伪造余额；维护者需在服务器重新完成 Codex 登录，再复测本接口。
 
 返回字段：
 

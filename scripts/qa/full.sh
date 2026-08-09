@@ -13,6 +13,7 @@ print_help() {
   skill-health: 项目 Skill 结构、metadata、索引和引用
   error-code-sync: 前端生成错误码同步检查
   error-codes: 统一错误码魔法数字检查
+  ops: Codex runtime 公网 TLS 健康检查回归
   web: pnpm lint -> pnpm css -> (若存在 test 脚本则 pnpm test) -> pnpm build
   server: go test ./... -> make build
 
@@ -56,6 +57,11 @@ if ! command -v go >/dev/null 2>&1; then
 	exit 1
 fi
 
+if ! command -v python3 >/dev/null 2>&1; then
+	echo "[qa:full] 未找到 python3，无法验证 Codex runtime 健康检查"
+	exit 1
+fi
+
 if [ -x "$ROOT_DIR/scripts/qa/db-guard.sh" ]; then
 	bash "$ROOT_DIR/scripts/qa/db-guard.sh"
 fi
@@ -77,6 +83,9 @@ fi
 if [ -x "$ROOT_DIR/scripts/qa/govulncheck.sh" ]; then
 	bash "$ROOT_DIR/scripts/qa/govulncheck.sh"
 fi
+
+echo "[qa:full] 运行 Codex runtime 健康检查回归"
+python3 "$ROOT_DIR/scripts/ops/codex_runtime_health_check_test.py"
 
 echo "[qa:full] 运行 web 全量检查"
 (

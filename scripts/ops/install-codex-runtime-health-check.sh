@@ -19,6 +19,7 @@ print_help() {
   - 检查 @openai/codex latest，发现新版本就安装 latest
   - 不重启 app-server
   - 不重启 Docker、mihomo 或 Nginx
+  - 校验公网 HTTPS 证书，默认剩余 21 天进入 warning
   - 写入 /var/lib/codex-runtime-health/state.json
   - 追加 /var/log/codex-runtime-health.log
 
@@ -26,6 +27,8 @@ print_help() {
   OAUTH_API_COMPOSE_DIR=/data/openai-oauth-api-service/compose
   OAUTH_API_BASE_URL=http://127.0.0.1:8400
   OAUTH_API_CONTAINER=openai-oauth-api-service-server
+  OAUTH_API_PUBLIC_BASE_URL=https://oauth-api.saurick.me
+  CODEX_RUNTIME_PUBLIC_TLS_WARN_DAYS=21
   CODEX_RUNTIME_BIN=codex
   CODEX_RUNTIME_LATEST_VERSION_COMMAND='npm view @openai/codex version'
   CODEX_RUNTIME_UPGRADE_COMMAND='npm install -g @openai/codex@latest'

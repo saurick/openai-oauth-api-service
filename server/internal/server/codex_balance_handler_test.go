@@ -243,6 +243,97 @@ done
 	}
 }
 
+func TestCodexBalanceRouteRefreshesExpiredCredentialBeforeRateLimitRead(t *testing.T) {
+	expiredToken := testJWT(time.Now().Add(-time.Hour).Unix(), "acct_test")
+	freshToken := testJWT(time.Now().Add(time.Hour).Unix(), "acct_test")
+	authPath := filepath.Join(t.TempDir(), "auth.json")
+	if err := os.WriteFile(authPath, []byte(`{"tokens":{"access_token":"`+expiredToken+`","refresh_token":"old-refresh","account_id":"acct_test"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	refreshCalls := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/token":
+			refreshCalls++
+			var body map[string]string
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body["grant_type"] != "refresh_token" || body["refresh_token"] != "old-refresh" {
+				t.Fatalf("unexpected refresh request: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"access_token":  freshToken,
+				"refresh_token": "new-refresh",
+			})
+		case "/reset-credits":
+			if got := r.Header.Get("Authorization"); got != "Bearer "+freshToken {
+				t.Fatalf("Authorization header = %q", got)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"available_count":    0,
+				"total_earned_count": 0,
+				"credits":            []any{},
+			})
+		default:
+			t.Fatalf("unexpected path = %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(upstream.Close)
+
+	bin := filepath.Join(t.TempDir(), "fake-codex")
+	script := `#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"initialize"'*)
+      echo '{"id":1,"result":{}}'
+      ;;
+    *'"method":"account/rateLimits/read"'*)
+      if grep -Fq "$CODEX_TEST_FRESH_TOKEN" "$CODEX_AUTH_FILE"; then
+        echo '{"id":2,"result":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":12},"credits":{"balance":"6"}}}}'
+      else
+        echo '{"id":2,"error":{"code":-32000,"message":"Provided authentication token is expired","data":{"code":"token_expired"}}}'
+      fi
+      exit 0
+      ;;
+  esac
+done
+`
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("CODEX_APP_SERVER_BIN", bin)
+	t.Setenv("CODEX_AUTH_FILE", authPath)
+	t.Setenv("CODEX_BALANCE_TIMEOUT_SECONDS", "5")
+	t.Setenv("CODEX_TEST_FRESH_TOKEN", freshToken)
+	t.Setenv("CODEX_REFRESH_TOKEN_URL_OVERRIDE", upstream.URL+"/oauth/token")
+	t.Setenv("CODEX_RATE_LIMIT_RESET_CREDITS_URL", upstream.URL+"/reset-credits")
+
+	handler := &codexBalanceHTTPHandler{log: klog.NewHelper(&captureLogger{})}
+	req := httptest.NewRequest(http.MethodGet, "/public/codex/balance", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(context.Background(), recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if refreshCalls != 1 {
+		t.Fatalf("refresh calls = %d, want 1", refreshCalls)
+	}
+	auth, _, err := loadCodexAuthFile(authPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auth.Tokens.AccessToken != freshToken || auth.Tokens.RefreshToken != "new-refresh" {
+		t.Fatalf("refreshed tokens were not persisted")
+	}
+	if auth.LastRefresh == "" {
+		t.Fatal("last_refresh was not persisted")
+	}
+}
+
 func TestCodexBalanceRouteKeepsBalanceWhenResetCreditsFail(t *testing.T) {
 	bin := filepath.Join(t.TempDir(), "fake-codex")
 	script := `#!/bin/sh

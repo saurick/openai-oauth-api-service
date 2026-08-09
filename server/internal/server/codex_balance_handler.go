@@ -191,6 +191,14 @@ func readCodexRateLimits(ctx context.Context) (*codexRateLimitsReadResponse, int
 	reqCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	// Codex app-server reads auth.json directly but does not reliably refresh an
+	// expired access token for account/rateLimits/read. Reuse the backend
+	// client's existing refresh-token path before starting the child process so
+	// the balance endpoint and normal gateway calls share one credential truth.
+	if _, _, err := defaultCodexBackendClient.codexAccessToken(reqCtx, false); err != nil {
+		return nil, 0, fmt.Errorf("prepare codex credentials for rate limits: %w", err)
+	}
+
 	result, err := readCodexRateLimitsOnce(reqCtx)
 	if err == nil {
 		return result, 1, nil

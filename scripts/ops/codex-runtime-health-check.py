@@ -7,10 +7,13 @@ import argparse
 import json
 import os
 import shutil
+import socket
+import ssl
 import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -45,6 +48,10 @@ UPGRADE_COMMAND = os.getenv("CODEX_RUNTIME_UPGRADE_COMMAND", "")
 REQUEST_TIMEOUT_SECONDS = float(os.getenv("CODEX_RUNTIME_HEALTH_TIMEOUT_SECONDS", "20"))
 DISK_WARN_PERCENT = float(os.getenv("CODEX_RUNTIME_DISK_WARN_PERCENT", "90"))
 COMMAND_OUTPUT_MAX_CHARS = int(os.getenv("CODEX_RUNTIME_COMMAND_OUTPUT_MAX_CHARS", "4000"))
+PUBLIC_BASE_URL = os.getenv(
+    "OAUTH_API_PUBLIC_BASE_URL", "https://oauth-api.saurick.me"
+).rstrip("/")
+PUBLIC_TLS_WARN_DAYS = float(os.getenv("CODEX_RUNTIME_PUBLIC_TLS_WARN_DAYS", "21"))
 
 
 def read_compose_env() -> dict[str, str]:
@@ -210,6 +217,42 @@ def http_get(path: str) -> dict[str, Any]:
         }
 
 
+def public_tls_details(base_url: str) -> dict[str, Any]:
+    parsed = urllib.parse.urlparse(base_url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        return {"ok": False, "error": "public base URL must use https with a hostname"}
+
+    host = parsed.hostname
+    port = parsed.port or 443
+    started = time.time()
+    try:
+        context = ssl.create_default_context()
+        with socket.create_connection((host, port), timeout=REQUEST_TIMEOUT_SECONDS) as raw_socket:
+            with context.wrap_socket(raw_socket, server_hostname=host) as tls_socket:
+                certificate = tls_socket.getpeercert()
+        not_after_raw = certificate.get("notAfter", "")
+        if not not_after_raw:
+            return {"ok": False, "host": host, "port": port, "error": "certificate has no notAfter"}
+        not_after_epoch = ssl.cert_time_to_seconds(not_after_raw)
+        days_remaining = (not_after_epoch - time.time()) / 86400
+        return {
+            "ok": True,
+            "host": host,
+            "port": port,
+            "not_after": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(not_after_epoch)),
+            "days_remaining": round(days_remaining, 2),
+            "elapsed_ms": int((time.time() - started) * 1000),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "host": host,
+            "port": port,
+            "elapsed_ms": int((time.time() - started) * 1000),
+            "error": str(exc),
+        }
+
+
 def add_check(report: dict[str, Any], name: str, status: str, details: dict[str, Any]) -> None:
     report["checks"].append({"name": name, "status": status, "details": details})
     rank = {"ok": 0, "warn": 1, "fail": 2}
@@ -273,6 +316,21 @@ def check_http(report: dict[str, Any], strict_balance: bool) -> None:
     if balance_status == "warn" and strict_balance:
         balance_status = "fail"
     add_check(report, "codex_balance", balance_status, balance)
+
+
+def check_public_tls(report: dict[str, Any]) -> None:
+    if not PUBLIC_BASE_URL:
+        add_check(report, "public_tls", "warn", {"skipped": True, "reason": "disabled"})
+        return
+
+    details = public_tls_details(PUBLIC_BASE_URL)
+    if not details.get("ok"):
+        add_check(report, "public_tls", "fail", details)
+        return
+    days_remaining = float(details.get("days_remaining", 0))
+    status = "warn" if days_remaining <= PUBLIC_TLS_WARN_DAYS else "ok"
+    details["warn_days"] = PUBLIC_TLS_WARN_DAYS
+    add_check(report, "public_tls", status, details)
 
 
 def check_docker(report: dict[str, Any]) -> None:
@@ -535,6 +593,7 @@ def build_report(strict_balance: bool) -> dict[str, Any]:
     report["codex_update_available"] = codex["update_available"]
     check_docker(report)
     check_http(report, strict_balance)
+    check_public_tls(report)
     check_failover(report)
     check_disk(report)
     return report
