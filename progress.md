@@ -6,11 +6,11 @@
 ## 2026-08-09 CodexBar 统计口径与额度节奏增强
 
 - 真源核对：本机 CodexBar 为 `0.48.0`、源码提交 `5bd587850`。其普通 pace 使用“实际已用比例 - 窗口时间进度”，窗口前 3% 不预测，并按当前速率估算是否会在重置前用尽；Automatic 还会使用最多 8 周账户额度历史。当前服务没有账户级额度历史真源，因此只复用可复核的线性算法，不伪称历史个性化预测。
-- 完成：`/admin-codex-balance` 的 5 小时 / 每周窗口改为展示已用比例、相对重置时间、可持续节奏标记和预计用尽 / 可持续到重置文案；上游额度、套餐、reset credits 仍只读 `/public/codex/balance`，不由本地 usage 反推。
+- 完成：`/admin-codex-balance` 的额度窗口展示已用比例、相对重置时间、可持续节奏标记和预计用尽 / 可持续到重置文案；窗口标签依 `window_duration_mins` 真值推导，不再假设 primary 固定是 5 小时。上游额度、套餐、reset credits 仍只读 `/public/codex/balance`，不由本地 usage 反推。
 - 完成：同页新增“本服务调用估算”，复用管理员 `api.summary` 的 Today / 30d 汇总和 `api.usage_buckets group_by=day_model`，展示今日 / 30 天费用估算、最近有记录日 / 30 天 Token、每日柱图、主模型和请求数。主模型在全部价格可用时按费用、存在任一缺价时按 Token 排名；价格缺失保持未知。页面明确说明只统计经本服务落库的 usage、不是 Codex 订阅账单，也不推测当前接口未提供的账号邮箱或续费日。
-- 验证：7 条统计 / pace 单测及前端 25/25 通过，实际量级的大额费用格式已纳入回归；desktop / mobile `style:l1`、人工截图与两次 `bash scripts/qa/full.sh` 全部通过。首轮生产 Playwright 发现动态小数位越界会使页面崩溃，已收口到共享 formatter 并重新发布；最终桌面、390px 暗色页面无横向溢出、console 0 错误。govulncheck 仍非阻断报告 gRPC、x/text、OpenTelemetry 三项可达依赖告警。
-- Git 与部署：功能提交 `aad8e083c2f3` 与真实数据格式修复 `4d8ef4a5a036` 已推送 `origin/main`；最终 linux/amd64 镜像 `oauth-api-service-server:20260809T053627Z-4d8ef4a5-codexbar-usage-final` 经本地验证、远端 SHA-256 校验与 Atlas `20260604123931` / pending 0 后仅重建 `app-server`，PostgreSQL 未重启。运行时自动升级检查确认 Codex before / latest / after 均为 `0.147.0`。
-- 线上验收与回滚：远端与公网 health / ready 正常，余额 `status=ok`、`stale=false`、`codex` / `codex_bengalfox` 和 2 张可用重置券均可读；管理员 30d summary 和 `day_model` 返回非空统计，容器 restart 0，启动后 WARN / ERROR / PANIC / FATAL 为 0。保留上一稳定镜像 `oauth-api-service-server:20260809T045013Z-3cd35ba5-quota-token-refresh`、发布包与 `.env.bak.20260809T052520Z-aad8e083-codexbar-usage`，未执行 image / builder / volume prune。
+- 验证：8 条统计 / pace 单测及前端 26/26 通过，真实大额费用与 primary=10080 分钟 / secondary=null 均已纳入回归；desktop / mobile `style:l1`、人工截图与多次 `bash scripts/qa/full.sh` 全部通过。生产 Playwright 先后捕获大额格式崩溃与 primary 周窗口误标为 5 小时两个真实数据问题，最终桌面、390px 暗色页面无溢出、console 0 错误。govulncheck 仍非阻断报告三项可达依赖告警。
+- Git 与部署：功能 `aad8e083c2f3`、大额格式修复 `4d8ef4a5a036` 和窗口真值修复 `2a7e2fa1c552` 已推送 `origin/main`；最终 linux/amd64 镜像 `oauth-api-service-server:20260809T055031Z-2a7e2fa1-codexbar-usage-truth` 经本地验证、远端 SHA-256 校验与 Atlas `20260604123931` / pending 0 后仅重建 `app-server`，PostgreSQL 未重启。运行时自动升级检查确认 Codex before / latest / after 均为 `0.147.0`。
+- 线上验收与回滚：远端与公网 health / ready 正常，余额 `status=ok`、`stale=false`、两个 primary 均为 10080 分钟并正确显示“每周额度”，2 张可用重置券可读；管理员 30d summary / `day_model` 非空，容器 restart 0，启动后 WARN / ERROR / PANIC / FATAL 为 0。保留上一稳定镜像 `oauth-api-service-server:20260809T045013Z-3cd35ba5-quota-token-refresh`、发布包与 `.env.bak.20260809T052520Z-aad8e083-codexbar-usage`，未执行 image / builder / volume prune。
 
 ## 2026-08-09 生产额度凭据自动恢复、证书续签与 Codex runtime 更新
 
