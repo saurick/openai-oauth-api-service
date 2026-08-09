@@ -16,6 +16,17 @@ function clampPercent(value) {
   return Math.min(100, Math.max(0, asNonNegativeNumber(value)))
 }
 
+export function formatCodexUsageCost(value) {
+  const number = Number(value)
+  if (value == null || !Number.isFinite(number)) return '未配置价格'
+  return new Intl.NumberFormat('en-US', {
+    currency: 'USD',
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: 'currency',
+  }).format(number)
+}
+
 function toDateMilliseconds(value) {
   if (value == null || value === '') return null
   if (value instanceof Date) return value.getTime()

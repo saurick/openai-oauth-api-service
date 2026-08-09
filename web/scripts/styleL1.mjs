@@ -4916,7 +4916,8 @@ function getApiMockData(method, params = {}, state = {}) {
         backend_requests: 206,
         cli_requests: 92,
         codex_requests: 168,
-        estimated_cost_usd: 1.4288,
+        estimated_cost_usd:
+          seconds > 2 * 24 * 60 * 60 ? 1545.710638 : 32.032506,
         fallback_requests: 7,
         failed_requests: 11,
         input_tokens: 86410,

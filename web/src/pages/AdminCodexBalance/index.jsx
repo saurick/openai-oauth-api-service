@@ -6,6 +6,7 @@ import { ADMIN_BASE_PATH } from '@/common/utils/adminRpc'
 import {
   buildCodexUsageOverview,
   calculateRateLimitPace,
+  formatCodexUsageCost,
 } from '@/common/utils/codexUsageStats'
 import { getActionErrorMessage } from '@/common/utils/errorMessage'
 import { JsonRpc } from '@/common/utils/jsonRpc'
@@ -59,17 +60,6 @@ function fmtCompact(value) {
   return new Intl.NumberFormat('zh-CN', {
     maximumFractionDigits: 1,
     notation: 'compact',
-  }).format(number)
-}
-
-function fmtCost(value) {
-  const number = Number(value)
-  if (value == null || !Number.isFinite(number)) return '未配置价格'
-  return new Intl.NumberFormat('en-US', {
-    currency: 'USD',
-    maximumFractionDigits: number >= 100 ? 0 : 2,
-    minimumFractionDigits: 2,
-    style: 'currency',
   }).format(number)
 }
 
@@ -344,7 +334,9 @@ function UsageBars({ daily }) {
     <div className="mt-5" data-codex-usage-chart>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--admin-muted)]">
         <span>{useCost ? '每日费用估算' : '每日 Token'}</span>
-        <span>峰值 {useCost ? fmtCost(maximum) : fmtCompact(maximum)}</span>
+        <span>
+          峰值 {useCost ? formatCodexUsageCost(maximum) : fmtCompact(maximum)}
+        </span>
       </div>
       <div
         aria-label={`近 30 天${useCost ? '费用估算' : 'Token'}柱状图`}
@@ -363,7 +355,7 @@ function UsageBars({ daily }) {
               : 3
           const label = `${item.date}：${
             useCost
-              ? fmtCost(item.costUSD)
+              ? formatCodexUsageCost(item.costUSD)
               : `${fmtCompact(item.totalTokens)} Token`
           } · ${fmtCompact(item.totalRequests)} 次请求`
           return (
@@ -428,7 +420,7 @@ function UsageEstimatePanel({ error, loading, overview }) {
                 今日费用估算
               </div>
               <div className="mt-1 text-2xl font-bold text-[var(--admin-text)]">
-                {fmtCost(overview.todayCostUSD)}
+                {formatCodexUsageCost(overview.todayCostUSD)}
               </div>
             </div>
             <div className="rounded-lg border border-[var(--admin-border-soft)] bg-[var(--admin-surface-muted)] p-4">
@@ -436,7 +428,7 @@ function UsageEstimatePanel({ error, loading, overview }) {
                 近 30 天费用估算
               </div>
               <div className="mt-1 text-2xl font-bold text-[var(--admin-text)]">
-                {fmtCost(overview.periodCostUSD)}
+                {formatCodexUsageCost(overview.periodCostUSD)}
               </div>
             </div>
             <div className="rounded-lg border border-[var(--admin-border-soft)] bg-[var(--admin-surface-muted)] p-4">

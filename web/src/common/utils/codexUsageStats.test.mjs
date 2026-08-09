@@ -10,14 +10,24 @@ function loadModule() {
   const transformed = source
     .replace(/export function /g, 'function ')
     .concat(
-      '\nmodule.exports = { calculateRateLimitPace, buildCodexUsageOverview };\n'
+      '\nmodule.exports = { calculateRateLimitPace, buildCodexUsageOverview, formatCodexUsageCost };\n'
     )
   const sandbox = { module: { exports: {} }, exports: {} }
   vm.runInNewContext(transformed, sandbox, { filename: filePath })
   return sandbox.module.exports
 }
 
-const { buildCodexUsageOverview, calculateRateLimitPace } = loadModule()
+const {
+  buildCodexUsageOverview,
+  calculateRateLimitPace,
+  formatCodexUsageCost,
+} = loadModule()
+
+test('codexUsageStats: 真实大额费用保持合法的两位小数格式', () => {
+  assert.equal(formatCodexUsageCost(1545.710638), '$1,545.71')
+  assert.equal(formatCodexUsageCost(32.032506), '$32.03')
+  assert.equal(formatCodexUsageCost(null), '未配置价格')
+})
 
 test('codexUsageStats: 线性节奏允许正常状态同时预测重置前用尽', () => {
   const now = Date.parse('2026-08-09T00:00:00Z')
