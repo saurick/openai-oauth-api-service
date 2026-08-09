@@ -188,6 +188,8 @@ const scenarios = [
       await expectText(page, '强制 CLI')
       await expectText(page, '全局默认推理档位')
       await expectText(page, '默认关闭')
+      await expectText(page, 'Max')
+      await expectText(page, 'Ultra')
       await expectNoText(page, '最近上游请求')
       await expectNoText(page, '每日模型汇总')
       await expectNoText(page, '会话聚合')
@@ -220,6 +222,17 @@ const scenarios = [
         return button?.getAttribute('aria-pressed') === 'true'
       })
       await effortGroup
+        .getByRole('button', { name: 'Max', exact: true })
+        .click()
+      await page.waitForFunction(() => {
+        const button = [
+          ...document.querySelectorAll(
+            '[aria-label="全局默认推理档位"] button'
+          ),
+        ].find((node) => node.textContent.trim() === 'Max')
+        return button?.getAttribute('aria-pressed') === 'true'
+      })
+      await effortGroup
         .getByRole('button', { name: '关闭', exact: true })
         .click()
       await page.waitForFunction(() => {
@@ -238,9 +251,28 @@ const scenarios = [
             (call) =>
               call.method === 'gateway_upstream_set' &&
               call.params?.default_reasoning_effort === 'low'
+          ) &&
+          calls.some(
+            (call) =>
+              call.method === 'gateway_upstream_set' &&
+              call.params?.default_reasoning_effort === 'max'
           ),
         `admin-upstream-desktop 未调用上游策略读写接口: ${JSON.stringify(calls)}`
       )
+    },
+  },
+  {
+    name: 'admin-upstream-mobile',
+    path: '/admin-upstream',
+    viewport: { width: 390, height: 844 },
+    adminAuth: true,
+    mockApiRpc: true,
+    verify: async (page) => {
+      await expectText(page, '上游策略')
+      await expectText(page, '全局默认推理档位')
+      await expectText(page, 'Max')
+      await expectText(page, 'Ultra')
+      await assertAdminChrome(page, 'admin-upstream-mobile')
     },
   },
   {
@@ -4951,6 +4983,8 @@ function getApiMockData(method, params = {}, state = {}) {
         { label: 'Medium', value: 'medium' },
         { label: 'High', value: 'high' },
         { label: 'Deep', value: 'xhigh' },
+        { label: 'Max', value: 'max' },
+        { label: 'Ultra', value: 'ultra' },
       ],
     }
   }
@@ -4983,6 +5017,8 @@ function getApiMockData(method, params = {}, state = {}) {
         { label: 'Medium', value: 'medium' },
         { label: 'High', value: 'high' },
         { label: 'Deep', value: 'xhigh' },
+        { label: 'Max', value: 'max' },
+        { label: 'Ultra', value: 'ultra' },
       ],
     }
   }

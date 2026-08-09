@@ -39,6 +39,8 @@ const (
 	GatewayReasoningEffortMed   = "medium"
 	GatewayReasoningEffortHigh  = "high"
 	GatewayReasoningEffortXHigh = "xhigh"
+	GatewayReasoningEffortMax   = "max"
+	GatewayReasoningEffortUltra = "ultra"
 )
 
 var (
@@ -715,6 +717,10 @@ func NormalizeGatewayReasoningEffort(effort string) string {
 		return GatewayReasoningEffortHigh
 	case GatewayReasoningEffortXHigh:
 		return GatewayReasoningEffortXHigh
+	case GatewayReasoningEffortMax:
+		return GatewayReasoningEffortMax
+	case GatewayReasoningEffortUltra:
+		return GatewayReasoningEffortUltra
 	default:
 		return ""
 	}
@@ -1352,7 +1358,7 @@ func (uc *GatewayUsecase) GetEffectiveReasoningEffort(ctx context.Context, key *
 		switch keyDefault {
 		case GatewayReasoningEffortNone:
 			return requested, nil
-		case GatewayReasoningEffortLow, GatewayReasoningEffortMed, GatewayReasoningEffortHigh, GatewayReasoningEffortXHigh:
+		case GatewayReasoningEffortLow, GatewayReasoningEffortMed, GatewayReasoningEffortHigh, GatewayReasoningEffortXHigh, GatewayReasoningEffortMax, GatewayReasoningEffortUltra:
 			return keyDefault, nil
 		}
 	}

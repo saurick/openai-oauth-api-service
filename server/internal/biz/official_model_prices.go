@@ -16,6 +16,45 @@ var OfficialModelContextWindows = map[string]int64{
 	"gpt-5.5":           1_050_000,
 }
 
+var OfficialModelDefaultReasoningEfforts = map[string]string{
+	DefaultCodexModelID: GatewayReasoningEffortLow,
+	"gpt-5.6-terra":     GatewayReasoningEffortMed,
+	"gpt-5.6-luna":      GatewayReasoningEffortMed,
+	"gpt-5.5":           GatewayReasoningEffortMed,
+}
+
+var OfficialModelReasoningEfforts = map[string][]string{
+	DefaultCodexModelID: {
+		GatewayReasoningEffortLow,
+		GatewayReasoningEffortMed,
+		GatewayReasoningEffortHigh,
+		GatewayReasoningEffortXHigh,
+		GatewayReasoningEffortMax,
+		GatewayReasoningEffortUltra,
+	},
+	"gpt-5.6-terra": {
+		GatewayReasoningEffortLow,
+		GatewayReasoningEffortMed,
+		GatewayReasoningEffortHigh,
+		GatewayReasoningEffortXHigh,
+		GatewayReasoningEffortMax,
+		GatewayReasoningEffortUltra,
+	},
+	"gpt-5.6-luna": {
+		GatewayReasoningEffortLow,
+		GatewayReasoningEffortMed,
+		GatewayReasoningEffortHigh,
+		GatewayReasoningEffortXHigh,
+		GatewayReasoningEffortMax,
+	},
+	"gpt-5.5": {
+		GatewayReasoningEffortLow,
+		GatewayReasoningEffortMed,
+		GatewayReasoningEffortHigh,
+		GatewayReasoningEffortXHigh,
+	},
+}
+
 // OfficialModelPrices keeps Codex picker model prices that have published API token rates.
 // Sources: OpenAI API model docs and Codex rate card, checked 2026-07-11.
 var OfficialModelPrices = []*GatewayModelPrice{
@@ -42,6 +81,32 @@ func CodexModelIDSet() map[string]bool {
 
 func OfficialModelContextWindowTokens(modelID string) int64 {
 	return OfficialModelContextWindows[modelID]
+}
+
+func OfficialModelDefaultReasoningEffort(modelID string) string {
+	return OfficialModelDefaultReasoningEfforts[modelID]
+}
+
+func OfficialModelReasoningEffortsForModel(modelID string) []string {
+	efforts := OfficialModelReasoningEfforts[modelID]
+	return append([]string(nil), efforts...)
+}
+
+func IsOfficialModelReasoningEffortSupported(modelID string, effort string) bool {
+	effort = NormalizeGatewayReasoningEffort(effort)
+	if effort == "" {
+		return true
+	}
+	efforts, ok := OfficialModelReasoningEfforts[modelID]
+	if !ok {
+		return true
+	}
+	for _, supported := range efforts {
+		if effort == supported {
+			return true
+		}
+	}
+	return false
 }
 
 func RecommendedGatewayContextPolicyForModel(modelID string) GatewayModelContextPolicy {

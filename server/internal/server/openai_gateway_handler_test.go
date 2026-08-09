@@ -536,14 +536,18 @@ func TestChatUsagePayloadIncludesCachedAndReasoningTokens(t *testing.T) {
 }
 
 func TestParseRequestReasoningEffort(t *testing.T) {
-	body := []byte(`{"model":"gpt-5.5","stream":true,"reasoning_effort":"xhigh"}`)
+	for _, wantEffort := range []string{"low", "medium", "high", "xhigh", "max", "ultra"} {
+		t.Run(wantEffort, func(t *testing.T) {
+			body := []byte(`{"model":"gpt-5.6-sol","stream":true,"reasoning_effort":"` + wantEffort + `"}`)
 
-	model, stream, effort, err := parseRequestModelStreamAndReasoningEffort(body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if model != "gpt-5.5" || !stream || effort != "xhigh" {
-		t.Fatalf("model=%q stream=%v effort=%q", model, stream, effort)
+			model, stream, effort, err := parseRequestModelStreamAndReasoningEffort(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if model != "gpt-5.6-sol" || !stream || effort != wantEffort {
+				t.Fatalf("model=%q stream=%v effort=%q", model, stream, effort)
+			}
+		})
 	}
 }
 
@@ -569,11 +573,11 @@ func TestParseRequestReasoningEffortRejectsUnknownValue(t *testing.T) {
 }
 
 func TestCodexBackendRequestPassesAllReasoningEfforts(t *testing.T) {
-	for _, effort := range []string{"low", "medium", "high", "xhigh"} {
+	for _, effort := range []string{"low", "medium", "high", "xhigh", "max", "ultra"} {
 		t.Run(effort, func(t *testing.T) {
 			req, _, err := codexBackendRequestFromGateway(
 				"/v1/chat/completions",
-				[]byte(`{"model":"gpt-5.5","messages":[{"role":"user","content":"Reply OK"}]}`),
+				[]byte(`{"model":"gpt-5.6-sol","messages":[{"role":"user","content":"Reply OK"}]}`),
 				"",
 				effort,
 			)
@@ -684,7 +688,7 @@ echo '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":1,"tot
 	t.Setenv("CODEX_CLI_BIN", bin)
 	t.Setenv("CODEX_CLI_TIMEOUT_SECONDS", "30")
 
-	for _, effort := range []string{"low", "medium", "high", "xhigh"} {
+	for _, effort := range []string{"low", "medium", "high", "xhigh", "max", "ultra"} {
 		t.Run(effort, func(t *testing.T) {
 			seenPath := filepath.Join(tmp, "seen-"+effort)
 			t.Setenv("SEEN_CODEX_CONFIG_PATH", seenPath)
@@ -692,7 +696,7 @@ echo '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":1,"tot
 				context.Background(),
 				"/v1/chat/completions",
 				[]byte(`{"messages":[{"role":"user","content":"Reply OK"}]}`),
-				"gpt-5.5",
+				"gpt-5.6-sol",
 				effort,
 			)
 			if err != nil {
@@ -708,6 +712,34 @@ echo '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":1,"tot
 			want := `model_reasoning_effort="` + effort + `"`
 			if string(seen) != want {
 				t.Fatalf("codex config = %q, want %q", string(seen), want)
+			}
+		})
+	}
+}
+
+func TestCodexModelReasoningLevelsMatchOfficialCatalog(t *testing.T) {
+	tests := []struct {
+		modelID string
+		want    []string
+	}{
+		{modelID: "gpt-5.6-sol", want: []string{"low", "medium", "high", "xhigh", "max", "ultra"}},
+		{modelID: "gpt-5.6-terra", want: []string{"low", "medium", "high", "xhigh", "max", "ultra"}},
+		{modelID: "gpt-5.6-luna", want: []string{"low", "medium", "high", "xhigh", "max"}},
+		{modelID: "gpt-5.5", want: []string{"low", "medium", "high", "xhigh"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.modelID, func(t *testing.T) {
+			levels := codexModelReasoningLevels(tt.modelID)
+			got := make([]string, 0, len(levels))
+			for _, level := range levels {
+				got = append(got, level["effort"])
+				if level["description"] == "" {
+					t.Fatalf("effort %q is missing a description", level["effort"])
+				}
+			}
+			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
+				t.Fatalf("reasoning levels = %#v, want %#v", got, tt.want)
 			}
 		})
 	}

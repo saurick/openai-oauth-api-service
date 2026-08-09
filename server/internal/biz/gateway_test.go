@@ -91,6 +91,48 @@ func TestOfficialModelPriceMapContainsStandardTokenRates(t *testing.T) {
 	}
 }
 
+func TestOfficialModelReasoningCatalogMatchesCurrentCodexModels(t *testing.T) {
+	tests := []struct {
+		modelID string
+		want    []string
+		def     string
+	}{
+		{modelID: "gpt-5.6-sol", want: []string{"low", "medium", "high", "xhigh", "max", "ultra"}, def: "low"},
+		{modelID: "gpt-5.6-terra", want: []string{"low", "medium", "high", "xhigh", "max", "ultra"}, def: "medium"},
+		{modelID: "gpt-5.6-luna", want: []string{"low", "medium", "high", "xhigh", "max"}, def: "medium"},
+		{modelID: "gpt-5.5", want: []string{"low", "medium", "high", "xhigh"}, def: "medium"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.modelID, func(t *testing.T) {
+			got := OfficialModelReasoningEffortsForModel(tt.modelID)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("reasoning efforts = %#v, want %#v", got, tt.want)
+			}
+			if gotDefault := OfficialModelDefaultReasoningEffort(tt.modelID); gotDefault != tt.def {
+				t.Fatalf("default reasoning = %q, want %q", gotDefault, tt.def)
+			}
+			for _, effort := range tt.want {
+				if !IsOfficialModelReasoningEffortSupported(tt.modelID, effort) {
+					t.Fatalf("effort %q should be supported", effort)
+				}
+			}
+		})
+	}
+
+	if IsOfficialModelReasoningEffortSupported("gpt-5.5", GatewayReasoningEffortMax) {
+		t.Fatal("gpt-5.5 must not accept max")
+	}
+	if IsOfficialModelReasoningEffortSupported("gpt-5.6-luna", GatewayReasoningEffortUltra) {
+		t.Fatal("gpt-5.6-luna must not accept ultra")
+	}
+	copyForCaller := OfficialModelReasoningEffortsForModel(DefaultCodexModelID)
+	copyForCaller[0] = "mutated"
+	if OfficialModelReasoningEffortsForModel(DefaultCodexModelID)[0] != GatewayReasoningEffortLow {
+		t.Fatal("reasoning catalog must return an independent copy")
+	}
+}
+
 func TestDetectGatewayClientType(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -215,6 +257,26 @@ func TestGatewayUsecaseCreateAPIKeyNormalizesDefaultReasoningEffort(t *testing.T
 	}
 	if repo.createdInput.DefaultReasoningEffort != GatewayReasoningEffortLow {
 		t.Fatalf("default reasoning = %q, want low", repo.createdInput.DefaultReasoningEffort)
+	}
+}
+
+func TestGatewayUsecaseCreateAPIKeyAcceptsSolMaxReasoningEfforts(t *testing.T) {
+	for _, effort := range []string{GatewayReasoningEffortMax, GatewayReasoningEffortUltra} {
+		t.Run(effort, func(t *testing.T) {
+			repo := &gatewayPolicyTestRepo{}
+			uc := NewGatewayUsecase(repo, log.NewStdLogger(testWriter{}), nil)
+
+			if _, err := uc.CreateAPIKey(context.Background(), CreateGatewayAPIKeyInput{
+				Name:                   "client7",
+				AllowedModels:          []string{DefaultCodexModelID},
+				DefaultReasoningEffort: strings.ToUpper(effort),
+			}); err != nil {
+				t.Fatalf("CreateAPIKey() error = %v", err)
+			}
+			if repo.createdInput.DefaultReasoningEffort != effort {
+				t.Fatalf("default reasoning = %q, want %q", repo.createdInput.DefaultReasoningEffort, effort)
+			}
+		})
 	}
 }
 
@@ -548,6 +610,9 @@ func TestGatewayUsecaseEffectiveReasoningEffortUsesKeyGlobalThenRequest(t *testi
 	}
 	if got, err := uc.GetEffectiveReasoningEffort(ctx, &GatewayAPIKey{DefaultReasoningEffort: GatewayReasoningEffortNone}, GatewayReasoningEffortHigh); err != nil || got != GatewayReasoningEffortHigh {
 		t.Fatalf("key none effort = %q err=%v, want requested high", got, err)
+	}
+	if got, err := uc.GetEffectiveReasoningEffort(ctx, &GatewayAPIKey{DefaultReasoningEffort: GatewayReasoningEffortMax}, GatewayReasoningEffortLow); err != nil || got != GatewayReasoningEffortMax {
+		t.Fatalf("key max effort = %q err=%v, want max", got, err)
 	}
 	if _, err := uc.SetGatewayDefaultReasoningEffort(ctx, ""); err != nil {
 		t.Fatalf("clear SetGatewayDefaultReasoningEffort() error = %v", err)

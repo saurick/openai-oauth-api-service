@@ -208,8 +208,8 @@ func (h *openAIGatewayHandler) handleModels(w stdhttp.ResponseWriter, r *stdhttp
 				"object":                     "model",
 				"created":                    created,
 				"owned_by":                   item.OwnedBy,
-				"default_reasoning_level":    "medium",
-				"supported_reasoning_levels": codexModelReasoningLevels(),
+				"default_reasoning_level":    biz.OfficialModelDefaultReasoningEffort(item.ModelID),
+				"supported_reasoning_levels": codexModelReasoningLevels(item.ModelID),
 				"shell_type":                 "shell_command",
 				"visibility":                 "list",
 				"supported_in_api":           true,
@@ -271,13 +271,24 @@ func (h *openAIGatewayHandler) handleModels(w stdhttp.ResponseWriter, r *stdhttp
 	})
 }
 
-func codexModelReasoningLevels() []map[string]string {
-	return []map[string]string{
-		{"effort": "low", "description": "Fast responses with lighter reasoning"},
-		{"effort": "medium", "description": "Balances speed and reasoning depth"},
-		{"effort": "high", "description": "Greater reasoning depth for complex problems"},
-		{"effort": "xhigh", "description": "Extra high reasoning depth for complex problems"},
+func codexModelReasoningLevels(modelID string) []map[string]string {
+	descriptions := map[string]string{
+		biz.GatewayReasoningEffortLow:   "Fast responses with lighter reasoning",
+		biz.GatewayReasoningEffortMed:   "Balances speed and reasoning depth",
+		biz.GatewayReasoningEffortHigh:  "Greater reasoning depth for complex problems",
+		biz.GatewayReasoningEffortXHigh: "Extra high reasoning depth for complex problems",
+		biz.GatewayReasoningEffortMax:   "Maximum reasoning depth for the hardest problems",
+		biz.GatewayReasoningEffortUltra: "Maximum reasoning with automatic task delegation",
 	}
+	efforts := biz.OfficialModelReasoningEffortsForModel(modelID)
+	levels := make([]map[string]string, 0, len(efforts))
+	for _, effort := range efforts {
+		levels = append(levels, map[string]string{
+			"effort":      effort,
+			"description": descriptions[effort],
+		})
+	}
+	return levels
 }
 
 func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.Request, key *biz.GatewayAPIKey, requestID string, start time.Time) {
@@ -294,6 +305,12 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 	requestModel, stream, reasoningEffort, parseErr := parseRequestModelStreamAndReasoningEffort(body)
 	sessionID := sessionIDFromGatewayRequest(r, body)
 	endpoint := gatewayEndpointFromPath(r.URL.Path)
+	if parseErr == nil {
+		reasoningEffort = h.effectiveReasoningEffort(r.Context(), key, reasoningEffort)
+		if !biz.IsOfficialModelReasoningEffortSupported(requestModel, reasoningEffort) {
+			parseErr = fmt.Errorf("unsupported reasoning_effort %s for model %s", reasoningEffort, requestModel)
+		}
+	}
 	if parseErr != nil {
 		status := stdhttp.StatusBadRequest
 		h.writeGatewayError(w, status, parseErr, "gateway_reasoning_effort_invalid")
@@ -317,7 +334,6 @@ func (h *openAIGatewayHandler) handleProxy(w stdhttp.ResponseWriter, r *stdhttp.
 		})
 		return
 	}
-	reasoningEffort = h.effectiveReasoningEffort(r.Context(), key, reasoningEffort)
 	requestOptions := gatewayRequestOptionsFromRequest(r, body)
 	if err := h.gatewayUC.ValidateModelAccess(r.Context(), key, requestModel); err != nil {
 		status := stdhttp.StatusForbidden

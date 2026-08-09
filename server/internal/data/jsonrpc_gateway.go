@@ -1152,6 +1152,16 @@ func mapGatewayUpstreamModeForRPC(strategy string, mode string, fallbackEnabled 
 				"value":       biz.GatewayReasoningEffortXHigh,
 				"description": "客户端未传 effort 时默认使用 xhigh。",
 			},
+			map[string]any{
+				"label":       "Max",
+				"value":       biz.GatewayReasoningEffortMax,
+				"description": "客户端未传 effort 时默认使用 max；模型不支持时请求会明确失败。",
+			},
+			map[string]any{
+				"label":       "Ultra",
+				"value":       biz.GatewayReasoningEffortUltra,
+				"description": "客户端未传 effort 时默认使用 ultra；当前仅 Sol / Terra 支持。",
+			},
 		},
 	}
 }

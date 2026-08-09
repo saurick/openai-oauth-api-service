@@ -92,6 +92,16 @@ test('clientConfigTemplates: opencode 只包含四模型并按选择更新 agent
       .reasoningEffort,
     'xhigh'
   )
+  assert.equal(
+    parsed.provider['oauth-api-service'].models['gpt-5.6-sol'].variants.max
+      .reasoningEffort,
+    'max'
+  )
+  assert.equal(
+    parsed.provider['oauth-api-service'].models['gpt-5.6-sol'].variants.ultra
+      .reasoningEffort,
+    'ultra'
+  )
   assert.deepEqual(
     Object.keys(parsed.provider['oauth-api-service'].models),
     expectedModels
@@ -103,6 +113,24 @@ test('clientConfigTemplates: opencode 只包含四模型并按选择更新 agent
       'xhigh'
     )
   }
+  assert.deepEqual(
+    Object.keys(
+      parsed.provider['oauth-api-service'].models['gpt-5.6-terra'].variants
+    ),
+    ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+  )
+  assert.deepEqual(
+    Object.keys(
+      parsed.provider['oauth-api-service'].models['gpt-5.6-luna'].variants
+    ),
+    ['low', 'medium', 'high', 'xhigh', 'max']
+  )
+  assert.deepEqual(
+    Object.keys(
+      parsed.provider['oauth-api-service'].models['gpt-5.5'].variants
+    ),
+    ['low', 'medium', 'high', 'xhigh']
+  )
 })
 
 test('clientConfigTemplates: Codex profile v2 文件名和路径区分 mac 与 Windows', () => {

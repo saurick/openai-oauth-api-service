@@ -93,13 +93,23 @@ export function normalizeModel(value) {
     : CLIENT_CONFIG_DEFAULTS.model
 }
 
+const CLIENT_CONFIG_MODEL_REASONING_EFFORTS = {
+  'gpt-5.6-sol': ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+  'gpt-5.6-terra': ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+  'gpt-5.6-luna': ['low', 'medium', 'high', 'xhigh', 'max'],
+  'gpt-5.5': ['low', 'medium', 'high', 'xhigh'],
+}
+
+function buildOpenCodeReasoningVariants(model) {
+  return Object.fromEntries(
+    (CLIENT_CONFIG_MODEL_REASONING_EFFORTS[model] || []).map((effort) => [
+      effort,
+      { reasoningEffort: effort },
+    ])
+  )
+}
+
 function buildOpenCodeTemplate({ baseUrl, apiKey, model }) {
-  const variants = {
-    low: { reasoningEffort: 'low' },
-    medium: { reasoningEffort: 'medium' },
-    high: { reasoningEffort: 'high' },
-    xhigh: { reasoningEffort: 'xhigh' },
-  }
   const models = Object.fromEntries(
     CLIENT_CONFIG_MODEL_OPTIONS.map((option) => [
       option.value,
@@ -107,7 +117,7 @@ function buildOpenCodeTemplate({ baseUrl, apiKey, model }) {
         name: option.value,
         reasoning: true,
         reasoningEffort: 'medium',
-        variants,
+        variants: buildOpenCodeReasoningVariants(option.value),
         modalities: {
           input: ['text', 'image', 'pdf'],
           output: ['text'],
