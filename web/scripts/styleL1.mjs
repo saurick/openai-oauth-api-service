@@ -2846,6 +2846,9 @@ async function assertCodexBalanceVisuals(page, scenarioName) {
       hasNoResetCreditID: !document.body.innerText.includes(
         'RateLimitResetCredit_'
       ),
+      hasPrimaryWeeklyLabel:
+        document.body.innerText.includes('每周额度 24% 已用') &&
+        !document.body.innerText.includes('5 小时额度 24% 已用'),
       hasResetCredits:
         document.body.innerText.includes('Rate limit reset credits') &&
         document.body.innerText.includes('可用 3 个 / 累计 3 个') &&
@@ -2925,6 +2928,10 @@ async function assertCodexBalanceVisuals(page, scenarioName) {
     `${scenarioName} reset credits 表格宽度异常: ${metrics.resetCreditTableScrollWidth}`
   )
   assert(metrics.hasCodexCard, `${scenarioName} 缺少 Codex 限额卡`)
+  assert(
+    metrics.hasPrimaryWeeklyLabel,
+    `${scenarioName} primary 周窗口被误标为 5 小时额度`
+  )
   assert(metrics.hasSparkCard, `${scenarioName} 缺少 Spark 限额卡`)
   assert(metrics.hasWeeklyPace, `${scenarioName} 缺少每周线性节奏估算`)
   assert(metrics.hasUsageEstimate, `${scenarioName} 缺少本服务调用估算`)
@@ -2938,7 +2945,7 @@ async function assertCodexBalanceVisuals(page, scenarioName) {
     `${scenarioName} 余额页卡片数量异常: ${metrics.panelCount}`
   )
   assert(
-    metrics.progressBarWidths.length >= 4 &&
+    metrics.progressBarWidths.length >= 3 &&
       metrics.progressBarWidths.every((width) => width >= 0),
     `${scenarioName} 限额进度条渲染异常: ${JSON.stringify(metrics.progressBarWidths)}`
   )
@@ -4768,7 +4775,6 @@ async function installCodexBalanceMock(page) {
     const now = new Date()
     const primaryReset = new Date(now.getTime() + 4 * 60 * 60 * 1000)
     const weeklyReset = new Date(now.getTime() + (6 * 24 + 16) * 60 * 60 * 1000)
-    const sparkPrimaryReset = new Date(now.getTime() + 3.5 * 60 * 60 * 1000)
     const sparkWeeklyReset = new Date(
       now.getTime() + (6 * 24 + 12) * 60 * 60 * 1000
     )
@@ -4838,17 +4844,12 @@ async function installCodexBalanceMock(page) {
               balance: '0',
             },
             primary: {
-              used_percent: 36,
-              remaining_percent: 64,
-              window_duration_mins: 300,
-              resets_at_time: sparkPrimaryReset.toISOString(),
-            },
-            secondary: {
               used_percent: 24,
               remaining_percent: 76,
               window_duration_mins: 10080,
               resets_at_time: sparkWeeklyReset.toISOString(),
             },
+            secondary: null,
           },
         },
         rate_limit_reset_credits: {

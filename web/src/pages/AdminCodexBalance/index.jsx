@@ -7,6 +7,7 @@ import {
   buildCodexUsageOverview,
   calculateRateLimitPace,
   formatCodexUsageCost,
+  rateLimitWindowLabel,
 } from '@/common/utils/codexUsageStats'
 import { getActionErrorMessage } from '@/common/utils/errorMessage'
 import { JsonRpc } from '@/common/utils/jsonRpc'
@@ -220,12 +221,12 @@ function LimitCard({ item, sampledAt }) {
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
         <LimitBar
-          label="5 小时额度"
+          label={rateLimitWindowLabel(item?.primary, 'primary')}
           item={item?.primary}
           sampledAt={sampledAt}
         />
         <LimitBar
-          label="每周额度"
+          label={rateLimitWindowLabel(item?.secondary, 'secondary')}
           item={item?.secondary}
           sampledAt={sampledAt}
         />

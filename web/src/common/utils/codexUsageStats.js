@@ -27,6 +27,21 @@ export function formatCodexUsageCost(value) {
   }).format(number)
 }
 
+export function rateLimitWindowLabel(window, slot = 'primary') {
+  const durationMinutes = asFiniteNumber(window?.window_duration_mins)
+  if (durationMinutes == null || durationMinutes <= 0) {
+    return slot === 'secondary' ? '次级额度窗口' : '主额度窗口'
+  }
+  if (durationMinutes === (7 * DAY_SECONDS) / 60) return '每周额度'
+  if (durationMinutes % (DAY_SECONDS / 60) === 0) {
+    return `${durationMinutes / (DAY_SECONDS / 60)} 天额度`
+  }
+  if (durationMinutes % 60 === 0) {
+    return `${durationMinutes / 60} 小时额度`
+  }
+  return `${Math.round(durationMinutes)} 分钟额度`
+}
+
 function toDateMilliseconds(value) {
   if (value == null || value === '') return null
   if (value instanceof Date) return value.getTime()

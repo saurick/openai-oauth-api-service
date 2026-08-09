@@ -10,7 +10,7 @@ function loadModule() {
   const transformed = source
     .replace(/export function /g, 'function ')
     .concat(
-      '\nmodule.exports = { calculateRateLimitPace, buildCodexUsageOverview, formatCodexUsageCost };\n'
+      '\nmodule.exports = { calculateRateLimitPace, buildCodexUsageOverview, formatCodexUsageCost, rateLimitWindowLabel };\n'
     )
   const sandbox = { module: { exports: {} }, exports: {} }
   vm.runInNewContext(transformed, sandbox, { filename: filePath })
@@ -21,12 +21,26 @@ const {
   buildCodexUsageOverview,
   calculateRateLimitPace,
   formatCodexUsageCost,
+  rateLimitWindowLabel,
 } = loadModule()
 
 test('codexUsageStats: 真实大额费用保持合法的两位小数格式', () => {
   assert.equal(formatCodexUsageCost(1545.710638), '$1,545.71')
   assert.equal(formatCodexUsageCost(32.032506), '$32.03')
   assert.equal(formatCodexUsageCost(null), '未配置价格')
+})
+
+test('codexUsageStats: 额度窗口标签以时长真值而非 primary 槽位推断', () => {
+  assert.equal(
+    rateLimitWindowLabel({ window_duration_mins: 300 }),
+    '5 小时额度'
+  )
+  assert.equal(
+    rateLimitWindowLabel({ window_duration_mins: 10080 }),
+    '每周额度'
+  )
+  assert.equal(rateLimitWindowLabel({ window_duration_mins: 1440 }), '1 天额度')
+  assert.equal(rateLimitWindowLabel({}, 'secondary'), '次级额度窗口')
 })
 
 test('codexUsageStats: 线性节奏允许正常状态同时预测重置前用尽', () => {
