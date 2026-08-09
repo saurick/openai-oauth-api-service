@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import test from 'node:test'
 
@@ -26,5 +27,16 @@ test('manifest rejects overlapping ports inside one project bundle', () => {
   assert.throws(
     () => loadDevPorts(repoRoot, { DEV_WEB_PORT: '15350' }),
     /DEV_AUX_PORT_START.*overlaps DEV_WEB_PORT/u
+  )
+})
+
+test('production image build carries the tracked port manifest', () => {
+  const dockerfile = readFileSync(
+    path.join(repoRoot, 'server', 'Dockerfile'),
+    'utf8'
+  )
+  assert.match(
+    dockerfile,
+    /^COPY config\/dev-ports\.env \/config\/dev-ports\.env$/mu
   )
 })

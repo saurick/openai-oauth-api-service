@@ -30,7 +30,8 @@ COPY web/.env.production ./
 COPY web/vite.config.mjs ./
 COPY web/tailwind.config.js ./
 COPY web/postcss.config.js ./
-# 关键兜底：前端 prebuild 依赖服务端错误码真源与生成脚本，镜像构建时必须一并带入。
+# 前端构建配置依赖根目录端口清单，prebuild 还依赖服务端错误码真源与生成脚本。
+COPY config/dev-ports.env /config/dev-ports.env
 COPY scripts /scripts
 COPY server/internal/errcode /server/internal/errcode
 RUN pnpm run build   # 输出到 web/build
