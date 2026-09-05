@@ -5,7 +5,9 @@ description: 项目代码审查治理（openai-oauth-api-service）。Use when r
 
 # OpenAI OAuth 代码审查治理 Code Review Governance
 
-用这个 skill 审查 `/Users/simon/projects/openai-oauth-api-service` 的代码和正式文档改动。默认只审查，不改代码。
+从当前任务的 checkout / Worktree 内用 `git rev-parse --show-toplevel` 核对仓库根；下文命令以该根目录为工作目录，仓库内文件引用也相对它解析。
+
+用这个 skill 审查 `openai-oauth-api-service` 的代码和正式文档改动。默认只审查，不改代码。
 
 - 新增 helper、组件、schema、migration、API、RBAC 权限、Workflow/业务规则、配置、QA 脚本或部署步骤时，检查现有能力是否可以承接。
 - 警惕为通过当前页面或当前测试而加入局部 fallback、重复派生、页面私有真源、宽松校验、隐藏兼容分支或后处理补丁。
@@ -15,7 +17,7 @@ description: 项目代码审查治理（openai-oauth-api-service）。Use when r
 ## 范围解析 Scope
 
 1. 用户指定 commit、branch、文件、目录或 PR 时，只审指定范围。
-2. side chat 或新会话未指定范围时，审当前仓库 `git status`、staged diff、unstaged diff 和最近相关提交。
+2. side chat 或新会话未指定范围时，审当前仓库 `GIT_OPTIONAL_LOCKS=0 git status`、staged diff、unstaged diff 和最近相关提交。
 3. 当前主会话里“实现后 review”时，审本轮相关改动；若工作区有多组无关改动，先按最近用户请求收窄。
 4. 不依赖聊天记忆或实现者解释；以代码、测试、正式文档和当前 diff 为准。
 
@@ -24,8 +26,8 @@ description: 项目代码审查治理（openai-oauth-api-service）。Use when r
 先运行：
 
 ```bash
-git -C /Users/simon/projects/openai-oauth-api-service status --short
-git -C /Users/simon/projects/openai-oauth-api-service diff --stat
+GIT_OPTIONAL_LOCKS=0 git status --short
+git diff --stat
 ```
 
 再按触达范围读：
@@ -59,7 +61,7 @@ git -C /Users/simon/projects/openai-oauth-api-service diff --stat
 ## 验证建议 Validation
 
 - 后端改动至少检查相关 `go test` 覆盖；API/usage/upstream 改动要看 JSON-RPC 或 HTTP 边界测试。
-- 前端样式/交互默认考虑 `cd /Users/simon/projects/openai-oauth-api-service/web && pnpm lint && pnpm css && pnpm test && pnpm style:l1`。
+- 前端样式/交互默认考虑 `(cd web && pnpm lint && pnpm css && pnpm test && pnpm style:l1)`。
 - 文档/skill-only 改动至少运行 `git diff --check` 和对应 skill validator。
 - 涉及 secrets、部署、OpenAI 官方行为、migration 时，要明确已验证和未验证范围。
 

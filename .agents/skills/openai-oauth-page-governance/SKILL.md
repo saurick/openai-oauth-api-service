@@ -5,6 +5,8 @@ description: 项目页面治理（openai-oauth-api-service）。Use when designi
 
 # OpenAI OAuth Page Governance
 
+从当前任务的 checkout / Worktree 内用 `git rev-parse --show-toplevel` 核对仓库根；下文命令以该根目录为工作目录，仓库内文件引用也相对它解析。
+
 Use this skill to keep `openai-oauth-api-service` admin pages useful, safe, and verifiable. This is project-specific admin-console guidance, not OpenAI official product documentation and not ERP page governance.
 
 - 每个元素都要支持明确角色、判断、动作或反馈；无决策价值、重复入口、假快捷方式和装饰性卡片应删除、合并或降级。
@@ -15,7 +17,7 @@ Use this skill to keep `openai-oauth-api-service` admin pages useful, safe, and 
 ## Workflow
 
 1. Establish scope and current truth.
-   - Run `git -C /Users/simon/projects/openai-oauth-api-service status --short` before editing and protect unrelated dirty files.
+   - Run `GIT_OPTIONAL_LOCKS=0 git status --short` before editing and protect unrelated dirty files.
    - Classify the task as page-only, page-adjacent, or behavior-changing. If schema, API, auth, key semantics, usage aggregation, upstream failover, deployment, or server behavior changes are needed, follow the corresponding project workflow too.
    - Read the relevant truth chain before making current-state claims: `AGENTS.md`, `README.md`, `docs/README.md`, `docs/architecture.md`, and `web/README.md`.
    - For server/API/data-backed page work, also read `server/README.md` and the relevant `server/docs/*` or implementation files.
@@ -44,10 +46,10 @@ Use this skill to keep `openai-oauth-api-service` admin pages useful, safe, and 
 
 5. Preserve project boundaries.
    - Do not change schema, migration, auth semantics, route truth, upstream mode behavior, key lifecycle, deployment defaults, or logging policy as a side effect of visual cleanup.
-   - If admin-page work requires backend/API/auth/API-key/usage/upstream behavior changes, stop treating it as page-only work. Use `openai-oauth-domain-boundary-governance` to define the auth, usage, upstream, API contract, and persistence boundary first.
+   - If the requested admin-page outcome needs backend/API/auth/key/usage/upstream changes, use `openai-oauth-domain-boundary-governance` to verify the contract and continue within existing authorization; do not treat a workflow switch as a request to stop.
    - Do not restore old portal/user-account flows or Python MVP behavior unless the task explicitly asks for that product review.
    - Do not change the default personal-deploy admin password policy or production deploy path from page work.
-   - If a page simplification requires hiding, renaming, or combining official admin routes, stop and treat it as a product/navigation review.
+   - For official admin-route changes, verify the product/navigation contract and proceed when already authorized; ask only if the change materially expands the requested scope.
 
 6. Implement with existing admin patterns.
    - Reuse current `web/src` admin components, auth/request helpers, table helpers, theme CSS variables, and error-message helpers.
@@ -59,15 +61,15 @@ Use this skill to keep `openai-oauth-api-service` admin pages useful, safe, and 
    - Prefer scoped styles and existing tokens. Do not add `!important` unless the source cannot be controlled; document the reason in the final response.
 
 7. Validate as regression.
-   - For admin page/style work, default to:
+   - Use `openai-oauth-test-governance` to select affected web tests and browser scenarios from these entry points:
      ```bash
-     cd /Users/simon/projects/openai-oauth-api-service/web && pnpm lint && pnpm css && pnpm test
-     cd /Users/simon/projects/openai-oauth-api-service/web && pnpm style:l1
+     (cd web && pnpm lint && pnpm css && pnpm test)
+     (cd web && pnpm style:l1)
      ```
-   - Use `STYLE_L1_SCENARIOS=... pnpm style:l1` only for narrow checks and name the covered scenarios and blind spots.
+   - Prefer `STYLE_L1_SCENARIOS=... pnpm style:l1` for narrow changes and name coverage/risks; broaden when shared behavior or remaining risk warrants it.
    - For layout-sensitive work, inspect DOM/box metrics: bounding boxes, overflow, scrollWidth/clientWidth, offsetHeight/clientHeight/scrollHeight, wrapping, and neighboring overlap.
-   - For server/API-backed behavior, also run relevant backend tests such as `cd /Users/simon/projects/openai-oauth-api-service/server && go test ./...` or a narrower package test when justified.
-   - If files in the repo changed, update `progress.md` according to `AGENTS.md`; do not overwrite unrelated existing progress or failover-script changes.
+   - For server/API-backed behavior, also run relevant backend tests such as `(cd server && go test ./...)` or a narrower package test when justified.
+   - Update `progress.md` only when the trigger conditions in `AGENTS.md` apply; do not overwrite unrelated existing progress or failover-script changes.
    - If page behavior or admin wording changed, check whether `README.md`, `web/README.md`, `docs/architecture.md`, `docs/operations.md`, or deploy docs need matching updates.
 
 ## Deliverable Standard

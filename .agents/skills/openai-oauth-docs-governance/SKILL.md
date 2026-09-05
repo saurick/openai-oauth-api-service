@@ -1,86 +1,34 @@
 ---
 name: openai-oauth-docs-governance
-description: 项目文档治理（openai-oauth-api-service）。Use when creating, reviewing, renaming, reorganizing, or updating service architecture, operations, deployment, README, AGENTS, or progress docs.
+description: 项目文档治理（openai-oauth-api-service）。Use to maintain service architecture, operations, deployment, README, AGENTS, and progress docs.
 ---
 
 # OpenAI OAuth Docs Governance
 
-Use this skill to keep `openai-oauth-api-service` docs concise, source-grounded, and operationally safe. This is local project documentation governance; use `openai-docs` separately for official OpenAI API/Product documentation questions.
+维护本服务文档；OpenAI 官方产品 / API 问题使用当前可发现的官方文档技能，不把本仓库说明当官方结论。
 
-- 先确认代码、migration、测试、README、正式 docs 和 AGENTS 的优先级，不让过程记录覆盖当前真源。
-- 结论、适用范围、主路径、验收方式和风险边界前置；表格、Mermaid、链接和摘要只在减少查找成本时使用。
-- 行为、入口、配置、测试或部署口径变化时，同步相关索引、README 和 progress；只改措辞时不机械扩大同步面。
-- 不为普通说明引入重模板、重复负面清单或并行 metadata；能由现有脚本、索引或文档承接的规则，不再造一套真源。
+## Read the Relevant Truth
 
-## Workflow
+- 先读 `AGENTS.md`、相关 README / `docs/README.md`，用 `GIT_OPTIONAL_LOCKS=0` 核对 scoped diff 并保留外部改动。
+- OAuth、API key、usage、upstream、日志 / 保留策略和管理端语义看 `docs/architecture.md`；运行与部署看 `docs/operations.md`、`server/README.md`、`server/deploy/README.md` 和 Compose 真源。
+- 页面文案 / 质量命令看 `web/README.md`、页面 / 路由代码和 `web/scripts/styleL1.mjs`；后端行为核对 service / biz / data、Ent schema、migration 和测试。
+- `legacy-python-mvp/`、progress 和 archive 是历史 / 过程证据，不能覆盖当前实现。只读任务相关分支，已读且未变化的内容不重复加载。
 
-1. Snapshot scope and classify the task.
-   - Run `git -C /Users/simon/projects/openai-oauth-api-service status --short` before editing and protect unrelated dirty files.
-   - Classify the task as docs-only, docs-adjacent, or behavior-changing.
-   - If runtime, schema, API, auth, key lifecycle, upstream strategy, deployment, migration, or frontend regression behavior changes are required, stop treating it as docs-only and follow the relevant project workflow too.
+## Preserve Boundaries
 
-2. Read the project truth chain.
-   - Always read `AGENTS.md` for repository rules. Treat it as protected project-level governance.
-   - Read `README.md` and `docs/README.md` before changing docs structure, reader paths, or current-state claims.
-   - For architecture, OAuth/API key, usage, upstream, logging, data retention, and admin-console behavior, read `docs/architecture.md`.
-   - For local run, configuration, operations, deploy defaults, and low-spec boundaries, read `docs/operations.md`, `server/README.md`, and `server/deploy/README.md`.
-   - For frontend/admin page wording or testing commands, read `web/README.md`.
-   - Treat `legacy-python-mvp/` as historical reference only, not current implementation truth.
-   - Treat `progress.md` and `docs/archive/**` as process/history evidence, not current formal truth.
+- 用户明确要求长期规则治理时可改 AGENTS，普通文档维护不改政策。必要行为改动在已有授权范围内进入领域 / operations 流程继续，新增范围才询问。
+- 不写真实 tokens、JWT / OAuth secrets、DB 密码、含凭据登录路径或生产 `.env` 值。usage 描述基于 `gateway_usage_logs` 等真实记录，不宣称默认保存请求正文、prompt 或模型输出。
+- 默认个人部署管理员密码口径、secret / logging 和低配发布约束遵循 AGENTS 与正式部署文档；低配目标只加载本地 / CI 制品并迁移 / smoke，不现场构建。
 
-3. Protect governance and secrets boundaries.
-   - Ordinary docs cleanup should read `AGENTS.md`, not edit it.
-   - Edit `AGENTS.md` only when the user explicitly asks to change long-term rules, prohibited actions, required workflows, or repository-wide policy.
-   - Keep secrets guidance, logging rules, deployment build boundaries, and default admin-password policy aligned with `AGENTS.md`; do not dilute them in ordinary docs.
-   - Never add real tokens, JWT secrets, database passwords, OAuth secrets, Codex login paths with credentials, or production private `.env` values to docs.
-   - In the final response, explicitly say whether `AGENTS.md` was read only or changed.
+## Write and Sync
 
-4. Maintain source-of-truth boundaries.
-   - Architecture truth: `docs/architecture.md`.
-   - Operations and deployment truth: `docs/operations.md`, `server/deploy/README.md`, and `server/deploy/compose/prod/*` when relevant.
-   - Frontend/admin truth: `web/README.md`, route/page code, and `web/scripts/styleL1.mjs`.
-   - Backend/API truth: `server/README.md`, `server/docs/*`, service/biz/data code, Ent schema, migrations, and tests.
-   - Usage diagnostics truth: backend recorded data such as `gateway_usage_logs`; docs must not claim request bodies, prompts, or outputs are stored by default.
-   - Public/OpenAI official API behavior should be checked with `openai-docs` when current external docs matter; do not invent official claims in this project doc skill.
+- 按读者区分开发、管理员操作、部署和排障入口；结论、范围、主路径和命令前置，具体章节可跳转。比较用表格、步骤用编号、配置用代码块，复杂关系才用 Mermaid。
+- 同一合同集中维护；保留稳定英文文档路径，不套用其他项目中文命名或 inventory。metadata / frontmatter 只在实际消费者需要时增加。
+- 文档增删 / 改名 / 职责调整时同步 `docs/README.md`、附近 README、锚点与引用；行为、命令、key / usage / upstream、OAuth callback 或部署口径变化时同步对应专题和消费者。
+- usage 可见性变化按需核对 dashboard 与 `/admin-usage`。progress 仅按 AGENTS 触发条件维护，保留外部内容；纯全局 Skill 改动不更新项目记录。
 
-5. Design docs for readers.
-   - Put current conclusion, scope, main path, commands, and risk boundary before history or detailed evidence.
-   - Give readers a path near the top: local development, admin operation, deployment, debugging, or contribution.
-   - Choose the expression shape by the information type, not by decoration:
-     - Use tables for short comparable facts, architecture/operations status, endpoint or route comparisons, environment variables, key/usage/upstream behavior matrices, command catalogs, acceptance criteria, risk registers, and docs classification.
-     - Use numbered lists for local run steps, deployment/runbooks, troubleshooting paths, migration sequences, and verification steps.
-     - Use code blocks for commands, env/config snippets, API examples, SQL, and minimal reproducible snippets.
-     - Use short paragraphs under clear headings for rules, rationale, boundaries, and caveats.
-     - Use nearby links and section anchors when readers need to jump from a summary to an exact architecture section, operation runbook, deploy command, admin behavior, usage diagnostic, acceptance section, or risk boundary.
-     - Use Mermaid or simple diagrams only when a visual structure makes request flow, OAuth redirect, admin/key lifecycle, usage logging, upstream fallback, deployment, source-of-truth chains, or decision trees easier to understand than prose.
-   - Make commands copyable and context-specific: include `cd /Users/simon/projects/openai-oauth-api-service/...` when useful and name the expected success signal.
-   - For non-trivial diagrams, add a short lead-in or follow-up sentence, keep diagrams compact, and use stable human-readable labels.
-   - Do not stack tables, diagrams, and links for visual polish alone. Each structure should answer a reader question or reduce lookup cost.
-   - Do not add Markdown frontmatter or metadata by default. First identify a real consumer such as a docs viewer, generator, search index, or build script.
-   - Do not force plush's Chinese-filename or docs-inventory rules onto this project. This repo currently uses stable English doc filenames and `docs/README.md` as the docs index.
+## Validate and Report
 
-6. Keep docs synchronized with behavior.
-   - If admin page behavior, route names, key management, usage fields, upstream strategy, model limits, public balance, OAuth callback, deploy steps, migration commands, or quality commands change, check related README/docs in the same round.
-   - If deployment docs change, preserve the low-spec boundary: build locally/CI, upload/load remotely, run migration/smoke remotely, and do not build on the low-spec server.
-   - If usage/admin visibility changes, check both compact dashboard wording and detailed `/admin-usage` behavior where relevant.
-   - If any file in the repo changed, update `progress.md` according to `AGENTS.md`; do not overwrite unrelated existing `progress.md` content.
-   - If only global skill files changed outside the repo, do not update project `progress.md`.
+运行 `git diff --check`、定向路径 / 命令 / 术语扫描；Skills 运行 validator 与元数据 / 引用检查。文档改变实际脚本或页面合同才运行对应测试，纯治理不运行 migration 或全量 QA。
 
-7. Validate with targeted scans.
-   - Run `git -C /Users/simon/projects/openai-oauth-api-service diff --check` for repo changes.
-   - Use targeted `rg` for old paths, route names, environment variables, stale headings, stale anchors, old deployment claims, and changed terminology.
-   - For Mermaid changes, scan fenced blocks and surrounding references for syntax shape and label consistency.
-   - For docs surfaced through frontend or scripts, run the relevant frontend/backend checks named by `README.md` or `web/README.md`.
-   - For docs-only changes, do not run migrations or unrelated heavy runtime tests unless the touched docs/scripts require them.
-
-## Deliverable Standard
-
-When answering after using this skill, report:
-
-- Verdict if the user asked whether a docs direction is reasonable.
-- Whether `AGENTS.md` was read only or changed, and why.
-- What docs were created, renamed, deleted, simplified, split, re-linked, or intentionally left untouched.
-- What diagrams or metadata/frontmatter were added, changed, or intentionally skipped.
-- Whether `README.md`, `docs/README.md`, `web/README.md`, `server/README.md`, deploy docs, anchors, references, and `progress.md` needed updates.
-- Which scans or validation commands passed.
-- What remains intentionally out of scope, especially runtime behavior, schema, auth/key semantics, upstream failover behavior, deployment execution, secrets, legacy Python MVP rewriting, archive rewriting, and broad directory reorganization.
+说明关键修改、AGENTS 是否变化、必要同步、验证与盲区；不用未触达事项填满报告。

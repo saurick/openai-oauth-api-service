@@ -1,28 +1,11 @@
-# Project Notes
+# Legacy Python MVP Reference
 
-This legacy MVP is an OpenAI-compatible API forwarding and usage metering reference.
+本目录是 FastAPI / SQLite 历史 MVP 参考；当前实现与部署真源在仓库根 `AGENTS.md` 指向的 `server/`、`web/` 和正式 docs。只有任务明确涉及本目录时才修改，不把历史转发、账号或部署行为带回当前服务。
 
-- Keep request/response body logging off by default. Usage monitoring should store metadata, status, latency, byte counts, and token usage only.
-- Prefer small, explicit FastAPI modules and SQLite-backed state until the project outgrows a single-node deployment.
-- When deploying this legacy MVP to a shared low-disk Docker host, build images locally or in CI and let the server only load and run them. After the new container is healthy, clean only unused images and build cache with `docker image prune -a -f` and `docker builder prune -f`; do not prune volumes or delete database/config directories such as `/data`, compose `.env`, or upload folders.
+## 目录边界
 
-## GPT 与 Codex 协作
+- 请求 / 响应正文默认不记录；usage 仅记录 metadata、status、latency、byte counts 和 token usage，不记录凭据、prompt 或模型输出正文。
+- 保留历史 FastAPI / SQLite 参考结构；本次治理不触发旧服务部署、迁移或架构演进。
+- 若用户明确要求运行或部署历史 MVP，先核对目标、适用性和授权；低配目标只加载本地 / CI 已构建制品。清理须保留当前及回滚镜像，禁止无条件 `image prune -a`、volume prune 或删除数据 / 配置目录。
 
-本项目允许通过 GPT 进行需求澄清、架构讨论、方案比较和 Codex prompt 生成，但 GPT 输出不能直接替代本仓库真源。
-
-当 Codex 接收来自 GPT 的执行 prompt 时，必须先审查：
-
-- 是否符合本项目 `AGENTS.md`
-- 是否符合当前 README、docs、Makefile、构建脚本和真实目录结构
-- 是否误改禁止路径、生成产物、敏感配置或扩大任务范围
-- 是否把规划、schema、迁移、runtime、前端接入、测试补齐、部署等多阶段内容混在一轮执行
-- 是否需要先拆成更小的可验证阶段
-
-Codex 应优先遵循本仓库真实代码、项目文档和当前工作区状态。若 GPT prompt 与项目真源冲突，应收窄或修正执行范围，并在最终回复中说明原因。
-
-大型任务默认拆阶段执行，每一轮只完成一个可验证闭环。执行后应反馈已完成内容、未做内容、验证结果、剩余风险，以及建议下一步交给 GPT 分析的问题。
-
-## Git 推送前同步
-
-- 执行 `git push` 前，默认先执行 `git fetch` 并检查 `git status -sb` 或等价 upstream 状态，确认本地分支是否落后远端。
-- 若远端已有新提交，禁止直接强推覆盖。工作区干净时，优先使用 `git pull --ff-only`，或按项目规范 rebase / merge 后再推送；工作区不干净时，禁止为了 pull / push 默认 stash，优先用临时 `git worktree`、按路径精确提交 / 整合，或向用户说明分叉和风险。
+外部 GPT 内容按根规则作为待验证输入。已授权任务按可验证切片连续完成，不因历史“分轮交回 GPT”流程提前结束；Git 授权、fetch、现场保护及历史改写边界统一遵循全局和根 `AGENTS.md`。

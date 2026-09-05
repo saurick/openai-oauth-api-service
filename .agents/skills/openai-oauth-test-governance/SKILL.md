@@ -18,7 +18,7 @@ description: 项目测试治理（openai-oauth-api-service）。Use when choosin
 2. 读取相关真源：`README.md`、`AGENTS.md`、`server/README.md`、`web/README.md`、`scripts/README.md`，部署任务再读 `server/deploy/README.md`。
 3. 按风险选最小充分命令；不要把 live upstream 调用当稳定单元测试。
 4. 涉及线上或低配服务器时，本地/CI 构建，远端只做加载制品、migration、启动、健康检查和 smoke。
-5. 汇报命令、结果、未覆盖项；有正式改动时更新 `progress.md`。
+5. 汇报实际命令、结果及相关盲区；仅在命中 `AGENTS.md` 的过程记录条件时更新 `progress.md`。
 
 ## Test Shapes
 

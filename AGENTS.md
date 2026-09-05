@@ -4,8 +4,7 @@
 
 ## AGENTS 体积治理
 
-- 本仓库所有 `AGENTS.md` 目标小于 16 KiB；达到 16 KiB 先去重，超过 24 KiB 必须按全局治理顺序精简，`bash scripts/qa/agents-size.sh` 负责预警和阻断。
-- 脚本只检查大小，不自动改写；OAuth、token、usage、secret、迁移和低配发布边界不得为过门禁被删除。
+运行 `bash scripts/qa/agents-size.sh`；阈值、精简顺序及只检查不改写的边界沿用全局 AGENTS，项目安全和业务约束必须保留。
 
 ## 当前真源
 
@@ -18,7 +17,7 @@
 - 项目 skills 位于 `.agents/skills/`，入口见其 README；只保留本服务专项 SOP。
 - 默认选一个主 skill，跨页面、服务边界、测试或 operations 时再组合。
 - 502/balance/usage 诊断、stale/日志、keys/tokens 安全、低配发布和回滚使用 `$openai-oauth-operations-governance`。
-- 提示词整理显式使用全局 `$prompt-governance`；Git 收口使用 `$git-closeout-coordination`。
+- 提示词整理使用全局 `$prompt-governance`；只有已授权 commit / push 且实时现场复杂时使用 `$git-closeout-coordination`，普通完成不自动触发 Git 动作。
 - 修改 skill 后同步 metadata/引用，运行 validator、YAML/metadata、引用扫描和 `git diff --check`。
 
 ## 工程与安全基线
@@ -44,7 +43,7 @@
 
 ## 过程、上下文与收口
 
-- 触达代码、正式文档或部署配置后更新 `progress.md`：完成、下一步、阻塞/风险。
+- 仅在跨会话续做、阻塞或显著风险、schema / migration、发布 / 回滚、重大产品或架构决策，或用户明确要求时更新 `progress.md`；普通已闭环改动由 diff 与验证结果留痕，仅讨论可跳过。 写入前检查 600 行 / 80 KiB 阈值，达到后显式归档并保留活跃事项和索引。
 - GPT/ChatGPT 只作输入，执行前核对本文件、正式 docs、代码、migration、测试和 worktree。
 - Codex 压缩/恢复测试必须显式使用本轮 JSONL 的 `thread_id`；不要用可能捡到其他会话的 `resume --last` 作验收。
 - 精确 stage 本轮范围，push 前 fetch 并确认 upstream；提交信息使用简体中文。
